@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+:root {
+  --navy: #09354e;
+  --navy-deep: #062433;
+  --navy-mid: #0e4d6c;
+  --orange: #f25c22;
+  --orange-bright: #ff7a3d;
+  --teal: #3ecfdc;
+  --teal-deep: #1aa7b5;
+  --fog: #f3f7fa;
+  --ink: #0b2433;
+  --muted: #5b7382;
+  --line: rgba(9, 53, 78, 0.1);
+}
+
+@theme inline {
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-navy-mid: var(--navy-mid);
+  --color-orange: var(--orange);
+  --color-orange-bright: var(--orange-bright);
+  --color-teal: var(--teal);
+  --color-teal-deep: var(--teal-deep);
+  --color-fog: var(--fog);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --font-sans: var(--font-plus-jakarta);
+  --font-display: var(--font-syne);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #ffffff;
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--orange);
+  color: #ffffff;
+}
+
+.font-display {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, black, transparent);
+}
+
+.grain {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  animation: drift 14s ease-in-out infinite;
+}
+
+.orb-orange {
+  background: #f25c22;
+  opacity: 0.38;
+}
+
+.orb-teal {
+  background: #3ecfdc;
+  opacity: 0.28;
+  animation-delay: -6s;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(24px, -18px, 0) scale(1.12);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  animation: rise 0.8s ease both;
+}
+
+.rise-2 {
+  animation-delay: 0.12s;
+}
+
+.rise-3 {
+  animation-delay: 0.22s;
+}
+
+.rise-4 {
+  animation-delay: 0.34s;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  animation: marquee 28s linear infinite;
+}
+
+.passport-tilt {
+  transform: rotate(3.5deg);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.passport-tilt:hover {
+  transform: rotate(0deg) translateY(-6px);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.cta-shine {
+  background-image: linear-gradient(
+    110deg,
+    #f25c22 0%,
+    #ff8a4a 42%,
+    #ffffff 50%,
+    #ff8a4a 58%,
+    #f25c22 100%
+  );
+  background-size: 220% 100%;
+}
+
+.cta-shine:hover {
+  animation: shimmer 1.1s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .orb,
+  .marquee-track,
+  .rise,
+  .cta-shine:hover {
+    animation: none;
+  }
+}
