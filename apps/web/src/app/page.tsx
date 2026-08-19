@@ -9,7 +9,7 @@ import { SkillMarquee } from "@/components/landing/SkillMarquee";
 
 export default function Home() {
   return (
-    <div id="top" className="min-h-full bg-white">
+    <div id="top" className="min-h-full bg-fog">
       <Navbar />
       <main>
         <Hero />

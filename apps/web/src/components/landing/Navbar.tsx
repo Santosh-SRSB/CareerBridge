@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const links = [
   { href: "#how-it-works", label: "How it works" },
@@ -10,46 +10,87 @@ const links = [
   { href: "#employers", label: "Employers" },
 ];
 
+const DEFAULT_LINK = "Jobs";
+
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(DEFAULT_LINK);
+  const navRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const [pill, setPill] = useState({ left: 0, width: 0, ready: false });
+
+  useEffect(() => {
+    const movePill = () => {
+      const parent = navRef.current;
+      const el = itemRefs.current[active];
+      if (!parent || !el) return;
+      const parentBox = parent.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      setPill({
+        left: box.left - parentBox.left,
+        width: box.width,
+        ready: true,
+      });
+    };
+
+    movePill();
+    window.addEventListener("resize", movePill);
+    return () => window.removeEventListener("resize", movePill);
+  }, [active]);
 
   return (
-    <header className="sticky top-0 z-50">
-      <div className="absolute inset-0 bg-navy/80 backdrop-blur-xl" />
-      <nav className="relative mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <a href="#top" className="flex items-center gap-2">
+    <header className="site-navbar sticky top-0 z-50">
+      <nav className="mx-auto flex h-[72px] max-w-[1280px] items-center justify-between gap-6 px-5 sm:h-[84px] sm:px-10">
+        <a href="#top" className="logo-mark w-[148px] shrink-0 sm:w-[180px]">
           <Image
-            src="/srsb-logo.png"
+            src="/srsb-wordmark.png"
             alt="SRSB"
-            width={168}
-            height={48}
-            className="h-10 w-auto rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.28)] sm:h-11"
+            width={408}
+            height={170}
+            className="h-10 w-auto bg-transparent sm:h-11"
+            unoptimized
             priority
           />
         </a>
 
-        <div className="hidden items-center gap-8 md:flex">
+        <div
+          ref={navRef}
+          className="relative hidden flex-1 items-center justify-center md:flex"
+          onMouseLeave={() => setActive(DEFAULT_LINK)}
+        >
+          <span
+            className="nav-pill nav-pill-shimmer"
+            style={{
+              opacity: pill.ready ? 1 : 0,
+              transform: `translateX(${pill.left}px)`,
+              width: pill.width,
+            }}
+          />
           {links.map((link) => (
             <a
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-white/75 transition hover:text-white"
+              ref={(node) => {
+                itemRefs.current[link.label] = node;
+              }}
+              className={`nav-link${active === link.label ? " nav-link-on" : ""}`}
+              onMouseEnter={() => setActive(link.label)}
             >
               {link.label}
             </a>
           ))}
         </div>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden w-[148px] shrink-0 items-center justify-end gap-3 sm:w-auto md:flex">
           <a
             href="#signin"
-            className="rounded-full px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10 hover:text-white"
+            className="rounded-full border-[1.5px] border-white/55 px-5 py-[11px] text-sm font-semibold text-white transition hover:bg-white/10"
           >
             Sign In
           </a>
           <a
             href="#get-started"
-            className="rounded-full bg-orange px-4 py-2 text-sm font-bold text-white shadow-[0_8px_20px_-6px_rgba(242,92,34,0.85)] transition hover:-translate-y-0.5 hover:bg-orange-bright"
+            className="rounded-full bg-white px-[22px] py-[11px] text-sm font-bold text-[#0a2e2c] transition hover:-translate-y-px"
           >
             Create Free Passport
           </a>
@@ -57,7 +98,7 @@ export function Navbar() {
 
         <button
           type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white md:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white text-white transition hover:bg-white hover:text-navy md:hidden"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
@@ -65,24 +106,28 @@ export function Navbar() {
           <span className="sr-only">Menu</span>
           <span className="flex flex-col gap-1.5">
             <span
-              className={`h-0.5 w-4 bg-white transition ${open ? "translate-y-2 rotate-45" : ""}`}
+              className={`h-0.5 w-4 bg-current transition ${open ? "translate-y-2 rotate-45" : ""}`}
             />
-            <span className={`h-0.5 w-4 bg-white transition ${open ? "opacity-0" : ""}`} />
+            <span className={`h-0.5 w-4 bg-current transition ${open ? "opacity-0" : ""}`} />
             <span
-              className={`h-0.5 w-4 bg-white transition ${open ? "-translate-y-2 -rotate-45" : ""}`}
+              className={`h-0.5 w-4 bg-current transition ${open ? "-translate-y-2 -rotate-45" : ""}`}
             />
           </span>
         </button>
       </nav>
 
       {open ? (
-        <div className="relative border-t border-white/10 bg-navy px-4 py-4 md:hidden">
+        <div className="border-t border-white/15 bg-navbar px-4 py-4 md:hidden">
           <div className="flex flex-col gap-3">
             {links.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
-                className="rounded-xl px-3 py-2 text-sm font-medium text-white/85"
+                className={`rounded-full px-3 py-2 text-sm font-semibold ${
+                  link.label === DEFAULT_LINK
+                    ? "nav-pill-fill text-white"
+                    : "text-white"
+                }`}
                 onClick={() => setOpen(false)}
               >
                 {link.label}
@@ -90,14 +135,14 @@ export function Navbar() {
             ))}
             <a
               href="#signin"
-              className="rounded-xl px-3 py-2 text-sm font-semibold text-white"
+              className="rounded-full border border-white px-4 py-2.5 text-center text-sm font-semibold text-white"
               onClick={() => setOpen(false)}
             >
               Sign In
             </a>
             <a
               href="#get-started"
-              className="rounded-full bg-orange px-4 py-3 text-center text-sm font-bold text-white"
+              className="rounded-full bg-white px-4 py-3 text-center text-sm font-bold text-navy"
               onClick={() => setOpen(false)}
             >
               Create Free Career Passport
