@@ -31,7 +31,7 @@ export function JobsTeaser() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-navy">
               Explore jobs
             </p>
             <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-navy sm:text-4xl">
@@ -48,19 +48,17 @@ export function JobsTeaser() {
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {jobs.map((job) => (
-            <article
-              key={job.title}
-              className="rounded-3xl border border-line bg-white p-5 shadow-[0_12px_30px_-20px_rgba(9,53,78,0.35)] transition hover:-translate-y-1 hover:border-teal/40"
-            >
+            <article key={job.title} className="job-card">
               <span
-                className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                  job.match === "Strong Match"
-                    ? "bg-teal/15 text-teal-deep"
-                    : "bg-orange/15 text-orange"
+                className={`job-match ${
+                  job.match === "Strong Match" ? "job-match-strong" : "job-match-good"
                 }`}
               >
                 ★ {job.match}
               </span>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+                {job.type}
+              </p>
               <h3 className="mt-3 font-display text-lg font-bold text-navy">
                 {job.title}
               </h3>

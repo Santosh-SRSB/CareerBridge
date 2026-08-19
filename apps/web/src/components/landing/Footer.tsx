@@ -1,16 +1,18 @@
 import Image from "next/image";
+import { CreatePassportButton } from "@/features/candidate/passport/CreatePassportButton";
 
 export function Footer() {
   return (
-    <footer id="signin" className="bg-navy-deep text-white">
+    <footer id="signin" className="bg-navy text-white">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-3">
         <div>
           <Image
-            src="/srsb-logo.png"
+            src="/srsb-wordmark.png"
             alt="SRSB"
-            width={160}
-            height={46}
-            className="h-10 w-auto rounded-lg"
+            width={408}
+            height={170}
+            className="h-10 w-auto bg-transparent"
+            unoptimized
           />
           <p className="mt-4 max-w-xs text-sm leading-6 text-white/60">
             SRSB CareerBridge — a free Career Passport for youth, and a hiring
@@ -23,9 +25,9 @@ export function Footer() {
           </p>
           <ul className="mt-4 space-y-2 text-sm text-white/70">
             <li>
-              <a href="#get-started" className="hover:text-white">
+              <CreatePassportButton className="hover:text-white">
                 Create Career Passport
-              </a>
+              </CreatePassportButton>
             </li>
             <li>
               <a href="#jobs" className="hover:text-white">
@@ -50,7 +52,7 @@ export function Footer() {
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <a
               href="#get-started"
-              className="rounded-full bg-orange px-5 py-2.5 text-center text-sm font-bold text-white"
+              className="rounded-full bg-white px-5 py-2.5 text-center text-sm font-bold text-navy"
             >
               Get started free
             </a>

@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserType {
+  CANDIDATE
+  EMPLOYER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String?    @unique
+  phone     String?    @unique
+  userType  UserType   @default(CANDIDATE)
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  candidate Candidate?
+}
+
+model Candidate {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  firstName          String
+  lastName           String   @default("")
+  city               String?
+  about              String?
+  source             String   @default("manual")
+  profileCompletion  Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  education  CandidateEducation[]
+  skills     CandidateSkill[]
+}
+
+model CandidateEducation {
+  id            String   @id @default(uuid())
+  candidateId   String
+  qualification String
+  institution   String?
+  fieldOfStudy  String?
+  yearCompleted String?
+  createdAt     DateTime @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+}
+
+model CandidateSkill {
+  id          String @id @default(uuid())
+  candidateId String
+  name        String
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, name])
+  @@index([candidateId])
+}

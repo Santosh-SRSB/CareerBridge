@@ -15,15 +15,14 @@ export function SkillMarquee() {
   const loop = [...skills, ...skills];
 
   return (
-    <div className="overflow-hidden border-y border-white/10 bg-navy-deep py-3">
-      <div className="marquee-track flex w-max gap-8 pr-8">
+    <div className="skill-marquee overflow-hidden py-3">
+      <div className="marquee-track flex w-max gap-10 pr-10">
         {loop.map((skill, index) => (
           <span
             key={`${skill}-${index}`}
-            className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55"
+            className="text-xs font-semibold uppercase tracking-[0.18em] text-navy/70"
           >
             {skill}
-            <span className="ml-8 text-orange">●</span>
           </span>
         ))}
       </div>
