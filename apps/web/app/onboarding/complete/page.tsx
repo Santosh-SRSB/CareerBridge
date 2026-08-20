@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/AuthShell';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { getCandidateMe } from '@/lib/api';
+import { BackButton } from '@/components/ui/BackButton';
 
 export default function OnboardingCompletePage() {
   const router = useRouter();
@@ -31,8 +32,11 @@ export default function OnboardingCompletePage() {
   if (!ready) return null;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col px-5 py-8">
-      <Logo />
+    <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <BackButton fallback="/onboarding/interests" />
+        <Logo />
+      </div>
       <div className="mt-16 rounded-lg bg-surface p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-primary">You&apos;re ready!</h1>
         <p className="mt-3 text-lg text-primary">

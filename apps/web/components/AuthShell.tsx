@@ -5,6 +5,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
 import { AuthHeroFx } from '@/components/AuthHeroFx';
 import { TiltCard } from '@/components/TiltCard';
+import { ClientOnly } from '@/components/ClientOnly';
 
 export { Logo };
 
@@ -28,7 +29,7 @@ export function AuthShell({
     return (
       <main className="relative min-h-screen">
         <AnimatedBackdrop />
-        <div className="relative mx-auto max-w-md px-5 py-8">
+        <div className="relative mx-auto max-w-md px-4 py-4">
           <div className="flex items-center justify-between">
             <Logo />
             {backHref ? (
@@ -37,9 +38,11 @@ export function AuthShell({
               </Link>
             ) : null}
           </div>
-          <h1 className="mt-8 text-3xl font-extrabold tracking-tight text-primary">{title}</h1>
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-primary">{title}</h1>
           {subtitle ? <p className="mt-2 text-muted">{subtitle}</p> : null}
-          <div className="cb-card mt-6 p-6">{children}</div>
+          <div className="cb-card mt-6 p-6">
+            <ClientOnly>{children}</ClientOnly>
+          </div>
           <div id="recaptcha-container" />
         </div>
       </main>
@@ -62,7 +65,9 @@ export function AuthShell({
             <div className="px-5 pt-4 text-center">
               <h1 className="text-xl font-extrabold tracking-tight text-primary">{title}</h1>
             </div>
-            <div className="px-5 pb-5 pt-3">{children}</div>
+            <div className="px-5 pb-5 pt-3">
+              <ClientOnly>{children}</ClientOnly>
+            </div>
           </TiltCard>
         </div>
         <div id="recaptcha-container" />

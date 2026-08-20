@@ -1,6 +1,12 @@
-import { IsEmail, IsIn, IsOptional, IsString, Matches, MinLength, ValidateIf } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AuthPurpose, OtpChannel, PREFERRED_LANGUAGES, REGISTRATION_PASSWORD_PATTERN } from '@careerbridge/shared';
+import {
+  AuthPurpose,
+  OtpChannel,
+  PERSON_NAME_PATTERN,
+  PREFERRED_LANGUAGES,
+  REGISTRATION_PASSWORD_PATTERN,
+} from '@careerbridge/shared';
 
 const PASSWORD_MESSAGE =
   'Password must be at least 8 characters, include an uppercase letter, and use only letters and numbers.';
@@ -36,6 +42,8 @@ export class RequestOtpDto {
   @ValidateIf((dto: RequestOtpDto) => dto.purpose === 'REGISTER')
   @IsString()
   @MinLength(2, { message: 'Enter your name.' })
+  @MaxLength(80, { message: 'Name is too long.' })
+  @Matches(PERSON_NAME_PATTERN, { message: 'Enter a valid name using letters only.' })
   fullName?: string;
 
   @ApiPropertyOptional()

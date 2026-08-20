@@ -2,8 +2,8 @@ import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/co
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
-import { JOB_CATEGORIES, JOB_TYPES } from '@careerbridge/shared';
+import { ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { JOB_TYPES } from '@careerbridge/shared';
 import { EmployersService } from './employers.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -25,16 +25,20 @@ class UpdateEmployerDto {
 
   @IsOptional()
   @IsString()
+  @MinLength(2)
+  @MaxLength(80)
   contactName?: string;
 }
 
 class CreateJobDto {
   @IsString()
-  @MinLength(2)
+  @MinLength(2, { message: 'Enter a job title.' })
+  @MaxLength(120)
   title: string;
 
   @IsString()
-  @MinLength(20, { message: 'Add a short job description.' })
+  @MinLength(20, { message: 'Add a short job description of at least 20 characters.' })
+  @MaxLength(8000)
   description: string;
 
   @IsString()
@@ -59,17 +63,17 @@ class CreateJobDto {
   jobType?: string;
 
   @IsString()
-  @IsIn([...JOB_CATEGORIES])
+  @MinLength(2)
   category: string;
 
   @IsOptional()
   @IsString()
   experience?: string;
 
-  @IsOptional()
   @IsArray()
+  @ArrayMinSize(1, { message: 'Add at least one required skill.' })
   @IsString({ each: true })
-  requiredSkills?: string[];
+  requiredSkills: string[];
 
   @IsOptional()
   @IsArray()

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CAREER_INTERESTS, SUGGESTED_SKILLS } from '@careerbridge/shared';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
+import { Chip } from '@/components/PassportFrame';
 import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
 import { addSkill, getCandidateMe, updateCandidateMe } from '@/lib/api';
@@ -65,38 +66,20 @@ export default function OnboardingInterestsPage() {
       subtitle="Select up to 3. You can also add a few skills."
     >
       <form onSubmit={onSubmit} className="space-y-6">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {CAREER_INTERESTS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setInterests(toggle(interests, item, 3))}
-              className={`rounded-sm border px-3 py-3 text-sm font-semibold ${
-                interests.includes(item)
-                  ? 'border-primary bg-primary text-accent'
-                  : 'border-primary/20 bg-surface text-primary'
-              }`}
-            >
+            <Chip key={item} selected={interests.includes(item)} onClick={() => setInterests(toggle(interests, item, 3))}>
               {item}
-            </button>
+            </Chip>
           ))}
         </div>
         <div>
           <p className="mb-2 text-sm font-medium">Skills (optional)</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {SUGGESTED_SKILLS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setSkills(toggle(skills, item))}
-                className={`rounded-pill border px-3 py-2 text-sm ${
-                  skills.includes(item)
-                    ? 'border-accent bg-accent text-white'
-                    : 'border-primary/20 bg-surface text-primary'
-                }`}
-              >
+              <Chip key={item} selected={skills.includes(item)} onClick={() => setSkills(toggle(skills, item))}>
                 {item}
-              </button>
+              </Chip>
             ))}
           </div>
         </div>

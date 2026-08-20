@@ -29,6 +29,7 @@ export function PhoneField({
       <div className="flex gap-2">
         <select
           aria-label="Country code"
+          suppressHydrationWarning
           value={dial}
           onChange={(event) => onDialChange(event.target.value)}
           className="w-28 rounded-sm border border-primary/20 bg-surface px-2 py-3 text-base"
@@ -41,6 +42,7 @@ export function PhoneField({
         </select>
         <input
           id="mobile"
+          suppressHydrationWarning
           inputMode="numeric"
           autoComplete="tel"
           placeholder="Enter Mobile Number"

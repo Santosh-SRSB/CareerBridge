@@ -12,7 +12,7 @@ import { saveOtpFlow } from '@/lib/otp-flow';
 import { setPendingPassword } from '@/lib/pending-password';
 import { isDevOtpEnabled, isFirebaseConfigured, sendFirebaseOtp } from '@/lib/firebase';
 import { authErrorMessage } from '@/lib/auth-errors';
-import { PREFERRED_LANGUAGES, REGISTRATION_PASSWORD_HINT, registrationPasswordError } from '@careerbridge/shared';
+import { emailError, personNameError, PREFERRED_LANGUAGES, REGISTRATION_PASSWORD_HINT, registrationPasswordError } from '@careerbridge/shared';
 import type { OtpChannel } from '@careerbridge/shared';
 
 export function RegistrationForm() {
@@ -37,12 +37,14 @@ export function RegistrationForm() {
       setError('Enter a valid mobile number.');
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError('Enter a valid email address.');
+    const emailProblem = emailError(email);
+    if (emailProblem) {
+      setError(emailProblem);
       return;
     }
-    if (fullName.trim().length < 2) {
-      setError('Enter your name.');
+    const nameError = personNameError(fullName, 'Enter your name.');
+    if (nameError) {
+      setError(nameError);
       return;
     }
     if (location.trim().length < 2) {

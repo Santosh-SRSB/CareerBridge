@@ -1,6 +1,6 @@
-import { IsEmail, IsString, Matches, MinLength } from 'class-validator';
+import { IsEmail, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { REGISTRATION_PASSWORD_PATTERN } from '@careerbridge/shared';
+import { PERSON_NAME_PATTERN, REGISTRATION_PASSWORD_PATTERN } from '@careerbridge/shared';
 
 export class EmployerRegisterDto {
   @ApiProperty()
@@ -10,7 +10,9 @@ export class EmployerRegisterDto {
 
   @ApiProperty()
   @IsString()
-  @MinLength(2)
+  @MinLength(2, { message: 'Enter the contact person name.' })
+  @MaxLength(80)
+  @Matches(PERSON_NAME_PATTERN, { message: 'Enter a valid name using letters only.' })
   contactName: string;
 
   @ApiProperty()

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { dateOfBirthError, personNameError } from '@careerbridge/shared';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -35,8 +36,14 @@ export default function OnboardingNamePage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (fullName.trim().length < 2) {
-      setError('Enter your full name.');
+    const nameError = personNameError(fullName);
+    if (nameError) {
+      setError(nameError);
+      return;
+    }
+    const dobError = dateOfBirthError(dateOfBirth, false);
+    if (dobError) {
+      setError(dobError);
       return;
     }
     setError('');

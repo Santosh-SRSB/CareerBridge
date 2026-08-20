@@ -18,6 +18,7 @@ export function RoleToggle({
       />
       <button
         type="button"
+        suppressHydrationWarning
         onClick={() => onChange('CANDIDATE')}
         className={`relative z-10 rounded-sm px-2 py-2 text-xs font-bold transition-colors duration-300 ${
           value === 'CANDIDATE' ? 'text-white' : 'text-primary/60 hover:text-primary'
@@ -27,6 +28,7 @@ export function RoleToggle({
       </button>
       <button
         type="button"
+        suppressHydrationWarning
         onClick={() => onChange('EMPLOYER')}
         className={`relative z-10 rounded-sm px-2 py-2 text-xs font-bold transition-colors duration-300 ${
           value === 'EMPLOYER' ? 'text-white' : 'text-primary/60 hover:text-primary'

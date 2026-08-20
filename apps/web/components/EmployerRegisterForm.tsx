@@ -10,7 +10,7 @@ import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
 import { setPendingPassword } from '@/lib/pending-password';
 import { authErrorMessage } from '@/lib/auth-errors';
-import { REGISTRATION_PASSWORD_HINT, registrationPasswordError } from '@careerbridge/shared';
+import { emailError, personNameError, REGISTRATION_PASSWORD_HINT, registrationPasswordError } from '@careerbridge/shared';
 
 export function EmployerRegisterForm() {
   const router = useRouter();
@@ -34,12 +34,22 @@ export function EmployerRegisterForm() {
       setError('Enter a valid mobile number.');
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError('Enter a valid email address.');
+    const emailProblem = emailError(email);
+    if (emailProblem) {
+      setError(emailProblem);
       return;
     }
-    if (companyName.trim().length < 2 || contactName.trim().length < 2 || city.trim().length < 2) {
-      setError('Fill in company, contact person, and location.');
+    if (companyName.trim().length < 2) {
+      setError('Enter the company name.');
+      return;
+    }
+    const contactError = personNameError(contactName, 'Enter the contact person name.');
+    if (contactError) {
+      setError(contactError);
+      return;
+    }
+    if (city.trim().length < 2) {
+      setError('Enter the company location.');
       return;
     }
     const passwordProblem = registrationPasswordError(password);

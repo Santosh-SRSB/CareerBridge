@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ApplicationStatus, JobStatus } from '@prisma/client';
 import { ErrorCode as SharedError } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -73,6 +73,7 @@ export class EmployersService {
   }
 
   async createJob(userId: string, dto: CreateJobInput) {
+    assertSalaryRange(dto.salaryMin, dto.salaryMax);
     const employer = await this.requireEmployer(userId);
     return this.prisma.job.create({
       data: {
@@ -98,6 +99,7 @@ export class EmployersService {
   }
 
   async updateJob(userId: string, id: string, dto: CreateJobInput) {
+    assertSalaryRange(dto.salaryMin, dto.salaryMax);
     await this.requireJob(userId, id);
     return this.prisma.job.update({
       where: { id },
@@ -231,6 +233,15 @@ export class EmployersService {
       contactName: employer.contactName,
       verified: employer.verified,
     };
+  }
+}
+
+function assertSalaryRange(salaryMin?: number, salaryMax?: number) {
+  if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
+    throw new BadRequestException({
+      code: SharedError.VALIDATION_ERROR,
+      message: 'Maximum salary cannot be less than starting salary.',
+    });
   }
 }
 

@@ -2,8 +2,9 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { EDUCATION_LEVELS } from '@careerbridge/shared';
+import { EDUCATION_LEVELS, yearError } from '@careerbridge/shared';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
+import { Chip } from '@/components/PassportFrame';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
@@ -34,6 +35,11 @@ export default function OnboardingEducationPage() {
       setError('Select your highest education.');
       return;
     }
+    const invalidYear = yearError(yearCompleted);
+    if (invalidYear) {
+      setError(invalidYear);
+      return;
+    }
     setError('');
     setLoading(true);
     try {
@@ -59,20 +65,11 @@ export default function OnboardingEducationPage() {
   return (
     <OnboardingFrame step={3} title="What is your highest education?" subtitle="You can add more later in your Career Passport.">
       <form onSubmit={onSubmit} className="space-y-5">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {EDUCATION_LEVELS.map((level) => (
-            <button
-              key={level}
-              type="button"
-              onClick={() => setQualification(level)}
-              className={`rounded-sm border px-3 py-3 text-sm font-semibold ${
-                qualification === level
-                  ? 'border-primary bg-primary text-accent'
-                  : 'border-primary/20 bg-surface text-primary'
-              }`}
-            >
+            <Chip key={level} selected={qualification === level} onClick={() => setQualification(level)}>
               {level}
-            </button>
+            </Chip>
           ))}
         </div>
         <Input

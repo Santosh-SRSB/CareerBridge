@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/AuthShell';
 import { getStoredUser } from '@/lib/session';
+import { BackButton } from '@/components/ui/BackButton';
 
 export default function OnboardingWelcomePage() {
   const router = useRouter();
@@ -28,8 +29,11 @@ export default function OnboardingWelcomePage() {
   if (!ready) return null;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col px-5 py-8">
-      <Logo />
+    <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <BackButton fallback="/login" />
+        <Logo />
+      </div>
       <div className="mt-16 rounded-lg bg-surface p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-primary">
           {name ? `Welcome, ${name}!` : 'Welcome!'}
