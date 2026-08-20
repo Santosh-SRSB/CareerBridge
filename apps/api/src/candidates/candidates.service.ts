@@ -1,9 +1,23 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ErrorCode, PASSPORT_SECTION_COPY, type PassportSection } from '@careerbridge/shared';
+import { randomUUID } from 'crypto';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  ErrorCode,
+  PASSPORT_SECTION_COPY,
+  dateOfBirthError,
+  dateRangeError,
+  normalizeHttpUrl,
+  optionalUrlError,
+  personNameError,
+  profileLinkError,
+  yearNumberError,
+  type PassportSection,
+} from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  CertificationDto,
   EducationDto,
   ExperienceDto,
+  ProjectDto,
   SkillDto,
   UpdateCandidateDto,
   UpdateEducationDto,
@@ -45,10 +59,10 @@ export class CandidatesService {
 
   async updateMe(userId: string, dto: UpdateCandidateDto) {
     await this.loadCandidate(userId);
+    rejectIf(dto.fullName !== undefined ? personNameError(dto.fullName) : null);
+    rejectIf(dto.dateOfBirth ? dateOfBirthError(dto.dateOfBirth, false) : null);
     const names = dto.fullName?.trim().split(/\s+/).filter(Boolean);
-    const careerInterests = dto.careerInterests
-      ? JSON.stringify(dto.careerInterests.slice(0, 3))
-      : undefined;
+    const careerInterests = dto.careerInterests ? JSON.stringify(dto.careerInterests) : undefined;
 
     await this.prisma.candidate.update({
       where: { userId },
@@ -68,6 +82,8 @@ export class CandidatesService {
         ...(dto.highestEducation !== undefined ? { highestEducation: dto.highestEducation } : {}),
         ...(careerInterests !== undefined ? { careerInterests } : {}),
         ...(dto.hasExperience !== undefined ? { hasExperience: dto.hasExperience } : {}),
+        ...(dto.photoUrl !== undefined ? { photoUrl: dto.photoUrl || null } : {}),
+        ...(dto.links !== undefined ? { profileLinks: JSON.stringify(cleanLinks(dto.links)) } : {}),
       },
     });
 
@@ -75,6 +91,7 @@ export class CandidatesService {
   }
 
   async addEducation(userId: string, dto: EducationDto) {
+    rejectIf(yearNumberError(dto.yearCompleted));
     const candidate = await this.loadCandidate(userId);
     await this.prisma.candidateEducation.create({
       data: {
@@ -95,6 +112,7 @@ export class CandidatesService {
   }
 
   async updateEducation(userId: string, educationId: string, dto: UpdateEducationDto) {
+    rejectIf(yearNumberError(dto.yearCompleted));
     const candidate = await this.loadCandidate(userId);
     const existing = await this.prisma.candidateEducation.findFirst({
       where: { id: educationId, candidateId: candidate.id },
@@ -145,6 +163,7 @@ export class CandidatesService {
   }
 
   async addExperience(userId: string, dto: ExperienceDto) {
+    rejectIf(dateRangeError(dto.startDate || '', dto.endDate || '', !dto.endDate));
     const candidate = await this.loadCandidate(userId);
     await this.prisma.candidateExperience.create({
       data: {
@@ -167,6 +186,7 @@ export class CandidatesService {
   }
 
   async updateExperience(userId: string, experienceId: string, dto: UpdateExperienceDto) {
+    rejectIf(dateRangeError(dto.startDate || '', dto.endDate || '', !dto.endDate));
     const candidate = await this.loadCandidate(userId);
     const existing = await this.prisma.candidateExperience.findFirst({
       where: { id: experienceId, candidateId: candidate.id },
@@ -199,10 +219,68 @@ export class CandidatesService {
     return this.recompute(userId);
   }
 
+  async addCertification(userId: string, dto: CertificationDto) {
+    rejectIf(yearNumberError(dto.year));
+    const candidate = await this.loadCandidate(userId);
+    const items = parseRecords(candidate.certifications);
+    items.push({
+      id: randomUUID(),
+      name: dto.name.trim(),
+      issuer: dto.issuer?.trim() || null,
+      year: dto.year ?? null,
+      credentialId: dto.credentialId?.trim() || null,
+    });
+    await this.prisma.candidate.update({
+      where: { userId },
+      data: { certifications: JSON.stringify(items) },
+    });
+    return this.recompute(userId);
+  }
+
+  async removeCertification(userId: string, certificationId: string) {
+    const candidate = await this.loadCandidate(userId);
+    const items = parseRecords(candidate.certifications).filter((item) => item.id !== certificationId);
+    await this.prisma.candidate.update({
+      where: { userId },
+      data: { certifications: JSON.stringify(items) },
+    });
+    return this.recompute(userId);
+  }
+
+  async addProject(userId: string, dto: ProjectDto) {
+    rejectIf(yearNumberError(dto.year));
+    rejectIf(optionalUrlError(dto.url || ''));
+    const candidate = await this.loadCandidate(userId);
+    const items = parseRecords(candidate.projects);
+    items.push({
+      id: randomUUID(),
+      title: dto.title.trim(),
+      role: dto.role?.trim() || null,
+      year: dto.year ?? null,
+      description: dto.description?.trim() || null,
+      url: normalizeHttpUrl(dto.url),
+    });
+    await this.prisma.candidate.update({
+      where: { userId },
+      data: { projects: JSON.stringify(items) },
+    });
+    return this.recompute(userId);
+  }
+
+  async removeProject(userId: string, projectId: string) {
+    const candidate = await this.loadCandidate(userId);
+    const items = parseRecords(candidate.projects).filter((item) => item.id !== projectId);
+    await this.prisma.candidate.update({
+      where: { userId },
+      data: { projects: JSON.stringify(items) },
+    });
+    return this.recompute(userId);
+  }
+
   private async loadCandidate(userId: string) {
     const candidate = await this.prisma.candidate.findUnique({
       where: { userId },
-      include: { education: true, skills: true, experiences: true },
+      include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
     if (!candidate) {
       throw new NotFoundException({
@@ -226,7 +304,7 @@ export class CandidatesService {
     const updated = await this.prisma.candidate.update({
       where: { userId },
       data: { profileCompletion, onboardingCompleted },
-      include: { education: true, skills: true, experiences: true },
+      include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
     return this.toProfile(updated);
   }
@@ -237,6 +315,8 @@ export class CandidatesService {
       firstName: candidate.firstName,
       lastName: candidate.lastName,
       city: candidate.city,
+      phone: candidate.user?.phone || null,
+      email: candidate.user?.email || null,
       preferredLanguage: candidate.preferredLanguage,
       dateOfBirth: candidate.dateOfBirth?.toISOString().slice(0, 10) ?? null,
       gender: candidate.gender,
@@ -263,6 +343,23 @@ export class CandidatesService {
         description: item.description,
         isInternship: item.isInternship,
       })),
+      certifications: parseRecords(candidate.certifications).map((item) => ({
+        id: String(item.id || ''),
+        name: String(item.name || ''),
+        issuer: item.issuer ? String(item.issuer) : null,
+        year: typeof item.year === 'number' ? item.year : null,
+        credentialId: item.credentialId ? String(item.credentialId) : null,
+      })),
+      projects: parseRecords(candidate.projects).map((item) => ({
+        id: String(item.id || ''),
+        title: String(item.title || ''),
+        role: item.role ? String(item.role) : null,
+        year: typeof item.year === 'number' ? item.year : null,
+        description: item.description ? String(item.description) : null,
+        url: item.url ? String(item.url) : null,
+      })),
+      photoUrl: candidate.photoUrl || null,
+      links: parseLinks(candidate.profileLinks),
     };
   }
 }
@@ -278,8 +375,8 @@ function parseInterests(raw: string) {
 
 function sectionDone(candidate: NonNullable<CandidateRecord>, key: PassportSection['key']) {
   if (key === 'personal') return Boolean(candidate.firstName && candidate.city);
-  if (key === 'education') return Boolean(candidate.highestEducation || candidate.education.length);
-  if (key === 'skills') return candidate.skills.length > 0;
+  if (key === 'education') return candidate.education.length >= 1;
+  if (key === 'skills') return candidate.skills.length >= 3;
   if (key === 'experience') {
     return (
       candidate.hasExperience === 'NONE' ||
@@ -290,7 +387,63 @@ function sectionDone(candidate: NonNullable<CandidateRecord>, key: PassportSecti
   }
   if (key === 'preferences') return parseInterests(candidate.careerInterests).length > 0;
   if (key === 'languages') return Boolean(candidate.preferredLanguage);
+  if (key === 'certifications') return parseRecords(candidate.certifications).length > 0;
+  if (key === 'projects') return parseRecords(candidate.projects).length > 0;
+  if (key === 'photo') return Boolean(candidate.photoUrl);
+  if (key === 'links') return Object.values(parseLinks(candidate.profileLinks)).some(Boolean);
   return false;
+}
+
+function parseLinks(raw: string) {
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    if (!value || typeof value !== 'object') return {};
+    return cleanLinks({
+      linkedin: typeof value.linkedin === 'string' ? value.linkedin : undefined,
+      github: typeof value.github === 'string' ? value.github : undefined,
+      portfolio: typeof value.portfolio === 'string' ? value.portfolio : undefined,
+      website: typeof value.website === 'string' ? value.website : undefined,
+    });
+  } catch {
+    return {};
+  }
+}
+
+function rejectIf(message: string | null) {
+  if (message) {
+    throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message });
+  }
+}
+
+function cleanLinks(input: {
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  website?: string;
+}) {
+  const next: Record<string, string> = {};
+  for (const key of ['linkedin', 'github', 'portfolio', 'website'] as const) {
+    const raw = input[key]?.trim();
+    if (!raw) continue;
+    const invalid = profileLinkError(key, raw);
+    if (invalid) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: invalid });
+    }
+    const url = normalizeHttpUrl(raw);
+    if (url) next[key] = url;
+  }
+  return next;
+}
+
+function parseRecords(raw: string): Array<Record<string, unknown>> {
+  try {
+    const value = JSON.parse(raw) as unknown;
+    return Array.isArray(value)
+      ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function buildSections(candidate: NonNullable<CandidateRecord>): PassportSection[] {

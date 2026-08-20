@@ -7,6 +7,8 @@ import {
   ExperienceDto,
   PreferencesDto,
   SkillDto,
+  CertificationDto,
+  ProjectDto,
   UpdateCandidateDto,
   UpdateEducationDto,
   UpdateExperienceDto,
@@ -109,5 +111,25 @@ export class CandidatesController {
   @Delete('me/experience/:id')
   removeExperience(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.candidates.removeExperience(user.id, id);
+  }
+
+  @Post('me/certifications')
+  addCertification(@CurrentUser() user: { id: string }, @Body() dto: CertificationDto) {
+    return this.candidates.addCertification(user.id, dto);
+  }
+
+  @Delete('me/certifications/:id')
+  removeCertification(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.candidates.removeCertification(user.id, id);
+  }
+
+  @Post('me/projects')
+  addProject(@CurrentUser() user: { id: string }, @Body() dto: ProjectDto) {
+    return this.candidates.addProject(user.id, dto);
+  }
+
+  @Delete('me/projects/:id')
+  removeProject(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.candidates.removeProject(user.id, id);
   }
 }

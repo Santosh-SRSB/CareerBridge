@@ -54,6 +54,37 @@ export const PREFERRED_LANGUAGES = [
 
 export type PreferredLanguage = (typeof PREFERRED_LANGUAGES)[number];
 
+export const LANGUAGE_LEVELS = ['Basic', 'Conversational', 'Professional', 'Fluent', 'Native'] as const;
+
+export type LanguageLevel = (typeof LANGUAGE_LEVELS)[number];
+
+export type LanguageSkill = {
+  name: string;
+  level: string;
+};
+
+export function parseLanguageSkills(value: string | null | undefined): LanguageSkill[] {
+  return (value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const match = item.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+      if (match) return { name: match[1].trim(), level: match[2].trim() };
+      return { name: item, level: '' };
+    });
+}
+
+export function serializeLanguageSkills(items: LanguageSkill[]) {
+  return items
+    .map((item) => (item.level ? `${item.name} (${item.level})` : item.name))
+    .join(', ');
+}
+
+export function formatLanguageSkill(item: LanguageSkill) {
+  return item.level ? `${item.name} · ${item.level}` : item.name;
+}
+
 export type RegistrationDraft = {
   email: string;
   fullName: string;

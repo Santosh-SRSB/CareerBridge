@@ -1,3 +1,4 @@
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ErrorCode, type ResumeContent } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -98,7 +99,12 @@ export class ResumesService {
 
   async download(userId: string, id: string) {
     const record = await this.get(userId, id);
-    return { html: renderHtml(record.content, record.template), fileName: `${record.title.replace(/\s+/g, '-')}.html` };
+    const pdf = await renderPdf(record.content, record.template);
+    return {
+      pdf,
+      fileName: `${record.title.replace(/[^\w]+/g, '-')}.pdf`,
+      mimeType: 'application/pdf',
+    };
   }
 
   private contentFromPassport(
@@ -189,15 +195,113 @@ function parseContent(raw: string): ResumeContent {
   }
 }
 
-function renderHtml(content: ResumeContent, template: string) {
-  const accent = template === 'MODERN' ? '#e07a3d' : '#004043';
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${content.fullName}</title>
-  <style>body{font-family:Arial,sans-serif;color:#123132;max-width:720px;margin:24px auto;padding:24px;border:1px solid #d7ecec}
-  h1{color:${accent};margin:0} h2{color:#004043;border-bottom:1px solid #d7ecec;padding-bottom:4px}</style></head>
-  <body><h1>${content.fullName}</h1><p>${content.city || ''} ${content.phone || ''}</p>
-  <h2>SUMMARY</h2><p>${content.summary}</p>
-  <h2>SKILLS</h2><p>${content.skills.join(' | ')}</p>
-  <h2>EXPERIENCE</h2>${content.experiences.map((item) => `<p><strong>${item.jobTitle}</strong> — ${item.company}<br>${item.description || ''}</p>`).join('')}
-  <h2>EDUCATION</h2>${content.education.map((item) => `<p>${item.qualification} ${item.institution || ''} ${item.yearCompleted || ''}</p>`).join('')}
-  </body></html>`;
+function ascii(value: string) {
+  return value.normalize('NFKD').replace(/[^\x20-\x7E]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function wrapText(font: PDFFont, text: string, size: number, maxWidth: number) {
+  const words = ascii(text).split(' ').filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(next, size) <= maxWidth) {
+      current = next;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+async function renderPdf(content: ResumeContent, template: string) {
+  const doc = await PDFDocument.create();
+  const pageSize: [number, number] = [595.28, 841.89];
+  const margin = 48;
+  const width = pageSize[0] - margin * 2;
+  const accent = template === 'MODERN' ? rgb(0.94, 0.35, 0.14) : rgb(0.05, 0.2, 0.25);
+  const ink = rgb(0.07, 0.19, 0.25);
+  const muted = rgb(0.35, 0.44, 0.46);
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  let page = doc.addPage(pageSize);
+  let y = pageSize[1] - margin;
+
+  const ensure = (needed: number) => {
+    if (y - needed < margin) {
+      page = doc.addPage(pageSize);
+      y = pageSize[1] - margin;
+    }
+  };
+
+  const write = (text: string, font: PDFFont, size: number, color = ink, gap = 4) => {
+    const lines = wrapText(font, text, size, width);
+    for (const line of lines) {
+      ensure(size + gap);
+      page.drawText(line, { x: margin, y: y - size, size, font, color });
+      y -= size + gap;
+    }
+  };
+
+  const heading = (label: string) => {
+    ensure(28);
+    y -= 10;
+    page.drawText(label, { x: margin, y: y - 12, size: 11, font: bold, color: accent });
+    y -= 16;
+    page.drawLine({
+      start: { x: margin, y },
+      end: { x: pageSize[0] - margin, y },
+      thickness: 0.8,
+      color: rgb(0.84, 0.89, 0.9),
+    });
+    y -= 10;
+  };
+
+  write(content.fullName || 'Career Passport Resume', bold, 22, accent, 6);
+  const contact = [content.city, content.phone].filter(Boolean).join('  ·  ');
+  if (contact) write(contact, regular, 10, muted, 4);
+
+  if (content.summary) {
+    heading('SUMMARY');
+    write(content.summary, regular, 10, ink, 5);
+  }
+
+  if (content.skills.length) {
+    heading('SKILLS');
+    write(content.skills.join('  |  '), regular, 10, ink, 5);
+  }
+
+  if (content.experiences.length) {
+    heading('EXPERIENCE');
+    for (const item of content.experiences) {
+      write(`${item.jobTitle}  —  ${item.company}${item.isInternship ? ' (Internship)' : ''}`, bold, 11, ink, 4);
+      if (item.description) write(item.description, regular, 10, muted, 5);
+      y -= 4;
+    }
+  }
+
+  if (content.education.length) {
+    heading('EDUCATION');
+    for (const item of content.education) {
+      write(
+        [item.qualification, item.institution, item.yearCompleted ? String(item.yearCompleted) : '']
+          .filter(Boolean)
+          .join('  ·  '),
+        regular,
+        10,
+        ink,
+        5,
+      );
+    }
+  }
+
+  if (content.languages.length) {
+    heading('LANGUAGES');
+    write(content.languages.join('  |  '), regular, 10, ink, 5);
+  }
+
+  return Buffer.from(await doc.save()).toString('base64');
 }

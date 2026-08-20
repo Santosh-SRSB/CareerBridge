@@ -4,12 +4,16 @@ import { ButtonHTMLAttributes } from 'react';
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive' | 'ghost' | 'link';
+  size?: 'md' | 'lg';
+  block?: boolean;
   loading?: boolean;
   loadingLabel?: string;
 };
 
 export function Button({
   variant = 'primary',
+  size = 'lg',
+  block = true,
   loading,
   loadingLabel = 'Please wait...',
   className = '',
@@ -19,19 +23,29 @@ export function Button({
 }: Props) {
   const styles = {
     primary:
-      'cb-btn-shine relative overflow-hidden bg-primary text-white shadow-[0_12px_28px_rgba(12,51,64,0.28)] transition duration-300 hover:bg-primary-hover hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(12,51,64,0.36)] active:translate-y-0',
-    secondary: 'border border-primary text-primary bg-surface hover:bg-primary-soft',
+      size === 'md'
+        ? 'bg-primary text-white hover:bg-primary-hover'
+        : 'cb-btn-shine relative overflow-hidden bg-primary text-white shadow-[0_12px_28px_rgba(12,51,64,0.28)] transition duration-300 hover:bg-primary-hover hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(12,51,64,0.36)] active:translate-y-0',
+    secondary: 'border border-primary/25 bg-white text-primary hover:bg-[#f7fbfb]',
     tertiary: 'bg-accent text-primary hover:bg-accent/90',
     destructive: 'bg-error text-white hover:bg-error/90',
     ghost: 'text-primary hover:bg-primary-soft',
     link: 'text-accent underline-offset-2 hover:underline',
   }[variant];
 
+  const sizes = {
+    lg: 'px-4 py-3.5 text-base font-bold',
+    md: 'h-10 min-w-[8.75rem] px-4 text-sm font-semibold',
+  }[size];
+
   return (
     <button
       {...props}
+      suppressHydrationWarning
       disabled={disabled || loading}
-      className={`inline-flex w-full items-center justify-center rounded-md px-4 py-3.5 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${styles} ${className}`}
+      className={`inline-flex items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:opacity-60 ${
+        block ? 'w-full' : 'w-auto'
+      } ${sizes} ${styles} ${className}`}
     >
       {loading ? loadingLabel : children}
     </button>

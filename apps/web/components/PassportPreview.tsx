@@ -1,27 +1,38 @@
-function Ring({ value }: { value: number }) {
-  const radius = 38;
+import Link from 'next/link';
+
+function prettyText(value: string) {
+  return value
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function PassportSeal({ value }: { value: number }) {
+  const safe = Math.min(100, Math.max(0, value));
+  const radius = 28;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (Math.min(100, Math.max(0, value)) / 100) * circumference;
+  const offset = circumference - (safe / 100) * circumference;
 
   return (
-    <div className="relative h-[104px] w-[104px]">
-      <svg viewBox="0 0 96 96" className="h-full w-full -rotate-90">
-        <circle cx="48" cy="48" r={radius} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="8" />
+    <div className="cb-passport-ready relative h-[72px] w-[72px] shrink-0">
+      <svg viewBox="0 0 72 72" className="h-full w-full -rotate-90">
+        <circle cx="36" cy="36" r={radius} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="6" />
         <circle
-          cx="48"
-          cy="48"
+          cx="36"
+          cy="36"
           r={radius}
           fill="none"
-          stroke="#f15a24"
-          strokeWidth="8"
+          stroke="#1ec8c0"
+          strokeWidth="6"
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-2xl font-extrabold leading-none text-accent">{value}</span>
-        <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-accent">Ready</span>
+        <span className="text-xl font-extrabold leading-none tracking-tight text-white">{safe}</span>
+        <span className="text-[7px] font-bold uppercase tracking-[0.16em] text-white/70">Ready</span>
       </div>
     </div>
   );
@@ -30,69 +41,103 @@ function Ring({ value }: { value: number }) {
 export function PassportPreview({
   name = 'Priya Sharma',
   location = 'Bengaluru',
-  role = 'Data Analyst',
+  role,
   ready = 64,
   skills = ['SQL', 'Excel'],
+  photoUrl,
   resumeScore = 70,
   interviewScore = 58,
+  passportId,
 }: {
   name?: string;
   location?: string;
   role?: string;
   ready?: number;
   skills?: string[];
+  photoUrl?: string | null;
   resumeScore?: number | null;
   interviewScore?: number | null;
+  passportId?: string;
 }) {
-  const initials = name
+  const displayName = prettyText(name);
+  const displayPlace = prettyText(location);
+  const initials = displayName
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+  const year = new Date().getFullYear();
+  const id = passportId || 'CB-2048';
 
   return (
-    <article className="relative overflow-hidden rounded-lg bg-primary p-5 text-white shadow-[0_30px_80px_rgba(12,51,64,0.32)]">
-      <div className="absolute right-4 top-0 h-5 w-8 rounded-b-md bg-white/15" />
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-14 w-12 items-center justify-center rounded-sm border border-white/20 bg-[#163433] text-sm font-bold text-accent shadow-inner">
-            {initials || 'CB'}
+    <article className="cb-passport-light">
+
+      <div className="relative">
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-[10px] font-extrabold uppercase tracking-[0.22em] text-white">Career Passport</p>
+          <span className="shrink-0 rounded-pill bg-[#1ec8c0] px-2 py-0.5 text-[9px] font-extrabold text-[#0c3340]">FREE</span>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2.5">
+          <div className="cb-passport-photo relative shrink-0 overflow-hidden">
+            {photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-sm font-extrabold tracking-tight text-white">{initials || 'CB'}</span>
+            )}
+            <span className="cb-id-chip" aria-hidden />
           </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Career Passport</p>
-            <h3 className="text-lg font-extrabold leading-tight">{name}</h3>
-            <p className="text-xs text-white/65">
-              {location}
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-base font-extrabold leading-tight text-white">{displayName}</h3>
+            <p className="truncate text-[11px] text-white/70">
+              {displayPlace}
               {role ? ` · ${role}` : ''}
             </p>
+            <p className="mt-1 text-[11px] font-semibold leading-4 text-white/90">
+              You&apos;re <span className="text-teal">{ready}%</span> ready
+            </p>
+          </div>
+          <PassportSeal value={ready} />
+        </div>
+
+        {skills.length ? (
+          <div className="mt-2.5 flex flex-wrap gap-1">
+            {skills.slice(0, 3).map((skill) => (
+              <span
+                key={skill}
+                className="rounded-pill bg-[#1ec8c0] px-2 py-0.5 text-[9px] font-semibold text-[#0c3340]"
+              >
+                {prettyText(skill)}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="relative mt-2.5 grid grid-cols-2 gap-2">
+          <div className="cb-passport-stat">
+            <p>Resume</p>
+            <strong>{resumeScore ?? '—'}</strong>
+          </div>
+          <div className="cb-passport-stat">
+            <p>Interview</p>
+            <strong>{interviewScore ?? '—'}</strong>
           </div>
         </div>
-        <span className="rounded-pill bg-accent px-3 py-1 text-xs font-bold text-white">FREE</span>
-      </div>
 
-      <div className="relative mt-5 flex items-center justify-between gap-4">
-        <Ring value={ready} />
-        <div className="flex flex-wrap justify-end gap-2">
-          {skills.slice(0, 4).map((skill) => (
-            <span key={skill} className="rounded-pill bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
-              {skill}
-            </span>
-          ))}
+        <div className="relative mt-3 flex flex-col items-center">
+          <Link
+            href={ready < 100 ? '/passport/personal?flow=1' : '/passport?overview=1'}
+            className="inline-flex h-8 items-center rounded-full bg-[#1ec8c0] px-3.5 text-xs font-extrabold text-[#0c3340] shadow-[0_8px_18px_rgba(12,51,64,0.22)] transition hover:brightness-110"
+          >
+            {ready < 100 ? 'Complete Passport' : 'View Passport'}
+          </Link>
+          <p className="cb-passport-mrz">
+            {id} • {year}
+          </p>
         </div>
       </div>
-
-      <div className="relative mt-5 grid grid-cols-2 gap-3">
-        <div className="rounded-md border border-white/10 bg-black/20 px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wide text-white/55">Resume</p>
-          <p className="mt-1 text-2xl font-extrabold text-accent">{resumeScore ?? '—'}</p>
-        </div>
-        <div className="rounded-md border border-white/10 bg-black/20 px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wide text-white/55">Interview</p>
-          <p className="mt-1 text-2xl font-extrabold text-accent">{interviewScore ?? '—'}</p>
-        </div>
-      </div>
-      <p className="relative mt-4 text-[10px] font-semibold tracking-[0.14em] text-white/40">ID CB-2048 · Issued 2026</p>
     </article>
   );
 }

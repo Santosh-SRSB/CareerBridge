@@ -3,6 +3,8 @@ export type CandidateProfile = {
   firstName: string | null;
   lastName: string | null;
   city: string | null;
+  phone: string | null;
+  email: string | null;
   preferredLanguage: string | null;
   dateOfBirth: string | null;
   gender: string | null;
@@ -15,6 +17,10 @@ export type CandidateProfile = {
   education: CandidateEducation[];
   skills: CandidateSkill[];
   experiences: CandidateExperience[];
+  certifications: CandidateCertification[];
+  projects: CandidateProject[];
+  photoUrl: string | null;
+  links: CandidateLinks;
 };
 
 export type CandidateEducation = {
@@ -40,6 +46,84 @@ export type CandidateExperience = {
   isInternship: boolean;
 };
 
+export type CandidateCertification = {
+  id: string;
+  name: string;
+  issuer: string | null;
+  year: number | null;
+  credentialId: string | null;
+};
+
+export type CandidateProject = {
+  id: string;
+  title: string;
+  role: string | null;
+  year: number | null;
+  description: string | null;
+  url: string | null;
+};
+
+export type CandidateLinks = {
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  website?: string;
+};
+
+const LINK_HOSTS: Record<keyof CandidateLinks, string[]> = {
+  linkedin: ['linkedin.com'],
+  github: ['github.com', 'github.io'],
+  portfolio: [],
+  website: [],
+};
+
+const LINK_MESSAGES: Record<keyof CandidateLinks, string> = {
+  linkedin: 'LinkedIn must be a linkedin.com link.',
+  github: 'GitHub must be a github.com link.',
+  portfolio: 'Enter a valid portfolio website link.',
+  website: 'Enter a valid website link.',
+};
+
+export function normalizeHttpUrl(value?: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(withProtocol);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (!url.hostname.includes('.')) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function hostAllowed(hostname: string, allowed: string[]) {
+  const host = hostname.toLowerCase().replace(/^www\./, '');
+  return allowed.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+export function profileLinkError(kind: keyof CandidateLinks, value?: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const normalized = normalizeHttpUrl(trimmed);
+  if (!normalized) return LINK_MESSAGES[kind];
+  const allowed = LINK_HOSTS[kind];
+  if (!allowed.length) return null;
+  const host = new URL(normalized).hostname;
+  if (!hostAllowed(host, allowed)) return LINK_MESSAGES[kind];
+  return null;
+}
+
+export function profileLinkErrors(links: CandidateLinks) {
+  const errors: Partial<Record<keyof CandidateLinks, string>> = {};
+  (['linkedin', 'github', 'portfolio', 'website'] as const).forEach((key) => {
+    const message = profileLinkError(key, links[key]);
+    if (message) errors[key] = message;
+  });
+  return errors;
+}
+
 export type UpdateCandidatePayload = {
   fullName?: string;
   city?: string;
@@ -50,6 +134,8 @@ export type UpdateCandidatePayload = {
   highestEducation?: string;
   careerInterests?: string[];
   hasExperience?: string;
+  photoUrl?: string | null;
+  links?: CandidateLinks;
 };
 
 export type CreateEducationPayload = {
@@ -72,6 +158,21 @@ export type CreateExperiencePayload = {
   isInternship?: boolean;
 };
 
+export type CreateCertificationPayload = {
+  name: string;
+  issuer?: string;
+  year?: number;
+  credentialId?: string;
+};
+
+export type CreateProjectPayload = {
+  title: string;
+  role?: string;
+  year?: number;
+  description?: string;
+  url?: string;
+};
+
 export const EDUCATION_LEVELS = ['10th', '12th', 'Diploma', 'Graduate', 'Postgraduate', 'Other'] as const;
 
 export const CAREER_INTERESTS = [
@@ -81,6 +182,12 @@ export const CAREER_INTERESTS = [
   'Sales',
   'Office/Admin',
   'Delivery/Logistics',
+  'Healthcare',
+  'Hospitality',
+  'Manufacturing',
+  'Education',
+  'Finance',
+  'Field Work',
 ] as const;
 
 export const SUGGESTED_SKILLS = [
@@ -89,6 +196,11 @@ export const SUGGESTED_SKILLS = [
   'MS Excel',
   'Sales',
   'Data Entry',
+  'English',
+  'Teamwork',
+  'Problem Solving',
+  'MS Word',
+  'Cash Handling',
 ] as const;
 
 export const EXPERIENCE_OPTIONS = [
@@ -99,13 +211,15 @@ export const EXPERIENCE_OPTIONS = [
 
 export type PassportSectionKey =
   | 'personal'
+  | 'photo'
   | 'education'
   | 'skills'
   | 'experience'
   | 'preferences'
   | 'languages'
   | 'certifications'
-  | 'projects';
+  | 'projects'
+  | 'links';
 
 export type PassportSection = {
   key: PassportSectionKey;
@@ -132,6 +246,12 @@ export const PASSPORT_SECTION_COPY: Record<
     why: 'Employers need to know who you are and where you are based.',
     href: '/passport/personal',
     weight: 10,
+  },
+  photo: {
+    label: 'Photo',
+    why: 'A clear photo helps employers recognise you.',
+    href: '/passport/photo',
+    weight: 0,
   },
   education: {
     label: 'Education',
@@ -160,19 +280,25 @@ export const PASSPORT_SECTION_COPY: Record<
   languages: {
     label: 'Languages',
     why: 'Helps employers know how you can communicate at work.',
-    href: '/passport/personal',
+    href: '/passport/languages',
     weight: 5,
   },
   certifications: {
     label: 'Certifications',
     why: 'Add certificates later to stand out for skilled roles.',
-    href: '/passport',
-    weight: 0,
+    href: '/passport/certifications',
+    weight: 8,
   },
   projects: {
     label: 'Projects',
     why: 'Projects and volunteer work can fill gaps if you are just starting out.',
-    href: '/passport',
+    href: '/passport/projects',
+    weight: 7,
+  },
+  links: {
+    label: 'Links',
+    why: 'Add LinkedIn, GitHub, or a portfolio so employers can see more of your work.',
+    href: '/passport/links',
     weight: 0,
   },
 };

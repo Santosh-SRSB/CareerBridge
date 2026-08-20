@@ -1,12 +1,29 @@
 export const JOB_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'] as const;
-export const JOB_CATEGORIES = [
+export const TECH_JOB_CATEGORIES = [
+  'Technology',
+  'Software Development',
+  'Data / Analytics',
+  'IT Support',
+  'Product / Design',
+  'Engineering',
+  'Cybersecurity',
+  'QA / Testing',
+] as const;
+export const NON_TECH_JOB_CATEGORIES = [
   'Customer Service',
   'Retail',
-  'Technology',
   'Sales',
   'Office/Admin',
   'Delivery/Logistics',
+  'Education',
+  'Healthcare',
+  'Hospitality',
+  'Finance / Accounting',
+  'Human Resources',
+  'Manufacturing',
+  'Marketing',
 ] as const;
+export const JOB_CATEGORIES = [...TECH_JOB_CATEGORIES, ...NON_TECH_JOB_CATEGORIES] as const;
 export const RESUME_TEMPLATES = ['CLASSIC', 'MODERN', 'SIMPLE'] as const;
 export const INTERVIEW_TYPES = [
   { value: 'HR', label: 'HR / General' },
@@ -26,6 +43,79 @@ export const APPLICATION_STATUSES = [
 
 export type JobType = (typeof JOB_TYPES)[number];
 export type JobCategory = (typeof JOB_CATEGORIES)[number];
+
+export const INDIAN_CITIES = [
+  'Agra',
+  'Ahmedabad',
+  'Ajmer',
+  'Amritsar',
+  'Aurangabad',
+  'Bengaluru',
+  'Bhopal',
+  'Bhubaneswar',
+  'Chandigarh',
+  'Chennai',
+  'Coimbatore',
+  'Dehradun',
+  'Delhi',
+  'Faridabad',
+  'Ghaziabad',
+  'Goa',
+  'Gurugram',
+  'Guwahati',
+  'Gwalior',
+  'Hubballi',
+  'Hyderabad',
+  'Indore',
+  'Jaipur',
+  'Jalandhar',
+  'Jammu',
+  'Jamshedpur',
+  'Jodhpur',
+  'Kanpur',
+  'Kochi',
+  'Kolkata',
+  'Kota',
+  'Lucknow',
+  'Ludhiana',
+  'Madurai',
+  'Mangaluru',
+  'Meerut',
+  'Mumbai',
+  'Mysuru',
+  'Nagpur',
+  'Nashik',
+  'Navi Mumbai',
+  'Noida',
+  'Patna',
+  'Prayagraj',
+  'Pune',
+  'Raipur',
+  'Rajkot',
+  'Ranchi',
+  'Salem',
+  'Srinagar',
+  'Surat',
+  'Thane',
+  'Thiruvananthapuram',
+  'Tiruchirappalli',
+  'Udaipur',
+  'Vadodara',
+  'Varanasi',
+  'Vijayawada',
+  'Visakhapatnam',
+  'Warangal',
+] as const;
+
+export type IndianCity = (typeof INDIAN_CITIES)[number];
+
+export function isListedIndianCity(city: string) {
+  return (INDIAN_CITIES as readonly string[]).includes(city);
+}
+
+export function isListedJobCategory(category: string) {
+  return (JOB_CATEGORIES as readonly string[]).includes(category);
+}
 export type ResumeTemplate = (typeof RESUME_TEMPLATES)[number];
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 

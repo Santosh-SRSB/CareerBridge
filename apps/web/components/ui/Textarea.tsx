@@ -1,26 +1,22 @@
-'use client';
+import { TextareaHTMLAttributes } from 'react';
 
-import { InputHTMLAttributes } from 'react';
-
-type Props = InputHTMLAttributes<HTMLInputElement> & {
+type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & {
   label: string;
   hint?: string;
   error?: string;
 };
 
-export function Input({ label, hint, error, className = '', id, ...props }: Props) {
+export function Textarea({ label, hint, error, className = '', id, ...props }: Props) {
   const inputId = id || props.name;
   return (
     <label className="block" htmlFor={inputId}>
       <span className="mb-1.5 block text-sm font-semibold text-primary">{label}</span>
-      <input
+      <textarea
         id={inputId}
         {...props}
         suppressHydrationWarning
-        className={`w-full rounded-md border bg-[#faf8f3] px-3.5 py-3.5 text-base outline-none transition duration-300 ${
-          error
-            ? 'border-error'
-            : 'border-primary/10 hover:border-primary/25 focus:border-accent focus:bg-white focus:shadow-[0_10px_28px_rgba(232,185,35,0.22)] focus:-translate-y-0.5'
+        className={`min-h-28 w-full rounded-md border bg-[#faf8f3] px-3.5 py-3 text-base outline-none ${
+          error ? 'border-error' : 'border-primary/10'
         } ${className}`}
       />
       {error ? (

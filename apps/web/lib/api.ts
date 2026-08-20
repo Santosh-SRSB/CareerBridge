@@ -8,8 +8,10 @@ import type {
   CandidateExperience,
   CandidateProfile,
   CandidateSkill,
+  CreateCertificationPayload,
   CreateEducationPayload,
   CreateExperiencePayload,
+  CreateProjectPayload,
   CreateSkillPayload,
   EmployerApplication,
   EmployerDashboard,
@@ -170,6 +172,32 @@ export async function removeExperience(id: string) {
   });
 }
 
+export async function addCertification(payload: CreateCertificationPayload) {
+  return request<CandidateProfile>('/candidates/me/certifications', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function removeCertification(id: string) {
+  return request<CandidateProfile>(`/candidates/me/certifications/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function addProject(payload: CreateProjectPayload) {
+  return request<CandidateProfile>('/candidates/me/projects', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function removeProject(id: string) {
+  return request<CandidateProfile>(`/candidates/me/projects/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function listEducation() {
   return request<CandidateEducation[]>('/candidates/me/education');
 }
@@ -255,7 +283,24 @@ export async function updateResume(id: string, payload: { title?: string; summar
 }
 
 export async function downloadResume(id: string) {
-  return request<{ html: string; fileName: string }>(`/resumes/${id}/download`);
+  return request<{ pdf: string; fileName: string; mimeType: string }>(`/resumes/${id}/download`);
+}
+
+export function saveBase64File(base64: string, fileName: string, mimeType: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  const blob = new Blob([bytes], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function startInterview(jobRole: string, interviewType: string) {
