@@ -22,6 +22,8 @@ import type {
   ProfileCompletion,
   RequestOtpResult,
   ResumeRecord,
+  SkillAssessmentAccess,
+  SkillAssessmentSession,
   UpdateCandidatePayload,
   RequestOtpPayload,
   VerifyOtpResult,
@@ -35,7 +37,8 @@ async function request<T>(
   options: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  if (!isFormData) headers.set('Content-Type', 'application/json');
   if (options.auth !== false) {
     const token = getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
@@ -322,6 +325,54 @@ export async function answerInterview(id: string, answer: string) {
   return request<InterviewSession>(`/interviews/${id}/respond`, {
     method: 'POST',
     body: JSON.stringify({ answer }),
+  });
+}
+
+export async function startSkillAssessment() {
+  return request<SkillAssessmentSession>('/assessments', { method: 'POST' });
+}
+
+export async function getSkillAssessmentAccess() {
+  return request<SkillAssessmentAccess>('/assessments/access');
+}
+
+export async function unlockSkillAssessments() {
+  return request<SkillAssessmentAccess>('/assessments/unlock', { method: 'POST' });
+}
+
+export async function getSkillAssessment(id: string) {
+  return request<SkillAssessmentSession>(`/assessments/${id}`);
+}
+
+export async function listSkillAssessments() {
+  return request<SkillAssessmentSession[]>('/assessments');
+}
+
+export async function answerSkillAssessment(
+  id: string,
+  payload: { selectedIndex?: number; text?: string; hasAudio?: boolean; hasVoice?: boolean; durationMs?: number; recording?: Blob },
+) {
+  if (payload.recording) {
+    const form = new FormData();
+    if (payload.text) form.append('text', payload.text);
+    form.append('hasAudio', String(Boolean(payload.hasAudio)));
+    form.append('hasVoice', String(Boolean(payload.hasVoice)));
+    form.append('durationMs', String(payload.durationMs || 0));
+    form.append('recording', payload.recording, 'answer.webm');
+    return request<SkillAssessmentSession>(`/assessments/${id}/respond`, {
+      method: 'POST',
+      body: form,
+    });
+  }
+  return request<SkillAssessmentSession>(`/assessments/${id}/respond`, {
+    method: 'POST',
+    body: JSON.stringify({
+      selectedIndex: payload.selectedIndex,
+      text: payload.text,
+      hasAudio: payload.hasAudio,
+      hasVoice: payload.hasVoice,
+      durationMs: payload.durationMs,
+    }),
   });
 }
 

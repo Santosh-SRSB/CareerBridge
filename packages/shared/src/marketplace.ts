@@ -231,6 +231,70 @@ export type InterviewFeedback = {
   improvements: string[];
 };
 
+export const SKILL_ASSESSMENT_MAX_QUESTIONS = 6;
+export const SKILL_ASSESSMENT_TYPED_COUNT = 3;
+export const SKILL_ASSESSMENT_RECORDED_COUNT = 3;
+export const SKILL_ASSESSMENT_PACK_CREDITS = 3;
+export const SKILL_ASSESSMENT_PACK_PRICE_INR = 99;
+
+export const SKILL_ASSESSMENT_RULES = [
+  'This is separate from mock interview. Questions come from your Career Passport resume and skills.',
+  'You will answer 3 objective questions, then 3 questions by voice recording.',
+  'Sit facing the camera with your head straight and both shoulders visible.',
+  'Use good light. Do not sit with a window or bright light behind you.',
+  'Look at the camera. Do not look down at another phone or notes.',
+  'Do not use ChatGPT, Gemini, or any AI tool during the assessment.',
+  'Do not read answers from another screen, book, or person.',
+  'Keep a voice answer between 8 and 20 seconds. Speak clearly in your own words.',
+  'We analyse the clip for face, voice, and length, then discard it. Only your score is saved.',
+];
+
+export type SkillAssessmentQuestionKind = 'MCQ' | 'TYPED' | 'SPOKEN';
+
+export type SkillAssessmentQuestion = {
+  index: number;
+  prompt: string;
+  skill: string;
+  kind: SkillAssessmentQuestionKind;
+  options: string[];
+};
+
+export type SkillAssessmentResult = {
+  prompt: string;
+  skill: string;
+  kind: SkillAssessmentQuestionKind;
+  correct: boolean;
+};
+
+export type SkillAssessmentFeedback = {
+  score: number;
+  correct: number;
+  total: number;
+  strengths: string[];
+  improvements: string[];
+  results: SkillAssessmentResult[];
+};
+
+export type SkillAssessmentSession = {
+  id: string;
+  skills: string[];
+  resumeScore: number;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  questionIndex: number;
+  totalQuestions: number;
+  currentQuestion: SkillAssessmentQuestion | null;
+  score: number | null;
+  feedback: SkillAssessmentFeedback | null;
+};
+
+export type SkillAssessmentAccess = {
+  credits: number;
+  completedCount: number;
+  canStart: boolean;
+  packCredits: number;
+  packPriceInr: number;
+};
+
 export type EmployerProfile = {
   id: string;
   companyName: string;

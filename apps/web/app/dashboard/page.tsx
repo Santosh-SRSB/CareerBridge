@@ -19,6 +19,7 @@ import { StatusBadge } from '@/components/AppNav';
 import { CandidateTopBar, ProfileRail } from '@/components/CandidatePortal';
 import { JobFeedCard } from '@/components/JobListingCard';
 import { ScoreRing } from '@/components/ScoreRing';
+import { SkillEntryCard } from '@/components/SkillEntryCard';
 
 function DashboardSkeleton() {
   return (
@@ -191,13 +192,11 @@ export default function DashboardPage() {
           </section>
 
           <section className="cb-dash-card p-4 sm:p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="min-w-0 text-base font-bold text-primary sm:text-lg">Get interview ready</h2>
-              <Link href="/interviews" className="shrink-0 text-sm font-bold text-teal hover:underline">
-                View all
-              </Link>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="min-w-0 text-base font-bold text-primary sm:text-lg">Choose how to practise</h2>
+              <p className="text-xs font-semibold text-muted">Mock interview and skill assessment are separate.</p>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <Link href="/resume" className="cb-lift-card p-4">
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-teal">Resume</p>
                 <div className="mt-3 flex items-center gap-3">
@@ -209,17 +208,18 @@ export default function DashboardPage() {
                 </div>
               </Link>
               <Link href="/interviews" className="cb-lift-card p-4">
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-teal">Interview</p>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-teal">Mock interview</p>
                 <div className="mt-3 flex items-center gap-3">
                   <ScoreRing value={interviewScore ?? 0} size={64} label="Score" />
                   <div className="min-w-0">
-                    <p className="font-bold text-primary">Practice a mock interview</p>
+                    <p className="font-bold text-primary">Go for a mock interview</p>
                     <p className="mt-1 text-sm text-muted">
-                      {headlineSkill ? `Try questions around ${headlineSkill}.` : 'Get feedback you can act on.'}
+                      {headlineSkill ? `Practice interview questions around ${headlineSkill}.` : 'Practice answers and get feedback.'}
                     </p>
                   </div>
                 </div>
               </Link>
+              <SkillEntryCard className="sm:col-span-2 xl:col-span-1" />
             </div>
           </section>
         </div>

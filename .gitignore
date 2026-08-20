@@ -16,3 +16,5 @@ apps/api/prisma/*.db
 apps/api/prisma/*.db-journal
 docker-data
 .postgres-data
+apps/api/uploads
+scripts/.tools

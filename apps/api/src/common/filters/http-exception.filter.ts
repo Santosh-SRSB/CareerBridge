@@ -46,6 +46,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         else if (status === HttpStatus.CONFLICT) code = ErrorCode.DUPLICATE_RESOURCE;
         else if (status === HttpStatus.UNPROCESSABLE_ENTITY)
           code = ErrorCode.BUSINESS_RULE_VIOLATION;
+        else if (status === HttpStatus.PAYMENT_REQUIRED) code = ErrorCode.PAYMENT_REQUIRED;
       }
     }
 

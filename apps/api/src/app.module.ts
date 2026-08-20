@@ -9,6 +9,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { ResumesModule } from './resumes/resumes.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { InterviewsModule } from './interviews/interviews.module';
+import { AssessmentsModule } from './assessments/assessments.module';
 import { EmployersModule } from './employers/employers.module';
 import { AdminModule } from './admin/admin.module';
 import { SkillsModule } from './skills/skills.module';
@@ -31,6 +32,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     ResumesModule,
     ApplicationsModule,
     InterviewsModule,
+    AssessmentsModule,
     EmployersModule,
     AdminModule,
     SkillsModule,

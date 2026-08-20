@@ -7,6 +7,7 @@ import type { InterviewSession } from '@careerbridge/shared';
 import { getInterview } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { ScoreRing } from '@/components/ScoreRing';
+import { SkillEntryCard } from '@/components/SkillEntryCard';
 
 export default function InterviewFeedbackPage() {
   const params = useParams<{ id: string }>();
@@ -44,7 +45,7 @@ export default function InterviewFeedbackPage() {
           <ScoreRing value={feedback.score} size={64} label="Score" />
           <div className="min-w-0">
             <p className="text-lg font-bold text-primary">{feedback.score} / 100</p>
-            <p className="mt-1 text-sm text-muted">You&apos;re improving. Here&apos;s what you can practice next.</p>
+            <p className="mt-1 text-sm text-muted">You&apos;re improving. Practice again whenever you want.</p>
           </div>
         </section>
         <section className="cb-dash-card min-w-0 p-4 sm:p-5">
@@ -81,12 +82,15 @@ export default function InterviewFeedbackPage() {
           </ul>
         </section>
       </div>
-      <Link
-        href="/interviews"
-        className="inline-flex h-8 items-center rounded-full bg-[#1ec8c0] px-3.5 text-xs font-extrabold text-[#0c3340]"
-      >
-        Practice Again
-      </Link>
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <Link
+          href="/interviews"
+          className="inline-flex h-10 items-center rounded-full bg-[#1ec8c0] px-4 text-sm font-extrabold text-[#0c3340]"
+        >
+          Practice again
+        </Link>
+        <SkillEntryCard variant="teaser" />
+      </div>
     </CandidateShell>
   );
 }

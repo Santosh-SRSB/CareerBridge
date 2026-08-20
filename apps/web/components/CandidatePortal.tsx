@@ -38,32 +38,45 @@ function prettyText(value: string) {
 export function CandidateTopBar({
   name,
   onSignOut,
+  hideSearch = false,
 }: {
   name: string;
   onSignOut: () => void;
+  hideSearch?: boolean;
 }) {
   const displayName = prettyText(name);
 
   return (
     <header className="sticky top-0 z-40 border-b border-primary/8 bg-white/80 shadow-[0_10px_30px_rgba(12,51,64,0.06)] backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1280px] items-center gap-2 px-3 py-2 md:grid md:grid-cols-[auto_minmax(220px,520px)_1fr] lg:px-4">
+      <div
+        className={`mx-auto flex max-w-[1280px] items-center gap-2 px-3 py-2 lg:px-4 ${
+          hideSearch ? '' : 'md:grid md:grid-cols-[auto_minmax(220px,520px)_1fr]'
+        }`}
+      >
         <BackButton fallback="/dashboard" />
-        <form action="/jobs" method="get" className="hidden w-full md:block">
-          <div className="flex w-full overflow-hidden rounded-pill border border-primary/10 bg-[#f7fbfb] shadow-[0_8px_20px_rgba(12,51,64,0.06)]">
-            <input
-              name="q"
-              type="search"
-              placeholder="Search jobs by title or skill"
-              className="min-w-0 flex-1 bg-transparent px-5 py-2.5 text-sm text-primary outline-none"
-            />
-            <button
-              type="submit"
-              className="m-1 shrink-0 rounded-pill bg-teal px-5 text-sm font-bold text-primary transition hover:brightness-105"
-            >
-              Search
-            </button>
-          </div>
-        </form>
+        {hideSearch ? (
+          <p className="flex min-w-0 flex-1 items-center gap-2 truncate text-sm font-extrabold tracking-tight text-primary">
+            <span className="cb-studio-dot" aria-hidden />
+            Skill studio
+          </p>
+        ) : (
+          <form action="/jobs" method="get" className="hidden w-full md:block">
+            <div className="flex w-full overflow-hidden rounded-pill border border-primary/10 bg-[#f7fbfb] shadow-[0_8px_20px_rgba(12,51,64,0.06)]">
+              <input
+                name="q"
+                type="search"
+                placeholder="Search jobs by title or skill"
+                className="min-w-0 flex-1 bg-transparent px-5 py-2.5 text-sm text-primary outline-none"
+              />
+              <button
+                type="submit"
+                className="m-1 shrink-0 rounded-pill bg-teal px-5 text-sm font-bold text-primary transition hover:brightness-105"
+              >
+                Search
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
           <p className="truncate text-sm font-bold text-primary">{displayName}</p>
@@ -76,19 +89,21 @@ export function CandidateTopBar({
           </button>
         </div>
       </div>
-      <form action="/jobs" method="get" className="px-3 pb-2 md:hidden">
-        <div className="flex overflow-hidden rounded-pill border border-primary/15 bg-[#f7fbfb]">
-          <input
-            name="q"
-            type="search"
-            placeholder="Search jobs"
-            className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm text-primary outline-none"
-          />
-          <button type="submit" className="m-1 shrink-0 rounded-pill bg-teal px-4 text-sm font-bold text-primary">
-            Search
-          </button>
-        </div>
-      </form>
+      {hideSearch ? null : (
+        <form action="/jobs" method="get" className="px-3 pb-2 md:hidden">
+          <div className="flex overflow-hidden rounded-pill border border-primary/15 bg-[#f7fbfb]">
+            <input
+              name="q"
+              type="search"
+              placeholder="Search jobs"
+              className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm text-primary outline-none"
+            />
+            <button type="submit" className="m-1 shrink-0 rounded-pill bg-teal px-4 text-sm font-bold text-primary">
+              Search
+            </button>
+          </div>
+        </form>
+      )}
     </header>
   );
 }
@@ -164,7 +179,15 @@ function PortalNav() {
   );
 }
 
-export function CandidateShell({ children }: { children: ReactNode }) {
+export function CandidateShell({
+  children,
+  studio = false,
+  scene,
+}: {
+  children: ReactNode;
+  studio?: boolean;
+  scene?: 'drop' | 'rules' | 'type' | 'cam' | 'result' | 'ok';
+}) {
   const router = useRouter();
   const [name, setName] = useState('there');
 
@@ -178,16 +201,24 @@ export function CandidateShell({ children }: { children: ReactNode }) {
     router.replace('/');
   }
 
+  const success = scene === 'ok';
+
   return (
-    <div className="cb-portal-page">
-      <CandidateTopBar name={name} onSignOut={signOut} />
-      <div className="cb-portal-wrap grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <nav className="cb-dash-card hidden p-2 lg:block" aria-label="Candidate">
-          <PortalNav />
-        </nav>
-        <div className="min-w-0 space-y-3">
-          {children}
-        </div>
+    <div className={`cb-portal-page ${studio ? `cb-check-page${scene ? ` is-${scene}` : ''}` : ''}`}>
+      <CandidateTopBar name={name} onSignOut={signOut} hideSearch={studio} />
+      <div
+        className={
+          success
+            ? 'cb-portal-wrap'
+            : 'cb-portal-wrap grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]'
+        }
+      >
+        {success ? null : (
+          <nav className="cb-dash-card hidden p-2 lg:block" aria-label="Candidate">
+            <PortalNav />
+          </nav>
+        )}
+        <div className="min-w-0 space-y-3">{children}</div>
       </div>
     </div>
   );

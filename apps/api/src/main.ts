@@ -6,8 +6,20 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
-  app.use(json({ limit: '2mb' }));
-  app.use(urlencoded({ extended: true, limit: '2mb' }));
+  app.use((req, res, next) => {
+    if (req.is('multipart/form-data')) {
+      next();
+      return;
+    }
+    json({ limit: '2mb' })(req, res, next);
+  });
+  app.use((req, res, next) => {
+    if (req.is('multipart/form-data')) {
+      next();
+      return;
+    }
+    urlencoded({ extended: true, limit: '2mb' })(req, res, next);
+  });
 
   app.setGlobalPrefix('api/v1');
   app.enableCors({

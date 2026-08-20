@@ -69,6 +69,7 @@ model Candidate {
   hasExperience         String?  @map("has_experience")
   onboardingCompleted   Boolean  @default(false) @map("onboarding_completed")
   profileCompletion     Int      @default(0) @map("profile_completion")
+  assessmentCredits     Int      @default(1) @map("assessment_credits")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
@@ -78,7 +79,9 @@ model Candidate {
   experiences   CandidateExperience[]
   resumes       Resume[]
   applications  Application[]
-  interviews    Interview[]
+  interviews        Interview[]
+  skillAssessments  SkillAssessment[]
+  assessmentPurchases AssessmentPurchase[]
 
   @@map("candidates")
 }
@@ -265,6 +268,40 @@ model Interview {
 
   @@index([candidateId])
   @@map("interviews")
+}
+
+model SkillAssessment {
+  id            String   @id @default(uuid())
+  candidateId   String   @map("candidate_id")
+  skills        String   @default("[]")
+  resumeScore   Int      @default(0) @map("resume_score")
+  status        String   @default("IN_PROGRESS")
+  questionIndex Int      @default(0) @map("question_index")
+  questionsJson String   @map("questions_json")
+  answersJson   String   @default("[]") @map("answers_json")
+  score         Int?
+  feedbackJson  String?  @map("feedback_json")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("skill_assessments")
+}
+
+model AssessmentPurchase {
+  id          String   @id @default(uuid())
+  candidateId String   @map("candidate_id")
+  credits     Int
+  amountInr   Int      @map("amount_inr")
+  status      String   @default("PAID")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("assessment_purchases")
 }
 
 model Skill {
