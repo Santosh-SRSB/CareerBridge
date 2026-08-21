@@ -8,5 +8,5 @@ const src = join(here, "..", "..", "web", "public");
 
 mkdirSync(dest, { recursive: true });
 cpSync(src, dest, { recursive: true });
-writeFileSync(join(dest, "CNAME"), "srsbcareerbridge.com\n");
+writeFileSync(join(dest, "CNAME"), "www.srsbcareerbridge.com\n");
 writeFileSync(join(dest, ".nojekyll"), "");
