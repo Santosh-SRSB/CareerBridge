@@ -136,7 +136,7 @@ export function HeroProof() {
     };
   }, []);
 
-  const beat = phase < 3 ? beats[phase] : null;
+  const beat = phase === 0 || phase === 1 || phase === 2 ? beats[phase] : null;
 
   return (
     <div className="hero-proof">
