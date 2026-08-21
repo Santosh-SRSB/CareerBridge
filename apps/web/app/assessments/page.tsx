@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -18,7 +18,6 @@ import {
 } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { SkillMascot } from '@/components/SkillMascot';
-import { Button } from '@/components/ui/Button';
 import { SkillStudioLoader } from '@/components/SkillEntryCard';
 
 export default function AssessmentsPage() {
@@ -83,121 +82,99 @@ export default function AssessmentsPage() {
 
   return (
     <CandidateShell studio scene="drop">
-      <section className="cb-arena">
-        <span className="cb-arena-scan" />
-        <div className="cb-arena-body">
-          <div className="cb-arena-copy cb-arena-rise">
-            <p className="cb-free-tag">
-              <span>Free</span> for candidate
-            </p>
+      <div className="cb-folio">
+        <i className="cb-folio-tape a" />
+        <i className="cb-folio-tape b" />
+        <div className="cb-folio-stack">
+          <i className="cb-folio-layer s3" />
+          <i className="cb-folio-layer s2" />
+          <section className="cb-folio-sheet">
+            <span className="cb-folio-spine">PASSPORT CHECK</span>
+            <div className="cb-folio-seal" aria-hidden>
+              06
+            </div>
+            <p className="cb-folio-kicker">Built from your Career Passport</p>
             <h1>
-              From your Passport.
-              <em className="cb-hero-accent">Get 6 questions.</em>
+              Tick three.
+              <em>Then speak three.</em>
             </h1>
-            <p>Built from your Career Passport resume: 3 objective ticks, then 3 on camera. We score the clip and keep the score only.</p>
-            <div className="cb-arena-chips">
-              <span className="cb-arena-chip is-teal">{SKILL_ASSESSMENT_TYPED_COUNT} objective</span>
-              <span className="cb-arena-chip is-orange">{SKILL_ASSESSMENT_RECORDED_COUNT} recorded</span>
-              <span className="cb-arena-chip is-gold">{access ? `${access.credits} left` : '…'}</span>
-            </div>
-          </div>
-          <div className="cb-arena-art">
-            <SkillMascot pose="idea" className="cb-arena-idea" alt="" />
-            <div className="cb-arena-token">
-              <i className="cb-arena-spinring" />
-              <SkillMascot pose="coach" className="cb-arena-float" alt="Skill coach" />
-            </div>
-          </div>
+            <p className="cb-folio-lead">
+              {SKILL_ASSESSMENT_TYPED_COUNT} objective ticks, then {SKILL_ASSESSMENT_RECORDED_COUNT} on camera. The clip is
+              scored and discarded.
+            </p>
+            <ul className="cb-folio-chips">
+              <li>
+                <b>{SKILL_ASSESSMENT_TYPED_COUNT}</b> ticks
+              </li>
+              <li>
+                <b>{SKILL_ASSESSMENT_RECORDED_COUNT}</b> camera
+              </li>
+              <li>
+                <b>{access ? access.credits : '—'}</b> left
+              </li>
+            </ul>
+            <ol className="cb-folio-steps">
+              <li className={!needsPay && !inProgress ? 'is-now' : ''}>
+                <span>01</span> Passport skills
+              </li>
+              <li className={inProgress ? 'is-now' : ''}>
+                <span>02</span> Tick, then submit
+              </li>
+              <li>
+                <span>03</span> Face + voice, 8–20s
+              </li>
+            </ol>
+            {needsPay ? (
+              <button type="button" className="cb-folio-btn" disabled={loading} onClick={() => void unlock()}>
+                {loading ? 'Unlocking...' : `Unlock ${access?.packCredits || 3} · ₹${access?.packPriceInr || SKILL_ASSESSMENT_PACK_PRICE_INR}`}
+              </button>
+            ) : (
+              <button type="button" className="cb-folio-btn" disabled={loading} onClick={() => void start()}>
+                {loading ? 'Opening...' : inProgress ? 'Continue this check' : 'Start from my Passport'}
+              </button>
+            )}
+            {error ? <p className="cb-folio-error">{error}</p> : null}
+            {needsPassport ? (
+              <Link href="/passport/personal?flow=1" className="cb-folio-link">
+                Complete Passport
+              </Link>
+            ) : null}
+            <SkillMascot pose="idea" className="cb-folio-sticker" alt="" />
+          </section>
         </div>
-        <ol className="cb-flow">
-          <li className={!needsPay && !inProgress ? 'is-now' : ''}>
-            <em>01</em>
-            <div>
-              <b>Passport resume</b>
-              <span>Skills on file</span>
-            </div>
-          </li>
-          <li className={inProgress ? 'is-now' : ''}>
-            <em>02</em>
-            <div>
-              <b>Tick 3</b>
-              <span>Objective</span>
-            </div>
-          </li>
-          <li>
-            <em>03</em>
-            <div>
-              <b>Camera 3</b>
-              <span>Face + voice</span>
-            </div>
-          </li>
-        </ol>
-        <div className="cb-arena-action">
-          {needsPay ? (
-            <Button type="button" size="md" variant="tertiary" block={false} className="cb-studio-btn" loading={loading} loadingLabel="Unlocking..." onClick={() => void unlock()}>
-              Unlock {access?.packCredits || 3} · ₹{access?.packPriceInr || SKILL_ASSESSMENT_PACK_PRICE_INR}
-            </Button>
-          ) : inProgress ? (
-            <Button type="button" size="md" block={false} className="cb-studio-btn" loading={loading} loadingLabel="Opening..." onClick={() => void start()}>
-              Continue skill check
-            </Button>
-          ) : (
-            <Button type="button" size="md" block={false} className="cb-studio-btn" loading={loading} loadingLabel="Building questions..." onClick={() => void start()}>
-              Start from my Passport
-            </Button>
-          )}
-          {error ? <p className="mt-2 text-xs text-[#ffb4a8]">{error}</p> : null}
-          {needsPassport ? (
-            <Link href="/passport/personal?flow=1" className="mt-2 inline-block text-xs font-bold text-[#1ec8c0] hover:underline">
-              Complete Passport
-            </Link>
-          ) : null}
-        </div>
-      </section>
 
-      <section className="cb-arena-rise" style={{ animationDelay: '180ms' }}>
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <h2 className="text-xs font-extrabold uppercase tracking-[0.14em] text-primary">Earlier checks</h2>
-          <p className="text-[11px] font-semibold text-muted">{history.length ? `${history.length} saved` : 'None yet'}</p>
-        </div>
-        {history.length ? (
-          <div className="cb-check-list">
-            {history.map((item, index) => {
-              const score = item.score ?? 0;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="cb-check-row"
-                  style={{ animationDelay: `${220 + index * 50}ms` }}
-                  onClick={() =>
-                    router.push(item.status === 'COMPLETED' ? `/assessments/${item.id}/result` : `/assessments/${item.id}`)
-                  }
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-primary">
-                      {item.skills.slice(0, 3).join(', ') || 'Skill check'}
-                    </p>
-                    <p className="text-[11px] text-muted">
-                      {item.status === 'COMPLETED' ? 'Open result' : 'Continue'} · Resume {item.resumeScore}
-                    </p>
-                    {item.status === 'COMPLETED' && item.score != null ? (
-                      <div className={`cb-check-meter mt-1 ${score < 70 ? 'is-mid' : ''}`}>
-                        <i style={{ width: `${score}%` }} />
-                      </div>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 text-base font-extrabold text-primary">
-                    {item.status === 'COMPLETED' && item.score != null ? score : '—'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="px-1 text-xs text-muted">No skill checks yet. Start from your Passport resume.</p>
-        )}
-      </section>
+        <section className="cb-folio-past">
+          <header>
+            <h2>Filed checks</h2>
+            <span>{history.length ? `${history.length} saved` : 'None yet'}</span>
+          </header>
+          {history.length ? (
+            <div className="cb-folio-slips">
+              {history.map((item, index) => {
+                const score = item.score ?? 0;
+                const done = item.status === 'COMPLETED' && item.score != null;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`cb-folio-slip ${done ? 'is-done' : 'is-open'}`}
+                    style={{ '--d': `${0.08 + index * 0.06}s`, '--r': `${index % 2 ? 1.2 : -1.1}deg` } as CSSProperties}
+                    onClick={() =>
+                      router.push(item.status === 'COMPLETED' ? `/assessments/${item.id}/result` : `/assessments/${item.id}`)
+                    }
+                  >
+                    <small>{done ? 'Result' : 'Open'}</small>
+                    <p>{item.skills.slice(0, 3).join(' · ') || 'Skill check'}</p>
+                    <strong>{done ? score : '—'}</strong>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="cb-folio-empty">No checks filed yet. Start from your Passport resume.</p>
+          )}
+        </section>
+      </div>
     </CandidateShell>
   );
 }

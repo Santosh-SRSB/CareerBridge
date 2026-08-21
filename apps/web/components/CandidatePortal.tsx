@@ -201,19 +201,19 @@ export function CandidateShell({
     router.replace('/');
   }
 
-  const success = scene === 'ok';
+  const cinema = scene === 'ok' || scene === 'cam';
 
   return (
     <div className={`cb-portal-page ${studio ? `cb-check-page${scene ? ` is-${scene}` : ''}` : ''}`}>
       <CandidateTopBar name={name} onSignOut={signOut} hideSearch={studio} />
       <div
         className={
-          success
+          cinema
             ? 'cb-portal-wrap'
             : 'cb-portal-wrap grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]'
         }
       >
-        {success ? null : (
+        {cinema ? null : (
           <nav className="cb-dash-card hidden p-2 lg:block" aria-label="Candidate">
             <PortalNav />
           </nav>

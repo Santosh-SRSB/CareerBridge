@@ -5,17 +5,19 @@ export function SkillProgress({
   current,
   justTicked = null,
   revealAll = false,
+  compact = false,
 }: {
   total: number;
   current: number;
   justTicked?: number | null;
   revealAll?: boolean;
+  compact?: boolean;
 }) {
   const lastShown = revealAll ? total - 1 : Math.max(0, justTicked != null ? justTicked : current);
   const count = Math.min(total, lastShown + 1);
 
   return (
-    <ol className="cb-ticks is-live" aria-label="Question progress">
+    <ol className={`cb-ticks is-live ${compact ? 'is-compact' : ''}`} aria-label="Question progress">
       {Array.from({ length: count }, (_, index) => {
         const done = index < current || index === justTicked || (revealAll && index < total);
         const active = !revealAll && index === current && index !== justTicked;
@@ -25,6 +27,7 @@ export function SkillProgress({
             className={`cb-tick ${index >= 3 ? 'is-cam' : ''} ${done ? 'is-done' : ''} ${active ? 'is-now' : ''} ${
               justTicked === index ? 'is-pop' : ''
             } ${index === lastShown && !revealAll ? 'is-fresh' : ''}`}
+            style={{ animationDelay: `${index * 70}ms` }}
           >
             <span className="cb-tick-orb">
               {done ? (
@@ -35,7 +38,7 @@ export function SkillProgress({
                 index + 1
               )}
             </span>
-            <em>{index < 3 ? 'MCQ' : 'Cam'}</em>
+            <em>{index < 3 ? 'Tick' : 'Cam'}</em>
           </li>
         );
       })}

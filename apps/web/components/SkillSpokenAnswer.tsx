@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Textarea } from '@/components/ui/Textarea';
-import { Button } from '@/components/ui/Button';
 
 function pickRecorderType() {
   const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
@@ -16,30 +14,32 @@ function isLive(media: MediaStream | null) {
 function cameraMessage(error: unknown) {
   const name = error instanceof DOMException ? error.name : '';
   if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
-    return 'The camera is already in use. Close Windows Camera, Teams, Zoom, and other browser tabs. Then tap Enable camera.';
+    return 'The camera is already in use. Close Windows Camera, Teams, Zoom, and other browser tabs. Then tap Open camera.';
   }
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-    return 'Camera permission is blocked. Allow camera and microphone for this site, then tap Enable camera.';
+    return 'Camera permission is blocked. Allow camera and microphone for this site, then tap Open camera.';
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
     return 'No camera was found. Plug in a webcam and try again.';
   }
-  return 'Could not open the camera. Close other camera apps, then tap Enable camera.';
+  return 'Could not open the camera. Close other camera apps, then tap Open camera.';
 }
 
 export function SkillSpokenAnswer({
   prompt,
   skill,
-  value,
-  onChange,
+  index = 0,
+  total = 6,
   error,
   loading,
   onSubmit,
 }: {
   prompt?: string;
   skill?: string;
-  value: string;
-  onChange: (value: string) => void;
+  index?: number;
+  total?: number;
+  value?: string;
+  onChange?: (value: string) => void;
   error: string;
   loading: boolean;
   onSubmit: (payload: { text: string; hasAudio: boolean; hasVoice: boolean; durationMs: number; recording?: Blob }) => void;
@@ -185,7 +185,7 @@ export function SkillSpokenAnswer({
   function startRecording() {
     const media = streamRef.current;
     if (!isLive(media)) {
-      setCameraError('Enable the camera first and wait until you see your face.');
+      setCameraError('Open the camera first and wait until you see your face.');
       return;
     }
     chunksRef.current = [];
@@ -242,115 +242,74 @@ export function SkillSpokenAnswer({
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
   }
 
+  function submitClip() {
+    if (!clipRef.current) {
+      setCameraError('Record your face and speak for at least 8 seconds.');
+      return;
+    }
+    if (!hasVoiceRef.current) {
+      setCameraError('We did not hear speech. Record again and speak clearly for 8 to 20 seconds. Silence will not score.');
+      return;
+    }
+    onSubmit({
+      text: '',
+      hasAudio: true,
+      hasVoice: true,
+      durationMs: durationRef.current || durationMs,
+      recording: clipRef.current,
+    });
+  }
+
   const seconds = Math.max(0, Math.round((recording ? liveMs : durationMs) / 1000));
   const live = isLive(stream);
-
   const meter = Math.min(100, Math.round((seconds / 20) * 100));
 
   return (
-    <div className="cb-booth">
-      <div className="cb-booth-copy">
-        <div className="cb-booth-head">
-          <span className={`cb-booth-live ${live ? 'is-on' : ''} ${recording ? 'is-rec' : ''}`}>
-            {recording ? 'REC' : live ? 'LIVE' : 'STANDBY'}
-          </span>
-          <span className={`cb-voice-pill ${hasVoice ? 'is-on' : recording ? 'is-listen' : ''}`}>
-            {recording ? 'Listening…' : hasClip ? (hasVoice ? 'Voice heard' : 'No speech') : `${seconds}s · speak to score`}
-          </span>
-        </div>
-        {skill ? <p className="cb-check-kicker">03 · Camera · {skill}</p> : null}
-        {prompt ? <h2 className="text-base font-extrabold leading-snug text-primary">{prompt}</h2> : null}
-        <p className="text-xs leading-5 text-muted">
-          Face the small camera on the right. Sit straight, show your shoulders, look at the lens, speak 8–20 seconds. Close Windows Camera, Teams, or Zoom first.
-        </p>
-        <div className="cb-booth-meter" aria-hidden>
-          <i style={{ width: `${meter}%` }} />
-          <em />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="md" variant="secondary" block={false} className="cb-studio-btn" loading={opening} loadingLabel="Opening..." onClick={() => void enableCamera()}>
-            {live ? 'Restart camera' : 'Enable camera'}
-          </Button>
-          <Button
-            type="button"
-            size="md"
-            variant={recording ? 'destructive' : 'tertiary'}
-            block={false}
-            className="cb-studio-btn"
-            onClick={recording ? stopRecording : startRecording}
-          >
-            {recording ? 'Stop' : hasClip ? 'Record again' : 'Record'}
-          </Button>
-          <Button
-            type="button"
-            size="md"
-            block={false}
-            className="cb-studio-btn"
-            loading={loading}
-            loadingLabel="Scoring..."
-            onClick={() => {
-              if (!clipRef.current) {
-                setCameraError('Record your face and speak for at least 8 seconds.');
-                return;
-              }
-              if (!hasVoiceRef.current) {
-                setCameraError('We did not hear speech. Record again and speak clearly for 8 to 20 seconds. Silence will not score.');
-                return;
-              }
-              onSubmit({
-                text: value.trim(),
-                hasAudio: true,
-                hasVoice: true,
-                durationMs: durationRef.current || durationMs,
-                recording: clipRef.current,
-              });
-            }}
-          >
-            Submit clip
-          </Button>
-        </div>
-        {cameraError ? <p className="text-xs text-error">{cameraError}</p> : null}
-        {error ? <p className="text-xs text-error">{error}</p> : null}
-        {hasClip && !recording ? (
-          <p className={`text-xs font-semibold ${hasVoice ? 'text-success' : 'text-error'}`}>
-            {hasVoice
-              ? 'Face and voice heard. Submit to score this answer. The clip is not stored.'
-              : 'This clip has no speech. Record again and talk for 8 to 20 seconds. Silent clips score 0.'}
-          </p>
-        ) : null}
-        <Textarea
-          label="Optional note"
-          name="spokenAnswer"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Optional. We analyse the clip, then save only your score."
-          className="cb-type-field min-h-16"
-        />
-      </div>
-
-      <aside className={`cb-booth-cam ${opening ? 'is-open' : ''} ${live ? 'is-live' : ''}`}>
-        <div className={`cb-face cb-booth-stage ${recording ? 'is-rec' : ''} ${hasClip && !recording ? 'is-play' : ''} ${live || recording ? 'cb-face-glow' : ''}`}>
-          <i className="cb-booth-iris" />
-          <i className="cb-booth-scan" />
-          <i className="cb-booth-corner tl" />
-          <i className="cb-booth-corner tr" />
-          <i className="cb-booth-corner bl" />
-          <i className="cb-booth-corner br" />
-          <span className="cb-booth-oval" />
+    <div className="cb-cast">
+      <p className="cb-folio-prompt">{prompt}</p>
+      <div className={`cb-polaroid ${recording ? 'is-rec' : ''} ${live ? 'is-live' : ''} ${hasClip && !recording ? 'is-play' : ''}`}>
+        <div className={`cb-cast-stage ${recording ? 'is-rec' : ''} ${live ? 'is-live' : ''} ${hasClip && !recording ? 'is-play' : ''}`}>
           <video ref={videoRef} autoPlay muted playsInline />
-          {!live && !hasClip ? <div className="cb-face-empty">Off</div> : null}
-          {recording ? (
-            <div className="cb-wavebars" aria-hidden>
-              {Array.from({ length: 8 }, (_, index) => (
-                <i key={index} style={{ animationDelay: `${index * 70}ms` }} />
-              ))}
+          {!live && !hasClip ? (
+            <div className="cb-cast-empty">
+              <strong>Camera is off</strong>
+              <span>Open it, then record 8–20 seconds</span>
             </div>
           ) : null}
-          <span className="cb-face-badge">
-            {recording ? `REC ${seconds}s` : hasClip ? `${Math.max(1, seconds)}s` : live ? 'Live' : 'Off'}
-          </span>
+          <span className="cb-cast-guide" aria-hidden />
+          <div className="cb-cast-chips">
+            <b className={recording ? 'is-rec' : live ? 'is-live' : ''}>{recording ? 'REC' : live ? 'LIVE' : 'OFF'}</b>
+            <b>{seconds}s / 20s</b>
+            <b className={hasVoice ? 'is-ok' : ''}>{recording ? 'Listening' : hasClip ? (hasVoice ? 'Voice heard' : 'No speech') : 'Speak'}</b>
+          </div>
+          <i className="cb-cast-meter" style={{ width: `${meter}%` }} />
         </div>
-      </aside>
+        <p className="cb-polaroid-cap">
+          Q{index + 1}/{total} · {skill || 'Camera'} · face + voice
+        </p>
+      </div>
+
+      {cameraError || error ? <p className="cb-folio-error">{cameraError || error}</p> : null}
+      {hasClip && !recording && !hasVoice ? (
+        <p className="cb-folio-error">Silent clip. Record again and talk for 8 to 20 seconds.</p>
+      ) : null}
+
+      <div className="cb-cast-dock">
+        <button type="button" className="cb-cast-side" disabled={opening} onClick={() => void enableCamera()}>
+          {opening ? 'Opening' : live ? 'Restart' : 'Open camera'}
+        </button>
+        <button
+          type="button"
+          className={`cb-cast-rec ${recording ? 'is-on' : ''}`}
+          aria-label={recording ? 'Stop recording' : 'Record'}
+          onClick={recording ? stopRecording : startRecording}
+        >
+          <span />
+        </button>
+        <button type="button" className="cb-cast-side is-go" disabled={loading} onClick={submitClip}>
+          {loading ? 'Scoring' : 'Submit'}
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,13 +1,11 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { SKILL_ASSESSMENT_RULES, type SkillAssessmentSession } from '@careerbridge/shared';
 import { answerSkillAssessment, getSkillAssessment } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
-import { SkillMascot } from '@/components/SkillMascot';
-import { Button } from '@/components/ui/Button';
 import { SkillSpokenAnswer } from '@/components/SkillSpokenAnswer';
 import { SkillStudioLoader } from '@/components/SkillEntryCard';
 import { SkillProgress } from '@/components/SkillProgress';
@@ -44,7 +42,7 @@ export default function AssessmentSessionPage() {
   async function submitMcq(event: FormEvent) {
     event.preventDefault();
     if (selected == null) {
-      setError('Choose one answer to continue.');
+      setError('Tick one option, then submit.');
       return;
     }
     await send({ selectedIndex: selected });
@@ -103,38 +101,34 @@ export default function AssessmentSessionPage() {
   if (!accepted) {
     return (
       <CandidateShell studio scene="rules">
-        <section className="cb-arena">
-          <span className="cb-arena-scan" />
-          <div className="cb-arena-body">
-            <div className="cb-arena-copy cb-arena-rise">
-              <Link href="/assessments" className="cb-arena-kicker hover:underline">
-                ← Skill check
-              </Link>
-              <h1>One question at a time</h1>
-              <p>Tick one option, submit, then next. 3 objective questions, then 3 on camera.</p>
-              <div className="mt-3">
-                <Button type="button" size="md" block={false} className="cb-studio-btn" onClick={() => setAccepted(true)}>
-                  Start question 1
-                </Button>
-              </div>
-            </div>
-            <div className="cb-arena-art">
-              <div className="cb-arena-token">
-                <i className="cb-arena-spinring" />
-                <SkillMascot pose="guide" className="cb-arena-float" alt="Skill guide" />
-              </div>
-            </div>
-          </div>
-          <SkillProgress total={session.totalQuestions} current={0} />
-        </section>
-        <ol className="cb-check-list cb-arena-rise" style={{ animationDelay: '120ms' }}>
-          {SKILL_ASSESSMENT_RULES.map((item, index) => (
-            <li key={item} className="cb-check-row cb-rule-row text-xs text-primary" style={{ animationDelay: `${160 + index * 40}ms` }}>
-              <span className="cb-rule-dot">{index + 1}</span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ol>
+        <div className="cb-folio">
+          <i className="cb-folio-tape a" />
+          <header className="cb-folio-top">
+            <Link href="/assessments" className="cb-folio-back">
+              ← Skill check
+            </Link>
+            <SkillProgress total={session.totalQuestions} current={0} compact />
+          </header>
+          <section className="cb-folio-sheet is-rules">
+            <span className="cb-folio-spine">BEFORE YOU START</span>
+            <p className="cb-folio-kicker">One question at a time</p>
+            <h1>
+              Tick, then speak.
+              <em>Face the lens.</em>
+            </h1>
+            <ol className="cb-folio-rules">
+              {SKILL_ASSESSMENT_RULES.map((item, index) => (
+                <li key={item} style={{ '--d': `${0.08 + index * 0.05}s` } as CSSProperties}>
+                  <b>{String(index + 1).padStart(2, '0')}</b>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ol>
+            <button type="button" className="cb-folio-btn" onClick={() => setAccepted(true)}>
+              Start question 1
+            </button>
+          </section>
+        </div>
       </CandidateShell>
     );
   }
@@ -143,26 +137,21 @@ export default function AssessmentSessionPage() {
   const kind = question.kind;
   const last = question.index + 1 >= session.totalQuestions;
   const busy = loading || leaving;
+  const mark = String(question.index + 1).padStart(2, '0');
 
   if (saved) {
     return (
       <CandidateShell studio scene="ok">
-        <div className="cb-ok">
-          <div className="cb-ok-card">
-            <span className="cb-ok-tick" aria-hidden>
-              <svg viewBox="0 0 24 24">
-                <path d="M5 13.2 9.4 17.5 19 7.5" />
-              </svg>
-            </span>
-            <h2>Question submitted successfully!</h2>
-            <p className="cb-ok-meta">
-              QUESTION {String(question.index + 1).padStart(2, '0')} OF {String(session.totalQuestions).padStart(2, '0')}:{' '}
-              <b>{question.skill}</b>
-            </p>
-            <button type="button" className="cb-ok-btn" disabled={leaving} onClick={() => void goNext()}>
-              {leaving ? 'Opening...' : last ? 'See result' : 'Next question'}
-            </button>
-          </div>
+        <div className="cb-folio cb-folio-filed">
+          <div className="cb-folio-stamp">FILED</div>
+          <p className="cb-folio-kicker">
+            Question {mark} of {String(session.totalQuestions).padStart(2, '0')}
+          </p>
+          <h2>{question.skill}</h2>
+          <p>Saved. The clip is not stored.</p>
+          <button type="button" className="cb-folio-btn" disabled={leaving} onClick={() => void goNext()}>
+            {leaving ? 'Opening...' : last ? 'See result' : 'Next question'}
+          </button>
         </div>
       </CandidateShell>
     );
@@ -170,76 +159,59 @@ export default function AssessmentSessionPage() {
 
   return (
     <CandidateShell studio scene={kind === 'SPOKEN' ? 'cam' : 'type'}>
-      <section className={`cb-arena ${kind === 'SPOKEN' ? 'is-compact' : ''}`}>
-        <span className="cb-arena-scan" />
-        <div className="cb-arena-body">
-          <div className="cb-arena-copy">
-            <Link href="/assessments" className="cb-arena-kicker hover:underline">
-              ← Skill studio
-            </Link>
-            <h1>
-              Question {question.index + 1}
-              <em>of {session.totalQuestions}</em>
-            </h1>
-            <p>
-              {question.skill} · {kind === 'SPOKEN' ? 'Look at the camera and speak' : 'Tick one option, then submit'}
-            </p>
-          </div>
-          {kind === 'SPOKEN' ? null : (
-            <div className="cb-arena-art hidden sm:grid">
-              <SkillMascot pose="idea" className="cb-arena-idea" alt="" />
-              <div className="cb-arena-token">
-                <i className="cb-arena-spinring" />
-                <SkillMascot pose="guide" className="cb-arena-float" alt="" />
-              </div>
-            </div>
-          )}
-        </div>
-        <SkillProgress total={session.totalQuestions} current={question.index} justTicked={justTicked} />
-      </section>
-      <article key={question.index} className={`cb-q-stage cb-check-sheet p-3 sm:p-4 ${kind === 'SPOKEN' ? 'is-speak' : ''} ${leaving ? 'is-exit' : ''}`}>
-        <span className="cb-q-no" aria-hidden>
-          {String(question.index + 1).padStart(2, '0')}
-        </span>
+      <div className={`cb-folio ${kind === 'SPOKEN' ? 'is-cam' : 'is-mcq'}`}>
+        <header className="cb-folio-top">
+          <Link href="/assessments" className="cb-folio-back">
+            ← Back
+          </Link>
+          <SkillProgress total={session.totalQuestions} current={question.index} justTicked={justTicked} compact />
+          <span className="cb-folio-tag">{question.skill}</span>
+        </header>
+
         {kind === 'SPOKEN' ? (
           <SkillSpokenAnswer
             key={question.index}
             prompt={question.prompt}
             skill={question.skill}
-            value={typedText}
-            onChange={setTypedText}
+            index={question.index}
+            total={session.totalQuestions}
             error={error}
             loading={busy}
             onSubmit={(payload) => void send(payload)}
           />
         ) : (
-          <>
-            <p className="cb-check-kicker">Tick one · then submit</p>
-            <h2 className="mt-1 text-base font-extrabold leading-snug text-primary">{question.prompt}</h2>
-            <p className="mt-1 text-[11px] font-semibold text-muted">Choose an option and submit. Next question opens after it is saved.</p>
-            <form onSubmit={submitMcq} className="mt-2 space-y-2">
-              {question.options.map((option, index) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => {
-                    setSelected(index);
-                    setError('');
-                  }}
-                  className={`cb-pick ${selected === index ? 'is-on' : ''}`}
-                >
-                  <em>{selected === index ? '✓' : String.fromCharCode(65 + index)}</em>
-                  <span>{option}</span>
+          <article key={question.index} className={`cb-folio-q ${leaving ? 'is-exit' : ''}`}>
+            <b className="cb-folio-num" aria-hidden>
+              {mark}
+            </b>
+            <div className="cb-folio-ruled">
+              <p className="cb-folio-kicker">Tick one · then submit</p>
+              <h2>{question.prompt}</h2>
+              <form onSubmit={submitMcq} className="cb-folio-marks">
+                {question.options.map((option, index) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      setSelected(index);
+                      setError('');
+                    }}
+                    className={`cb-folio-mark ${selected === index ? 'is-on' : ''}`}
+                    style={{ '--d': `${0.06 + index * 0.05}s` } as CSSProperties}
+                  >
+                    <em>{selected === index ? '✓' : String.fromCharCode(65 + index)}</em>
+                    <span>{option}</span>
+                  </button>
+                ))}
+                {error ? <p className="cb-folio-error">{error}</p> : null}
+                <button type="submit" className="cb-folio-btn" disabled={busy}>
+                  {busy ? 'Saving...' : 'Submit'}
                 </button>
-              ))}
-              {error ? <p className="text-xs text-error">{error}</p> : null}
-              <Button type="submit" size="md" block={false} className="cb-studio-btn" loading={busy} loadingLabel="Saving...">
-                Submit
-              </Button>
-            </form>
-          </>
+              </form>
+            </div>
+          </article>
         )}
-      </article>
+      </div>
     </CandidateShell>
   );
 }
