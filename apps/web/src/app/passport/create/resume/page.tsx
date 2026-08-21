@@ -6,19 +6,8 @@ export default function ResumePassportPage() {
   return (
     <div className="min-h-full bg-fog">
       <Navbar />
-      <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-deep">
-          Create with resume
-        </p>
-        <h1 className="font-display mt-3 text-3xl font-extrabold text-navy">
-          Drop your resume
-        </h1>
-        <p className="mt-3 max-w-xl text-sm text-muted">
-          SRSB fetches education, skills and about. Anything missing stays empty for you to fill.
-        </p>
-        <div className="mt-10">
-          <ResumeCreateFlow />
-        </div>
+      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+        <ResumeCreateFlow />
       </main>
       <Footer />
     </div>

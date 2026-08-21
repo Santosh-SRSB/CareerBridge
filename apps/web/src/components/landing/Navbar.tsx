@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CreatePassportButton } from "@/features/candidate/passport/CreatePassportButton";
 
@@ -83,12 +84,12 @@ export function Navbar() {
         </div>
 
         <div className="hidden w-[148px] shrink-0 items-center justify-end gap-3 sm:w-auto md:flex">
-          <a
-            href="#signin"
+          <Link
+            href="/login"
             className="rounded-full border-[1.5px] border-white/55 px-5 py-[11px] text-sm font-semibold text-white transition hover:bg-white/10"
           >
             Sign In
-          </a>
+          </Link>
           <CreatePassportButton className="rounded-full bg-white px-[22px] py-[11px] text-sm font-bold text-[#0a2e2c] transition hover:-translate-y-px">
             Create Free Passport
           </CreatePassportButton>
@@ -131,13 +132,13 @@ export function Navbar() {
                 {link.label}
               </a>
             ))}
-            <a
-              href="#signin"
+            <Link
+              href="/login"
               className="rounded-full border border-white px-4 py-2.5 text-center text-sm font-semibold text-white"
               onClick={() => setOpen(false)}
             >
               Sign In
-            </a>
+            </Link>
             <CreatePassportButton className="rounded-full bg-white px-4 py-3 text-center text-sm font-bold text-navy">
               Create Free Career Passport
             </CreatePassportButton>

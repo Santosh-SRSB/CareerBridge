@@ -1,10 +1,56 @@
-import type { PassportDraft } from "@/types/passport";
+import { EMPTY_DRAFT, type PassportDraft } from "@/types/passport";
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function toPassportDraft(input: unknown, source: PassportDraft["source"] = "resume"): PassportDraft {
+  const data = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const education = Array.isArray(data.education)
+    ? data.education
+        .map((row) => {
+          const item = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+          return {
+            qualification: asString(item.qualification),
+            institution: asString(item.institution),
+            fieldOfStudy: asString(item.fieldOfStudy),
+            yearCompleted: asString(item.yearCompleted),
+          };
+        })
+        .filter((row) => row.qualification || row.institution)
+    : [];
+  const skills = Array.isArray(data.skills)
+    ? data.skills.map((item) => asString(item)).filter(Boolean).slice(0, 20)
+    : [];
+  const careerInterests = Array.isArray(data.careerInterests)
+    ? data.careerInterests.map((item) => asString(item)).filter(Boolean).slice(0, 8)
+    : [];
+
+  return {
+    firstName: asString(data.firstName),
+    lastName: asString(data.lastName),
+    city: "",
+    about: "",
+    education: education.length ? education : EMPTY_DRAFT.education,
+    stillInCollege: false,
+    educationStart: "",
+    educationEnd: "",
+    experienceLevel: "fresher",
+    totalExperienceYears: asString(data.totalExperienceYears),
+    totalExperienceMonths: asString(data.totalExperienceMonths),
+    experience: EMPTY_DRAFT.experience,
+    gapReason: asString(data.gapReason),
+    skills,
+    careerInterests,
+    source,
+  };
+}
 
 function section(text: string, labels: string[]) {
   const lower = text.replace(/\r/g, "");
   for (const label of labels) {
     const re = new RegExp(
-      `${label}\\s*[:\\-]?\\s*([\\s\\S]{8,900}?)(?=\\n\\s*(education|skills|experience|about|summary|projects|certification)s?\\b|$)`,
+      `${label}\\s*[:\\-]?\\s*([\\s\\S]{8,900}?)(?=\\n\\s*(education|skills|experience|work experience|career interest|interests|about|summary|projects|certification)s?\\b|$)`,
       "i",
     );
     const match = lower.match(re);
@@ -33,14 +79,6 @@ export function parseResumeText(raw: string): PassportDraft {
   const [firstName = "", ...rest] = nameLine.split(" ");
   const lastName = rest.join(" ");
 
-  const cityMatch =
-    text.match(/\b(Chennai|Madurai|Coimbatore|Bengaluru|Bangalore|Hyderabad|Pune|Mumbai|Delhi|Kolkata|Jaipur)\b/i) ??
-    text.match(/city\s*[:\-]\s*([A-Za-z ]{2,30})/i);
-
-  const about =
-    section(text, ["about", "summary", "objective", "profile"]) ||
-    firstLines.slice(1, 4).join(" ");
-
   const educationBlock = section(text, ["education", "qualification", "academics"]);
   const educationLines = linesOf(educationBlock).slice(0, 3);
   const education =
@@ -63,13 +101,25 @@ export function parseResumeText(raw: string): PassportDraft {
   const skillBlock = section(text, ["skills", "skill set", "technical skills"]);
   const skills = linesOf(skillBlock).slice(0, 12);
 
+  const interestBlock = section(text, ["career interest", "interests", "areas of interest", "objective"]);
+  const careerInterests = linesOf(interestBlock).slice(0, 6);
+
   return {
     firstName,
     lastName,
-    city: cityMatch?.[1] ?? cityMatch?.[0] ?? "",
-    about,
+    city: "",
+    about: "",
     education,
+    stillInCollege: false,
+    educationStart: "",
+    educationEnd: "",
+    experienceLevel: "fresher",
+    totalExperienceYears: "",
+    totalExperienceMonths: "",
+    experience: EMPTY_DRAFT.experience,
+    gapReason: "",
     skills,
+    careerInterests,
     source: "resume",
   };
 }

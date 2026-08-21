@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { extractReadableText, parseResumeText } from "@/lib/parse-resume";
+import { extractResumeText } from "@/lib/extract-resume-text";
+import { parseResumeText } from "@/lib/parse-resume";
+import { structureResumeText } from "@/lib/structure-resume";
+
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
@@ -16,13 +20,48 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const text =
-      file.type.startsWith("text/") || file.name.endsWith(".txt")
-        ? buffer.toString("utf8")
-        : extractReadableText(buffer);
+    const rawText = await extractResumeText(file, buffer);
+    if (!rawText.trim()) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "RESUME_EMPTY",
+            message: "We could not extract text from that file. Try a text-based PDF.",
+          },
+        },
+        { status: 400 },
+      );
+    }
 
-    const draft = parseResumeText(text || file.name.replace(/\.[^.]+$/, ""));
-    return NextResponse.json({ success: true, data: draft });
+    let draft;
+    try {
+      draft = await structureResumeText(rawText);
+    } catch (error) {
+      console.error(error);
+      draft = parseResumeText(rawText);
+    }
+
+    let parseId: string | undefined;
+    try {
+      const { prisma } = await import("@/lib/prisma");
+      const saved = await prisma.resumeParse.create({
+        data: {
+          fileName: file.name,
+          rawText,
+          structured: draft,
+        },
+      });
+      parseId = saved.id;
+    } catch (error) {
+      console.error(error);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: draft,
+      parseId,
+    });
   } catch {
     return NextResponse.json(
       {

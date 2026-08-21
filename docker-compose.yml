@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: careerbridge
     ports:
       - "5432:5432"
+      - "5434:5432"
     volumes:
       - careerbridge_pg:/var/lib/postgresql/data
 

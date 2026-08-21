@@ -19,11 +19,11 @@ export function BuildResumeArrow() {
         AI
       </span>
       <div className="build-arrow-wrap">
-        <div className="build-arrow">
-          <span>Build Your resume</span>
-        </div>
         <div className="build-eagle">
           <EagleMascot pose="arrow" />
+        </div>
+        <div className="build-arrow">
+          <span>Build Your resume</span>
         </div>
       </div>
       {ready ? (

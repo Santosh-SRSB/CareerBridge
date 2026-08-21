@@ -70,3 +70,11 @@ model CandidateSkill {
   @@unique([candidateId, name])
   @@index([candidateId])
 }
+
+model ResumeParse {
+  id         String   @id @default(uuid())
+  fileName   String
+  rawText    String   @db.Text
+  structured Json
+  createdAt  DateTime @default(now())
+}
