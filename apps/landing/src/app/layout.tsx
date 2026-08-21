@@ -19,7 +19,22 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "SRSB CareerBridge | Build your career. Build your future.",
   description:
-    "Create your free Career Passport, improve your skills with AI, practice interviews, and find jobs. Free for candidates.",
+    "SRSB CareerBridge is a free Career Passport for youth in India. Improve skills with AI, practice interviews, and find jobs. Free for candidates.",
+  keywords: [
+    "SRSB CareerBridge",
+    "SRSB Career Bridge",
+    "CareerBridge",
+    "Career Passport",
+    "jobs for youth",
+  ],
+  metadataBase: new URL("https://www.srsbcareerbridge.com"),
+  openGraph: {
+    title: "SRSB CareerBridge",
+    description: "Build your career. Build your future. Free Career Passport for candidates.",
+    url: "https://www.srsbcareerbridge.com",
+    siteName: "SRSB CareerBridge",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
