@@ -18,12 +18,13 @@ async function parseResumeFile(file: File) {
   const json = (await response.json()) as {
     success?: boolean;
     data?: PassportDraft;
+    rawText?: string;
     error?: { message?: string };
   };
   if (!response.ok || !json.success || !json.data) {
     throw new Error(json.error?.message || 'Could not read that resume.');
   }
-  return json.data;
+  return { draft: json.data, rawText: json.rawText || '' };
 }
 
 export default function ResumeEnhanceDropPage() {
@@ -37,16 +38,21 @@ export default function ResumeEnhanceDropPage() {
   async function onFile(file: File) {
     setError('');
     setBusy(true);
-    setStatus('Saving your resume...');
+    setStatus('Uploading resume...');
     try {
-      const [draft, profile] = await Promise.all([parseResumeFile(file), getCandidateMe()]);
-      setStatus('Checking ATS score...');
+      const [{ draft, rawText }, profile] = await Promise.all([parseResumeFile(file), getCandidateMe()]);
+      setStatus('Reading resume...');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      setStatus('Extracting content...');
       const content = draftToResumeContent(draft, { phone: profile.phone, city: profile.city });
+      setStatus('Analyzing resume...');
       const resume = await uploadResume({
         fileName: file.name,
         targetJobTitle: draft.careerInterests[0] || profile.careerInterests[0] || undefined,
         content,
+        rawText,
       });
+      setStatus('Checking ATS compatibility...');
       router.push(`/resume/enhance/${resume.id}`);
     } catch (err) {
       setStatus('');
@@ -61,7 +67,7 @@ export default function ResumeEnhanceDropPage() {
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal">Resume enhancement</p>
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">Drop your resume</h1>
       <p className="mt-2 max-w-xl text-muted">
-        We will save your file first, then check its ATS score so you can improve it.
+        We will read your file, score ATS readiness, and show exactly what to fix. This first report is free.
       </p>
 
       <div className="resume-point mt-10">

@@ -100,15 +100,6 @@ export function isListedJobCategory(category: string) {
 
 export const RESUME_TEMPLATES = ['CLASSIC', 'MODERN', 'SIMPLE'] as const;
 
-export const ATS_ENHANCE_PLANS = [
-  { id: 'elite', label: '95% – 100% ATS score', minScore: 95, maxScore: 100, amount: 99 },
-  { id: 'strong', label: '85% – 95% ATS score', minScore: 85, maxScore: 94, amount: 69 },
-  { id: 'solid', label: '80% – 85% ATS score', minScore: 80, maxScore: 84, amount: 49 },
-  { id: 'boost', label: '70% – 80% ATS score', minScore: 70, maxScore: 79, amount: 39 },
-  { id: 'start', label: 'Below 70% ATS score', minScore: 0, maxScore: 69, amount: 29 },
-] as const;
-
-export type AtsEnhancePlan = (typeof ATS_ENHANCE_PLANS)[number];
 export const INTERVIEW_TYPES = [
   { value: 'HR', label: 'HR / General' },
   { value: 'CUSTOMER_SERVICE', label: 'Customer Service' },
@@ -173,6 +164,7 @@ export type ResumeContent = {
   fullName: string;
   city: string | null;
   phone: string | null;
+  email?: string | null;
   summary: string;
   skills: string[];
   education: Array<{ qualification: string; institution: string | null; yearCompleted: number | null }>;
@@ -183,6 +175,8 @@ export type ResumeContent = {
     isInternship: boolean;
   }>;
   languages: string[];
+  certifications?: string[];
+  projects?: Array<{ name: string; description: string | null }>;
   includePhoto?: boolean;
 };
 
@@ -195,15 +189,11 @@ export type ResumeRecord = {
   content: ResumeContent;
   score: number;
   version: number;
+  kind?: 'ORIGINAL' | 'OPTIMIZED';
+  parentResumeId?: string | null;
   updatedAt: string;
-  analysis?: ResumeAnalysis;
-};
-
-export type ResumeAnalysis = {
-  score: number;
-  complete: string[];
-  improve: string[];
-  suggestions: Array<{ id: string; text: string }>;
+  analysis?: import('./ats').ResumeAnalysis;
+  plans?: Array<{ id: string; label: string; minScore: number; maxScore: number; amount: number }>;
 };
 
 export type ApplicationRecord = {

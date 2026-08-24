@@ -26,19 +26,37 @@ export function toPassportDraft(input: unknown, source: PassportDraft["source"] 
     ? data.careerInterests.map((item) => asString(item)).filter(Boolean).slice(0, 8)
     : [];
 
+  const experience = Array.isArray(data.experience)
+    ? data.experience
+        .map((row) => {
+          const item = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+          return {
+            years: asString(item.years),
+            company: asString(item.company),
+            jobTitle: asString(item.jobTitle),
+            stillInCompany: Boolean(item.stillInCompany),
+            startDate: asString(item.startDate),
+            endDate: asString(item.endDate),
+            isInternship: Boolean(item.isInternship),
+            description: asString(item.description),
+          };
+        })
+        .filter((row) => row.company || row.jobTitle || row.description)
+    : [];
+
   return {
     firstName: asString(data.firstName),
     lastName: asString(data.lastName),
-    city: "",
-    about: "",
+    city: asString(data.city),
+    about: asString(data.about) || asString(data.summary),
     education: education.length ? education : EMPTY_DRAFT.education,
     stillInCollege: false,
     educationStart: "",
     educationEnd: "",
-    experienceLevel: "fresher",
+    experienceLevel: experience.length ? "experienced" : "fresher",
     totalExperienceYears: asString(data.totalExperienceYears),
     totalExperienceMonths: asString(data.totalExperienceMonths),
-    experience: EMPTY_DRAFT.experience,
+    experience: experience.length ? experience : EMPTY_DRAFT.experience,
     gapReason: asString(data.gapReason),
     skills,
     careerInterests,
@@ -104,24 +122,54 @@ export function parseResumeText(raw: string): PassportDraft {
   const interestBlock = section(text, ["career interest", "interests", "areas of interest", "objective"]);
   const careerInterests = linesOf(interestBlock).slice(0, 6);
 
+  const summaryBlock = section(text, ["summary", "profile", "about me", "professional summary"]);
+  const experienceBlock = section(text, [
+    "work experience",
+    "professional experience",
+    "employment",
+    "experience",
+    "internships",
+  ]);
+  const experience = parseExperienceBlock(experienceBlock);
+
   return {
     firstName,
     lastName,
     city: "",
-    about: "",
+    about: summaryBlock.slice(0, 600),
     education,
     stillInCollege: false,
     educationStart: "",
     educationEnd: "",
-    experienceLevel: "fresher",
+    experienceLevel: experience.length ? "experienced" : "fresher",
     totalExperienceYears: "",
     totalExperienceMonths: "",
-    experience: EMPTY_DRAFT.experience,
+    experience: experience.length ? experience : EMPTY_DRAFT.experience,
     gapReason: "",
     skills,
     careerInterests,
     source: "resume",
   };
+}
+
+function parseExperienceBlock(block: string) {
+  if (!block.trim()) return [];
+  const chunks = block.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+  return chunks.slice(0, 6).map((chunk) => {
+    const lines = chunk.split("\n").map((line) => line.trim()).filter(Boolean);
+    const header = lines[0] || "";
+    const parts = header.split(/\s[-–|@]\s/);
+    return {
+      years: "",
+      company: parts[1] || parts[0] || "",
+      jobTitle: parts[0] || "",
+      stillInCompany: /present|current/i.test(chunk),
+      startDate: "",
+      endDate: "",
+      isInternship: /intern/i.test(chunk),
+      description: lines.slice(1).join("\n") || header,
+    };
+  });
 }
 
 export function extractReadableText(buffer: Buffer) {

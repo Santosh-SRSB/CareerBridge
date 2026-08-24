@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { InterviewFeedback, JobMatch, ResumeAnalysis, ResumeContent } from '@careerbridge/shared';
+import { analyzeResumeContent } from '@careerbridge/shared';
 
 export type MatchCandidate = {
   city: string | null;
@@ -85,36 +86,7 @@ export class IntelligenceService {
   }
 
   analyzeResume(content: ResumeContent): ResumeAnalysis {
-    const complete: string[] = [];
-    const improve: string[] = [];
-    if (content.fullName && content.phone) complete.push('Contact Information');
-    else improve.push('Contact Information');
-    if (content.education.length) complete.push('Education');
-    else improve.push('Education');
-    if (content.skills.length) complete.push('Skills');
-    else improve.push('Skills');
-    if (content.experiences.length) complete.push('Work Experience');
-    else improve.push('Work Experience');
-    if (content.summary && content.summary.length > 40) complete.push('Professional Summary');
-    else improve.push('Professional Summary');
-    const keywordHits = ['customer', 'communication', 'excel', 'sales'].filter((word) =>
-      `${content.summary} ${content.skills.join(' ')}`.toLowerCase().includes(word),
-    );
-    if (keywordHits.length >= 2) complete.push('Keywords');
-    else improve.push('Keywords');
-    const score = Math.min(100, complete.length * 16 + content.skills.length * 2 + content.experiences.length * 4);
-    const suggestions = [
-      content.experiences.length
-        ? 'Add measurable achievements to your experience, such as number of customers helped.'
-        : 'Add internships, projects or volunteer experience so employers can see what you can do.',
-      content.skills.includes('MS Excel') ? '' : 'Add MS Excel if you have used it, even in studies or internships.',
-      content.summary.toLowerCase().includes('customer')
-        ? ''
-        : 'Highlight customer service or communication experience in your summary.',
-    ]
-      .filter(Boolean)
-      .map((text, index) => ({ id: `s${index + 1}`, text }));
-    return { score, complete, improve, suggestions };
+    return analyzeResumeContent(content);
   }
 
   buildResumeContent(input: {

@@ -21,7 +21,7 @@ export async function structureResumeText(rawText: string): Promise<PassportDraf
       {
         role: "system",
         content:
-          "Extract only name, education, skills and career interests from the resume. Ignore experience, city, about and job preferences. Return JSON only. Use empty strings or empty arrays when a field is missing. Do not invent degrees or skills. Career interests can be known options (Customer Service, Retail, Technology, Sales, Office/Admin, Delivery/Logistics) or other short labels found in the resume.",
+          "Extract resume facts only. Do not invent companies, titles, dates, skills, metrics or degrees. Return JSON only. Use empty strings or empty arrays when missing.",
       },
       {
         role: "user",
@@ -29,6 +29,8 @@ export async function structureResumeText(rawText: string): Promise<PassportDraf
           {
             firstName: "",
             lastName: "",
+            city: "",
+            about: "",
             education: [
               {
                 qualification: "",
@@ -39,6 +41,14 @@ export async function structureResumeText(rawText: string): Promise<PassportDraf
             ],
             skills: [""],
             careerInterests: [""],
+            experience: [
+              {
+                company: "",
+                jobTitle: "",
+                isInternship: false,
+                description: "",
+              },
+            ],
           },
         )}`,
       },

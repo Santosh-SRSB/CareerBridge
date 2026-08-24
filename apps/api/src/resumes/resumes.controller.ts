@@ -32,6 +32,10 @@ class UploadResumeDto {
   @IsString()
   targetJobTitle?: string;
 
+  @IsOptional()
+  @IsString()
+  rawText?: string;
+
   @IsObject()
   content!: Record<string, unknown>;
 }
@@ -54,6 +58,11 @@ class UpdateResumeDto {
   @IsOptional()
   @IsString()
   summary?: string;
+}
+
+class StartOptimizationDto {
+  @IsString()
+  planId!: string;
 }
 
 @ApiTags('resumes')
@@ -102,6 +111,41 @@ export class ResumesController {
   @Post(':id/analyze')
   analyze(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.resumes.analyze(user.id, id);
+  }
+
+  @Get(':id/analysis')
+  analysis(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.analyze(user.id, id);
+  }
+
+  @Get(':id/issues')
+  issues(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.issues(user.id, id);
+  }
+
+  @Get(':id/optimization-options')
+  options(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.optimizationOptions(user.id, id);
+  }
+
+  @Post(':id/optimizations')
+  startOpt(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: StartOptimizationDto) {
+    return this.resumes.startOptimization(user.id, id, dto.planId);
+  }
+
+  @Get(':id/optimizations/:optId')
+  getOpt(@CurrentUser() user: { id: string }, @Param('id') id: string, @Param('optId') optId: string) {
+    return this.resumes.getOptimization(user.id, id, optId);
+  }
+
+  @Get(':id/versions')
+  versions(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.versions(user.id, id);
+  }
+
+  @Get(':id/changes')
+  changes(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.changes(user.id, id);
   }
 
   @Post(':id/ai/suggestions')

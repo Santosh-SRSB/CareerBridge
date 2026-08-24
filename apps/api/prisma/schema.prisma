@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/client"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -221,24 +221,122 @@ model Job {
   @@map("jobs")
 }
 
+enum ResumeKind {
+  ORIGINAL
+  OPTIMIZED
+}
+
+enum OptimizationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 model Resume {
-  id             String   @id @default(uuid())
-  candidateId    String   @map("candidate_id")
+  id             String     @id @default(uuid())
+  candidateId    String     @map("candidate_id")
   title          String
-  targetJobTitle String?  @map("target_job_title")
-  template       String   @default("CLASSIC")
+  targetJobTitle String?    @map("target_job_title")
+  template       String     @default("CLASSIC")
   summary        String?
-  contentJson    String   @default("{}") @map("content_json")
-  score          Int      @default(0)
-  version        Int      @default(1)
+  contentJson    String     @default("{}") @map("content_json")
+  rawText        String?    @map("raw_text") @db.Text
+  score          Int        @default(0)
+  version        Int        @default(1)
+  kind           ResumeKind @default(ORIGINAL)
+  parentResumeId String?    @map("parent_resume_id")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  candidate      Candidate             @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  parent         Resume?               @relation("ResumeLineage", fields: [parentResumeId], references: [id], onDelete: SetNull)
+  versions       Resume[]              @relation("ResumeLineage")
+  applications   Application[]
+  analysis       ResumeAtsReport?
+  facts          ResumeFact[]
+  issues         ResumeIssue[]
+  sourceOpts     ResumeOptimization[]  @relation("OptSource")
+  resultOpts     ResumeOptimization[]  @relation("OptResult")
+
+  @@index([candidateId])
+  @@index([parentResumeId])
+  @@map("resumes")
+}
+
+model ResumeAtsReport {
+  id             String   @id @default(uuid())
+  resumeId       String   @unique @map("resume_id")
+  scoreType      String   @default("ATS_READINESS") @map("score_type")
+  overallScore   Int      @map("overall_score")
+  label          String
+  sectionJson    String   @map("section_json") @db.Text
+  issuesJson     String   @map("issues_json") @db.Text
+  highPriority   Int      @default(0) @map("high_priority")
+  mediumPriority Int      @default(0) @map("medium_priority")
+  goodSections   Int      @default(0) @map("good_sections")
+  recommendedPlanId String @map("recommended_plan_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  candidate    Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  applications Application[]
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
 
-  @@index([candidateId])
-  @@map("resumes")
+  @@map("resume_ats_reports")
+}
+
+model ResumeIssue {
+  id             String @id @default(uuid())
+  resumeId       String @map("resume_id")
+  section        String
+  severity       String
+  problem        String
+  location       String
+  why            String @db.Text
+  recommendation String @db.Text
+  originalExample String? @map("original_example") @db.Text
+  suggestedExample String? @map("suggested_example") @db.Text
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+  @@map("resume_issues")
+}
+
+model ResumeFact {
+  id      String @id @default(uuid())
+  resumeId String @map("resume_id")
+  factType String @map("fact_type")
+  value   String
+  source  String @db.Text
+  section String
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+  @@map("resume_facts")
+}
+
+model ResumeOptimization {
+  id                String              @id @default(uuid())
+  sourceResumeId    String              @map("source_resume_id")
+  resultResumeId    String?             @unique @map("result_resume_id")
+  planId            String              @map("plan_id")
+  targetMin         Int                 @map("target_min")
+  targetMax         Int                 @map("target_max")
+  status            OptimizationStatus  @default(PENDING)
+  beforeScore       Int                 @map("before_score")
+  afterScore        Int?                @map("after_score")
+  factPreservation  Int?                @map("fact_preservation")
+  improvementsJson  String              @default("[]") @map("improvements_json")
+  changesJson       String              @default("[]") @map("changes_json") @db.Text
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  source Resume  @relation("OptSource", fields: [sourceResumeId], references: [id], onDelete: Cascade)
+  result Resume? @relation("OptResult", fields: [resultResumeId], references: [id], onDelete: SetNull)
+
+  @@index([sourceResumeId])
+  @@map("resume_optimizations")
 }
 
 model Application {

@@ -289,6 +289,7 @@ export async function uploadResume(payload: {
   fileName?: string;
   targetJobTitle?: string;
   content: ResumeRecord['content'];
+  rawText?: string;
 }) {
   return request<ResumeRecord>('/resumes/upload', {
     method: 'POST',
@@ -301,6 +302,34 @@ export async function enhanceResume(id: string) {
     `/resumes/${id}/enhance`,
     { method: 'POST' },
   );
+}
+
+export async function startResumeOptimization(id: string, planId: string) {
+  return request<{
+    id: string;
+    sourceResumeId: string;
+    resultResumeId: string | null;
+    beforeScore: number;
+    afterScore: number | null;
+    improvement: number | null;
+    factPreservation: number | null;
+    improvements: string[];
+    changes: Array<{
+      section: string;
+      originalText: string;
+      suggestedText: string;
+      reason: string;
+      validation: string;
+    }>;
+    targetLabel: string;
+  }>(`/resumes/${id}/optimizations`, {
+    method: 'POST',
+    body: JSON.stringify({ planId }),
+  });
+}
+
+export async function listResumeVersions(id: string) {
+  return request<ResumeRecord[]>(`/resumes/${id}/versions`);
 }
 
 export async function getResume(id: string) {

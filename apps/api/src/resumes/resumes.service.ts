@@ -1,14 +1,26 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ErrorCode, type ResumeContent, ATS_ENHANCE_PLANS } from '@careerbridge/shared';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ATS_ENHANCE_PLANS,
+  ErrorCode,
+  analyzeResumeContent,
+  applySafeOptimizations,
+  extractFacts,
+  factPreservationScore,
+  type ResumeAnalysis,
+  type ResumeChangeRecord,
+  type ResumeContent,
+} from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { renderResumePdf } from './resume-pdf';
+import { ResumeOptimizeAi } from './resume-optimize-ai';
 
 @Injectable()
 export class ResumesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
+    private readonly optimizeAi: ResumeOptimizeAi,
   ) {}
 
   async list(userId: string) {
@@ -31,7 +43,6 @@ export class ResumesService {
     const content = this.contentFromPassport(candidate, dto.targetJobTitle);
     if (dto.includePhoto === false) content.includePhoto = false;
     if (dto.includePhoto === true) content.includePhoto = true;
-    const analysis = this.intelligence.analyzeResume(content);
     const title = dto.targetJobTitle ? `${dto.targetJobTitle} Resume` : 'General Resume';
     const created = await this.prisma.resume.create({
       data: {
@@ -41,15 +52,17 @@ export class ResumesService {
         template: dto.template || 'CLASSIC',
         summary: content.summary,
         contentJson: JSON.stringify(content),
-        score: analysis.score,
+        score: 0,
+        kind: 'ORIGINAL',
       },
     });
-    return this.toRecord(created, analysis);
+    const analysis = await this.persistAnalysis(created.id, content, '');
+    return this.toRecord({ ...created, score: analysis.score }, analysis);
   }
 
   async upload(
     userId: string,
-    dto: { fileName?: string; targetJobTitle?: string; content: Partial<ResumeContent> },
+    dto: { fileName?: string; targetJobTitle?: string; content: Partial<ResumeContent>; rawText?: string },
   ) {
     const candidate = await this.prisma.candidate.findUnique({
       where: { userId },
@@ -63,7 +76,7 @@ export class ResumesService {
       city: candidate.city,
       phone: candidate.user.phone,
     });
-    const analysis = this.intelligence.analyzeResume(content);
+    const rawText = (dto.rawText || '').slice(0, 80000);
     const baseName = (dto.fileName || 'Uploaded resume').replace(/\.[^.]+$/, '').trim() || 'Uploaded resume';
     const created = await this.prisma.resume.create({
       data: {
@@ -73,14 +86,17 @@ export class ResumesService {
         template: 'CLASSIC',
         summary: content.summary,
         contentJson: JSON.stringify(content),
-        score: analysis.score,
+        rawText,
+        score: 0,
+        kind: 'ORIGINAL',
       },
     });
-    return this.toRecord(created, analysis);
+    const analysis = await this.persistAnalysis(created.id, content, rawText);
+    return this.toRecord({ ...created, score: analysis.score }, analysis);
   }
 
   async enhance(userId: string, id: string) {
-    const record = await this.get(userId, id);
+    const record = await this.analyze(userId, id);
     return {
       ...record,
       plans: ATS_ENHANCE_PLANS.map((plan) => ({ ...plan })),
@@ -88,16 +104,14 @@ export class ResumesService {
   }
 
   async get(userId: string, id: string) {
-    const resume = await this.requireResume(userId, id);
-    const content = parseContent(resume.contentJson);
-    return this.toRecord(resume, this.intelligence.analyzeResume(content));
+    return this.analyze(userId, id);
   }
 
   async update(userId: string, id: string, dto: { title?: string; targetJobTitle?: string; template?: string; summary?: string }) {
     const resume = await this.requireResume(userId, id);
     const content = parseContent(resume.contentJson);
     if (dto.summary !== undefined) content.summary = dto.summary;
-    const analysis = this.intelligence.analyzeResume(content);
+    const analysis = analyzeResumeContent(content, resume.rawText || '');
     const updated = await this.prisma.resume.update({
       where: { id: resume.id },
       data: {
@@ -107,7 +121,7 @@ export class ResumesService {
         summary: content.summary,
         contentJson: JSON.stringify(content),
         score: analysis.score,
-        version: resume.version + 1,
+        version: resume.kind === 'ORIGINAL' ? resume.version : resume.version + 1,
       },
     });
     return this.toRecord(updated, analysis);
@@ -120,7 +134,131 @@ export class ResumesService {
   }
 
   async analyze(userId: string, id: string) {
-    return this.get(userId, id);
+    const resume = await this.requireResume(userId, id);
+    const content = parseContent(resume.contentJson);
+    const analysis = await this.persistAnalysis(resume.id, content, resume.rawText || '');
+    return this.toRecord({ ...resume, score: analysis.score }, analysis);
+  }
+
+  async issues(userId: string, id: string) {
+    const record = await this.analyze(userId, id);
+    return {
+      highPriority: record.analysis?.highPriority ?? 0,
+      mediumPriority: record.analysis?.mediumPriority ?? 0,
+      goodSections: record.analysis?.goodSections ?? 0,
+      issues: record.analysis?.issues ?? [],
+    };
+  }
+
+  async optimizationOptions(userId: string, id: string) {
+    const record = await this.analyze(userId, id);
+    return {
+      score: record.score,
+      recommendedPlanId: record.analysis?.recommendedPlanId,
+      disclaimer: record.analysis?.disclaimer,
+      plans: ATS_ENHANCE_PLANS.map((plan) => ({ ...plan })),
+    };
+  }
+
+  async startOptimization(userId: string, id: string, planId: string) {
+    const plan = ATS_ENHANCE_PLANS.find((item) => item.id === planId);
+    if (!plan) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Choose a valid optimization target.' });
+    }
+    const source = await this.requireResume(userId, id);
+    const content = parseContent(source.contentJson);
+    const before = analyzeResumeContent(content, source.rawText || '');
+    const facts = extractFacts(content, source.rawText || '');
+    const optimization = await this.prisma.resumeOptimization.create({
+      data: {
+        sourceResumeId: source.id,
+        planId: plan.id,
+        targetMin: plan.minScore,
+        targetMax: plan.maxScore,
+        status: 'RUNNING',
+        beforeScore: before.score,
+        updatedAt: new Date(),
+      },
+    });
+
+    try {
+      const ai = await this.optimizeAi.rewrite(content, before.issues, facts);
+      const used = ai && ai.changes.length ? ai : applySafeOptimizations(content, facts);
+      const after = analyzeResumeContent(used.content, source.rawText || '');
+      const preservation = factPreservationScore(facts, used.changes);
+      const result = await this.prisma.resume.create({
+        data: {
+          candidateId: source.candidateId,
+          title: `${source.title} (ATS optimized)`,
+          targetJobTitle: source.targetJobTitle,
+          template: source.template,
+          summary: used.content.summary,
+          contentJson: JSON.stringify(used.content),
+          rawText: source.rawText,
+          score: after.score,
+          kind: 'OPTIMIZED',
+          parentResumeId: source.id,
+          version: source.version + 1,
+        },
+      });
+      await this.persistAnalysis(result.id, used.content, source.rawText || '');
+      const improvements = improvementLabels(used.changes);
+      const updated = await this.prisma.resumeOptimization.update({
+        where: { id: optimization.id },
+        data: {
+          resultResumeId: result.id,
+          status: 'COMPLETED',
+          afterScore: after.score,
+          factPreservation: preservation,
+          improvementsJson: JSON.stringify(improvements),
+          changesJson: JSON.stringify(used.changes),
+        },
+      });
+      return this.toOptimization(updated, before.score, after.score);
+    } catch {
+      await this.prisma.resumeOptimization.update({
+        where: { id: optimization.id },
+        data: { status: 'FAILED' },
+      });
+      throw new BadRequestException({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Optimization could not finish. Your original resume was not changed.',
+      });
+    }
+  }
+
+  async getOptimization(userId: string, id: string, optId: string) {
+    await this.requireResume(userId, id);
+    const row = await this.prisma.resumeOptimization.findFirst({
+      where: { id: optId, sourceResumeId: id },
+    });
+    if (!row) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Optimization was not found' });
+    }
+    return this.toOptimization(row, row.beforeScore, row.afterScore);
+  }
+
+  async versions(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const rootId = resume.parentResumeId || resume.id;
+    const rows = await this.prisma.resume.findMany({
+      where: {
+        candidateId: resume.candidateId,
+        OR: [{ id: rootId }, { parentResumeId: rootId }],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => this.toRecord(row));
+  }
+
+  async changes(userId: string, id: string) {
+    await this.requireResume(userId, id);
+    const row = await this.prisma.resumeOptimization.findFirst({
+      where: { OR: [{ sourceResumeId: id }, { resultResumeId: id }] },
+      orderBy: { createdAt: 'desc' },
+    });
+    const list = row ? (JSON.parse(row.changesJson || '[]') as ResumeChangeRecord[]) : [];
+    return { changes: list, factPreservation: row?.factPreservation ?? null };
   }
 
   async duplicate(userId: string, id: string) {
@@ -133,7 +271,9 @@ export class ResumesService {
         template: resume.template,
         summary: resume.summary,
         contentJson: resume.contentJson,
+        rawText: resume.rawText,
         score: resume.score,
+        kind: 'ORIGINAL',
       },
     });
     return this.toRecord(copy);
@@ -154,6 +294,67 @@ export class ResumesService {
       fileName: `${resume.title.replace(/\s+/g, '-')}.pdf`,
       mimeType: 'application/pdf',
     };
+  }
+
+  private async persistAnalysis(resumeId: string, content: ResumeContent, rawText: string) {
+    const analysis = analyzeResumeContent(content, rawText);
+    const facts = extractFacts(content, rawText);
+    await this.prisma.resumeIssue.deleteMany({ where: { resumeId } });
+    await this.prisma.resumeFact.deleteMany({ where: { resumeId } });
+    await this.prisma.resumeAtsReport.upsert({
+      where: { resumeId },
+      create: {
+        resumeId,
+        scoreType: analysis.scoreType,
+        overallScore: analysis.score,
+        label: analysis.label,
+        sectionJson: JSON.stringify(analysis.sections),
+        issuesJson: JSON.stringify(analysis.issues),
+        highPriority: analysis.highPriority,
+        mediumPriority: analysis.mediumPriority,
+        goodSections: analysis.goodSections,
+        recommendedPlanId: analysis.recommendedPlanId,
+        updatedAt: new Date(),
+      },
+      update: {
+        overallScore: analysis.score,
+        label: analysis.label,
+        sectionJson: JSON.stringify(analysis.sections),
+        issuesJson: JSON.stringify(analysis.issues),
+        highPriority: analysis.highPriority,
+        mediumPriority: analysis.mediumPriority,
+        goodSections: analysis.goodSections,
+        recommendedPlanId: analysis.recommendedPlanId,
+      },
+    });
+    if (analysis.issues.length) {
+      await this.prisma.resumeIssue.createMany({
+        data: analysis.issues.map((item) => ({
+          resumeId,
+          section: item.section,
+          severity: item.severity,
+          problem: item.problem,
+          location: item.location,
+          why: item.why,
+          recommendation: item.recommendation,
+          originalExample: item.originalExample || null,
+          suggestedExample: item.suggestedExample || null,
+        })),
+      });
+    }
+    if (facts.length) {
+      await this.prisma.resumeFact.createMany({
+        data: facts.map((item) => ({
+          resumeId,
+          factType: item.type,
+          value: item.value.slice(0, 500),
+          source: item.source.slice(0, 1000),
+          section: item.section,
+        })),
+      });
+    }
+    await this.prisma.resume.update({ where: { id: resumeId }, data: { score: analysis.score } });
+    return analysis;
   }
 
   private contentFromPassport(
@@ -201,17 +402,60 @@ export class ResumesService {
     return resume;
   }
 
-  private toRecord(row: {
-    id: string;
-    title: string;
-    targetJobTitle: string | null;
-    template: string;
-    summary: string | null;
-    contentJson: string;
-    score: number;
-    version: number;
-    updatedAt: Date;
-  }, analysis?: ReturnType<IntelligenceService['analyzeResume']>) {
+  private toOptimization(
+    row: {
+      id: string;
+      sourceResumeId: string;
+      resultResumeId: string | null;
+      planId: string;
+      targetMin: number;
+      targetMax: number;
+      status: string;
+      beforeScore: number;
+      afterScore: number | null;
+      factPreservation: number | null;
+      improvementsJson: string;
+      changesJson: string;
+    },
+    beforeScore: number,
+    afterScore: number | null,
+  ) {
+    const plan = ATS_ENHANCE_PLANS.find((item) => item.id === row.planId);
+    return {
+      id: row.id,
+      sourceResumeId: row.sourceResumeId,
+      resultResumeId: row.resultResumeId,
+      planId: row.planId,
+      targetLabel: plan?.label || 'Optimization',
+      targetMin: row.targetMin,
+      targetMax: row.targetMax,
+      status: row.status,
+      beforeScore,
+      afterScore,
+      improvement: afterScore == null ? null : afterScore - beforeScore,
+      factPreservation: row.factPreservation,
+      improvements: JSON.parse(row.improvementsJson || '[]') as string[],
+      changes: JSON.parse(row.changesJson || '[]') as ResumeChangeRecord[],
+      guaranteed: false,
+    };
+  }
+
+  private toRecord(
+    row: {
+      id: string;
+      title: string;
+      targetJobTitle: string | null;
+      template: string;
+      summary: string | null;
+      contentJson: string;
+      score: number;
+      version: number;
+      updatedAt: Date;
+      kind?: string;
+      parentResumeId?: string | null;
+    },
+    analysis?: ResumeAnalysis,
+  ) {
     return {
       id: row.id,
       title: row.title,
@@ -221,10 +465,25 @@ export class ResumesService {
       content: parseContent(row.contentJson),
       score: row.score,
       version: row.version,
+      kind: row.kind || 'ORIGINAL',
+      parentResumeId: row.parentResumeId ?? null,
       updatedAt: row.updatedAt.toISOString(),
       analysis,
     };
   }
+}
+
+function improvementLabels(changes: ResumeChangeRecord[]) {
+  const labels = new Set<string>();
+  for (const change of changes) {
+    if (change.validation !== 'PASS') continue;
+    if (/summary/i.test(change.section)) labels.add('Improved professional summary');
+    else if (/experience/i.test(change.section)) labels.add('Improved experience bullets');
+    else if (/skill/i.test(change.section)) labels.add('Organized skills');
+    else labels.add(`Improved ${change.section.toLowerCase()}`);
+  }
+  if (!labels.size) labels.add('Improved readability');
+  return [...labels];
 }
 
 function asString(value: unknown) {
@@ -242,9 +501,7 @@ function sanitizeUploadedContent(
           const item = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
           const yearRaw = item.yearCompleted;
           const yearCompleted =
-            typeof yearRaw === 'number'
-              ? yearRaw
-              : Number.parseInt(asString(yearRaw), 10) || null;
+            typeof yearRaw === 'number' ? yearRaw : Number.parseInt(asString(yearRaw), 10) || null;
           return {
             qualification: asString(item.qualification),
             institution: asString(item.institution) || null,
@@ -270,15 +527,29 @@ function sanitizeUploadedContent(
   const languages = Array.isArray(data.languages)
     ? data.languages.map((item) => asString(item)).filter(Boolean)
     : [];
+  const certifications = Array.isArray(data.certifications)
+    ? data.certifications.map((item) => asString(item)).filter(Boolean)
+    : [];
+  const projects = Array.isArray(data.projects)
+    ? data.projects
+        .map((row) => {
+          const item = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+          return { name: asString(item.name), description: asString(item.description) || null };
+        })
+        .filter((row) => row.name)
+    : [];
   return {
     fullName: asString(data.fullName) || fallback.fullName || 'Candidate',
     city: asString(data.city) || fallback.city,
     phone: asString(data.phone) || fallback.phone,
+    email: asString(data.email) || null,
     summary: asString(data.summary),
     skills,
     education,
     experiences,
     languages,
+    certifications,
+    projects,
   };
 }
 

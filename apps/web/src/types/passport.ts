@@ -6,6 +6,7 @@ export type PassportExperience = {
   startDate: string;
   endDate: string;
   isInternship: boolean;
+  description: string;
 };
 
 export type PassportDraft = {
@@ -47,6 +48,7 @@ export const EMPTY_EXPERIENCE: PassportExperience = {
   startDate: "",
   endDate: "",
   isInternship: false,
+  description: "",
 };
 
 export const EMPTY_DRAFT: PassportDraft = {

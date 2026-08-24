@@ -87,11 +87,11 @@ export function draftToResumeContent(draft: PassportDraft, extras?: { phone?: st
         yearCompleted: Number.parseInt(item.yearCompleted, 10) || null,
       })),
     experiences: draft.experience
-      .filter((item) => item.company || item.jobTitle)
+      .filter((item) => item.company || item.jobTitle || item.description)
       .map((item) => ({
         company: item.company,
         jobTitle: item.jobTitle,
-        description: null,
+        description: item.description || null,
         isInternship: item.isInternship,
       })),
     languages: [],
