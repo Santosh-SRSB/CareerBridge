@@ -1,0 +1,5 @@
+node_modules/
+.env
+resume_builder.db.json
+resume_builder.db.json.tmp
+*.log
