@@ -200,7 +200,17 @@ export class AssessmentsService {
     return this.toSession(updated);
   }
 
-  private async rescoreIfNeeded(row: { id: string; status: string; questionsJson: string; answersJson: string; score: number | null; feedbackJson: string | null }) {
+  private async rescoreIfNeeded(row: {
+    id: string;
+    skills: string;
+    resumeScore: number;
+    status: string;
+    questionIndex: number;
+    questionsJson: string;
+    answersJson: string;
+    score: number | null;
+    feedbackJson: string | null;
+  }) {
     if (row.status !== 'COMPLETED') return row;
     const feedback = this.intelligence.scoreSkillAssessment(parseQuestions(row.questionsJson), parseAnswers(row.answersJson));
     if (feedback.score === row.score) return row;

@@ -214,7 +214,9 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <p className="font-bold text-primary">Go for a mock interview</p>
                     <p className="mt-1 text-sm text-muted">
-                      {headlineSkill ? `Practice interview questions around ${headlineSkill}.` : 'Practice answers and get feedback.'}
+                      {headlineSkill
+                        ? `Book a live human interview with a CareerBridge interviewer, or practise typed AI questions around ${headlineSkill}.`
+                        : 'Live human interview with a CareerBridge interviewer, or a typed AI mock. Video is not stored.'}
                     </p>
                   </div>
                 </div>

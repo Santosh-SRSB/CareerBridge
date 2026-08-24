@@ -39,10 +39,12 @@ export function CandidateTopBar({
   name,
   onSignOut,
   hideSearch = false,
+  lounge = false,
 }: {
   name: string;
   onSignOut: () => void;
   hideSearch?: boolean;
+  lounge?: boolean;
 }) {
   const displayName = prettyText(name);
 
@@ -50,14 +52,14 @@ export function CandidateTopBar({
     <header className="sticky top-0 z-40 border-b border-primary/8 bg-white/80 shadow-[0_10px_30px_rgba(12,51,64,0.06)] backdrop-blur-xl">
       <div
         className={`mx-auto flex max-w-[1280px] items-center gap-2 px-3 py-2 lg:px-4 ${
-          hideSearch ? '' : 'md:grid md:grid-cols-[auto_minmax(220px,520px)_1fr]'
+          hideSearch || lounge ? '' : 'md:grid md:grid-cols-[auto_minmax(220px,520px)_1fr]'
         }`}
       >
         <BackButton fallback="/dashboard" />
-        {hideSearch ? (
+        {hideSearch || lounge ? (
           <p className="flex min-w-0 flex-1 items-center gap-2 truncate text-sm font-extrabold tracking-tight text-primary">
-            <span className="cb-studio-dot" aria-hidden />
-            Skill studio
+            <span className={`cb-studio-dot ${lounge ? 'is-lounge' : ''}`} aria-hidden />
+            {lounge ? 'Human interview' : 'Skill studio'}
           </p>
         ) : (
           <form action="/jobs" method="get" className="hidden w-full md:block">
@@ -89,7 +91,7 @@ export function CandidateTopBar({
           </button>
         </div>
       </div>
-      {hideSearch ? null : (
+      {hideSearch || lounge ? null : (
         <form action="/jobs" method="get" className="px-3 pb-2 md:hidden">
           <div className="flex overflow-hidden rounded-pill border border-primary/15 bg-[#f7fbfb]">
             <input
@@ -182,10 +184,12 @@ function PortalNav() {
 export function CandidateShell({
   children,
   studio = false,
+  lounge = false,
   scene,
 }: {
   children: ReactNode;
   studio?: boolean;
+  lounge?: boolean;
   scene?: 'drop' | 'rules' | 'type' | 'cam' | 'result' | 'ok';
 }) {
   const router = useRouter();
@@ -204,8 +208,12 @@ export function CandidateShell({
   const cinema = scene === 'ok' || scene === 'cam';
 
   return (
-    <div className={`cb-portal-page ${studio ? `cb-check-page${scene ? ` is-${scene}` : ''}` : ''}`}>
-      <CandidateTopBar name={name} onSignOut={signOut} hideSearch={studio} />
+    <div
+      className={`cb-portal-page ${studio ? `cb-check-page${scene ? ` is-${scene}` : ''}` : ''} ${
+        lounge ? 'cb-lounge-page' : ''
+      }`}
+    >
+      <CandidateTopBar name={name} onSignOut={signOut} hideSearch={studio} lounge={lounge} />
       <div
         className={
           cinema

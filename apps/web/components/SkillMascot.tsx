@@ -1,10 +1,10 @@
 'use client';
 
 const SRC = {
-  coach: '/brand/mascot-coach.png?v=2',
-  guide: '/brand/mascot-guide.png?v=2',
-  graduate: '/brand/mascot-graduate.png?v=2',
-  idea: '/brand/mascot-idea.png?v=2',
+  coach: '/brand/mascot-coach-live.png?v=5',
+  guide: '/brand/mascot-guide-live.png?v=5',
+  graduate: '/brand/mascot-graduate-live.png?v=5',
+  idea: '/brand/mascot-idea-live.png?v=5',
 } as const;
 
 export function SkillMascot({

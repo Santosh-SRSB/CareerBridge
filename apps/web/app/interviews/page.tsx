@@ -1,24 +1,44 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { INTERVIEW_TYPES, type InterviewSession } from '@careerbridge/shared';
-import { listInterviews, startInterview } from '@/lib/api';
+import { HUMAN_INTERVIEW_PRICE_INR, INTERVIEW_TYPES, type HumanMockSession, type InterviewSession } from '@careerbridge/shared';
+import { listHumanMocks, listInterviews, startInterview } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { ScoreRing } from '@/components/ScoreRing';
+import { SkillMascot } from '@/components/SkillMascot';
+
+function whenLabel(value: string) {
+  return new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+}
 
 export default function InterviewsPage() {
   const router = useRouter();
   const [jobRole, setJobRole] = useState('Customer Service Executive');
   const [interviewType, setInterviewType] = useState('CUSTOMER_SERVICE');
   const [history, setHistory] = useState<InterviewSession[]>([]);
+  const [human, setHuman] = useState<HumanMockSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    listInterviews().then(setHistory).catch(() => router.replace('/login'));
+    let gone = false;
+    listInterviews()
+      .then((ai) => {
+        if (!gone) setHistory(ai);
+      })
+      .catch((err) => {
+        const code = (err as { code?: string }).code;
+        if (code === 'UNAUTHORIZED') router.replace('/login');
+      });
+    listHumanMocks()
+      .then((live) => {
+        if (!gone) setHuman(live);
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
   }, [router]);
 
   async function onSubmit(event: FormEvent) {
@@ -39,58 +59,115 @@ export default function InterviewsPage() {
 
   return (
     <CandidateShell>
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal">AI Mock Interviews</p>
-      <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">Practice before the real interview</h1>
-      <p className="mt-2 max-w-2xl text-muted">This is practice, not an examination. Estimated time: 10 minutes.</p>
+      <h1 className="text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">Interviews</h1>
+      <p className="mt-1 text-sm text-muted">Live with a CareerBridge interviewer, or typed with AI. Video is never stored.</p>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <form onSubmit={onSubmit} className="cb-dash-card min-w-0 space-y-4 p-4 sm:p-5">
-          <h2 className="text-lg font-bold text-primary">Start mock interview</h2>
-          <Input label="What are you preparing for?" name="jobRole" required value={jobRole} onChange={(event) => setJobRole(event.target.value)} />
-          <div className="space-y-2">
-            {INTERVIEW_TYPES.map((item) => (
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Link href="/interviews/human" className="cb-hire-pass">
+          <SkillMascot pose="coach" className="cb-hire-eagle" alt="" />
+          <p>Human interview</p>
+          <b>Pay, then book a time</b>
+          <span className="cb-hire-shimmer">₹{HUMAN_INTERVIEW_PRICE_INR} static checkout</span>
+        </Link>
+        <section className="cb-dash-card p-4 sm:p-5">
+          <p className="text-sm font-bold text-orange">AI interview</p>
+          <p className="mt-1 font-extrabold text-primary">Type your answers</p>
+          <p className="mt-1 text-sm text-muted">Eight questions. About 10 minutes.</p>
+        </section>
+      </div>
+
+      <section className="cb-dash-card mt-3 p-4 sm:p-5">
+        <h2 className="text-base font-bold text-primary">Your live interviews</h2>
+        {human.length ? (
+          <div className="mt-3 space-y-2">
+            {human.map((item) => (
               <button
-                key={item.value}
+                key={item.id}
                 type="button"
-                onClick={() => setInterviewType(item.value)}
-                className={`w-full rounded-md border px-3 py-3 text-left text-sm font-bold ${
-                  interviewType === item.value
-                    ? 'border-primary bg-primary text-white'
-                    : 'border-primary/15 bg-surface text-primary'
-                }`}
+                className="cb-hire-rowcard"
+                onClick={() =>
+                  router.push(
+                    item.status === 'COMPLETED' ? `/interviews/human/${item.id}/score` : `/interviews/human/${item.id}`,
+                  )
+                }
               >
-                {item.label}
+                <span>
+                  <b>{item.jobRole}</b>
+                  <span>
+                    {item.interviewerName ? `${item.interviewerName} · ` : ''}
+                    {item.status === 'COMPLETED' ? `Score ${item.score ?? '—'}` : whenLabel(item.scheduledAt)}
+                  </span>
+                </span>
               </button>
             ))}
           </div>
-          {error ? <p className="text-sm text-error">{error}</p> : null}
-          <Button type="submit" loading={loading} loadingLabel="Starting...">
-            Start Mock Interview
-          </Button>
-        </form>
+        ) : (
+          <p className="mt-3 text-sm text-muted">None yet.</p>
+        )}
+      </section>
 
-        <section className="min-w-0">
-          <h2 className="text-lg font-bold text-primary">Previous interviews</h2>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <form onSubmit={onSubmit} className="cb-dash-card mt-3 space-y-4 p-4 sm:p-5">
+        <h2 className="text-base font-bold text-primary">Start a typed AI interview</h2>
+        <label className="block text-sm font-bold text-primary">
+          Role
+          <input
+            name="jobRole"
+            required
+            value={jobRole}
+            onChange={(event) => setJobRole(event.target.value)}
+            className="mt-1 w-full rounded-md border border-primary/15 px-3 py-2 text-sm font-semibold"
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {INTERVIEW_TYPES.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className={`rounded-full px-3 py-1.5 text-sm font-bold ${
+                interviewType === item.value ? 'bg-primary text-white' : 'bg-[#eefaf8] text-primary'
+              }`}
+              onClick={() => setInterviewType(item.value)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {error ? <p className="text-sm font-semibold text-orange">{error}</p> : null}
+        <button
+          type="submit"
+          disabled={loading}
+          className="inline-flex h-10 items-center rounded-full bg-teal px-4 text-sm font-extrabold text-primary"
+        >
+          {loading ? 'Opening…' : 'Start typed interview'}
+        </button>
+      </form>
+
+      <section className="cb-dash-card mt-3 p-4 sm:p-5">
+        <h2 className="text-base font-bold text-primary">Earlier typed interviews</h2>
+        {history.length ? (
+          <div className="mt-3 space-y-2">
             {history.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => router.push(item.status === 'COMPLETED' ? `/interviews/${item.id}/feedback` : `/interviews/${item.id}`)}
-                className="cb-lift-card flex min-w-0 items-center gap-3 p-4 text-left"
+                className="flex w-full items-center justify-between gap-3 rounded-md border border-primary/10 bg-[#f7fbfb] px-3 py-3 text-left"
+                onClick={() =>
+                  router.push(item.status === 'COMPLETED' ? `/interviews/${item.id}/feedback` : `/interviews/${item.id}`)
+                }
               >
-                <div className="min-w-0 flex-1">
-                  <p className="break-words font-bold text-primary">{item.jobRole}</p>
-                  <p className="mt-1 text-sm text-muted">
-                    {item.status === 'COMPLETED' ? 'View feedback' : 'In progress'}
-                  </p>
-                </div>
-                {item.status === 'COMPLETED' && item.score != null ? <ScoreRing value={item.score} size={64} /> : null}
+                <span>
+                  <span className="block font-bold text-primary">{item.jobRole}</span>
+                  <span className="text-sm text-muted">
+                    {item.status === 'COMPLETED' ? `Score ${item.score ?? '—'}` : 'In progress'}
+                  </span>
+                </span>
               </button>
             ))}
           </div>
-        </section>
-      </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted">None yet.</p>
+        )}
+      </section>
     </CandidateShell>
   );
 }

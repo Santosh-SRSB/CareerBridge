@@ -79,9 +79,10 @@ model Candidate {
   experiences   CandidateExperience[]
   resumes       Resume[]
   applications  Application[]
-  interviews        Interview[]
-  skillAssessments  SkillAssessment[]
-  assessmentPurchases AssessmentPurchase[]
+  interviews           Interview[]
+  humanMockInterviews  HumanMockInterview[]
+  skillAssessments     SkillAssessment[]
+  assessmentPurchases  AssessmentPurchase[]
 
   @@map("candidates")
 }
@@ -268,6 +269,39 @@ model Interview {
 
   @@index([candidateId])
   @@map("interviews")
+}
+
+model HumanMockInterview {
+  id                 String    @id @default(uuid())
+  candidateId        String    @map("candidate_id")
+  jobRole            String    @map("job_role")
+  interviewType      String    @map("interview_type")
+  interviewLevel     String    @default("EASY") @map("interview_level")
+  paidAmountInr      Int?      @map("paid_amount_inr")
+  scheduledAt        DateTime  @map("scheduled_at")
+  status             String    @default("SCHEDULED")
+  joinToken          String    @unique @map("join_token")
+  interviewerName    String?   @map("interviewer_name")
+  interviewerEmail   String?   @map("interviewer_email")
+  candidateName      String?   @map("candidate_name")
+  candidateEmail     String?   @map("candidate_email")
+  transcriptText     String?   @map("transcript_text")
+  emailSentAt        DateTime? @map("email_sent_at")
+  startedAt          DateTime? @map("started_at")
+  endedAt            DateTime? @map("ended_at")
+  durationMs         Int?      @map("duration_ms")
+  hadVideo           Boolean   @default(false) @map("had_video")
+  hadVoice           Boolean   @default(false) @map("had_voice")
+  interviewerJoined  Boolean   @default(false) @map("interviewer_joined")
+  score              Int?
+  feedbackJson       String?   @map("feedback_json")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("human_mock_interviews")
 }
 
 model SkillAssessment {

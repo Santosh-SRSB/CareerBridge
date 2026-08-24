@@ -231,6 +231,89 @@ export type InterviewFeedback = {
   improvements: string[];
 };
 
+export const HUMAN_MOCK_RULES = [
+  'Pay the interview fee first. This checkout is static for now.',
+  'Then enter your name, email, and time to schedule.',
+  'The interviewer gets the join link at priyakum2120@gmail.com.',
+  'The live room opens only 5 minutes before your booked time.',
+  'After the live room, we generate a transcript. Download or copy it, then see your score.',
+];
+
+export const HUMAN_INTERVIEWER = {
+  name: 'Priya Kumari',
+  email: 'priyakum2120@gmail.com',
+};
+
+export const HUMAN_INTERVIEW_PRICE_INR = 199;
+
+export const HUMAN_INTERVIEW_OPEN_BEFORE_MS = 5 * 60 * 1000;
+
+export function humanInterviewOpensAt(scheduledAt: string | Date) {
+  return new Date(new Date(scheduledAt).getTime() - HUMAN_INTERVIEW_OPEN_BEFORE_MS);
+}
+
+export function humanInterviewJoinState(scheduledAt: string | Date, now = Date.now()) {
+  const start = new Date(scheduledAt).getTime();
+  const opensAt = start - HUMAN_INTERVIEW_OPEN_BEFORE_MS;
+  const remainingMs = Math.max(0, opensAt - now);
+  return {
+    canJoin: now >= opensAt,
+    opensAt: new Date(opensAt).toISOString(),
+    remainingMs,
+  };
+}
+
+export function formatInterviewCountdown(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const clock = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  return hours > 0 ? `${hours}:${clock}` : clock;
+}
+
+export function humanInterviewRoleFromPassport(profile: {
+  careerInterests: string[];
+  experiences: { jobTitle: string }[];
+  skills: { name: string }[];
+}) {
+  const latestJob =
+    profile.experiences[profile.experiences.length - 1]?.jobTitle?.trim() ||
+    profile.experiences[0]?.jobTitle?.trim();
+  return latestJob || profile.careerInterests[0]?.trim() || profile.skills[0]?.name?.trim() || null;
+}
+
+export function humanInterviewTypeFromRole(role: string): 'HR' | 'CUSTOMER_SERVICE' | 'SITUATIONAL' {
+  const text = role.toLowerCase();
+  if (/(customer|retail|sales|hospitality)/.test(text)) return 'CUSTOMER_SERVICE';
+  if (/(hr|human resource|recruit)/.test(text)) return 'HR';
+  return 'SITUATIONAL';
+}
+
+export type HumanMockStatus = 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
+
+export type HumanMockSession = {
+  id: string;
+  jobRole: string;
+  interviewType: string;
+  scheduledAt: string;
+  status: HumanMockStatus;
+  candidateName: string | null;
+  candidateEmail: string | null;
+  interviewerName: string | null;
+  interviewerEmail: string | null;
+  emailSent: boolean;
+  joinUrl: string;
+  interviewerJoinUrl: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  durationMs: number | null;
+  interviewerJoined: boolean;
+  transcript: string | null;
+  score: number | null;
+  feedback: InterviewFeedback | null;
+};
+
 export const SKILL_ASSESSMENT_MAX_QUESTIONS = 6;
 export const SKILL_ASSESSMENT_TYPED_COUNT = 3;
 export const SKILL_ASSESSMENT_RECORDED_COUNT = 3;

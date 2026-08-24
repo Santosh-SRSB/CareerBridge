@@ -17,6 +17,7 @@ import type {
   EmployerDashboard,
   EmployerProfile,
   InterviewSession,
+  HumanMockSession,
   JobDetail,
   PagedJobs,
   ProfileCompletion,
@@ -49,7 +50,15 @@ async function request<T>(
     headers,
   });
 
-  const body = (await response.json()) as ApiResponse<T>;
+  const raw = await response.text();
+  let body: ApiResponse<T>;
+  try {
+    body = JSON.parse(raw) as ApiResponse<T>;
+  } catch {
+    const error = new Error('The server did not return a valid response.') as Error & { code: string };
+    error.code = 'INTERNAL_ERROR';
+    throw error;
+  }
 
   if (!body.success) {
     if (response.status === 401 && path !== '/auth/refresh' && getRefreshToken()) {
@@ -328,6 +337,63 @@ export async function answerInterview(id: string, answer: string) {
   });
 }
 
+export async function scheduleHumanMock(payload: {
+  candidateName: string;
+  candidateEmail: string;
+  scheduledAt: string;
+}) {
+  return request<HumanMockSession & { emailSent: boolean }>('/human-mocks', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listHumanMocks() {
+  return request<HumanMockSession[]>('/human-mocks');
+}
+
+export async function getHumanMock(id: string, token?: string) {
+  const query = token ? `?token=${encodeURIComponent(token)}` : '';
+  return request<HumanMockSession>(`/human-mocks/${id}${query}`, { auth: token ? false : true });
+}
+
+export async function joinHumanMock(id: string, role: 'candidate' | 'interviewer', token?: string) {
+  return request<HumanMockSession>(`/human-mocks/${id}/join`, {
+    method: 'POST',
+    auth: token ? false : true,
+    body: JSON.stringify({ role, token }),
+  });
+}
+
+export async function postHumanSignal(
+  id: string,
+  payload: { role: 'candidate' | 'interviewer'; kind: 'offer' | 'answer' | 'ice'; payload: unknown; token?: string },
+) {
+  return request<{ ok: boolean }>(`/human-mocks/${id}/signal`, {
+    method: 'POST',
+    auth: payload.token ? false : true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function peekHumanSignal(id: string, role: 'candidate' | 'interviewer', token?: string) {
+  const query = new URLSearchParams({ role });
+  if (token) query.set('token', token);
+  return request<{ offer: unknown; answer: unknown; ice: unknown[] }>(`/human-mocks/${id}/signal?${query}`, {
+    auth: token ? false : true,
+  });
+}
+
+export async function completeHumanMock(
+  id: string,
+  payload: { durationMs: number; hadVideo: boolean; hadVoice: boolean; interviewerJoined: boolean; transcript?: string },
+) {
+  return request<HumanMockSession>(`/human-mocks/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function startSkillAssessment() {
   return request<SkillAssessmentSession>('/assessments', { method: 'POST' });
 }
@@ -428,6 +494,8 @@ export async function logout() {
       method: 'POST',
       body: JSON.stringify({ refreshToken: getRefreshToken() }),
     });
+  } catch {
+    // Access token may already be expired. Still sign out locally.
   } finally {
     clearSession();
   }

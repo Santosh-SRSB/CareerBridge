@@ -282,6 +282,60 @@ export class IntelligenceService {
       ],
     };
   }
+
+  scoreHumanMock(input: {
+    durationMs: number;
+    hadVideo: boolean;
+    hadVoice: boolean;
+    interviewerJoined: boolean;
+    transcript?: string;
+    jobRole?: string;
+  }): InterviewFeedback {
+    const seconds = Math.max(0, Math.round(input.durationMs / 1000));
+    const text = (input.transcript || '').trim();
+    const words = text.split(/\s+/).filter(Boolean);
+    const lower = text.toLowerCase();
+    if (!input.hadVideo || seconds < 15 || (!input.hadVoice && words.length < 8)) {
+      return {
+        score: 0,
+        communication: 0,
+        structure: 12,
+        relevance: 10,
+        confidence: 0,
+        strengths: [],
+        improvements: [
+          'Keep the camera on, speak clearly, and stay in the room long enough for a transcript.',
+          'We score from what you said. Video is not stored.',
+        ],
+      };
+    }
+    const starHits = ['situation', 'task', 'action', 'result', 'example', 'because', 'learned', 'team', 'customer', 'handled'].filter(
+      (word) => lower.includes(word),
+    ).length;
+    const roleHits = (input.jobRole || '')
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => word.length > 3 && lower.includes(word)).length;
+    const fillers = (lower.match(/\b(um|uh|like|you know)\b/g) || []).length;
+    const communication = clamp(Math.round(Math.min(36, words.length / 3) + (input.hadVoice ? 18 : 8) + Math.min(18, seconds / 12)));
+    const structure = clamp(38 + starHits * 8 + (words.length > 60 ? 10 : 0));
+    const relevance = clamp(42 + roleHits * 12 + (input.interviewerJoined ? 8 : 0) + (words.length > 40 ? 10 : 0));
+    const confidence = clamp(62 - fillers * 4 + Math.min(22, seconds / 18) + (input.hadVoice ? 8 : 0));
+    const score = clamp(Math.round(communication * 0.3 + structure * 0.25 + relevance * 0.25 + confidence * 0.2));
+    const strengths = [
+      words.length >= 30 ? 'Your transcript shows you spoke in full answers.' : 'You stayed in the live room and we captured speech.',
+      starHits >= 2 ? 'You used examples or a situation–action–result shape.' : input.interviewerJoined
+        ? 'The interviewer joined the CareerBridge room.'
+        : 'You completed a live practice in the CareerBridge room.',
+    ];
+    const improvements = [
+      words.length < 40 ? 'Say more in your own words so the transcript can show your thinking.' : 'Keep answers structured: situation, action, result.',
+      roleHits < 1 && input.jobRole
+        ? `Name the ${input.jobRole} work more clearly in your answers.`
+        : 'The live video was discarded. This score is from your transcript.',
+    ];
+    return { score, communication, structure, relevance, confidence, strengths, improvements };
+  }
 }
 
 function titleCase(value: string) {
