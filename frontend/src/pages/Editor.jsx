@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { getTemplateComponent, resolveTemplateId } from "../templates/index.js";
@@ -6,13 +6,68 @@ import TemplatePreview from "../templates/TemplatePreview.jsx";
 import {
   EDUCATION_LEVELS,
   applyEducationPatch,
+  applyProjectPatch,
+  blankCertification,
   blankEducation,
+  blankProject,
+  createProjectBulletId,
+  normalizeCertificateUrl,
+  normalizeCertificationList,
   normalizeEducationList,
+  normalizeProjectList,
+  normalizeProjectUrl,
+  projectTechnologies,
 } from "../templates/helpers.js";
+import AtsAnalysisPanel from "../components/AtsAnalysisPanel.jsx";
+import { useResumePageFit, usePreviewScale, RESUME_PAGE } from "../templates/pageFit.js";
+
+function analysisFingerprint(resume) {
+  const data = { ...(resume.data || {}) };
+  const hasPhoto = Boolean(data.photo);
+  delete data.photo;
+  return JSON.stringify({
+    templateId: resume.templateId,
+    hasPhoto,
+    data,
+  });
+}
 
 const EMPTY_EXPERIENCE = { company: "", role: "", location: "", startDate: "", endDate: "", current: false, bullets: [""] };
-const EMPTY_PROJECT = { name: "", description: "", link: "" };
-const EMPTY_CERT = { name: "", issuer: "", date: "" };
+
+const FORM_STEPS = [
+  { id: "personal", label: "Personal" },
+  { id: "summary", label: "Summary" },
+  { id: "education", label: "Education" },
+  { id: "experience", label: "Experience" },
+  { id: "skills", label: "Skills" },
+  { id: "projects", label: "Projects" },
+  { id: "certifications", label: "Certifications" },
+  { id: "review", label: "Review & ATS" },
+];
+
+function filled(value) {
+  return Boolean(String(value || "").trim());
+}
+
+function sectionComplete(stepId, data) {
+  const source = data || {};
+  if (stepId === "personal") return filled(source.fullName) && filled(source.email) && filled(source.phone);
+  if (stepId === "summary") return filled(source.summary);
+  if (stepId === "education") {
+    return (source.education || []).some((ed) => filled(ed.institution) || filled(ed.school) || filled(ed.degree));
+  }
+  if (stepId === "experience") {
+    return (source.experience || []).some((job) => filled(job.role) || filled(job.company));
+  }
+  if (stepId === "skills") return (source.skills || []).length > 0;
+  if (stepId === "projects") {
+    return (source.projects || []).some((p) => filled(p.name) || filled(p.description));
+  }
+  if (stepId === "certifications") {
+    return (source.certifications || []).some((c) => filled(c.name));
+  }
+  return true;
+}
 
 export default function Editor() {
   const { id } = useParams();
@@ -24,6 +79,29 @@ export default function Editor() {
   const [error, setError] = useState("");
   const [photoError, setPhotoError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [previousScore, setPreviousScore] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState("");
+  const [analyzedFingerprint, setAnalyzedFingerprint] = useState("");
+  const [projectUrlErrors, setProjectUrlErrors] = useState({});
+  const [rewriting, setRewriting] = useState(false);
+  const [rewriteError, setRewriteError] = useState("");
+  const [rewriteResult, setRewriteResult] = useState(null);
+  const [viewingRewrite, setViewingRewrite] = useState(false);
+  const [undoSnapshot, setUndoSnapshot] = useState(null);
+  const [editorStep, setEditorStep] = useState("personal");
+  const [navError, setNavError] = useState("");
+  const [certUrlErrors, setCertUrlErrors] = useState({});
+  const sheetRef = useRef(null);
+  const previewPaneRef = useRef(null);
+  const { overfull } = useResumePageFit(sheetRef, [
+    resume?.templateId,
+    resume?.data,
+    viewingRewrite,
+    rewriteResult,
+  ]);
+  const previewScale = usePreviewScale(previewPaneRef, Boolean(resume));
 
   useEffect(() => {
     (async () => {
@@ -35,6 +113,8 @@ export default function Editor() {
           data: {
             ...(r.data || {}),
             education: normalizeEducationList(r.data?.education),
+            projects: normalizeProjectList(r.data?.projects),
+            certifications: normalizeCertificationList(r.data?.certifications),
           },
         });
         setTemplates(t);
@@ -179,6 +259,27 @@ export default function Editor() {
   }
 
   async function handleSave() {
+    const nextProjectErrors = {};
+    for (const project of resume.data.projects || []) {
+      const raw = project.url || project.link || "";
+      if (!raw.trim()) continue;
+      const checked = normalizeProjectUrl(raw);
+      if (!checked.ok) nextProjectErrors[project.id] = checked.error;
+    }
+    const nextCertErrors = {};
+    for (const cert of resume.data.certifications || []) {
+      const raw = cert.url || cert.link || "";
+      if (!raw.trim()) continue;
+      const checked = normalizeCertificateUrl(raw);
+      if (!checked.ok) nextCertErrors[cert.id] = checked.error;
+    }
+    setProjectUrlErrors(nextProjectErrors);
+    setCertUrlErrors(nextCertErrors);
+    if (Object.keys(nextProjectErrors).length || Object.keys(nextCertErrors).length) {
+      setError("Please enter a valid URL, or leave the optional URL fields empty.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -188,6 +289,8 @@ export default function Editor() {
         data: {
           ...resume.data,
           education: normalizeEducationList(resume.data.education),
+          projects: normalizeProjectList(resume.data.projects),
+          certifications: normalizeCertificationList(resume.data.certifications),
         },
       });
       setResume({
@@ -196,6 +299,8 @@ export default function Editor() {
         data: {
           ...(updated.data || {}),
           education: normalizeEducationList(updated.data?.education),
+          projects: normalizeProjectList(updated.data?.projects),
+          certifications: normalizeCertificationList(updated.data?.certifications),
         },
       });
       setStatus("Saved");
@@ -208,6 +313,353 @@ export default function Editor() {
 
   function handlePrint() {
     window.print();
+  }
+
+  async function handleAnalyze() {
+    const role = (resume.data.targetRole || "").trim();
+    if (!role) {
+      setAnalyzeError("Enter a target job role to analyze your resume.");
+      return;
+    }
+    setAnalyzing(true);
+    setAnalyzeError("");
+    try {
+      const result = await api.analyzeResume({
+        resume: {
+          ...resume.data,
+          photo: resume.data.photo ? "present" : "",
+          education: normalizeEducationList(resume.data.education),
+          projects: normalizeProjectList(resume.data.projects),
+          certifications: normalizeCertificationList(resume.data.certifications),
+        },
+        templateId: resume.templateId,
+        targetRole: role,
+        jobDescription: resume.data.jobDescription || "",
+      });
+      setPreviousScore(analysis ? analysis.overallScore : null);
+      setAnalysis(result);
+      setAnalyzedFingerprint(analysisFingerprint(resume));
+    } catch (err) {
+      setAnalyzeError(err.message);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleRewrite() {
+    const role = (resume.data.targetRole || "").trim();
+    if (!role) {
+      setRewriteError("Enter a target job role before rewriting your resume.");
+      return;
+    }
+    setRewriting(true);
+    setRewriteError("");
+    try {
+      const result = await api.rewriteResume(resume.id, {
+        resume: {
+          ...resume.data,
+          photo: resume.data.photo ? "present" : "",
+          education: normalizeEducationList(resume.data.education),
+          projects: normalizeProjectList(resume.data.projects),
+          certifications: normalizeCertificationList(resume.data.certifications),
+        },
+        templateId: resume.templateId,
+        targetRole: role,
+        jobDescription: resume.data.jobDescription || "",
+        analysis,
+      });
+      setRewriteResult(result);
+      setViewingRewrite(false);
+    } catch (err) {
+      setRewriteError(err.message);
+    } finally {
+      setRewriting(false);
+    }
+  }
+
+  async function handleApplyRewrite() {
+    if (!rewriteResult?.rewrittenResume) return;
+    setUndoSnapshot({ ...(resume.data || {}) });
+    const rewritten = rewriteResult.rewrittenResume;
+    const nextData = {
+      ...rewritten,
+      photo: resume.data.photo,
+      targetRole: resume.data.targetRole,
+      jobDescription: resume.data.jobDescription,
+      education: normalizeEducationList(rewritten.education),
+      projects: normalizeProjectList(rewritten.projects),
+      certifications: normalizeCertificationList(rewritten.certifications),
+    };
+    setResume((prev) => ({ ...prev, data: nextData }));
+    setRewriteResult(null);
+    setViewingRewrite(false);
+    setAnalysis(null);
+    try {
+      await api.updateResume(resume.id, {
+        title: resume.title,
+        templateId: resume.templateId,
+        data: nextData,
+      });
+      setStatus("Resume updated successfully.");
+    } catch (err) {
+      setStatus("Rewrite applied in the editor — click Save to keep it.");
+      setError(err.message);
+    }
+  }
+
+  function handleUndoRewrite() {
+    if (!undoSnapshot) return;
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...undoSnapshot,
+        education: normalizeEducationList(undoSnapshot.education),
+        projects: normalizeProjectList(undoSnapshot.projects),
+        certifications: normalizeCertificationList(undoSnapshot.certifications),
+      },
+    }));
+    setUndoSnapshot(null);
+    setAnalysis(null);
+    setStatus("Rewrite undone");
+  }
+
+  function updateProject(id, patch) {
+    setResume((prev) => {
+      const list = (prev.data.projects || []).map((project) =>
+        project.id === id ? applyProjectPatch(project, patch) : project
+      );
+      return { ...prev, data: { ...prev.data, projects: list } };
+    });
+    setStatus("");
+  }
+
+  function addProject() {
+    setResume((prev) => ({
+      ...prev,
+      data: { ...prev.data, projects: [...(prev.data.projects || []), blankProject()] },
+    }));
+    setStatus("");
+  }
+
+  function removeProject(id) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        projects: (prev.data.projects || []).filter((project) => project.id !== id),
+      },
+    }));
+    setProjectUrlErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function addProjectBullet(projectId) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        projects: (prev.data.projects || []).map((project) =>
+          project.id === projectId
+            ? applyProjectPatch(project, {
+                bullets: [...(project.bullets || []), { id: createProjectBulletId(), text: "" }],
+              })
+            : project
+        ),
+      },
+    }));
+  }
+
+  function updateProjectBullet(projectId, bulletId, value) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        projects: (prev.data.projects || []).map((project) =>
+          project.id === projectId
+            ? applyProjectPatch(project, {
+                bullets: (project.bullets || []).map((bullet) =>
+                  bullet.id === bulletId ? { ...bullet, text: value } : bullet
+                ),
+              })
+            : project
+        ),
+      },
+    }));
+  }
+
+  function removeProjectBullet(projectId, bulletId) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        projects: (prev.data.projects || []).map((project) =>
+          project.id === projectId
+            ? applyProjectPatch(project, {
+                bullets: (project.bullets || []).filter((bullet) => bullet.id !== bulletId),
+              })
+            : project
+        ),
+      },
+    }));
+  }
+
+  function handleProjectUrlBlur(project) {
+    const raw = project.url || project.link || "";
+    const checked = normalizeProjectUrl(raw);
+    if (!raw.trim()) {
+      setProjectUrlErrors((prev) => ({ ...prev, [project.id]: "" }));
+      return;
+    }
+    if (!checked.ok) {
+      setProjectUrlErrors((prev) => ({ ...prev, [project.id]: checked.error }));
+      return;
+    }
+    setProjectUrlErrors((prev) => ({ ...prev, [project.id]: "" }));
+    updateProject(project.id, { url: checked.href, link: checked.href });
+  }
+
+  function techDrafts(project) {
+    const list = Array.isArray(project.technologies)
+      ? project.technologies.map((item) => String(item ?? ""))
+      : [];
+    if (list.length) return list;
+    const legacy = projectTechnologies(project);
+    return legacy.length ? legacy : [""];
+  }
+
+  function addProjectTechnology(projectId) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        projects: (prev.data.projects || []).map((project) =>
+          project.id === projectId
+            ? applyProjectPatch(project, {
+                technologies: [...techDrafts(project), ""],
+              })
+            : project
+        ),
+      },
+    }));
+  }
+
+  function updateProjectTechnology(projectId, index, value) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        projects: (prev.data.projects || []).map((project) => {
+          if (project.id !== projectId) return project;
+          const next = [...techDrafts(project)];
+          next[index] = value;
+          return applyProjectPatch(project, { technologies: next });
+        }),
+      },
+    }));
+  }
+
+  function removeProjectTechnology(projectId, index) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        projects: (prev.data.projects || []).map((project) => {
+          if (project.id !== projectId) return project;
+          const next = techDrafts(project).filter((_, i) => i !== index);
+          return applyProjectPatch(project, { technologies: next });
+        }),
+      },
+    }));
+  }
+
+  function addCertification() {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        certifications: [...(prev.data.certifications || []), blankCertification()],
+      },
+    }));
+    setStatus("");
+  }
+
+  function updateCertification(id, patch) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        certifications: (prev.data.certifications || []).map((cert) =>
+          cert.id === id ? { ...cert, ...patch } : cert
+        ),
+      },
+    }));
+    setStatus("");
+  }
+
+  function removeCertification(id) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        certifications: (prev.data.certifications || []).filter((cert) => cert.id !== id),
+      },
+    }));
+    setCertUrlErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function handleCertUrlBlur(cert) {
+    const raw = cert.url || "";
+    const checked = normalizeCertificateUrl(raw);
+    if (!raw.trim()) {
+      setCertUrlErrors((prev) => ({ ...prev, [cert.id]: "" }));
+      return;
+    }
+    if (!checked.ok) {
+      setCertUrlErrors((prev) => ({ ...prev, [cert.id]: checked.error }));
+      return;
+    }
+    setCertUrlErrors((prev) => ({ ...prev, [cert.id]: "" }));
+    updateCertification(cert.id, { url: checked.href });
+  }
+
+  function goToStep(stepId) {
+    setNavError("");
+    setEditorStep(stepId);
+  }
+
+  function goNext() {
+    const currentIndex = FORM_STEPS.findIndex((step) => step.id === editorStep);
+    if (editorStep === "personal" && !sectionComplete("personal", resume.data)) {
+      setNavError("Please enter your name, email, and phone before continuing.");
+      return;
+    }
+    if (editorStep === "projects" && Object.values(projectUrlErrors).some(Boolean)) {
+      setNavError("Please enter a valid project URL, or leave the field empty.");
+      return;
+    }
+    if (editorStep === "certifications" && Object.values(certUrlErrors).some(Boolean)) {
+      setNavError("Please enter a valid certificate URL, or leave the field empty.");
+      return;
+    }
+    if (currentIndex >= 0 && currentIndex < FORM_STEPS.length - 1) {
+      setNavError("");
+      setEditorStep(FORM_STEPS[currentIndex + 1].id);
+    }
+  }
+
+  function goPrevious() {
+    const currentIndex = FORM_STEPS.findIndex((step) => step.id === editorStep);
+    if (currentIndex > 0) {
+      setNavError("");
+      setEditorStep(FORM_STEPS[currentIndex - 1].id);
+    }
   }
 
   function handlePhotoChange(event) {
@@ -255,6 +707,12 @@ export default function Editor() {
   const activeTemplate = templates.find((t) => t.id === resume.templateId);
   const photoTemplates = templates.filter((t) => t.hasPhoto);
   const textTemplates = templates.filter((t) => !t.hasPhoto);
+  const sourceData = viewingRewrite && rewriteResult?.rewrittenResume
+    ? { ...resume.data, ...rewriteResult.rewrittenResume, photo: resume.data.photo }
+    : resume.data;
+  const previewData = { ...sourceData };
+  delete previewData.targetRole;
+  delete previewData.jobDescription;
 
   return (
     <div className="editor">
@@ -301,8 +759,27 @@ export default function Editor() {
         </aside>
 
         <div className="editor-form no-print">
+          <nav className="form-stepper" aria-label="Resume sections">
+            {FORM_STEPS.map((step) => {
+              const done = sectionComplete(step.id, resume.data);
+              const active = editorStep === step.id;
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  className={`form-step ${active ? "active" : ""} ${done ? "done" : ""}`}
+                  onClick={() => goToStep(step.id)}
+                >
+                  {done ? "✓ " : ""}{step.label}
+                </button>
+              );
+            })}
+          </nav>
+          {navError && <p className="alert">{navError}</p>}
+
+          {editorStep === "personal" && (
           <section className="form-section">
-            <h2>Basics</h2>
+            <h2>Personal information</h2>
             <div className="grid-2">
               <label>Full name
                 <input value={resume.data.fullName || ""} onChange={(e) => updateData({ fullName: e.target.value })} />
@@ -322,14 +799,10 @@ export default function Editor() {
               <label>LinkedIn / portfolio
                 <input value={resume.data.linkedin || ""} onChange={(e) => updateData({ linkedin: e.target.value })} />
               </label>
+              <label>GitHub / website
+                <input value={resume.data.website || ""} onChange={(e) => updateData({ website: e.target.value })} />
+              </label>
             </div>
-            <label>Summary
-              <textarea
-                rows={3}
-                value={resume.data.summary || ""}
-                onChange={(e) => updateData({ summary: e.target.value })}
-              />
-            </label>
             <div className="photo-upload">
               <span className="photo-upload-label" id="photo-upload-label">Profile photo</span>
               <p className="muted small">Optional. Shown on photo templates only. JPG, PNG, or WebP up to 5 MB.</p>
@@ -358,8 +831,25 @@ export default function Editor() {
               </div>
               {photoError && <p className="alert photo-upload-error">{photoError}</p>}
             </div>
+            <FormNav onPrevious={goPrevious} onNext={goNext} isFirst />
           </section>
+          )}
 
+          {editorStep === "summary" && (
+          <section className="form-section">
+            <h2>Professional summary</h2>
+            <label>Summary
+              <textarea
+                rows={5}
+                value={resume.data.summary || ""}
+                onChange={(e) => updateData({ summary: e.target.value })}
+              />
+            </label>
+            <FormNav onPrevious={goPrevious} onNext={goNext} />
+          </section>
+          )}
+
+          {editorStep === "experience" && (
           <section className="form-section">
             <div className="form-section-head">
               <h2>Experience</h2>
@@ -401,8 +891,11 @@ export default function Editor() {
                 <button className="btn btn-ghost btn-small danger" type="button" onClick={() => removeListItem("experience", i)}>Remove this role</button>
               </div>
             ))}
+            <FormNav onPrevious={goPrevious} onNext={goNext} />
           </section>
+          )}
 
+          {editorStep === "education" && (
           <section className="form-section">
             <div className="form-section-head">
               <h2>Education</h2>
@@ -480,8 +973,11 @@ export default function Editor() {
                 </button>
               </div>
             ))}
+            <FormNav onPrevious={goPrevious} onNext={goNext} />
           </section>
+          )}
 
+          {editorStep === "skills" && (
           <section className="form-section">
             <h2>Skills</h2>
             <label>
@@ -510,61 +1006,227 @@ export default function Editor() {
                 />
               </div>
             </label>
+            <FormNav onPrevious={goPrevious} onNext={goNext} />
           </section>
+          )}
 
+          {editorStep === "projects" && (
           <section className="form-section">
             <div className="form-section-head">
               <h2>Projects</h2>
-              <button className="btn btn-small" type="button" onClick={() => addListItem("projects", { ...EMPTY_PROJECT })}>+ Add</button>
+              <button className="btn btn-small" type="button" onClick={addProject}>+ Add</button>
             </div>
-            {(resume.data.projects || []).map((p, i) => (
-              <div className="list-item" key={i}>
+            {(resume.data.projects || []).map((p) => (
+              <div className="list-item" key={p.id}>
                 <div className="grid-2">
-                  <label>Name
-                    <input value={p.name} onChange={(e) => updateList("projects", i, { name: e.target.value })} />
+                  <label>Project title
+                    <input
+                      value={p.name || ""}
+                      onChange={(e) => updateProject(p.id, { name: e.target.value })}
+                      placeholder="Sales Analytics Dashboard"
+                    />
                   </label>
-                  <label>Link (optional)
-                    <input value={p.link} onChange={(e) => updateList("projects", i, { link: e.target.value })} />
+                  <label>Project URL (optional)
+                    <input
+                      value={p.url || p.link || ""}
+                      onChange={(e) => updateProject(p.id, { url: e.target.value, link: e.target.value })}
+                      onBlur={() => handleProjectUrlBlur(p)}
+                      placeholder="https://github.com/username/project"
+                    />
                   </label>
                 </div>
-                <label>Description
-                  <textarea rows={2} value={p.description} onChange={(e) => updateList("projects", i, { description: e.target.value })} />
+                {projectUrlErrors[p.id] && <p className="alert photo-upload-error">{projectUrlErrors[p.id]}</p>}
+                <label>Project description
+                  <textarea
+                    rows={2}
+                    value={p.description || ""}
+                    onChange={(e) => updateProject(p.id, { description: e.target.value })}
+                    placeholder="Developed an interactive dashboard to analyze sales performance and identify business trends."
+                  />
                 </label>
-                <button className="btn btn-ghost btn-small danger" type="button" onClick={() => removeListItem("projects", i)}>Remove</button>
+                <div className="bullets">
+                  <span className="muted small">Technologies</span>
+                  {techDrafts(p).map((tech, index) => (
+                    <div className="bullet-row" key={`${p.id}-tech-${index}`}>
+                      <span className="muted small">{index + 1}.</span>
+                      <input
+                        value={tech}
+                        onChange={(e) => updateProjectTechnology(p.id, index, e.target.value)}
+                        placeholder="Power BI"
+                      />
+                      <button
+                        className="btn btn-ghost btn-small"
+                        type="button"
+                        onClick={() => removeProjectTechnology(p.id, index)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <button className="btn btn-small" type="button" onClick={() => addProjectTechnology(p.id)}>
+                    + Add Technology
+                  </button>
+                </div>
+                <div className="bullets">
+                  <span className="muted small">Project details / bullet points</span>
+                  {(p.bullets || []).map((bullet, index) => (
+                    <div className="bullet-row" key={bullet.id}>
+                      <span className="muted small">{index + 1}.</span>
+                      <input
+                        value={bullet.text || ""}
+                        onChange={(e) => updateProjectBullet(p.id, bullet.id, e.target.value)}
+                        placeholder="Built interactive dashboards using Power BI."
+                      />
+                      <button
+                        className="btn btn-ghost btn-icon"
+                        type="button"
+                        onClick={() => removeProjectBullet(p.id, bullet.id)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button className="btn btn-small" type="button" onClick={() => addProjectBullet(p.id)}>
+                    + Add bullet point
+                  </button>
+                </div>
+                <button className="btn btn-ghost btn-small danger" type="button" onClick={() => removeProject(p.id)}>Remove</button>
               </div>
             ))}
+            <FormNav onPrevious={goPrevious} onNext={goNext} />
           </section>
+          )}
 
+          {editorStep === "certifications" && (
           <section className="form-section">
             <div className="form-section-head">
               <h2>Certifications</h2>
-              <button className="btn btn-small" type="button" onClick={() => addListItem("certifications", { ...EMPTY_CERT })}>+ Add</button>
+              <button className="btn btn-small" type="button" onClick={addCertification}>+ Add</button>
             </div>
-            {(resume.data.certifications || []).map((c, i) => (
-              <div className="list-item" key={i}>
+            {(resume.data.certifications || []).map((c) => (
+              <div className="list-item" key={c.id}>
                 <div className="grid-2">
                   <label>Name
-                    <input value={c.name} onChange={(e) => updateList("certifications", i, { name: e.target.value })} />
+                    <input value={c.name || ""} onChange={(e) => updateCertification(c.id, { name: e.target.value })} />
                   </label>
                   <label>Issuer
-                    <input value={c.issuer} onChange={(e) => updateList("certifications", i, { issuer: e.target.value })} />
+                    <input value={c.issuer || ""} onChange={(e) => updateCertification(c.id, { issuer: e.target.value })} />
                   </label>
                   <label>Date
-                    <input value={c.date} onChange={(e) => updateList("certifications", i, { date: e.target.value })} />
+                    <input value={c.date || ""} onChange={(e) => updateCertification(c.id, { date: e.target.value })} />
+                  </label>
+                  <label>Certificate URL (optional)
+                    <input
+                      value={c.url || ""}
+                      onChange={(e) => updateCertification(c.id, { url: e.target.value })}
+                      onBlur={() => handleCertUrlBlur(c)}
+                      placeholder="https://example.com/certificate"
+                    />
                   </label>
                 </div>
-                <button className="btn btn-ghost btn-small danger" type="button" onClick={() => removeListItem("certifications", i)}>Remove</button>
+                {certUrlErrors[c.id] && <p className="alert photo-upload-error">{certUrlErrors[c.id]}</p>}
+                <button className="btn btn-ghost btn-small danger" type="button" onClick={() => removeCertification(c.id)}>Remove</button>
               </div>
             ))}
+            <FormNav onPrevious={goPrevious} onNext={goNext} />
           </section>
+          )}
+
+          {editorStep === "review" && (
+          <section className="form-section">
+            <h2>Final review</h2>
+            <ul className="review-list">
+              {FORM_STEPS.filter((step) => step.id !== "review").map((step) => (
+                <li key={step.id}>
+                  {sectionComplete(step.id, resume.data) ? "✓" : "○"} {step.label}
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">Save and Export / Print PDF remain in the toolbar. All section data stays in this resume until you save.</p>
+            <FormNav onPrevious={goPrevious} onNext={goNext} isLast />
+          </section>
+          )}
+
+          {editorStep === "review" && (
+          <AtsAnalysisPanel
+            targetRole={resume.data.targetRole || ""}
+            jobDescription={resume.data.jobDescription || ""}
+            onTargetRole={(value) => updateData({ targetRole: value })}
+            onJobDescription={(value) => updateData({ jobDescription: value })}
+            onAnalyze={handleAnalyze}
+            analyzing={analyzing}
+            analysis={analysis}
+            error={analyzeError}
+            stale={Boolean(analysis && analyzedFingerprint && analyzedFingerprint !== analysisFingerprint(resume))}
+            previousScore={previousScore}
+            onRewrite={handleRewrite}
+            rewriting={rewriting}
+            rewriteError={rewriteError}
+            rewriteResult={rewriteResult}
+            viewingRewrite={viewingRewrite}
+            onViewRewrite={() => setViewingRewrite(true)}
+            onApplyRewrite={handleApplyRewrite}
+            onCancelRewrite={() => {
+              setRewriteResult(null);
+              setViewingRewrite(false);
+              setRewriteError("");
+            }}
+            onUndoRewrite={handleUndoRewrite}
+            canUndo={Boolean(undoSnapshot)}
+          />
+          )}
         </div>
 
-        <div className="editor-preview">
-          <div className="preview-sheet" id="print-area">
-            <TemplateComponent data={resume.data} />
+        <div className="editor-preview" ref={previewPaneRef}>
+          <div
+            className="preview-stack"
+            style={{ width: Math.round(RESUME_PAGE.width * previewScale) }}
+          >
+          {viewingRewrite && (
+            <p className="ats-stale no-print preview-rewrite-note">
+              Previewing rewritten resume — the original is unchanged until you apply the rewrite.
+            </p>
+          )}
+          {overfull && (
+            <p className="alert no-print page-fit-warning">
+              Your resume contains a large amount of content. Consider shortening some sections to maintain one-page readability.
+            </p>
+          )}
+          <div
+            className="preview-scale-frame"
+            style={{
+              width: Math.round(RESUME_PAGE.width * previewScale),
+              height: Math.round(RESUME_PAGE.height * previewScale),
+            }}
+          >
+            <div
+              className="preview-sheet"
+              id="print-area"
+              ref={sheetRef}
+              data-density="normal"
+              style={{ transform: `scale(${previewScale})` }}
+            >
+              <TemplateComponent data={previewData} />
+            </div>
+          </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function FormNav({ onPrevious, onNext, isFirst, isLast }) {
+  return (
+    <div className="form-nav">
+      <button type="button" className="btn" onClick={onPrevious} disabled={isFirst}>
+        Previous
+      </button>
+      {!isLast && (
+        <button type="button" className="btn btn-primary" onClick={onNext}>
+          Next
+        </button>
+      )}
     </div>
   );
 }

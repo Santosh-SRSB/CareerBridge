@@ -1,6 +1,8 @@
 const express = require("express");
 const db = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { analyzeResume } = require("../services/resumeAnalyzer");
+const { rewriteResume } = require("../services/resumeRewriter");
 
 const router = express.Router();
 
@@ -102,6 +104,78 @@ router.get("/templates", (req, res) => {
 });
 
 router.use(requireAuth);
+
+// POST /api/resumes/analyze — role-based estimated ATS compatibility.
+// Must be registered before /:id so "analyze" is never treated as an id.
+router.post("/analyze", (req, res) => {
+  try {
+    const body = req.body || {};
+    const targetRole = String(body.targetRole || "").trim();
+    if (!targetRole) {
+      return res.status(400).json({ error: "Enter a target job role to analyze your resume." });
+    }
+
+    const resume = body.resume && typeof body.resume === "object" ? body.resume : {};
+    const jobDescription = String(body.jobDescription || "").slice(0, 50000);
+    const templateId = body.templateId || resume.templateId;
+
+    const result = analyzeResume({
+      resume,
+      targetRole,
+      jobDescription,
+      templateId,
+    });
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error("Resume analysis failed:", err);
+    res.status(status).json({ error: err.message || "Analysis failed. Please try again." });
+  }
+});
+
+function handleRewriteRequest(req, res, storedResume) {
+  try {
+    const body = req.body || {};
+    const fallbackRole = storedResume && storedResume.data ? storedResume.data.targetRole : "";
+    const targetRole = String(body.targetRole || fallbackRole || "").trim();
+    if (!targetRole) {
+      return res.status(400).json({ error: "Enter a target job role before rewriting your resume." });
+    }
+
+    const editorResume = body.resume && typeof body.resume === "object"
+      ? body.resume
+      : (storedResume && storedResume.data) || {};
+    const result = rewriteResume({
+      resume: editorResume,
+      targetRole,
+      jobDescription: String(body.jobDescription || editorResume.jobDescription || "").slice(0, 50000),
+      analysis: body.analysis && typeof body.analysis === "object" ? body.analysis : null,
+      templateId: body.templateId || (storedResume && storedResume.templateId) || editorResume.templateId,
+    });
+    res.json({
+      success: true,
+      ...result,
+      beforeScore: result.estimatedScoreBefore,
+      afterScore: result.estimatedScoreAfter,
+    });
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error("Resume rewrite failed:", err);
+    res.status(status).json({ error: err.message || "Rewrite failed. Please try again." });
+  }
+}
+
+// POST /api/resumes/rewrite — editor sends current unsaved resume data
+router.post("/rewrite", (req, res) => {
+  handleRewriteRequest(req, res, null);
+});
+
+// POST /api/resumes/:id/rewrite — verifies the resume belongs to the signed-in user
+router.post("/:id/rewrite", (req, res) => {
+  const stored = db.getResume(Number(req.params.id), req.userId);
+  if (!stored) return res.status(404).json({ error: "Resume not found." });
+  handleRewriteRequest(req, res, stored);
+});
 
 function publicResume(r) {
   return {

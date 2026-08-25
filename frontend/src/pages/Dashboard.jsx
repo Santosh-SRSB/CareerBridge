@@ -17,6 +17,8 @@ const BLANK_DATA = {
   projects: [],
   certifications: [],
   photo: null,
+  targetRole: "",
+  jobDescription: "",
 };
 
 export default function Dashboard() {

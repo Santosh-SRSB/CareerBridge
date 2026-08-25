@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getTemplateComponent } from "./index.js";
 import { SAMPLE_RESUME } from "./sampleData.js";
+import { RESUME_PAGE } from "./pageFit.js";
 
-const PAGE_WIDTH = 794;
-const PAGE_HEIGHT = 1123;
+const PAGE_WIDTH = RESUME_PAGE.width;
+const PAGE_HEIGHT = RESUME_PAGE.height;
 
 export default function TemplatePreview({ id }) {
   const wrapRef = useRef(null);

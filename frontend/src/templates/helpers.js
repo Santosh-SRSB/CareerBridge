@@ -116,3 +116,211 @@ export function educationMetaLine(ed) {
   const grade = ed.grade || ed.gpa;
   return [dates, grade].filter(Boolean).join(" | ");
 }
+
+function makeLocalId(prefix) {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createProjectId() {
+  return makeLocalId("project");
+}
+
+export function createProjectBulletId() {
+  return makeLocalId("project-bullet");
+}
+
+export function blankProject() {
+  return {
+    id: createProjectId(),
+    name: "",
+    title: "",
+    description: "",
+    link: "",
+    url: "",
+    technologies: [],
+    bullets: [{ id: createProjectBulletId(), text: "" }],
+    bulletPoints: [],
+    startDate: "",
+    endDate: "",
+  };
+}
+
+export function normalizeHttpUrl(raw, errorMessage = "Please enter a valid URL.") {
+  const value = String(raw || "").trim();
+  if (!value) return { ok: true, href: "", display: "" };
+  if (/^(javascript|data|vbscript):/i.test(value)) {
+    return { ok: false, href: value, display: value, error: errorMessage };
+  }
+  let candidate = value;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate)) {
+    candidate = `https://${candidate.replace(/^\/\//, "")}`;
+  }
+  if (!/^https?:\/\//i.test(candidate)) {
+    return { ok: false, href: value, display: value, error: errorMessage };
+  }
+  try {
+    const parsed = new URL(candidate);
+    if (!parsed.hostname || !/[a-z0-9-]+\.[a-z]{2,}$/i.test(parsed.hostname)) {
+      return { ok: false, href: value, display: value, error: errorMessage };
+    }
+    const display = `${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}${parsed.search}`.replace(/\/$/, "");
+    return { ok: true, href: parsed.toString(), display };
+  } catch {
+    return { ok: false, href: value, display: value, error: errorMessage };
+  }
+}
+
+export function normalizeProjectUrl(raw) {
+  return normalizeHttpUrl(raw, "Please enter a valid project URL.");
+}
+
+export function normalizeCertificateUrl(raw) {
+  return normalizeHttpUrl(raw, "Please enter a valid certificate URL.");
+}
+
+function asBulletEntry(raw, index = 0) {
+  if (raw && typeof raw === "object") {
+    return {
+      id: raw.id || createProjectBulletId(),
+      text: String(raw.text || raw.value || "").trim() ? String(raw.text || raw.value || "") : "",
+    };
+  }
+  return {
+    id: `project-bullet-${index + 1}-${String(raw || "item").slice(0, 12)}`.replace(/\s+/g, "-").toLowerCase(),
+    text: String(raw || ""),
+  };
+}
+
+export function projectBulletEntries(project) {
+  const source = project && typeof project === "object" ? project : {};
+  const list = Array.isArray(source.bullets)
+    ? source.bullets
+    : Array.isArray(source.bulletPoints)
+      ? source.bulletPoints
+      : [];
+  return list.map((item, index) => asBulletEntry(item, index));
+}
+
+export function projectBulletTexts(project) {
+  return projectBulletEntries(project).map((b) => String(b.text || "").trim()).filter(Boolean);
+}
+
+export function projectTechnologies(project) {
+  const source = project && typeof project === "object" ? project : {};
+  const fromValue = (value) => {
+    if (Array.isArray(value)) {
+      return value.map((item) => {
+        if (item && typeof item === "object") return String(item.name || item.text || item.value || "").trim();
+        return String(item || "").trim();
+      }).filter(Boolean);
+    }
+    if (typeof value === "string" && value.trim()) {
+      return value.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+    return [];
+  };
+  const listed = fromValue(source.technologies);
+  if (listed.length) return listed;
+  return fromValue(source.technology || source.tech);
+}
+
+export function normalizeProjectEntry(project, index = 0) {
+  const source = project && typeof project === "object" ? project : {};
+  const name = source.name || source.title || "";
+  const url = source.url || source.link || "";
+  const bullets = projectBulletEntries(source);
+  const used = new Set();
+  const uniqueBullets = bullets.map((b, i) => {
+    let id = b.id || createProjectBulletId();
+    if (used.has(id)) id = createProjectBulletId();
+    used.add(id);
+    return { id, text: b.text || "" };
+  });
+  return {
+    id: source.id || `project-${index + 1}-${name || "entry"}`.replace(/\s+/g, "-").toLowerCase(),
+    name,
+    title: name,
+    description: source.description || "",
+    link: url,
+    url,
+    technologies: projectTechnologies(source),
+    bullets: uniqueBullets,
+    bulletPoints: uniqueBullets.map((b) => b.text),
+    startDate: source.startDate || "",
+    endDate: source.endDate || "",
+  };
+}
+
+export function normalizeProjectList(list) {
+  if (!Array.isArray(list)) return [];
+  const used = new Set();
+  return list.map((project, index) => {
+    const next = normalizeProjectEntry(project, index);
+    let id = next.id;
+    if (used.has(id)) id = createProjectId();
+    used.add(id);
+    return { ...next, id };
+  });
+}
+
+export function applyProjectPatch(entry, patch) {
+  const next = { ...entry, ...patch };
+  if (Object.prototype.hasOwnProperty.call(patch, "name")) next.title = patch.name;
+  if (Object.prototype.hasOwnProperty.call(patch, "title")) next.name = patch.title;
+  if (Object.prototype.hasOwnProperty.call(patch, "url")) next.link = patch.url;
+  if (Object.prototype.hasOwnProperty.call(patch, "link")) next.url = patch.link;
+  if (Object.prototype.hasOwnProperty.call(patch, "bullets")) {
+    next.bulletPoints = projectBulletEntries({ bullets: patch.bullets }).map((b) => b.text);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "technologies")) {
+    if (Array.isArray(patch.technologies)) {
+      next.technologies = patch.technologies.map((item) => {
+        if (item && typeof item === "object") return String(item.name || item.text || item.value || "");
+        return String(item ?? "");
+      });
+    } else if (typeof patch.technologies === "string") {
+      next.technologies = patch.technologies.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+  }
+  return next;
+}
+
+export function createCertificationId() {
+  return makeLocalId("certification");
+}
+
+export function blankCertification() {
+  return {
+    id: createCertificationId(),
+    name: "",
+    issuer: "",
+    date: "",
+    url: "",
+  };
+}
+
+export function normalizeCertificationEntry(cert, index = 0) {
+  const source = cert && typeof cert === "object" ? cert : {};
+  return {
+    id: source.id || `certification-${index + 1}-${source.name || "entry"}`.replace(/\s+/g, "-").toLowerCase(),
+    name: source.name || "",
+    issuer: source.issuer || "",
+    date: source.date || "",
+    url: source.url || source.link || "",
+  };
+}
+
+export function normalizeCertificationList(list) {
+  if (!Array.isArray(list)) return [];
+  const used = new Set();
+  return list.map((cert, index) => {
+    const next = normalizeCertificationEntry(cert, index);
+    let id = next.id;
+    if (used.has(id)) id = createCertificationId();
+    used.add(id);
+    return { ...next, id };
+  });
+}
