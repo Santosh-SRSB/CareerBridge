@@ -376,6 +376,49 @@ export async function startInterview(jobRole: string, interviewType: string) {
   });
 }
 
+export async function createLiveInterview(payload: {
+  jobRole?: string;
+  interviewType: string;
+  difficulty?: string;
+  durationLimitMin: number;
+  source: 'PASSPORT' | 'UPLOAD';
+  content?: ResumeRecord['content'];
+}) {
+  return request<InterviewSession>('/interviews/live', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function startLiveInterview(id: string) {
+  return request<InterviewSession>(`/interviews/${id}/start`, { method: 'POST' });
+}
+
+export async function answerLiveInterview(id: string, answer: string, durationSec?: number) {
+  return request<InterviewSession>(`/interviews/${id}/answers`, {
+    method: 'POST',
+    body: JSON.stringify({ answer, durationSec }),
+  });
+}
+
+export async function warnLiveInterview(
+  id: string,
+  payload: { type: string; message: string; severity: 'INFO' | 'WARNING' | 'HIGH' },
+) {
+  return request<InterviewSession>(`/interviews/${id}/warnings`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function endLiveInterview(id: string) {
+  return request<InterviewSession>(`/interviews/${id}/end`, { method: 'POST' });
+}
+
+export async function downloadInterviewReport(id: string) {
+  return request<{ pdf: string; fileName: string; mimeType: string }>(`/interviews/${id}/download-report`);
+}
+
 export async function getInterview(id: string) {
   return request<InterviewSession>(`/interviews/${id}`);
 }

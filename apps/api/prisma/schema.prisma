@@ -359,18 +359,32 @@ model Application {
 }
 
 model Interview {
-  id            String    @id @default(uuid())
-  candidateId   String    @map("candidate_id")
-  jobRole       String    @map("job_role")
-  interviewType String    @map("interview_type")
-  status        String    @default("IN_PROGRESS")
-  questionIndex Int       @default(0) @map("question_index")
-  questionsJson String    @map("questions_json")
-  answersJson   String    @default("[]") @map("answers_json")
-  score         Int?
-  feedbackJson  String?   @map("feedback_json")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid())
+  candidateId        String    @map("candidate_id")
+  jobRole            String    @map("job_role")
+  interviewType      String    @map("interview_type")
+  status             String    @default("IN_PROGRESS")
+  questionIndex      Int       @default(0) @map("question_index")
+  questionsJson      String    @map("questions_json")
+  answersJson        String    @default("[]") @map("answers_json")
+  score              Int?
+  feedbackJson       String?   @map("feedback_json")
+  mode               String    @default("CLASSIC")
+  source             String?
+  startAt            DateTime? @map("start_at")
+  endAt              DateTime? @map("end_at")
+  durationSec        Int?      @map("duration_sec")
+  durationLimitMin   Int?      @map("duration_limit_min")
+  difficulty         String?
+  profileJson        String?   @map("profile_json") @db.Text
+  transcriptJson     String    @default("[]") @map("transcript_json") @db.Text
+  warningsJson       String    @default("[]") @map("warnings_json") @db.Text
+  reportJson         String?   @map("report_json") @db.Text
+  communicationScore Int?      @map("communication_score")
+  behaviourScore     Int?      @map("behaviour_score")
+  listeningScore     Int?      @map("listening_score")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 

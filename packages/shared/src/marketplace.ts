@@ -209,18 +209,8 @@ export type ApplicationRecord = {
 export type InterviewQuestion = {
   index: number;
   prompt: string;
-};
-
-export type InterviewSession = {
-  id: string;
-  jobRole: string;
-  interviewType: string;
-  status: 'IN_PROGRESS' | 'COMPLETED';
-  questionIndex: number;
-  totalQuestions: number;
-  currentQuestion: InterviewQuestion | null;
-  score: number | null;
-  feedback: InterviewFeedback | null;
+  snippet?: string | null;
+  thinkSeconds?: number;
 };
 
 export type InterviewFeedback = {
@@ -231,6 +221,91 @@ export type InterviewFeedback = {
   confidence: number;
   strengths: string[];
   improvements: string[];
+};
+
+export type LiveInterviewTurn = {
+  role: 'ai' | 'candidate';
+  text: string;
+  at: string;
+  questionNumber?: number;
+};
+
+export type LiveInterviewQuestion = {
+  id: string;
+  number: number;
+  text: string;
+  category: string;
+  difficulty: string;
+  askedAt: string;
+  answer?: string;
+  answeredAt?: string;
+  answerDurationSec?: number;
+  analysis?: string;
+  improvedAnswer?: string;
+  score?: number;
+  strengths?: string[];
+  weaknesses?: string[];
+  snippet?: string | null;
+  thinkSeconds?: number;
+};
+
+export type InterviewWarning = {
+  type: string;
+  message: string;
+  severity: 'INFO' | 'WARNING' | 'HIGH';
+  at: string;
+};
+
+export type InterviewReport = {
+  overallScore: number;
+  communication: number;
+  behaviour: number;
+  listening: number;
+  recommendation: 'Strongly Recommended' | 'Recommended' | 'Needs Improvement' | 'Not Ready';
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  dos: string[];
+  donts: string[];
+  answeredCount: number;
+  totalPlanned: number;
+  integrity: {
+    tabSwitches: number;
+    faceMissing: number;
+    multipleFaces: number;
+    micIssues: number;
+    abuseWarnings?: number;
+    nonsenseWarnings?: number;
+  };
+};
+
+export type InterviewSession = {
+  id: string;
+  jobRole: string;
+  interviewType: string;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  questionIndex: number;
+  totalQuestions: number;
+  conductWarning?: string | null;
+  currentQuestion: InterviewQuestion | null;
+  score: number | null;
+  feedback: InterviewFeedback | null;
+  mode?: 'CLASSIC' | 'LIVE_AI' | 'HUMAN';
+  source?: 'PASSPORT' | 'UPLOAD' | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  durationSec?: number | null;
+  durationLimitMin?: number | null;
+  difficulty?: string | null;
+  transcript?: LiveInterviewTurn[];
+  liveQuestions?: LiveInterviewQuestion[];
+  warnings?: InterviewWarning[];
+  report?: InterviewReport | null;
+  candidateName?: string | null;
+  communicationScore?: number | null;
+  behaviourScore?: number | null;
+  listeningScore?: number | null;
+  focusStacks?: string[];
 };
 
 export type EmployerProfile = {
