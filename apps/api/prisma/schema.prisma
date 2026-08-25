@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider      = "prisma-client-js"
+  output        = "../generated/prisma"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -177,44 +178,71 @@ enum ApplicationStatus {
   HIRED
 }
 
+enum EmployerVerificationStatus {
+  UNVERIFIED
+  KYC_COMPLETE
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
 model Employer {
-  id          String   @id @default(uuid())
-  userId      String   @unique @map("user_id")
-  companyName String   @map("company_name")
-  industry    String?
-  city        String?
-  contactName String?  @map("contact_name")
-  verified    Boolean  @default(false)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                   String                      @id @default(uuid())
+  userId               String                      @unique @map("user_id")
+  companyName          String                      @map("company_name")
+  industry             String?
+  city                 String?
+  contactName          String?                     @map("contact_name")
+  gstNumber            String?                     @map("gst_number")
+  cin                  String?
+  website              String?
+  panNumber            String?                     @map("pan_number")
+  workEmail            String?                     @map("work_email")
+  designation          String?
+  verificationStatus   EmployerVerificationStatus  @default(UNVERIFIED) @map("verification_status")
+  verified             Boolean                     @default(false)
+  createdAt            DateTime                    @default(now()) @map("created_at")
+  updatedAt            DateTime                    @updatedAt @map("updated_at")
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobs Job[]
+  payments EmployerPayment[]
+  hiringOutcomes HiringOutcome[]
 
   @@map("employers")
 }
 
 model Job {
-  id              String    @id @default(uuid())
-  employerId      String    @map("employer_id")
-  title           String
-  description     String
-  city            String
-  salaryMin       Int?      @map("salary_min")
-  salaryMax       Int?      @map("salary_max")
-  jobType         String    @default("FULL_TIME") @map("job_type")
-  category        String
-  experience      String?
-  requiredSkills  String    @default("[]") @map("required_skills")
-  preferredSkills String    @default("[]") @map("preferred_skills")
-  benefits        String?
-  status          JobStatus @default(DRAFT)
-  publishedAt     DateTime? @map("published_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id                      String    @id @default(uuid())
+  employerId              String    @map("employer_id")
+  title                   String
+  description             String
+  city                    String
+  department              String?
+  hiringManager           String?   @map("hiring_manager")
+  openings                Int       @default(1)
+  workMode                String?   @map("work_mode")
+  educationMin            String?   @map("education_min")
+  salaryMin               Int?      @map("salary_min")
+  salaryMax               Int?      @map("salary_max")
+  jobType                 String    @default("FULL_TIME") @map("job_type")
+  category                String
+  experience              String?
+  requiredSkills          String    @default("[]") @map("required_skills")
+  preferredSkills         String    @default("[]") @map("preferred_skills")
+  benefits                String?
+  screeningQuestionsJson  String    @default("[]") @map("screening_questions_json")
+  status                  JobStatus @default(DRAFT)
+  publishedAt             DateTime? @map("published_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   employer     Employer      @relation(fields: [employerId], references: [id], onDelete: Cascade)
   applications Application[]
+  skillProfile JobSkillProfile?
+  matches      CandidateMatch[]
+  hiringOutcomes HiringOutcome[]
+  payments     EmployerPayment[]
 
   @@index([status, city])
   @@index([category])
@@ -340,18 +368,21 @@ model ResumeOptimization {
 }
 
 model Application {
-  id            String            @id @default(uuid())
-  candidateId   String            @map("candidate_id")
-  jobId         String            @map("job_id")
-  resumeId      String?           @map("resume_id")
-  resumeVersion Int?              @map("resume_version")
-  status        ApplicationStatus @default(APPLIED)
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
+  id                    String            @id @default(uuid())
+  candidateId           String            @map("candidate_id")
+  jobId                 String            @map("job_id")
+  resumeId              String?           @map("resume_id")
+  resumeVersion         Int?              @map("resume_version")
+  screeningAnswersJson  String            @default("[]") @map("screening_answers_json")
+  status                ApplicationStatus @default(APPLIED)
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
 
   candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
   resume    Resume?   @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  match     CandidateMatch?
+  hiringOutcome HiringOutcome?
 
   @@unique([candidateId, jobId])
   @@index([jobId])
@@ -402,4 +433,117 @@ model RefreshToken {
   @@index([userId])
   @@index([tokenHash])
   @@map("refresh_tokens")
+}
+
+enum SkillProfileSource {
+  MANUAL
+  AI_EXTRACTED
+  HYBRID
+}
+
+/// Required skill profile for a job (flowchart: AI Skill Extraction → Required Skill Profile)
+model JobSkillProfile {
+  id                     String             @id @default(uuid())
+  jobId                  String             @unique @map("job_id")
+  source                 SkillProfileSource @default(MANUAL)
+  requiredSkillsJson     String             @default("[]") @map("required_skills_json")
+  preferredSkillsJson    String             @default("[]") @map("preferred_skills_json")
+  experienceYearsMin     Int                @default(0) @map("experience_years_min")
+  educationMin           String?            @map("education_min")
+  interviewReadinessMin  Int                @default(0) @map("interview_readiness_min")
+  extractionRawJson      String             @default("{}") @map("extraction_raw_json")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_skill_profiles")
+}
+
+/// Persisted match scores (flowchart: Skills / Experience / Interview Readiness → Candidate Ranking)
+model CandidateMatch {
+  id                       String   @id @default(uuid())
+  jobId                    String   @map("job_id")
+  candidateId              String   @map("candidate_id")
+  applicationId            String?  @unique @map("application_id")
+  skillsScore              Int      @default(0) @map("skills_score")
+  experienceScore          Int      @default(0) @map("experience_score")
+  interviewReadinessScore  Int      @default(0) @map("interview_readiness_score")
+  totalScore               Int      @default(0) @map("total_score")
+  rank                     Int?
+  reasonsJson              String   @default("[]") @map("reasons_json")
+  gapsJson                 String   @default("[]") @map("gaps_json")
+  computedAt               DateTime @default(now()) @map("computed_at")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  job         Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@unique([jobId, candidateId])
+  @@index([jobId, totalScore])
+  @@index([candidateId])
+  @@map("candidate_matches")
+}
+
+enum HiringOutcomeType {
+  HIRED
+  OFFER_EXTENDED
+  OFFER_DECLINED
+  REJECTED
+  POSITION_FILLED
+}
+
+/// Final hiring decision (flowchart: Shortlist / Hire → Hiring Outcome)
+model HiringOutcome {
+  id            String            @id @default(uuid())
+  employerId    String            @map("employer_id")
+  jobId         String            @map("job_id")
+  candidateId   String            @map("candidate_id")
+  applicationId String            @unique @map("application_id")
+  outcome       HiringOutcomeType
+  notes         String?
+  decidedAt     DateTime          @default(now()) @map("decided_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  employer    Employer         @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  job         Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  application Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  payment     EmployerPayment?
+
+  @@index([employerId])
+  @@index([jobId])
+  @@map("hiring_outcomes")
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+/// Employer billing after hire (flowchart: Employer Payment)
+model EmployerPayment {
+  id              String        @id @default(uuid())
+  employerId      String        @map("employer_id")
+  jobId           String?       @map("job_id")
+  hiringOutcomeId String?       @unique @map("hiring_outcome_id")
+  amountPaise     Int           @map("amount_paise")
+  currency        String        @default("INR")
+  status          PaymentStatus @default(PENDING)
+  provider        String?       // e.g. RAZORPAY, MANUAL
+  providerRef     String?       @map("provider_ref")
+  description     String?
+  paidAt          DateTime?     @map("paid_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  employer      Employer       @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  job           Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  hiringOutcome HiringOutcome? @relation(fields: [hiringOutcomeId], references: [id], onDelete: SetNull)
+
+  @@index([employerId, status])
+  @@map("employer_payments")
 }

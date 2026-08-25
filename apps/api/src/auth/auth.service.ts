@@ -128,12 +128,11 @@ export class AuthService {
     const passwordHash =
       dto.purpose === 'REGISTER' ? await this.resolvePasswordHash(phone, dto.password) : null;
 
-    const otpCode =
-      channel === 'EMAIL'
+    const otpCode = this.isDevOtp()
+      ? DEV_OTP
+      : channel === 'EMAIL'
         ? String(Math.floor(100000 + Math.random() * 900000))
-        : this.isDevOtp()
-          ? DEV_OTP
-          : null;
+        : null;
     const otpHash = otpCode ? hashToken(otpCode) : null;
 
     const request = await this.prisma.otpRequest.create({
@@ -160,14 +159,14 @@ export class AuthService {
       },
     });
 
-    if (channel === 'EMAIL' && otpCode) {
+    if (channel === 'EMAIL' && otpCode && !this.isDevOtp()) {
       await this.email.sendOtp(email || '', otpCode);
     }
 
     return {
       requestId: request.id,
       expiresIn: OTP_TTL_SECONDS,
-      ...(this.isDevOtp() && channel !== 'EMAIL' ? { devOtp: DEV_OTP } : {}),
+      ...(this.isDevOtp() ? { devOtp: DEV_OTP } : {}),
     };
   }
 
@@ -493,7 +492,20 @@ export class AuthService {
         firstName: user.candidate?.firstName ?? user.employer?.contactName ?? null,
         profileCompleted: user.candidate?.profileCompletion ?? 0,
         onboardingCompleted:
-          user.userType === 'CANDIDATE' ? user.candidate?.onboardingCompleted ?? false : true,
+          user.userType === 'CANDIDATE'
+            ? user.candidate?.onboardingCompleted ?? false
+            : user.userType === 'EMPLOYER_ADMIN' || user.userType === 'EMPLOYER_RECRUITER'
+              ? user.employer?.verificationStatus === 'PENDING' ||
+                user.employer?.verificationStatus === 'VERIFIED' ||
+                user.employer?.verified === true
+              : true,
+        ...(user.userType === 'EMPLOYER_ADMIN' || user.userType === 'EMPLOYER_RECRUITER'
+          ? {
+              employerVerificationStatus:
+                user.employer?.verificationStatus ||
+                (user.employer?.verified ? 'VERIFIED' : 'UNVERIFIED'),
+            }
+          : {}),
     };
   }
 
@@ -554,7 +566,11 @@ export class AuthService {
     userType: string;
     phone: string;
     candidate?: { onboardingCompleted: boolean; firstName: string | null } | null;
-    employer?: { contactName: string | null } | null;
+    employer?: {
+      contactName: string | null;
+      verificationStatus?: string | null;
+      verified?: boolean;
+    } | null;
   }) {
     const payload: JwtPayload = {
       sub: user.id,
@@ -584,6 +600,11 @@ export class AuthService {
       },
     });
     const isCandidate = user.userType === 'CANDIDATE';
+    const isEmployer =
+      user.userType === 'EMPLOYER_ADMIN' || user.userType === 'EMPLOYER_RECRUITER';
+    const employerStatus =
+      user.employer?.verificationStatus ||
+      (user.employer?.verified ? 'VERIFIED' : 'UNVERIFIED');
     return {
       accessToken,
       refreshToken,
@@ -594,7 +615,10 @@ export class AuthService {
         role: user.userType,
         phone: user.phone,
         firstName: user.candidate?.firstName ?? user.employer?.contactName ?? null,
-        onboardingCompleted: isCandidate ? user.candidate?.onboardingCompleted ?? false : true,
+        onboardingCompleted: isCandidate
+          ? user.candidate?.onboardingCompleted ?? false
+          : !isEmployer || employerStatus === 'PENDING' || employerStatus === 'VERIFIED',
+        ...(isEmployer ? { employerVerificationStatus: employerStatus } : {}),
       },
     };
   }

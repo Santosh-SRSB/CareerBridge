@@ -1,4 +1,84 @@
 export const JOB_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'] as const;
+
+export const WORK_MODES = ['ONSITE', 'HYBRID', 'REMOTE'] as const;
+
+export const JOB_EXPERIENCE_RANGES = [
+  'Fresher',
+  '0 - 1 Years',
+  '1 - 2 Years',
+  '2 - 4 Years',
+  '3 - 5 Years',
+  '5 - 8 Years',
+  '8+ Years',
+] as const;
+
+export const JOB_EDUCATION_LEVELS = [
+  'Any',
+  "10th / Secondary",
+  "12th / Higher Secondary",
+  'Diploma',
+  "Bachelor's Degree",
+  "Master's Degree",
+  'Doctorate',
+] as const;
+
+export const SCREENING_QUESTION_TYPES = ['YES_NO', 'SHORT_TEXT', 'SINGLE_CHOICE'] as const;
+
+export const JOB_SKILL_SUGGESTIONS = [
+  'Communication',
+  'Customer Service',
+  'MS Excel',
+  'Sales',
+  'Data Entry',
+  'React',
+  'Node.js',
+  'SQL',
+  'AWS',
+  'JavaScript',
+  'Python',
+  'Java',
+  'TypeScript',
+  'HTML / CSS',
+  'Teamwork',
+] as const;
+
+export type WorkMode = (typeof WORK_MODES)[number];
+export type ScreeningQuestionType = (typeof SCREENING_QUESTION_TYPES)[number];
+
+export type ScreeningQuestion = {
+  id: string;
+  prompt: string;
+  type: ScreeningQuestionType;
+  options?: string[];
+  required?: boolean;
+};
+
+export type ScreeningAnswer = {
+  questionId: string;
+  answer: string;
+  prompt?: string;
+};
+
+export type CreateJobPayload = {
+  title: string;
+  description: string;
+  city: string;
+  category: string;
+  department?: string;
+  hiringManager?: string;
+  openings?: number;
+  workMode?: string;
+  educationMin?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  jobType?: string;
+  experience?: string;
+  requiredSkills?: string[];
+  preferredSkills?: string[];
+  benefits?: string;
+  screeningQuestions?: ScreeningQuestion[];
+  publish?: boolean;
+};
 export const TECH_JOB_CATEGORIES = [
   'Technology',
   'Software Development',
@@ -151,6 +231,12 @@ export type JobDetail = JobCard & {
   benefits: string | null;
   status: string;
   applied: boolean;
+  department?: string | null;
+  hiringManager?: string | null;
+  openings?: number;
+  workMode?: string | null;
+  educationMin?: string | null;
+  screeningQuestions?: ScreeningQuestion[];
 };
 
 export type PagedJobs = {
@@ -233,13 +319,105 @@ export type InterviewFeedback = {
   improvements: string[];
 };
 
+export type EmployerVerificationStatus =
+  | 'UNVERIFIED'
+  | 'KYC_COMPLETE'
+  | 'PENDING'
+  | 'VERIFIED'
+  | 'REJECTED';
+
 export type EmployerProfile = {
   id: string;
   companyName: string;
   industry: string | null;
   city: string | null;
   contactName: string | null;
+  gstNumber: string | null;
+  cin: string | null;
+  website: string | null;
+  panNumber: string | null;
+  workEmail: string | null;
+  designation: string | null;
+  verificationStatus: EmployerVerificationStatus;
   verified: boolean;
+};
+
+export type EmployerJobSummary = {
+  id: string;
+  title: string;
+  city: string;
+  status: string;
+  applicantCount: number;
+  publishedAt: string | null;
+  createdAt: string;
+};
+
+export type JobSkillProfile = {
+  jobId: string;
+  source: 'MANUAL' | 'AI_EXTRACTED' | 'HYBRID' | string;
+  requiredSkills: string[];
+  preferredSkills: string[];
+  experienceYearsMin: number;
+  educationMin: string | null;
+  interviewReadinessMin: number;
+  extractionRaw?: Record<string, unknown>;
+};
+
+export type CandidateMatchRank = {
+  id: string;
+  jobId: string;
+  applicationId: string | null;
+  rank: number | null;
+  totalScore: number;
+  skillsScore: number;
+  experienceScore: number;
+  interviewReadinessScore: number;
+  reasons: string[];
+  gaps: string[];
+  computedAt: string;
+  candidate: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    city: string | null;
+    skills: string[];
+  } | null;
+};
+
+export type HiringOutcomeRecord = {
+  id: string;
+  applicationId: string;
+  jobId: string;
+  candidateId: string;
+  outcome: string;
+  notes: string | null;
+  decidedAt: string;
+};
+
+export type EmployerPaymentRecord = {
+  id: string;
+  jobId: string | null;
+  hiringOutcomeId: string | null;
+  amountPaise: number;
+  currency: string;
+  status: string;
+  provider: string | null;
+  description: string | null;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+export type EmployerKycPayload = {
+  gstNumber: string;
+  cin: string;
+  website: string;
+  panNumber: string;
+};
+
+export type EmployerAffiliationPayload = {
+  companyName: string;
+  workEmail: string;
+  designation: string;
 };
 
 export type EmployerDashboard = {
@@ -252,6 +430,7 @@ export type EmployerDashboard = {
     jobTitle: string;
     status: string;
     applicationId: string;
+    jobId: string;
   }>;
 };
 
@@ -269,6 +448,7 @@ export type EmployerApplication = {
   };
   job: { id: string; title: string };
   match?: JobMatch;
+  screeningAnswers?: ScreeningAnswer[];
 };
 
 export type CatalogSkill = {

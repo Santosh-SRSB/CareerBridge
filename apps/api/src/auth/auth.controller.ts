@@ -16,28 +16,28 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
-  @Throttle({ default: { limit: 8, ttl: 60000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('otp/request')
   requestOtp(@Body() dto: RequestOtpDto) {
     return this.auth.requestOtp(dto);
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('otp/verify')
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.auth.verifyOtp(dto);
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('login')
   login(@Body() dto: PasswordLoginDto) {
     return this.auth.loginWithPassword(dto.identifier, dto.password, dto.accountType);
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('employer/register')
   registerEmployer(@Body() dto: EmployerRegisterDto) {
     return this.auth.registerEmployer(dto);

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
-import { IsOptional, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsInt, Min } from 'class-validator';
 import { JobsService } from './jobs.service';
@@ -40,10 +40,24 @@ class JobQueryDto {
   pageSize?: number;
 }
 
+class ScreeningAnswerDto {
+  @IsString()
+  questionId: string;
+
+  @IsString()
+  answer: string;
+}
+
 class ApplyDto {
   @IsOptional()
   @IsString()
   resumeId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ScreeningAnswerDto)
+  screeningAnswers?: ScreeningAnswerDto[];
 }
 
 @ApiTags('jobs')
@@ -88,6 +102,6 @@ export class JobsController {
     @CurrentUser() user: { id: string },
     @Body() dto: ApplyDto,
   ) {
-    return this.jobs.apply(user.id, jobId, dto.resumeId);
+    return this.jobs.apply(user.id, jobId, dto.resumeId, dto.screeningAnswers);
   }
 }

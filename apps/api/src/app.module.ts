@@ -13,17 +13,18 @@ import { EmployersModule } from './employers/employers.module';
 import { AdminModule } from './admin/admin.module';
 import { SkillsModule } from './skills/skills.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
+import { MatchingModule } from './matching/matching.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     PrismaModule,
     AuthModule,
     CandidatesModule,
@@ -32,6 +33,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     ApplicationsModule,
     InterviewsModule,
     EmployersModule,
+    MatchingModule,
     AdminModule,
     SkillsModule,
     IntelligenceModule,
@@ -40,7 +42,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: RequestIdInterceptor },
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: AppThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     SeedService,
   ],

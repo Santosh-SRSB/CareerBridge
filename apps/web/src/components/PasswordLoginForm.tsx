@@ -1,15 +1,21 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { loginWithPassword } from '@/lib/api';
 import { postAuthPath } from '@/lib/phone';
 import type { AccountKind } from '@careerbridge/shared';
 
+function safeNextPath(raw: string | null) {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null;
+  return raw;
+}
+
 export function PasswordLoginForm({ accountType }: { accountType: AccountKind }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,7 +35,16 @@ export function PasswordLoginForm({ accountType }: { accountType: AccountKind })
     setLoading(true);
     try {
       const session = await loginWithPassword(identifier.trim(), password, accountType);
-      router.replace(postAuthPath(session.user));
+      const next = safeNextPath(searchParams.get('next'));
+      const onboarding = postAuthPath(session.user);
+      const needsOnboarding = onboarding === '/employer/kyc' || onboarding === '/employer/verify';
+      const destination =
+        needsOnboarding
+          ? onboarding
+          : accountType === 'EMPLOYER' && next?.startsWith('/employer')
+            ? next
+            : onboarding;
+      router.replace(destination);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Incorrect mobile number, email, or password.');
     } finally {

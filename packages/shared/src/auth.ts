@@ -30,6 +30,7 @@ export type AuthUser = {
   phone: string;
   firstName: string | null;
   onboardingCompleted: boolean;
+  employerVerificationStatus?: import('./marketplace').EmployerVerificationStatus | null;
 };
 
 export type AuthSession = {

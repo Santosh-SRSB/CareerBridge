@@ -15,7 +15,10 @@ import type {
   CreateProjectPayload,
   EmployerApplication,
   EmployerDashboard,
+  EmployerJobSummary,
   EmployerProfile,
+  EmployerKycPayload,
+  EmployerAffiliationPayload,
   InterviewSession,
   JobDetail,
   PagedJobs,
@@ -255,10 +258,14 @@ export async function getJob(id: string) {
   return request<JobDetail>(`/jobs/${id}`, { auth: Boolean(getAccessToken()) });
 }
 
-export async function applyToJob(jobId: string, resumeId?: string) {
+export async function applyToJob(
+  jobId: string,
+  resumeId?: string,
+  screeningAnswers?: Array<{ questionId: string; answer: string }>,
+) {
   return request<ApplicationRecord>(`/jobs/${jobId}/applications`, {
     method: 'POST',
-    body: JSON.stringify({ resumeId }),
+    body: JSON.stringify({ resumeId, screeningAnswers }),
   });
 }
 
@@ -402,20 +409,60 @@ export async function updateEmployerMe(payload: Partial<EmployerProfile>) {
   });
 }
 
+export async function saveEmployerKyc(payload: EmployerKycPayload) {
+  return request<EmployerProfile>('/employers/me/kyc', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function submitEmployerVerification(payload: EmployerAffiliationPayload) {
+  return request<EmployerProfile>('/employers/me/verification', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getEmployerDashboard() {
   return request<EmployerDashboard>('/employers/me/dashboard');
 }
 
 export async function listEmployerJobs() {
-  return request<Array<{ id: string; title: string; city: string; status: string }>>('/employers/jobs');
+  return request<EmployerJobSummary[]>('/employers/jobs');
+}
+
+export async function getEmployerJob(id: string) {
+  return request<EmployerJobSummary & Record<string, unknown>>(`/employers/jobs/${id}`);
 }
 
 export async function createEmployerJob(payload: Record<string, unknown>) {
-  return request('/employers/jobs', { method: 'POST', body: JSON.stringify(payload) });
+  return request<{ id: string; title: string }>('/employers/jobs', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateEmployerJob(id: string, payload: Record<string, unknown>) {
+  return request(`/employers/jobs/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function saveEmployerJobSkillProfile(
+  jobId: string,
+  payload: { requiredSkills: string[]; educationMin?: string },
+) {
+  return request(`/employers/jobs/${jobId}/skill-profile`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function publishEmployerJob(id: string) {
   return request(`/employers/jobs/${id}/publish`, { method: 'POST' });
+}
+
+export async function pauseEmployerJob(id: string) {
+  return request(`/employers/jobs/${id}/pause`, { method: 'POST' });
+}
+
+export async function closeEmployerJob(id: string) {
+  return request(`/employers/jobs/${id}/close`, { method: 'POST' });
 }
 
 export async function listEmployerApplications(jobId: string) {

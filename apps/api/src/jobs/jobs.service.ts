@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
@@ -77,6 +77,12 @@ export class JobsService {
       benefits: job.benefits,
       status: job.status,
       applied,
+      department: job.department,
+      hiringManager: job.hiringManager,
+      openings: job.openings,
+      workMode: job.workMode,
+      educationMin: job.educationMin,
+      screeningQuestions: parseScreeningQuestions(job.screeningQuestionsJson),
     };
   }
 
@@ -85,12 +91,19 @@ export class JobsService {
     return detail.match;
   }
 
-  async apply(userId: string, jobId: string, resumeId?: string) {
+  async apply(
+    userId: string,
+    jobId: string,
+    resumeId?: string,
+    screeningAnswers?: Array<{ questionId: string; answer: string }>,
+  ) {
     const candidate = await this.requireCandidate(userId);
     const job = await this.prisma.job.findUnique({ where: { id: jobId } });
     if (!job || job.status !== 'PUBLISHED') {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'This job is not open for applications' });
     }
+    const questions = parseScreeningQuestions(job.screeningQuestionsJson);
+    const answers = normalizeScreeningAnswers(questions, screeningAnswers);
     const existing = await this.prisma.application.findUnique({
       where: { candidateId_jobId: { candidateId: candidate.id, jobId } },
     });
@@ -106,7 +119,12 @@ export class JobsService {
     const application = existing
       ? await this.prisma.application.update({
           where: { id: existing.id },
-          data: { status: 'APPLIED', resumeId: resume?.id, resumeVersion: resume?.version },
+          data: {
+            status: 'APPLIED',
+            resumeId: resume?.id,
+            resumeVersion: resume?.version,
+            screeningAnswersJson: JSON.stringify(answers),
+          },
         })
       : await this.prisma.application.create({
           data: {
@@ -114,6 +132,7 @@ export class JobsService {
             jobId,
             resumeId: resume?.id,
             resumeVersion: resume?.version,
+            screeningAnswersJson: JSON.stringify(answers),
           },
         });
     return this.applicationView(application.id);
@@ -214,4 +233,63 @@ export function parseList(raw: string) {
   } catch {
     return [];
   }
+}
+
+function parseScreeningQuestions(raw: string | null | undefined) {
+  try {
+    const value = JSON.parse(raw || '[]') as unknown;
+    if (!Array.isArray(value)) return [];
+    return value
+      .filter((item): item is {
+        id: string;
+        prompt: string;
+        type: string;
+        options?: string[];
+        required?: boolean;
+      } => {
+        return (
+          Boolean(item) &&
+          typeof item === 'object' &&
+          typeof (item as { id?: unknown }).id === 'string' &&
+          typeof (item as { prompt?: unknown }).prompt === 'string' &&
+          typeof (item as { type?: unknown }).type === 'string'
+        );
+      })
+      .map((item) => ({
+        id: item.id,
+        prompt: item.prompt,
+        type: item.type as 'YES_NO' | 'SHORT_TEXT' | 'SINGLE_CHOICE',
+        options: item.options || [],
+        required: item.required !== false,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function normalizeScreeningAnswers(
+  questions: Array<{ id: string; prompt: string; type: string; required?: boolean }>,
+  answers?: Array<{ questionId: string; answer: string }>,
+) {
+  const byId = new Map((answers || []).map((item) => [item.questionId, item.answer.trim()]));
+  const normalized = questions.map((question) => ({
+    questionId: question.id,
+    answer: byId.get(question.id) || '',
+  }));
+
+  for (const question of questions) {
+    if (question.required === false) continue;
+    const answer = byId.get(question.id) || '';
+    if (!answer) {
+      throw new HttpException(
+        {
+          code: ErrorCode.VALIDATION_ERROR,
+          message: `Please answer: ${question.prompt}`,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  return normalized.filter((item) => item.answer);
 }

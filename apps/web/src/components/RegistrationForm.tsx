@@ -105,9 +105,11 @@ export function RegistrationForm() {
     <form onSubmit={onSubmit} className="space-y-3">
       <OtpChannelToggle value={channel} onChange={setChannel} />
       <p className="text-xs text-muted">
-        {channel === 'MOBILE'
-          ? 'We will send the OTP to your mobile number.'
-          : 'We will send the OTP to your email address.'}
+        {isDevOtpEnabled()
+          ? 'Local OTP mode is on. After Send OTP, use code 123456 — no email or SMS is sent.'
+          : channel === 'MOBILE'
+            ? 'We will send the OTP to your mobile number.'
+            : 'We will send the OTP to your email address.'}
       </p>
       <Input
         label="Name"
