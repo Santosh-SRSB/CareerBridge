@@ -6,6 +6,22 @@ export function dateRange(start, end, current) {
   return parts.join(" – ");
 }
 
+export const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+export const CAREER_GAP_TYPES = [
+  "Career Development Period",
+  "Education / Coursework",
+  "Family / Personal",
+  "Health",
+  "Relocation",
+  "Job search",
+  "Freelance / Independent work",
+  "Other",
+];
+
 export function contactItems(data) {
   return [data.email, data.phone, data.location, data.linkedin, data.website].filter(Boolean);
 }
@@ -323,4 +339,114 @@ export function normalizeCertificationList(list) {
     used.add(id);
     return { ...next, id };
   });
+}
+
+export function createCareerGapId() {
+  return makeLocalId("career-gap");
+}
+
+function formatGapMonthYear(month, year, fallback, current) {
+  if (current) return "Present";
+  const monthText = String(month || "").trim();
+  const yearText = String(year || "").trim();
+  if (monthText && yearText) return `${monthText} ${yearText}`;
+  return String(fallback || "").trim();
+}
+
+function stringList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      if (item && typeof item === "object") return String(item.name || item.text || item.value || "").trim();
+      return String(item || "").trim();
+    }).filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+export function blankCareerGap() {
+  return {
+    id: createCareerGapId(),
+    type: "",
+    reason: "",
+    startMonth: "",
+    startYear: "",
+    endMonth: "",
+    endYear: "",
+    current: false,
+    description: "",
+    activities: [""],
+    skills: [""],
+    certifications: [""],
+    projects: [""],
+    startDate: "",
+    endDate: "",
+  };
+}
+
+export function normalizeCareerGapEntry(gap, index = 0) {
+  const source = gap && typeof gap === "object" ? gap : {};
+  const startDate = formatGapMonthYear(source.startMonth, source.startYear, source.startDate, false);
+  const endDate = source.current
+    ? "Present"
+    : formatGapMonthYear(source.endMonth, source.endYear, source.endDate, false);
+  const type = source.type || source.reason || source.title || "";
+  return {
+    id: source.id || `career-gap-${index + 1}-${type || "entry"}`.replace(/\s+/g, "-").toLowerCase(),
+    type,
+    reason: source.reason || type,
+    startMonth: source.startMonth || "",
+    startYear: source.startYear || "",
+    endMonth: source.endMonth || "",
+    endYear: source.endYear || "",
+    current: Boolean(source.current),
+    description: source.description || "",
+    activities: Array.isArray(source.activities) ? source.activities.map((item) => String(item ?? "")) : stringList(source.activities),
+    skills: Array.isArray(source.skills) ? source.skills.map((item) => String(item ?? "")) : stringList(source.skills),
+    certifications: Array.isArray(source.certifications) ? source.certifications.map((item) => String(item ?? "")) : stringList(source.certifications),
+    projects: Array.isArray(source.projects) ? source.projects.map((item) => String(item ?? "")) : stringList(source.projects),
+    startDate,
+    endDate,
+  };
+}
+
+export function normalizeCareerGapList(list) {
+  const source = Array.isArray(list) ? list : [];
+  const used = new Set();
+  return source.map((gap, index) => {
+    const next = normalizeCareerGapEntry(gap, index);
+    let id = next.id;
+    if (used.has(id)) id = createCareerGapId();
+    used.add(id);
+    return { ...next, id };
+  });
+}
+
+export function applyCareerGapPatch(entry, patch) {
+  const next = { ...entry, ...patch };
+  if (Object.prototype.hasOwnProperty.call(patch, "type") && !patch.reason) next.reason = patch.type;
+  if (Object.prototype.hasOwnProperty.call(patch, "reason") && !patch.type) next.type = patch.reason;
+  next.startDate = formatGapMonthYear(next.startMonth, next.startYear, next.startDate, false);
+  next.endDate = next.current
+    ? "Present"
+    : formatGapMonthYear(next.endMonth, next.endYear, next.endDate, false);
+  return next;
+}
+
+export function careerGapDateRange(gap) {
+  const start = formatGapMonthYear(gap.startMonth, gap.startYear, gap.startDate, false);
+  const end = gap.current ? "Present" : formatGapMonthYear(gap.endMonth, gap.endYear, gap.endDate, false);
+  return dateRange(start, end, false);
+}
+
+export function visibleCareerGapItems(gap) {
+  const list = (value) => (Array.isArray(value) ? value : []).map((item) => String(item || "").trim()).filter(Boolean);
+  return {
+    activities: list(gap.activities),
+    skills: list(gap.skills),
+    certifications: list(gap.certifications),
+    projects: list(gap.projects),
+  };
 }

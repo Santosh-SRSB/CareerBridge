@@ -15,6 +15,7 @@ const {
   projectName,
   projectCorpus,
 } = require("./projectUtils");
+const { allCareerGapCorpus, analyzeCareerTimeline } = require("./careerGapUtils");
 
 const MAX_JOB_DESCRIPTION = 50000;
 
@@ -96,6 +97,7 @@ function resumeCorpus(resume) {
   for (const c of asList(resume.certifications)) {
     parts.push(c.name, c.issuer, c.date, c.url, c.link);
   }
+  parts.push(allCareerGapCorpus(resume));
   return parts.map(text).filter(Boolean).join("\n");
 }
 
@@ -208,20 +210,22 @@ function evidenceLevel(skill, resume) {
   const certText = visibleCerts(resume)
     .map((c) => [c.name, c.issuer, c.url, c.link].join(" "))
     .join(" \n ");
+  const gapText = allCareerGapCorpus(resume);
 
   const inSkills = corpusHasSkill(skillsText, skill);
   const inExp = corpusHasSkill(expText, skill);
   const inProj = corpusHasSkill(projText, skill);
   const inCert = corpusHasSkill(certText, skill);
-  const sections = [inSkills, inExp, inProj, inCert].filter(Boolean).length;
-  const uses = (inExp ? 1 : 0) + (inProj ? 1 : 0) + (inCert ? 1 : 0);
+  const inGap = corpusHasSkill(gapText, skill);
+  const sections = [inSkills, inExp, inProj, inCert, inGap].filter(Boolean).length;
+  const uses = (inExp ? 1 : 0) + (inProj ? 1 : 0) + (inCert ? 1 : 0) + (inGap ? 1 : 0);
 
-  if (!inSkills && !inExp && !inProj && !inCert) return { level: "Not found", score: 0, sections, uses };
+  if (!inSkills && !inExp && !inProj && !inCert && !inGap) return { level: "Not found", score: 0, sections, uses };
   if (uses >= 2 && (inCert || hasMetric(expText + " " + projText))) {
     return { level: "Strong Evidence", score: 100, sections, uses };
   }
   if (uses >= 2 || (inExp && inProj)) return { level: "Demonstrated", score: 95, sections, uses };
-  if (inExp || inProj || inCert) return { level: "Used", score: 85, sections, uses };
+  if (inExp || inProj || inCert || inGap) return { level: "Used", score: 85, sections, uses };
   return { level: "Mentioned", score: 70, sections, uses };
 }
 
@@ -915,6 +919,7 @@ function buildInsights({
   content,
   template,
   overall,
+  timeline,
 }) {
   const strengths = [];
   const weaknesses = [];
@@ -1005,6 +1010,13 @@ function buildInsights({
       text: `Add a relevant certification such as ${roleProfile.certifications[0]} only if you already hold it.`,
     });
   }
+  for (const note of (timeline && timeline.recommendations) || []) {
+    if (/No action required/i.test(note)) continue;
+    recommendations.push({
+      priority: "LOW",
+      text: note,
+    });
+  }
 
   const uniqueStrengths = uniq(strengths).slice(0, 5);
   const uniqueWeaknesses = uniq(weaknesses).slice(0, 5);
@@ -1068,6 +1080,14 @@ function sectionAnalysis(resume, parts) {
       note: parts.education.relevance || "Education evaluated.",
     },
     {
+      section: "Career Break",
+      present: Boolean(parts.timeline && (parts.timeline.entries || []).length),
+      score: 100,
+      note: parts.timeline
+        ? `${parts.timeline.status}. ATS impact: ${parts.timeline.atsImpact}.`
+        : "Optional timeline section. No direct ATS penalty.",
+    },
+    {
       section: "Contact",
       present: !!(text(resume.email) || text(resume.phone)),
       score: parts.formatting.score,
@@ -1105,6 +1125,7 @@ function analyzeResume({ resume = {}, targetRole, jobDescription = "", templateI
   const formatting = calculateATSFormattingScore(data, templateProfile);
   const template = calculateTemplateScore(templateProfile);
   const content = calculateContentQuality(data, roleName, experience);
+  const timeline = analyzeCareerTimeline(data);
 
   const overallScore = calculateOverallScore({
     roleMatch: roleMatch.score,
@@ -1131,6 +1152,7 @@ function analyzeResume({ resume = {}, targetRole, jobDescription = "", templateI
     content,
     template,
     overall: overallScore,
+    timeline,
   });
 
   return {
@@ -1193,7 +1215,9 @@ function analyzeResume({ resume = {}, targetRole, jobDescription = "", templateI
       certs,
       education,
       formatting,
+      timeline,
     }),
+    careerTimeline: timeline,
     usedJobDescription: targets.used,
     roleProfileId: roleProfile.id,
     roleProfileKnown: roleProfile.known,

@@ -9,6 +9,7 @@ const {
   normalizeProject,
   normalizeProjectUrl,
 } = require("./projectUtils");
+const { stringList } = require("./careerGapUtils");
 
 const CONTACT_KEYS = [
   "fullName", "email", "phone", "location", "linkedin", "website", "photo",
@@ -236,6 +237,34 @@ function rewriteProject(project, index) {
   };
 }
 
+function rewriteCareerGap(gap) {
+  const source = gap && typeof gap === "object" ? gap : {};
+  const allowed = [
+    ...stringList(source.skills),
+    ...stringList(source.certifications),
+    ...stringList(source.projects),
+    ...stringList(source.activities),
+  ];
+  const activities = Array.isArray(source.activities) ? source.activities : stringList(source.activities);
+  return {
+    ...source,
+    type: source.type || source.reason || source.title || "",
+    reason: source.reason || source.type || "",
+    startMonth: source.startMonth,
+    startYear: source.startYear,
+    endMonth: source.endMonth,
+    endYear: source.endYear,
+    current: source.current,
+    startDate: source.startDate,
+    endDate: source.endDate,
+    description: text(source.description) ? polishSentence(source.description, allowed) : source.description,
+    activities: activities.map((item) => (text(item) ? polishSentence(item, allowed) : item)),
+    skills: Array.isArray(source.skills) ? [...source.skills] : stringList(source.skills),
+    certifications: Array.isArray(source.certifications) ? [...source.certifications] : stringList(source.certifications),
+    projects: Array.isArray(source.projects) ? [...source.projects] : stringList(source.projects),
+  };
+}
+
 function rewriteResumeData(resume, targetRole, roleSkills) {
   const source = resume && typeof resume === "object" ? resume : {};
   const skills = resumeSkillList(source);
@@ -257,6 +286,11 @@ function rewriteResumeData(resume, targetRole, roleSkills) {
           url: c.url || c.link || "",
         }))
       : [],
+    careerGaps: (Array.isArray(source.careerGaps)
+      ? source.careerGaps
+      : Array.isArray(source.careerBreaks)
+        ? source.careerBreaks
+        : []).map((gap) => rewriteCareerGap(gap)),
   };
 
   for (const key of CONTACT_KEYS) {
@@ -282,6 +316,12 @@ function describeChanges(original, rewritten, targetRole, usedJobDescription) {
   const origExp = JSON.stringify((original.experience || []).map((j) => j.bullets));
   const newExp = JSON.stringify((rewritten.experience || []).map((j) => j.bullets));
   if (origExp !== newExp) changes.push("Experience bullets improved");
+  const origGaps = JSON.stringify((original.careerGaps || original.careerBreaks || []).map((g) => [g.type, g.reason, g.startDate, g.endDate]));
+  const newGaps = JSON.stringify((rewritten.careerGaps || []).map((g) => [g.type, g.reason, g.startDate, g.endDate]));
+  if (origGaps !== newGaps) changes.push("Career break dates or type were preserved");
+  const origGapCopy = JSON.stringify((original.careerGaps || original.careerBreaks || []).map((g) => [g.description, g.activities]));
+  const newGapCopy = JSON.stringify((rewritten.careerGaps || []).map((g) => [g.description, g.activities]));
+  if (origGapCopy !== newGapCopy) changes.push("Career break wording improved");
   if (usedJobDescription) changes.push("Job description keywords naturally incorporated where already evidenced");
   changes.push("ATS formatting preserved");
   return uniq(changes);

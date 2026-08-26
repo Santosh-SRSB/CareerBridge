@@ -7,12 +7,17 @@ import {
   EDUCATION_LEVELS,
   applyEducationPatch,
   applyProjectPatch,
+  applyCareerGapPatch,
+  blankCareerGap,
   blankCertification,
   blankEducation,
   blankProject,
+  CAREER_GAP_TYPES,
+  MONTHS,
   createProjectBulletId,
   normalizeCertificateUrl,
   normalizeCertificationList,
+  normalizeCareerGapList,
   normalizeEducationList,
   normalizeProjectList,
   normalizeProjectUrl,
@@ -39,6 +44,7 @@ const FORM_STEPS = [
   { id: "summary", label: "Summary" },
   { id: "education", label: "Education" },
   { id: "experience", label: "Experience" },
+  { id: "career-gap", label: "Career Gap" },
   { id: "skills", label: "Skills" },
   { id: "projects", label: "Projects" },
   { id: "certifications", label: "Certifications" },
@@ -59,6 +65,7 @@ function sectionComplete(stepId, data) {
   if (stepId === "experience") {
     return (source.experience || []).some((job) => filled(job.role) || filled(job.company));
   }
+  if (stepId === "career-gap") return true;
   if (stepId === "skills") return (source.skills || []).length > 0;
   if (stepId === "projects") {
     return (source.projects || []).some((p) => filled(p.name) || filled(p.description));
@@ -115,6 +122,7 @@ export default function Editor() {
             education: normalizeEducationList(r.data?.education),
             projects: normalizeProjectList(r.data?.projects),
             certifications: normalizeCertificationList(r.data?.certifications),
+            careerGaps: normalizeCareerGapList(r.data?.careerGaps || r.data?.careerBreaks),
           },
         });
         setTemplates(t);
@@ -291,6 +299,7 @@ export default function Editor() {
           education: normalizeEducationList(resume.data.education),
           projects: normalizeProjectList(resume.data.projects),
           certifications: normalizeCertificationList(resume.data.certifications),
+          careerGaps: normalizeCareerGapList(resume.data.careerGaps),
         },
       });
       setResume({
@@ -301,6 +310,7 @@ export default function Editor() {
           education: normalizeEducationList(updated.data?.education),
           projects: normalizeProjectList(updated.data?.projects),
           certifications: normalizeCertificationList(updated.data?.certifications),
+          careerGaps: normalizeCareerGapList(updated.data?.careerGaps || updated.data?.careerBreaks),
         },
       });
       setStatus("Saved");
@@ -331,6 +341,7 @@ export default function Editor() {
           education: normalizeEducationList(resume.data.education),
           projects: normalizeProjectList(resume.data.projects),
           certifications: normalizeCertificationList(resume.data.certifications),
+          careerGaps: normalizeCareerGapList(resume.data.careerGaps),
         },
         templateId: resume.templateId,
         targetRole: role,
@@ -362,6 +373,7 @@ export default function Editor() {
           education: normalizeEducationList(resume.data.education),
           projects: normalizeProjectList(resume.data.projects),
           certifications: normalizeCertificationList(resume.data.certifications),
+          careerGaps: normalizeCareerGapList(resume.data.careerGaps),
         },
         templateId: resume.templateId,
         targetRole: role,
@@ -389,6 +401,7 @@ export default function Editor() {
       education: normalizeEducationList(rewritten.education),
       projects: normalizeProjectList(rewritten.projects),
       certifications: normalizeCertificationList(rewritten.certifications),
+      careerGaps: normalizeCareerGapList(rewritten.careerGaps || rewritten.careerBreaks),
     };
     setResume((prev) => ({ ...prev, data: nextData }));
     setRewriteResult(null);
@@ -416,6 +429,7 @@ export default function Editor() {
         education: normalizeEducationList(undoSnapshot.education),
         projects: normalizeProjectList(undoSnapshot.projects),
         certifications: normalizeCertificationList(undoSnapshot.certifications),
+        careerGaps: normalizeCareerGapList(undoSnapshot.careerGaps || undoSnapshot.careerBreaks),
       },
     }));
     setUndoSnapshot(null);
@@ -629,6 +643,81 @@ export default function Editor() {
     updateCertification(cert.id, { url: checked.href });
   }
 
+  function addCareerGap() {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        careerGaps: [...(prev.data.careerGaps || []), blankCareerGap()],
+      },
+    }));
+    setStatus("");
+  }
+
+  function updateCareerGap(id, patch) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        careerGaps: (prev.data.careerGaps || []).map((gap) =>
+          gap.id === id ? applyCareerGapPatch(gap, patch) : gap
+        ),
+      },
+    }));
+    setStatus("");
+  }
+
+  function removeCareerGap(id) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        careerGaps: (prev.data.careerGaps || []).filter((gap) => gap.id !== id),
+      },
+    }));
+  }
+
+  function updateCareerGapList(id, field, index, value) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        careerGaps: (prev.data.careerGaps || []).map((gap) => {
+          if (gap.id !== id) return gap;
+          const list = [...(gap[field] || [])];
+          list[index] = value;
+          return applyCareerGapPatch(gap, { [field]: list });
+        }),
+      },
+    }));
+  }
+
+  function addCareerGapListItem(id, field) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        careerGaps: (prev.data.careerGaps || []).map((gap) =>
+          gap.id === id ? applyCareerGapPatch(gap, { [field]: [...(gap[field] || []), ""] }) : gap
+        ),
+      },
+    }));
+  }
+
+  function removeCareerGapListItem(id, field, index) {
+    setResume((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        careerGaps: (prev.data.careerGaps || []).map((gap) => {
+          if (gap.id !== id) return gap;
+          const list = (gap[field] || []).filter((_, i) => i !== index);
+          return applyCareerGapPatch(gap, { [field]: list.length ? list : [""] });
+        }),
+      },
+    }));
+  }
+
   function goToStep(stepId) {
     setNavError("");
     setEditorStep(stepId);
@@ -647,6 +736,33 @@ export default function Editor() {
     if (editorStep === "certifications" && Object.values(certUrlErrors).some(Boolean)) {
       setNavError("Please enter a valid certificate URL, or leave the field empty.");
       return;
+    }
+    if (editorStep === "career-gap") {
+      const incomplete = (resume.data.careerGaps || []).some((gap) => {
+        const hasList = (list) => (list || []).some((item) => String(item || "").trim());
+        const typeText = String(gap.type || "").trim();
+        const hasContent = Boolean(
+          (typeText && typeText !== "Other")
+          || String(gap.reason || "").trim()
+          || String(gap.description || "").trim()
+          || String(gap.startMonth || "").trim()
+          || String(gap.startYear || "").trim()
+          || String(gap.endMonth || "").trim()
+          || String(gap.endYear || "").trim()
+          || hasList(gap.activities)
+          || hasList(gap.skills)
+          || hasList(gap.certifications)
+          || hasList(gap.projects)
+        );
+        if (!hasContent) return false;
+        const hasStart = String(gap.startMonth || "").trim() && String(gap.startYear || "").trim();
+        const hasEnd = gap.current || (String(gap.endMonth || "").trim() && String(gap.endYear || "").trim());
+        return !(hasStart && hasEnd);
+      });
+      if (incomplete) {
+        setNavError("Add start and end month/year for each Career Break, or mark it as ongoing.");
+        return;
+      }
     }
     if (currentIndex >= 0 && currentIndex < FORM_STEPS.length - 1) {
       setNavError("");
@@ -889,6 +1005,151 @@ export default function Editor() {
                   <button className="btn btn-small" type="button" onClick={() => addBullet(i)}>+ Bullet</button>
                 </div>
                 <button className="btn btn-ghost btn-small danger" type="button" onClick={() => removeListItem("experience", i)}>Remove this role</button>
+              </div>
+            ))}
+            <FormNav onPrevious={goPrevious} onNext={goNext} />
+          </section>
+          )}
+
+          {editorStep === "career-gap" && (
+          <section className="form-section">
+            <div className="form-section-head">
+              <h2>Career Gap / Career Break</h2>
+              <button className="btn btn-small" type="button" onClick={addCareerGap}>+ Add</button>
+            </div>
+            <p className="muted small">Optional. A career break does not reduce your ATS score. Add a start month and year if you include an entry.</p>
+            {(resume.data.careerGaps || []).map((gap) => (
+              <div className="list-item" key={gap.id}>
+                <div className="grid-2">
+                  <label>Gap type / reason
+                    <select
+                      value={
+                        CAREER_GAP_TYPES.filter((type) => type !== "Other").includes(gap.type)
+                          ? gap.type
+                          : (gap.type || gap.reason ? "Other" : "")
+                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === "Other") {
+                          const named = CAREER_GAP_TYPES.filter((type) => type !== "Other").includes(gap.type);
+                          updateCareerGap(gap.id, named ? { type: "Other", reason: "" } : { type: gap.type || "Other", reason: gap.reason || "" });
+                        } else {
+                          updateCareerGap(gap.id, { type: value, reason: value });
+                        }
+                      }}
+                    >
+                      <option value="">Select (optional)</option>
+                      {CAREER_GAP_TYPES.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>Custom reason
+                    <input
+                      value={gap.type === "Other" ? (gap.reason || "") : (gap.reason || gap.type || "")}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const named = CAREER_GAP_TYPES.filter((type) => type !== "Other").includes(gap.type);
+                        updateCareerGap(gap.id, {
+                          type: named ? gap.type : (value || "Other"),
+                          reason: value,
+                        });
+                      }}
+                      placeholder="Career Development Period"
+                    />
+                  </label>
+                  <label>Start month
+                    <select value={gap.startMonth || ""} onChange={(e) => updateCareerGap(gap.id, { startMonth: e.target.value })}>
+                      <option value="">Month</option>
+                      {MONTHS.map((month) => (
+                        <option key={month} value={month}>{month}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>Start year
+                    <input value={gap.startYear || ""} onChange={(e) => updateCareerGap(gap.id, { startYear: e.target.value })} placeholder="2024" />
+                  </label>
+                  <label>End month
+                    <select value={gap.endMonth || ""} disabled={gap.current} onChange={(e) => updateCareerGap(gap.id, { endMonth: e.target.value })}>
+                      <option value="">Month</option>
+                      {MONTHS.map((month) => (
+                        <option key={month} value={month}>{month}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>End year
+                    <input value={gap.endYear || ""} disabled={gap.current} onChange={(e) => updateCareerGap(gap.id, { endYear: e.target.value })} placeholder="2025" />
+                  </label>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={Boolean(gap.current)} onChange={(e) => updateCareerGap(gap.id, { current: e.target.checked })} />
+                    This break is ongoing
+                  </label>
+                </div>
+                <label>Short description
+                  <textarea
+                    rows={2}
+                    value={gap.description || ""}
+                    onChange={(e) => updateCareerGap(gap.id, { description: e.target.value })}
+                    placeholder="Continued professional skill development."
+                  />
+                </label>
+                <div className="bullets">
+                  <span className="muted small">Activities during the gap</span>
+                  {(gap.activities || [""]).map((item, index) => (
+                    <div className="bullet-row" key={`${gap.id}-act-${index}`}>
+                      <input
+                        value={item}
+                        onChange={(e) => updateCareerGapList(gap.id, "activities", index, e.target.value)}
+                        placeholder="Completed SQL and Power BI certifications."
+                      />
+                      <button className="btn btn-ghost btn-icon" type="button" onClick={() => removeCareerGapListItem(gap.id, "activities", index)}>✕</button>
+                    </div>
+                  ))}
+                  <button className="btn btn-small" type="button" onClick={() => addCareerGapListItem(gap.id, "activities")}>+ Add activity</button>
+                </div>
+                <div className="bullets">
+                  <span className="muted small">Skills developed</span>
+                  {(gap.skills || [""]).map((item, index) => (
+                    <div className="bullet-row" key={`${gap.id}-skill-${index}`}>
+                      <input
+                        value={item}
+                        onChange={(e) => updateCareerGapList(gap.id, "skills", index, e.target.value)}
+                        placeholder="SQL"
+                      />
+                      <button className="btn btn-ghost btn-icon" type="button" onClick={() => removeCareerGapListItem(gap.id, "skills", index)}>✕</button>
+                    </div>
+                  ))}
+                  <button className="btn btn-small" type="button" onClick={() => addCareerGapListItem(gap.id, "skills")}>+ Add skill</button>
+                </div>
+                <div className="bullets">
+                  <span className="muted small">Certifications completed</span>
+                  {(gap.certifications || [""]).map((item, index) => (
+                    <div className="bullet-row" key={`${gap.id}-cert-${index}`}>
+                      <input
+                        value={item}
+                        onChange={(e) => updateCareerGapList(gap.id, "certifications", index, e.target.value)}
+                        placeholder="Power BI certification"
+                      />
+                      <button className="btn btn-ghost btn-icon" type="button" onClick={() => removeCareerGapListItem(gap.id, "certifications", index)}>✕</button>
+                    </div>
+                  ))}
+                  <button className="btn btn-small" type="button" onClick={() => addCareerGapListItem(gap.id, "certifications")}>+ Add certification</button>
+                </div>
+                <div className="bullets">
+                  <span className="muted small">Projects completed</span>
+                  {(gap.projects || [""]).map((item, index) => (
+                    <div className="bullet-row" key={`${gap.id}-proj-${index}`}>
+                      <input
+                        value={item}
+                        onChange={(e) => updateCareerGapList(gap.id, "projects", index, e.target.value)}
+                        placeholder="Sales analytics dashboard"
+                      />
+                      <button className="btn btn-ghost btn-icon" type="button" onClick={() => removeCareerGapListItem(gap.id, "projects", index)}>✕</button>
+                    </div>
+                  ))}
+                  <button className="btn btn-small" type="button" onClick={() => addCareerGapListItem(gap.id, "projects")}>+ Add project</button>
+                </div>
+                <button className="btn btn-ghost btn-small danger" type="button" onClick={() => removeCareerGap(gap.id)}>Remove</button>
               </div>
             ))}
             <FormNav onPrevious={goPrevious} onNext={goNext} />

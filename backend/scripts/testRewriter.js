@@ -140,6 +140,30 @@ function run() {
   assert(java.estimatedScoreAfter < rewrite.estimatedScoreAfter, "Rewrite after-score is not role-aware");
   assert(!JSON.stringify(java.rewrittenResume).toLowerCase().includes("spring boot"), "Invented Spring Boot");
 
+  const withGap = rewriteResume({
+    resume: {
+      ...RESUME,
+      careerGaps: [{
+        type: "Career Development Period",
+        startMonth: "June",
+        startYear: "2023",
+        endMonth: "March",
+        endYear: "2024",
+        activities: ["Completed SQL certification."],
+        skills: ["SQL"],
+        certifications: ["SQL Certification"],
+        projects: ["Practice SQL project"],
+      }],
+    },
+    targetRole: "Data Analyst",
+    templateId: "ats-minimal",
+  });
+  assert(withGap.rewrittenResume.careerGaps[0].type === "Career Development Period", "Rewrite removed career break type");
+  assert(withGap.rewrittenResume.careerGaps[0].startYear === "2023", "Rewrite changed career break dates");
+  assert(withGap.rewrittenResume.careerGaps[0].skills.includes("SQL"), "Rewrite dropped gap skills");
+  assert(withGap.rewrittenResume.careerGaps[0].projects.includes("Practice SQL project"), "Rewrite dropped gap projects");
+  assert(!/invented freelance|Google|Amazon/i.test(JSON.stringify(withGap.rewrittenResume.careerGaps)), "Rewrite invented gap employment");
+
   const withCertUrl = rewriteResume({
     resume: {
       ...RESUME,

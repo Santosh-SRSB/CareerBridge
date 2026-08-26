@@ -217,6 +217,52 @@ function run() {
     failures.push(`dupes: ${err.message}`);
   }
 
+  try {
+    const gapped = {
+      ...DATA_ANALYST_RESUME,
+      experience: [
+        { company: "Company A", role: "Data Analyst", startDate: "Jan 2021", endDate: "May 2023", current: false, bullets: ["Wrote SQL queries."] },
+        { company: "Company B", role: "Data Analyst", startDate: "Apr 2024", endDate: "", current: true, bullets: ["Built Power BI dashboards."] },
+      ],
+    };
+    const unexplained = analyzeResume({ resume: gapped, targetRole: "Data Analyst", templateId: "ats-minimal" });
+    const explained = analyzeResume({
+      resume: {
+        ...gapped,
+        careerGaps: [{
+          type: "Career Development Period",
+          startMonth: "June",
+          startYear: "2023",
+          endMonth: "March",
+          endYear: "2024",
+          activities: ["Completed SQL and Power BI certifications.", "Built Python projects."],
+          skills: ["SQL", "Power BI", "Python"],
+          certifications: ["SQL Certification"],
+        }],
+      },
+      targetRole: "Data Analyst",
+      templateId: "ats-minimal",
+    });
+    const silentGap = analyzeResume({
+      resume: { ...DATA_ANALYST_RESUME, careerGaps: [{ startMonth: "June", startYear: "2019", endMonth: "March", endYear: "2020" }] },
+      targetRole: "Data Analyst",
+      templateId: "ats-minimal",
+    });
+    const baseline = byRole["Data Analyst"];
+    assert(unexplained.careerTimeline.atsPenalty === 0, "Career gap must not apply an ATS penalty");
+    assert(unexplained.careerTimeline.atsImpact === "No direct penalty", "ATS impact label missing");
+    assert(unexplained.careerTimeline.employmentGapsDetected >= 1, "Employment hole was not detected");
+    assert(/Employment gap detected/i.test(unexplained.careerTimeline.recommendation), "Unexplained gap recommendation missing");
+    assert(explained.careerTimeline.gapExplanation === "Provided", "Explained gap was not recognized");
+    assert(explained.overallScore >= unexplained.overallScore, "Explaining a gap must not lower the ATS score");
+    assert(explained.starRating >= unexplained.starRating, "Star rating must not drop because a gap is explained");
+    assert(silentGap.overallScore >= baseline.overallScore, "Adding a career break must not reduce the ATS score");
+    assert(silentGap.starRating >= baseline.starRating, "Star rating must not drop because a career break exists");
+    log.push(`Career gap: unexplained ${unexplained.overallScore} / explained ${explained.overallScore} / silent ${silentGap.overallScore}, penalty ${unexplained.careerTimeline.atsPenalty}`);
+  } catch (err) {
+    failures.push(`career gap: ${err.message}`);
+  }
+
   console.log(log.join("\n"));
   if (failures.length) {
     console.error("\nFAILURES:\n" + failures.join("\n"));

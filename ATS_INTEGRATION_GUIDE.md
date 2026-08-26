@@ -9,6 +9,33 @@ Repo: `https://github.com/Santosh-SRSB/CareerBridge.git`
 
 ---
 
+## Latest update — Career Gap / Career Break
+
+This branch now includes an **optional Career Gap / Career Break** section. Existing ATS scoring, rewrite, templates, save, and PDF/print behavior are unchanged except for the additions below.
+
+What was added:
+
+- Optional editor step after Experience: gap type/reason, start/end month and year, description, activities, skills, certifications, and projects
+- A **Career Break** block on the printed resume (same month-year date style as the rest of the resume)
+- ATS **Career Timeline** report: employment gaps detected, longest gap, explanation status, date consistency
+- Skills/keywords from gap activities are included in ATS analysis
+- Rewrite keeps Career Break entries; it may polish wording only and never invents a reason
+
+What was **not** changed:
+
+- ATS weights in `atsWeights.js`
+- Overall score formula
+- 5-star rating formula
+
+Important ATS rule:
+
+- A career gap is a timeline condition, **not** an ATS failure
+- `atsPenalty` is always `0`
+- An unexplained hole between jobs is a **recommendation only**, never an automatic score cut
+- The system never invents gap reasons, jobs, freelance work, certifications, projects, or skills
+
+---
+
 ## 1. What was added
 
 This work adds the following on top of the existing Resume Builder:
@@ -20,10 +47,11 @@ This work adds the following on top of the existing Resume Builder:
 | Skills / experience / project / certification / education matrices | Section-level evidence used by the score |
 | 5-star rating | Derived from overall score |
 | Resume rewrite | Deterministic, no LLM. Rewrites wording from facts already in the resume |
-| Multi-step editor | Personal → Summary → Education → Experience → Skills → Projects → Certifications → Review & ATS |
+| Multi-step editor | Personal → Summary → Education → Experience → Career Gap → Skills → Projects → Certifications → Review & ATS |
 | Multiple project technologies | `technologies: ["SQL", "Power BI", ...]` |
 | Optional project URL | Saved and shown only when present |
 | Optional certificate URL | Validated if provided; omitted from the resume when empty |
+| Optional Career Gap / Career Break | Timeline entry with activities, skills, certs, and projects. **Never reduces ATS score or star rating** |
 | One-page A4 preview | Live preview scales to the editor pane; print/PDF stays full A4 |
 | Original typography | Resume body stays 13.5px. Fitting reduces spacing, not font size |
 
@@ -52,6 +80,7 @@ Backend (Express, port 4000)
   routes/resumes.js
     → services/resumeAnalyzer.js
     → services/resumeRewriter.js
+    → services/careerGapUtils.js
     → services/atsWeights.js
     → services/roleKnowledge.js
     → services/projectUtils.js
@@ -73,7 +102,7 @@ Storage in this prototype is a JSON file (`backend/resume_builder.db.json`). Res
 | `backend/services/atsWeights.js` | Overall score weights. **Do not change.** |
 | `backend/services/roleKnowledge.js` | Role titles, required/preferred skills, keywords |
 | `backend/services/templateProfiles.js` | Template ATS formatting hints |
-| `backend/services/projectUtils.js` | Project title/url/technologies/bullets helpers |
+| `backend/services/careerGapUtils.js` | Career break parsing and timeline analysis (no score penalty) |
 | `backend/services/resumeAnalyzer.js` | Scoring engine |
 | `backend/services/resumeRewriter.js` | Deterministic rewrite engine |
 | `backend/scripts/testAnalyzer.js` | Analyzer regression tests |
@@ -100,10 +129,10 @@ Storage in this prototype is a JSON file (`backend/resume_builder.db.json`). Res
 | File | What to merge |
 |---|---|
 | `frontend/src/api.js` | `analyzeResume`, `rewriteResume` |
-| `frontend/src/pages/Editor.jsx` | Stepper, project techs, URLs, ATS panel, preview scale |
+| `frontend/src/pages/Editor.jsx` | Stepper, project techs, URLs, optional Career Gap, ATS panel, preview scale |
 | `frontend/src/pages/Dashboard.jsx` | Tiny related copy if present |
-| `frontend/src/templates/helpers.js` | Project/cert normalization, URL validators |
-| `frontend/src/templates/sections.jsx` | Project techs + URLs, compact cert list |
+| `frontend/src/templates/helpers.js` | Project/cert/career-gap normalization, URL validators |
+| `frontend/src/templates/sections.jsx` | Project techs + URLs, compact cert list, Career Break section |
 | `frontend/src/templates/TemplatePreview.jsx` | Shared A4 page constants |
 | `frontend/src/styles.css` | ATS panel, stepper, A4 sheet, preview scale |
 
@@ -151,7 +180,8 @@ All ATS endpoints require `Authorization: Bearer <jwt>` except template listing.
     "experience": [],
     "projects": [],
     "education": [],
-    "certifications": []
+    "certifications": [],
+    "careerGaps": []
   }
 }
 ```
@@ -181,6 +211,15 @@ Important response fields:
   "experienceMatrix": {},
   "certificationMatrix": [],
   "educationAnalysis": {},
+  "careerTimeline": {
+    "employmentGapsDetected": 1,
+    "longestGap": "9 months",
+    "gapExplanation": "Provided",
+    "dateConsistency": "Good",
+    "atsImpact": "No direct penalty",
+    "atsPenalty": 0,
+    "recommendation": "Career gap is clearly represented. No action required."
+  },
   "weights": {
     "roleMatch": 35,
     "skills": 20,
@@ -320,6 +359,32 @@ Missing `url` / `link` still loads. Invalid URLs show:
 
 Empty URL is valid and is not shown on the resume.
 
+### 6.5 Career Gap / Career Break (optional)
+
+```js
+{
+  id: "career-gap-...",
+  type: "Career Development Period",
+  reason: "Career Development Period",
+  startMonth: "June",
+  startYear: "2024",
+  endMonth: "March",
+  endYear: "2025",
+  current: false,
+  description: "Continued professional skill development.",
+  activities: ["Completed SQL and Power BI certifications."],
+  skills: ["SQL", "Power BI"],
+  certifications: ["SQL Certification"],
+  projects: ["Practice analytics dashboard"],
+  startDate: "June 2024",
+  endDate: "March 2025"
+}
+```
+
+Missing `careerGaps` still loads. Dates are required only if the user creates an entry. A career break **must not** reduce the ATS score. Analyze skills/keywords from gap activities; never invent a reason.
+
+Timeline report field: `careerTimeline` (`atsImpact: "No direct penalty"`, `atsPenalty: 0`).
+
 ---
 
 ## 7. ATS scoring (do not change)
@@ -344,7 +409,8 @@ Rules the integrator must keep:
 3. Job description, when present, overrides generic role skill lists.
 4. Missing project/certificate URLs are optional. They are a small positive signal when present; they must not heavily penalize the score.
 5. **All** project technologies are included in skill/project/keyword evidence — not only the first one.
-6. The UI must keep the disclaimer: this is an estimated match, not a guarantee.
+7. A career gap is a timeline condition, not an ATS failure. `atsPenalty` is always `0`.
+8. The UI must keep the disclaimer: this is an estimated match, not a guarantee.
 
 Star rating is derived from `overallScore` inside `resumeAnalyzer.js`.
 

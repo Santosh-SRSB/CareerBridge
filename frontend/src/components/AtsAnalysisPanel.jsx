@@ -274,6 +274,24 @@ export default function AtsAnalysisPanel({
             </ul>
           )}
 
+          <h3>Career timeline</h3>
+          <div className="ats-card">
+            <ul className="ats-mini-list">
+              <li>Employment gaps detected: {analysis.careerTimeline?.employmentGapsDetected ?? 0}</li>
+              <li>Longest gap: {analysis.careerTimeline?.longestGap || "None"}</li>
+              <li>Gap explanation: {analysis.careerTimeline?.gapExplanation || "None detected"}</li>
+              <li>Date consistency: {analysis.careerTimeline?.dateConsistency || "Not enough employment dates"}</li>
+              <li>Status: {analysis.careerTimeline?.status || "No significant employment gap detected"}</li>
+              <li>ATS impact: {analysis.careerTimeline?.atsImpact || "No direct penalty"}</li>
+            </ul>
+            <p className="muted small">{analysis.careerTimeline?.recommendation || "No action required."}</p>
+            {(analysis.careerTimeline?.recommendations || [])
+              .filter((note) => note && note !== analysis.careerTimeline?.recommendation)
+              .map((note) => (
+                <p className="muted small" key={note}>{note}</p>
+              ))}
+          </div>
+
           <h3>Education</h3>
           {(analysis.educationAnalysis?.items || []).length === 0 ? (
             <p className="muted small">No education listed.</p>

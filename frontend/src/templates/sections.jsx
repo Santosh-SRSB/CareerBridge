@@ -11,6 +11,8 @@ import {
   projectBulletTexts,
   projectTechnologies,
   visibleBullets,
+  careerGapDateRange,
+  visibleCareerGapItems,
 } from "./helpers.js";
 
 export function ProfilePhoto({ src, variant = "circle" }) {
@@ -209,11 +211,60 @@ export function CertificationsSection({ data, title = "Certifications" }) {
   );
 }
 
+export function CareerGapSection({ data, title = "Career Break" }) {
+  const source = data || {};
+  const list = Array.isArray(source.careerGaps) && source.careerGaps.length
+    ? source.careerGaps
+    : Array.isArray(source.careerBreaks) ? source.careerBreaks : [];
+  const visible = list.filter((gap) => {
+    const items = visibleCareerGapItems(gap);
+    return gap.type || gap.reason || gap.startDate || gap.startYear || gap.description
+      || items.activities.length || items.skills.length || items.certifications.length || items.projects.length;
+  });
+  if (!visible.length) return null;
+  return (
+    <section>
+      <h2>{title}</h2>
+      {visible.map((gap, i) => {
+        const items = visibleCareerGapItems(gap);
+        const heading = gap.type || gap.reason || "Career Break";
+        const dates = careerGapDateRange(gap);
+        return (
+          <div className="entry project-entry" key={gap.id || i}>
+            <div className="entry-head">
+              <strong>{heading}</strong>
+              {dates ? <span>{dates}</span> : null}
+            </div>
+            {gap.description ? <p>{gap.description}</p> : null}
+            {items.activities.length > 0 && (
+              <ul>
+                {items.activities.map((item, j) => (
+                  <li key={j}>{item}</li>
+                ))}
+              </ul>
+            )}
+            {items.skills.length > 0 && (
+              <p className="entry-sub">Skills developed: {items.skills.join(" | ")}</p>
+            )}
+            {items.certifications.length > 0 && (
+              <p className="entry-sub">Certifications: {items.certifications.join(" | ")}</p>
+            )}
+            {items.projects.length > 0 && (
+              <p className="entry-sub">Projects: {items.projects.join(" | ")}</p>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 export function StandardBody({ data, summaryTitle = "Summary", experienceTitle = "Experience", experienceVariant = "role-first" }) {
   return (
     <>
       <SummarySection data={data} title={summaryTitle} />
       <ExperienceSection data={data} title={experienceTitle} variant={experienceVariant} />
+      <CareerGapSection data={data} />
       <EducationSection data={data} />
       <SkillsSection data={data} />
       <ProjectsSection data={data} />

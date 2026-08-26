@@ -16,6 +16,7 @@ const BLANK_DATA = {
   skills: [],
   projects: [],
   certifications: [],
+  careerGaps: [],
   photo: null,
   targetRole: "",
   jobDescription: "",
