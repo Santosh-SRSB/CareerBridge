@@ -66,6 +66,21 @@ body {
   font-weight: 700;
 }
 .topbar-nav { display: flex; align-items: center; gap: 14px; }
+.topbar-nav a,
+.topbar-link {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.topbar-nav a:hover,
+.topbar-link:hover { color: var(--accent); }
+.topbar-link:disabled { opacity: 0.65; cursor: wait; }
 .topbar-user { font-size: 0.85rem; color: var(--muted); }
 
 .app-main { flex: 1; }
@@ -183,6 +198,12 @@ textarea { resize: vertical; font-family: var(--font-body); }
 }
 .resume-card-body h3 { margin: 0 0 2px; font-size: 1rem; }
 .resume-card-body p { margin: 0 0 8px; font-size: 0.85rem; }
+.resume-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
 .badge {
   display: inline-block;
   font-family: var(--font-mono);
@@ -931,6 +952,136 @@ textarea { resize: vertical; font-family: var(--font-body); }
 }
 .preview-rewrite-note { margin: 0 0 12px; max-width: 794px; }
 
+.topbar-nav a {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.topbar-nav a:hover { color: var(--accent); }
+
+.ready-prompt {
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.ready-prompt h3 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+.ready-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.guidance-page,
+.interview-page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+.guidance-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.guidance-headline {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+}
+.guidance-loading,
+.guidance-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.guidance-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.guidance-card h2,
+.guidance-card h3,
+.guidance-card h4 { margin-top: 0; }
+.guidance-steps { padding-left: 1.15rem; }
+.skill-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
+.skill-chip-good {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
+.interview-progress { margin-bottom: 16px; }
+.interview-progress-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.interview-progress-track {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--border);
+  overflow: hidden;
+}
+.interview-progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+}
+
+.question-card,
+.answer-input textarea {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.question-card { padding: 18px; margin-bottom: 16px; }
+.question-card-text { font-size: 1.05rem; line-height: 1.5; }
+.answer-input {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  font-weight: 600;
+}
+.interview-fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.interview-fieldset legend { padding: 0 6px; color: var(--ink-soft); }
+.interview-transcript {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
 @media (max-width: 720px) {
   .ats-hero { flex-direction: column; align-items: flex-start; }
+  .guidance-header { flex-direction: column; }
 }

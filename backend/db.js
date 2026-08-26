@@ -12,13 +12,38 @@ const path = require("path");
 
 const DB_FILE = path.join(__dirname, "resume_builder.db.json");
 
+function emptyState() {
+  return {
+    nextUserId: 1,
+    nextResumeId: 1,
+    nextInterviewSessionId: 1,
+    nextInterviewQuestionId: 1,
+    users: [],
+    resumes: [],
+    interviewSessions: [],
+    interviewQuestions: [],
+  };
+}
+
+function normalizeState(state) {
+  const base = emptyState();
+  return {
+    ...base,
+    ...(state || {}),
+    interviewSessions: Array.isArray(state && state.interviewSessions) ? state.interviewSessions : [],
+    interviewQuestions: Array.isArray(state && state.interviewQuestions) ? state.interviewQuestions : [],
+    nextInterviewSessionId: (state && state.nextInterviewSessionId) || 1,
+    nextInterviewQuestionId: (state && state.nextInterviewQuestionId) || 1,
+  };
+}
+
 function loadRaw() {
   if (!fs.existsSync(DB_FILE)) {
-    return { nextUserId: 1, nextResumeId: 1, users: [], resumes: [] };
+    return emptyState();
   }
   try {
     const text = fs.readFileSync(DB_FILE, "utf8");
-    return text.trim() ? JSON.parse(text) : { nextUserId: 1, nextResumeId: 1, users: [], resumes: [] };
+    return normalizeState(text.trim() ? JSON.parse(text) : emptyState());
   } catch (err) {
     throw new Error(`Could not read database file at ${DB_FILE}: ${err.message}`);
   }
@@ -103,6 +128,94 @@ const db = {
     const deleted = state.resumes.length < before;
     if (deleted) saveRaw(state);
     return deleted;
+  },
+
+  // ---- interview sessions ----
+  createInterviewSession({ userId, resumeId, roleTitle, difficulty, questionCount }) {
+    const state = loadRaw();
+    const session = {
+      id: state.nextInterviewSessionId,
+      userId,
+      resumeId,
+      roleTitle: roleTitle || "General Interview",
+      difficulty: difficulty || "standard",
+      questionCount: questionCount || 5,
+      currentQuestionIndex: 0,
+      status: "created",
+      startedAt: nowIso(),
+      completedAt: null,
+      summary: null,
+    };
+    state.interviewSessions.push(session);
+    state.nextInterviewSessionId += 1;
+    saveRaw(state);
+    return session;
+  },
+
+  getInterviewSession(id, userId) {
+    const state = loadRaw();
+    return state.interviewSessions.find((s) => s.id === id && s.userId === userId) || null;
+  },
+
+  listInterviewSessions(userId) {
+    const state = loadRaw();
+    return state.interviewSessions
+      .filter((s) => s.userId === userId)
+      .sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
+  },
+
+  updateInterviewSession(id, userId, patch) {
+    const state = loadRaw();
+    const session = state.interviewSessions.find((s) => s.id === id && s.userId === userId);
+    if (!session) return null;
+    Object.assign(session, patch);
+    saveRaw(state);
+    return session;
+  },
+
+  addInterviewQuestion({ sessionId, sequence, competency, competencyKey, question }) {
+    const state = loadRaw();
+    const row = {
+      id: state.nextInterviewQuestionId,
+      sessionId,
+      sequence,
+      competency,
+      competencyKey: competencyKey || competency,
+      question,
+      answer: "",
+      evaluation: null,
+    };
+    state.interviewQuestions.push(row);
+    state.nextInterviewQuestionId += 1;
+    saveRaw(state);
+    return row;
+  },
+
+  listInterviewQuestions(sessionId) {
+    const state = loadRaw();
+    return state.interviewQuestions
+      .filter((q) => q.sessionId === sessionId)
+      .sort((a, b) => a.sequence - b.sequence);
+  },
+
+  updateInterviewQuestion(id, sessionId, patch) {
+    const state = loadRaw();
+    const row = state.interviewQuestions.find((q) => q.id === id && q.sessionId === sessionId);
+    if (!row) return null;
+    Object.assign(row, patch);
+    saveRaw(state);
+    return row;
+  },
+
+  completeInterviewSession(id, userId, summary) {
+    const state = loadRaw();
+    const session = state.interviewSessions.find((s) => s.id === id && s.userId === userId);
+    if (!session) return null;
+    session.status = "completed";
+    session.completedAt = nowIso();
+    session.summary = summary || session.summary;
+    saveRaw(state);
+    return session;
   },
 };
 

@@ -8,7 +8,9 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test:analyzer": "node scripts/testAnalyzer.js",
-    "test:rewrite": "node scripts/testRewriter.js"
+    "test:rewrite": "node scripts/testRewriter.js",
+    "test:guidance": "node scripts/testCareerGuidance.js",
+    "test:interview": "node scripts/testInterviewEngine.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

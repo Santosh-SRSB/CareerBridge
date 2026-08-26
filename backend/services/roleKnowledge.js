@@ -613,6 +613,7 @@ function buildRoleProfile(targetRole) {
 module.exports = {
   SKILL_ALIASES,
   ROLES,
+  ROLE_FAMILIES,
   KNOWN_SKILLS,
   canonicalSkill,
   skillKey,

@@ -40,7 +40,12 @@ function apiErrorMessage(status, error, path) {
         ? error
         : "Rewrite endpoint is unavailable. Restart the backend (cd backend && npm start) and try again.";
     }
-    return error || "Resume not found.";
+    if (String(path).includes("career-guidance")) {
+      return error && error !== "Not found."
+        ? error
+        : "Resume not found.";
+    }
+    return error && error !== "Not found." ? error : "Resume not found.";
   }
   if (status === 400) return error || "Invalid rewrite request.";
   if (status >= 500) return error || "Backend/server error. Please try again.";
@@ -63,6 +68,29 @@ export const api = {
   analyzeResume: (payload) => request("/resumes/analyze", { method: "POST", body: payload }),
   rewriteResume: (id, payload) =>
     request(`/resumes/${id}/rewrite`, { method: "POST", body: payload }),
+  careerGuidance: (id) =>
+    request("/resumes/career-guidance", { method: "POST", body: { resumeId: Number(id) } }),
+
+  listInterviews: async () => {
+    const res = await request("/interviews");
+    return res.data || res;
+  },
+  getInterview: async (id) => {
+    const res = await request(`/interviews/${id}`);
+    return res.data || res;
+  },
+  createInterview: async (payload) => {
+    const res = await request("/interviews", { method: "POST", body: payload });
+    return res.data || res;
+  },
+  answerInterview: async (id, payload) => {
+    const res = await request(`/interviews/${id}/answer`, { method: "POST", body: payload });
+    return res.data || res;
+  },
+  completeInterview: async (id) => {
+    const res = await request(`/interviews/${id}/complete`, { method: "POST", body: {} });
+    return res.data || res;
+  },
 };
 
 export function saveSession(token, user) {

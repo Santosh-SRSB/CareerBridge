@@ -1242,4 +1242,5 @@ module.exports = {
   calculateOverallScore,
   calculateStarRating,
   parseJobDescription,
+  interpretScore,
 };

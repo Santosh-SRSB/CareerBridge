@@ -78,9 +78,14 @@ export default function Dashboard() {
           <h1>Your resumes</h1>
           <p className="muted">Create a resume once, then preview it in any template.</p>
         </div>
-        <button className="btn btn-primary" onClick={handleCreate} disabled={creating}>
-          {creating ? "Creating…" : "+ New resume"}
-        </button>
+        <div className="ready-prompt-actions">
+          <button className="btn" type="button" onClick={() => navigate("/interviews")}>
+            Mock interviews
+          </button>
+          <button className="btn btn-primary" onClick={handleCreate} disabled={creating}>
+            {creating ? "Creating…" : "+ New resume"}
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert">{error}</div>}
@@ -104,15 +109,28 @@ export default function Dashboard() {
                 <p className="muted">{r.data.fullName || "No name yet"}</p>
                 <span className="badge">{r.templateId}</span>
               </div>
-              <button
-                className="btn btn-ghost btn-small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(r.id);
-                }}
-              >
-                Delete
-              </button>
+              <div className="resume-card-actions">
+                <button
+                  className="btn btn-small"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/resumes/${r.id}/career-guidance`);
+                  }}
+                >
+                  Career Guidance
+                </button>
+                <button
+                  className="btn btn-ghost btn-small"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(r.id);
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>

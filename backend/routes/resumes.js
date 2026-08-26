@@ -3,6 +3,7 @@ const db = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { analyzeResume } = require("../services/resumeAnalyzer");
 const { rewriteResume } = require("../services/resumeRewriter");
+const { recommendRoles } = require("../services/careerGuidance");
 
 const router = express.Router();
 
@@ -133,6 +134,29 @@ router.post("/analyze", (req, res) => {
   }
 });
 
+function handleCareerGuidanceRequest(req, res, resumeIdRaw) {
+  try {
+    const resumeId = Number(resumeIdRaw);
+    if (!Number.isFinite(resumeId)) {
+      return res.status(404).json({ error: "Resume not found." });
+    }
+    const stored = db.getResume(resumeId, req.userId);
+    if (!stored) return res.status(404).json({ error: "Resume not found." });
+    const result = recommendRoles({ resume: stored.data || {} });
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error("Career guidance failed:", err);
+    res.status(status).json({ error: err.message || "Could not recommend roles. Please try again." });
+  }
+}
+
+// Must be registered before /:id so "career-guidance" is never treated as an id.
+router.post("/career-guidance", (req, res) => {
+  const body = req.body || {};
+  handleCareerGuidanceRequest(req, res, body.resumeId);
+});
+
 function handleRewriteRequest(req, res, storedResume) {
   try {
     const body = req.body || {};
@@ -175,6 +199,10 @@ router.post("/:id/rewrite", (req, res) => {
   const stored = db.getResume(Number(req.params.id), req.userId);
   if (!stored) return res.status(404).json({ error: "Resume not found." });
   handleRewriteRequest(req, res, stored);
+});
+
+router.post("/:id/career-guidance", (req, res) => {
+  handleCareerGuidanceRequest(req, res, req.params.id);
 });
 
 function publicResume(r) {

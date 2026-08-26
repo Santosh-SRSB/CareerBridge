@@ -76,6 +76,15 @@ function sectionComplete(stepId, data) {
   return true;
 }
 
+function resumeReadyForGuidance(data) {
+  return sectionComplete("personal", data)
+    && (
+      sectionComplete("skills", data)
+      || sectionComplete("experience", data)
+      || sectionComplete("projects", data)
+    );
+}
+
 export default function Editor() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -100,6 +109,7 @@ export default function Editor() {
   const [editorStep, setEditorStep] = useState("personal");
   const [navError, setNavError] = useState("");
   const [certUrlErrors, setCertUrlErrors] = useState({});
+  const [nextPathLoading, setNextPathLoading] = useState("");
   const sheetRef = useRef(null);
   const previewPaneRef = useRef(null);
   const { overfull } = useResumePageFit(sheetRef, [
@@ -285,7 +295,7 @@ export default function Editor() {
     setCertUrlErrors(nextCertErrors);
     if (Object.keys(nextProjectErrors).length || Object.keys(nextCertErrors).length) {
       setError("Please enter a valid URL, or leave the optional URL fields empty.");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -314,8 +324,10 @@ export default function Editor() {
         },
       });
       setStatus("Saved");
+      return true;
     } catch (err) {
       setError(err.message);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -323,6 +335,17 @@ export default function Editor() {
 
   function handlePrint() {
     window.print();
+  }
+
+  async function goToNextFeature(path) {
+    setNextPathLoading(path);
+    try {
+      const saved = await handleSave();
+      if (saved === false) return;
+      navigate(path);
+    } finally {
+      setNextPathLoading("");
+    }
   }
 
   async function handleAnalyze() {
@@ -1404,6 +1427,29 @@ export default function Editor() {
               ))}
             </ul>
             <p className="muted small">Save and Export / Print PDF remain in the toolbar. All section data stays in this resume until you save.</p>
+            {resumeReadyForGuidance(resume.data) && (
+              <div className="ready-prompt">
+                <h3>Your resume is ready. Want to practice a mock interview before you apply?</h3>
+                <div className="ready-prompt-actions">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    disabled={Boolean(nextPathLoading) || saving}
+                    onClick={() => goToNextFeature(`/interviews/new?resumeId=${resume.id}${resume.data.targetRole ? `&roleTitle=${encodeURIComponent(resume.data.targetRole)}` : ""}`)}
+                  >
+                    {nextPathLoading.includes("/interviews/new") ? "Opening…" : "Start Mock Interview"}
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={Boolean(nextPathLoading) || saving}
+                    onClick={() => goToNextFeature(`/resumes/${resume.id}/career-guidance`)}
+                  >
+                    {nextPathLoading.includes("career-guidance") ? "Opening…" : "Skip for now"}
+                  </button>
+                </div>
+              </div>
+            )}
             <FormNav onPrevious={goPrevious} onNext={goNext} isLast />
           </section>
           )}
