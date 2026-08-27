@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { PassportPreview } from '@/components/PassportPreview';
 import { HoverTilt } from '@/components/HoverTilt';
 import { BackButton } from '@/components/ui/BackButton';
+import { ActiveInterviewTimerBanner } from '@/components/ActiveInterviewTimerBanner';
 import { logout } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
 
@@ -14,8 +15,10 @@ const NAV = [
   { href: '/dashboard', label: 'My home' },
   { href: '/jobs', label: 'Jobs' },
   { href: '/passport?overview=1', label: 'Passport' },
+  { href: '/courses', label: 'Courses' },
   { href: '/resume', label: 'Resume' },
   { href: '/interviews', label: 'Interviews' },
+  { href: '/assessments', label: 'Skill assessment' },
 ];
 
 function navPath(href: string) {
@@ -47,6 +50,7 @@ export function CandidateTopBar({
 
   return (
     <header className="site-navbar sticky top-0 z-50">
+      <ActiveInterviewTimerBanner compact />
       <div className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 py-3 sm:h-[84px] sm:px-10">
         <BackButton fallback="/dashboard" light />
         <Link href="/dashboard" className="logo-mark hidden shrink-0 sm:inline-flex">
@@ -60,22 +64,7 @@ export function CandidateTopBar({
             priority
           />
         </Link>
-        <form action="/jobs" method="get" className="hidden min-w-0 flex-1 md:block">
-          <div className="flex w-full overflow-hidden rounded-full border border-white/25 bg-white/10">
-            <input
-              name="q"
-              type="search"
-              placeholder="Search jobs by title or skill"
-              className="min-w-0 flex-1 bg-transparent px-5 py-2.5 text-sm text-white outline-none placeholder:text-white/55"
-            />
-            <button
-              type="submit"
-              className="m-1 shrink-0 rounded-full bg-gradient-to-r from-[#ca8a04] to-[#eab308] px-5 text-sm font-bold text-navy transition hover:brightness-110"
-            >
-              Search
-            </button>
-          </div>
-        </form>
+        <div className="min-w-0 flex-1" />
 
         <div className="ml-auto flex min-w-0 items-center justify-end gap-3">
           <p className="truncate text-sm font-semibold text-white/90">{displayName}</p>
@@ -88,22 +77,6 @@ export function CandidateTopBar({
           </button>
         </div>
       </div>
-      <form action="/jobs" method="get" className="px-4 pb-3 md:hidden">
-        <div className="flex overflow-hidden rounded-full border border-white/25 bg-white/10">
-          <input
-            name="q"
-            type="search"
-            placeholder="Search jobs"
-            className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/55"
-          />
-          <button
-            type="submit"
-            className="m-1 shrink-0 rounded-full bg-gradient-to-r from-[#ca8a04] to-[#eab308] px-4 text-sm font-bold text-navy"
-          >
-            Search
-          </button>
-        </div>
-      </form>
     </header>
   );
 }
@@ -179,7 +152,15 @@ function PortalNav() {
   );
 }
 
-export function CandidateShell({ children }: { children: ReactNode }) {
+export function CandidateShell({
+  children,
+  studio = false,
+  scene,
+}: {
+  children: ReactNode;
+  studio?: boolean;
+  scene?: 'drop' | 'rules' | 'type' | 'cam' | 'result' | 'ok';
+}) {
   const router = useRouter();
   const [name, setName] = useState('there');
 
@@ -193,16 +174,24 @@ export function CandidateShell({ children }: { children: ReactNode }) {
     router.replace('/');
   }
 
+  const cinema = scene === 'ok' || scene === 'cam';
+
   return (
-    <div className="cb-portal-page">
+    <div className={`cb-portal-page ${studio ? `cb-check-page${scene ? ` is-${scene}` : ''}` : ''}`}>
       <CandidateTopBar name={name} onSignOut={signOut} />
-      <div className="cb-portal-wrap grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <nav className="cb-dash-card hidden p-2 lg:block" aria-label="Candidate">
-          <PortalNav />
-        </nav>
-        <div className="min-w-0 space-y-3">
-          {children}
-        </div>
+      <div
+        className={
+          cinema
+            ? 'cb-portal-wrap'
+            : 'cb-portal-wrap grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]'
+        }
+      >
+        {cinema ? null : (
+          <nav className="cb-dash-card hidden p-2 lg:block" aria-label="Candidate">
+            <PortalNav />
+          </nav>
+        )}
+        <div className="min-w-0 space-y-3">{children}</div>
       </div>
     </div>
   );

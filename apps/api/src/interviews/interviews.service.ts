@@ -11,7 +11,13 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { InterviewAiService, profileFromResume, type InterviewProfile } from './interview-ai.service';
-import { conductWarningMessage, detectConduct } from './interview-conduct';
+import {
+  CONDUCT_MAX_WARNINGS,
+  conductTerminateMessage,
+  conductWarningMessage,
+  countConductWarnings,
+  detectConduct,
+} from './interview-conduct';
 import { renderInterviewPdf } from './interview-pdf';
 
 @Injectable()
@@ -140,8 +146,10 @@ export class InterviewsService {
     const warnings = parseWarnings(interview.warningsJson);
     const conduct = detectConduct(trimmed);
     if (conduct) {
-      const prior = warnings.filter((item) => item.type === 'ABUSE' || item.type === 'NONSENSE');
-      if (prior.length >= 1) {
+      // Count same-kind strikes so 3 abusive answers end the interview.
+      const prior = countConductWarnings(warnings, conduct);
+      const strike = prior + 1;
+      if (prior >= CONDUCT_MAX_WARNINGS) {
         const questions = parseQuestions(interview.questionsJson);
         const current = questions[interview.questionIndex];
         if (current && !current.answer) {
@@ -149,18 +157,26 @@ export class InterviewsService {
           current.answeredAt = new Date().toISOString();
           current.answerDurationSec = durationSec;
           current.score = 0;
-          current.analysis = 'Interview ended due to repeated inappropriate or meaningless responses.';
-          current.improvedAnswer = trimmed;
+          current.analysis =
+            conduct === 'abuse'
+              ? 'Interview ended after repeated abusive language. Behaviour scored as unprofessional.'
+              : 'Interview ended due to repeated inappropriate or meaningless responses.';
+          current.improvedAnswer =
+            'I will answer professionally without abusive or meaningless language.';
           current.strengths = [];
-          current.weaknesses = ['Repeated conduct issue after a warning'];
+          current.weaknesses =
+            conduct === 'abuse'
+              ? ['Used abusive language after two warnings']
+              : ['Repeated conduct issue after warnings'];
           await this.prisma.interview.update({
             where: { id: interview.id },
             data: { questionsJson: JSON.stringify(questions) },
           });
         }
+        const terminateMsg = conductTerminateMessage(conduct);
         warnings.push({
           type: conduct === 'abuse' ? 'ABUSE' : 'NONSENSE',
-          message: 'Interview terminated after a second conduct warning.',
+          message: terminateMsg,
           severity: 'HIGH',
           at: new Date().toISOString(),
         });
@@ -168,11 +184,13 @@ export class InterviewsService {
           where: { id: interview.id },
           data: { warningsJson: JSON.stringify(warnings.slice(-40)) },
         });
-        return this.endLive(userId, id);
+        const ended = await this.endLive(userId, id);
+        return { ...ended, conductWarning: terminateMsg, conductTerminated: true };
       }
+      const warnMsg = conductWarningMessage(conduct, strike);
       warnings.push({
         type: conduct === 'abuse' ? 'ABUSE' : 'NONSENSE',
-        message: conductWarningMessage(conduct),
+        message: warnMsg,
         severity: 'HIGH',
         at: new Date().toISOString(),
       });
@@ -180,7 +198,7 @@ export class InterviewsService {
         where: { id: interview.id },
         data: { warningsJson: JSON.stringify(warnings.slice(-40)) },
       });
-      return { ...this.toSession(updated), conductWarning: conductWarningMessage(conduct) };
+      return { ...this.toSession(updated), conductWarning: warnMsg };
     }
 
     const questions = parseQuestions(interview.questionsJson);

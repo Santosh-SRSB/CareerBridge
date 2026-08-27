@@ -41,20 +41,30 @@ export class AuthService {
     const channel = dto.channel;
     let phone = dto.phone?.trim() || '';
     const email = dto.email?.trim().toLowerCase();
+    const accountType = dto.accountType || 'CANDIDATE';
+    const userTypes = userTypesForAccount(accountType);
 
     if (dto.purpose === 'LOGIN') {
       const existing =
         channel === 'EMAIL'
-          ? await this.prisma.user.findFirst({ where: { email: email || '' } })
-          : await this.prisma.user.findUnique({ where: { phone } });
+          ? await this.prisma.user.findFirst({
+              where: { email: email || '', userType: { in: userTypes } },
+            })
+          : await this.prisma.user.findFirst({
+              where: { phone, userType: { in: userTypes } },
+            });
       if (!existing) {
         throw new HttpException(
           {
             code: ErrorCode.ACCOUNT_NOT_FOUND,
             message:
               channel === 'EMAIL'
-                ? 'No account found for this email. Create your free Career Passport.'
-                : 'No account found for this number. Create your free Career Passport.',
+                ? accountType === 'EMPLOYER'
+                  ? 'No employer account found for this email. Register as an employer first.'
+                  : 'No account found for this email. Create your free Career Passport.'
+                : accountType === 'EMPLOYER'
+                  ? 'No employer account found for this number. Register as an employer first.'
+                  : 'No account found for this number. Create your free Career Passport.',
           },
           HttpStatus.NOT_FOUND,
         );
@@ -64,24 +74,34 @@ export class AuthService {
 
     if (dto.purpose === 'REGISTER') {
       if (phone) {
-        const phoneTaken = await this.prisma.user.findUnique({ where: { phone } });
+        const phoneTaken = await this.prisma.user.findFirst({
+          where: { phone, userType: { in: userTypes } },
+        });
         if (phoneTaken) {
           throw new HttpException(
             {
               code: ErrorCode.ACCOUNT_EXISTS,
-              message: 'An account already exists. Please sign in.',
+              message:
+                accountType === 'EMPLOYER'
+                  ? 'An employer account already exists with this mobile number. Please sign in.'
+                  : 'A candidate account already exists with this mobile number. Please sign in.',
             },
             HttpStatus.CONFLICT,
           );
         }
       }
       if (email) {
-        const emailTaken = await this.prisma.user.findFirst({ where: { email } });
+        const emailTaken = await this.prisma.user.findFirst({
+          where: { email, userType: { in: userTypes } },
+        });
         if (emailTaken) {
           throw new HttpException(
             {
               code: ErrorCode.ACCOUNT_EXISTS,
-              message: 'An account already exists with this email. Please sign in.',
+              message:
+                accountType === 'EMPLOYER'
+                  ? 'An employer account already exists with this email. Please sign in.'
+                  : 'A candidate account already exists with this email. Please sign in.',
             },
             HttpStatus.CONFLICT,
           );
@@ -143,19 +163,20 @@ export class AuthService {
         channel,
         purpose: dto.purpose,
         otpHash,
-        payloadJson:
+        payloadJson: JSON.stringify(
           dto.purpose === 'REGISTER'
-            ? JSON.stringify({
+            ? {
                 email,
                 fullName: dto.fullName?.trim(),
                 location: dto.location?.trim(),
                 preferredLanguage: dto.preferredLanguage,
                 passwordHash,
-                accountType: dto.accountType || 'CANDIDATE',
+                accountType,
                 companyName: dto.companyName?.trim(),
                 industry: dto.industry?.trim(),
-              })
-            : null,
+              }
+            : { accountType },
+        ),
         expiresAt: new Date(Date.now() + OTP_TTL_SECONDS * 1000),
       },
     });
@@ -238,13 +259,23 @@ export class AuthService {
 
   private async resolveIdentity(
     dto: VerifyOtpDto,
-    request: { phone: string; email: string | null; channel: string; otpHash: string | null },
+    request: {
+      phone: string;
+      email: string | null;
+      channel: string;
+      otpHash: string | null;
+      payloadJson?: string | null;
+    },
   ) {
     const allowServerOtp = request.channel === 'EMAIL' || this.isDevOtp();
     if (allowServerOtp && dto.otp && request.otpHash && hashToken(dto.otp) === request.otpHash) {
+      const kind = parseRegistration(request.payloadJson)?.accountType;
+      const role = kind === 'EMPLOYER' ? 'EMPLOYER' : 'CANDIDATE';
       return {
         firebaseUid:
-          request.channel === 'EMAIL' ? `email_${request.email}` : `otp_${request.phone}`,
+          request.channel === 'EMAIL'
+            ? `email_${role}_${request.email}`
+            : `otp_${role}_${request.phone}`,
         phone: request.phone,
       };
     }
@@ -258,7 +289,9 @@ export class AuthService {
           message: 'We could not verify your number right now. Please try again.',
         });
       }
-      return { firebaseUid: decoded.uid, phone };
+      const kind = parseRegistration(request.payloadJson)?.accountType;
+      const role = kind === 'EMPLOYER' ? 'EMPLOYER' : 'CANDIDATE';
+      return { firebaseUid: `${decoded.uid}_${role}`, phone };
     }
 
     throw new HttpException(
@@ -275,6 +308,7 @@ export class AuthService {
   ) {
     const registration = parseRegistration(payloadJson);
     const isEmployer = registration?.accountType === 'EMPLOYER';
+    const userTypes = userTypesForAccount(isEmployer ? 'EMPLOYER' : 'CANDIDATE');
     const names = splitName(registration?.fullName);
     const profileCompletion =
       (names.firstName ? 20 : 0) +
@@ -282,8 +316,8 @@ export class AuthService {
       (registration?.preferredLanguage ? 10 : 0) +
       (registration?.email ? 10 : 0);
 
-    let user = await this.prisma.user.findUnique({
-      where: { phone },
+    let user = await this.prisma.user.findFirst({
+      where: { phone, userType: { in: userTypes } },
       include: { candidate: true, employer: true },
     });
 
@@ -291,7 +325,9 @@ export class AuthService {
       throw new HttpException(
         {
           code: ErrorCode.ACCOUNT_NOT_FOUND,
-          message: 'No account found for this number. Create your free Career Passport.',
+          message: isEmployer
+            ? 'No employer account found for this number. Register as an employer first.'
+            : 'No account found for this number. Create your free Career Passport.',
         },
         HttpStatus.NOT_FOUND,
       );
@@ -299,7 +335,12 @@ export class AuthService {
 
     if (purpose === 'REGISTER' && user) {
       throw new HttpException(
-        { code: ErrorCode.ACCOUNT_EXISTS, message: 'An account already exists. Please sign in.' },
+        {
+          code: ErrorCode.ACCOUNT_EXISTS,
+          message: isEmployer
+            ? 'An employer account already exists. Please sign in.'
+            : 'A candidate account already exists. Please sign in.',
+        },
         HttpStatus.CONFLICT,
       );
     }
@@ -363,9 +404,13 @@ export class AuthService {
     const value = identifier.trim();
     const email = value.includes('@') ? value.toLowerCase() : null;
     const phone = email ? null : normalizeLoginPhone(value);
+    const userTypes = accountType ? userTypesForAccount(accountType) : undefined;
 
     const user = await this.prisma.user.findFirst({
-      where: email ? { email } : { phone: phone || value },
+      where: {
+        ...(email ? { email } : { phone: phone || value }),
+        ...(userTypes ? { userType: { in: userTypes } } : {}),
+      },
       include: { candidate: true, employer: true },
     });
 
@@ -426,12 +471,19 @@ export class AuthService {
     }
     const email = dto.email.trim().toLowerCase();
     const phone = dto.phone.trim();
+    const employerTypes = userTypesForAccount('EMPLOYER');
     const taken = await this.prisma.user.findFirst({
-      where: { OR: [{ email }, { phone }] },
+      where: {
+        userType: { in: employerTypes },
+        OR: [{ email }, { phone }],
+      },
     });
     if (taken) {
       throw new HttpException(
-        { code: ErrorCode.ACCOUNT_EXISTS, message: 'An account already exists. Please sign in.' },
+        {
+          code: ErrorCode.ACCOUNT_EXISTS,
+          message: 'An employer account already exists with this email or mobile. Please sign in.',
+        },
         HttpStatus.CONFLICT,
       );
     }
@@ -666,4 +718,8 @@ function normalizeLoginPhone(value: string) {
     return value;
   }
   return `+${digits}`;
+}
+
+function userTypesForAccount(kind: 'CANDIDATE' | 'EMPLOYER'): Array<'CANDIDATE' | 'EMPLOYER_ADMIN' | 'EMPLOYER_RECRUITER'> {
+  return kind === 'EMPLOYER' ? ['EMPLOYER_ADMIN', 'EMPLOYER_RECRUITER'] : ['CANDIDATE'];
 }

@@ -16,7 +16,8 @@
     "noImplicitAny": false,
     "strictBindCallApply": true,
     "forceConsistentCasingInFileNames": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "allowJs": true
   },
   "include": ["src"]
 }

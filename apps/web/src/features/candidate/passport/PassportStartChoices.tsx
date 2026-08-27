@@ -58,9 +58,9 @@ export function PassportStartChoices({
                 sizes="160px"
               />
             </span>
-            <span className="passport-choice-title">With resume</span>
+            <span className="passport-choice-title">Autofill with resume</span>
           </button>
-          <button type="button" className="passport-choice" onClick={() => go("/passport/create/build")}>
+          <button type="button" className="passport-choice" onClick={() => go("/passport/create/form?source=manual")}>
             <span className="passport-choice-photo">
               <Image
                 src="/mascots/passport-without-resume.png"

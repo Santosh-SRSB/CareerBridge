@@ -9,10 +9,14 @@ import { JobsModule } from './jobs/jobs.module';
 import { ResumesModule } from './resumes/resumes.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { InterviewsModule } from './interviews/interviews.module';
+import { AssessmentsModule } from './assessments/assessments.module';
+import { HumanMocksModule } from './human-mocks/human-mocks.module';
+import { MatchingModule } from './matching/matching.module';
 import { EmployersModule } from './employers/employers.module';
 import { AdminModule } from './admin/admin.module';
 import { SkillsModule } from './skills/skills.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
+import { GstModule } from './gst/gst.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -31,10 +35,14 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     ResumesModule,
     ApplicationsModule,
     InterviewsModule,
+    AssessmentsModule,
+    HumanMocksModule,
+    MatchingModule,
     EmployersModule,
     AdminModule,
     SkillsModule,
     IntelligenceModule,
+    GstModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -11,9 +11,15 @@ import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
 import { isDevOtpEnabled, isFirebaseConfigured, sendFirebaseOtp } from '@/lib/firebase';
 import { authErrorMessage } from '@/lib/auth-errors';
-import type { AuthPurpose, OtpChannel } from '@careerbridge/shared';
+import type { AccountKind, AuthPurpose, OtpChannel } from '@careerbridge/shared';
 
-export function PhoneAuthForm({ purpose }: { purpose: AuthPurpose }) {
+export function PhoneAuthForm({
+  purpose,
+  accountType = 'CANDIDATE',
+}: {
+  purpose: AuthPurpose;
+  accountType?: AccountKind;
+}) {
   const router = useRouter();
   const [channel, setChannel] = useState<OtpChannel>('EMAIL');
   const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
@@ -42,6 +48,7 @@ export function PhoneAuthForm({ purpose }: { purpose: AuthPurpose }) {
         purpose,
         phone,
         email: email.trim() || undefined,
+        accountType,
       });
       if (channel === 'MOBILE' && phone && !isDevOtpEnabled()) {
         if (!isFirebaseConfigured()) {

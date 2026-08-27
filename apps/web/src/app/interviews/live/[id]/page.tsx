@@ -11,6 +11,7 @@ import {
   startLiveInterview,
   warnLiveInterview,
 } from '@/lib/api';
+import { clearActiveInterviewTimer, saveActiveInterviewTimer } from '@/lib/interview-timer';
 import { greetingForHour, pickFemaleVoice, setAiThinking, setAvatarMood, startAiSpeech, stopAiSpeech } from '@/features/interview/ai-speech';
 import { LOBBY_DONTS, LOBBY_DOS } from '@/features/interview/lobby-rules';
 
@@ -203,7 +204,12 @@ export default function LiveInterviewPage() {
   const load = useCallback(async () => {
     const next = await getInterview(params.id);
     setSession(next);
-    if (next.status === 'COMPLETED') router.replace(`/interviews/${next.id}/report`);
+    if (next.status === 'COMPLETED') {
+      clearActiveInterviewTimer(next.id);
+      router.replace(`/interviews/${next.id}/report`);
+    } else if (next.startAt) {
+      saveActiveInterviewTimer(next);
+    }
     return next;
   }, [params.id, router]);
 
@@ -233,6 +239,13 @@ export default function LiveInterviewPage() {
   }, [session?.transcript?.length, listening]);
 
   useEffect(() => {
+    if (!session?.startAt || session.status === 'COMPLETED') return;
+    saveActiveInterviewTimer(session);
+    const id = window.setInterval(() => saveActiveInterviewTimer(session), 5000);
+    return () => window.clearInterval(id);
+  }, [session]);
+
+  useEffect(() => {
     if (!session?.startAt || session.status === 'COMPLETED' || endingRef.current) return;
     const limit = (session.durationLimitMin || 15) * 60;
     const elapsedSec = Math.max(0, Math.round((now - new Date(session.startAt).getTime()) / 1000));
@@ -243,7 +256,10 @@ export default function LiveInterviewPage() {
     notify('Time is up. Generating your report.');
     streamRef.current?.getTracks().forEach((track) => track.stop());
     window.speechSynthesis?.cancel();
-    void endLiveInterview(params.id).then((next) => router.replace(`/interviews/${next.id}/report`));
+    void endLiveInterview(params.id).then((next) => {
+      clearActiveInterviewTimer(params.id);
+      router.replace(`/interviews/${next.id}/report`);
+    });
   }, [now, params.id, router, session?.durationLimitMin, session?.startAt, session?.status]);
 
   useEffect(() => {
@@ -269,7 +285,10 @@ export default function LiveInterviewPage() {
           .finally(() => {
             streamRef.current?.getTracks().forEach((track) => track.stop());
             window.speechSynthesis?.cancel();
-            void endLiveInterview(session.id).then((next) => router.replace(`/interviews/${next.id}/report`));
+            void endLiveInterview(session.id).then((next) => {
+              clearActiveInterviewTimer(session.id);
+              router.replace(`/interviews/${next.id}/report`);
+            });
           });
         return;
       }
@@ -287,6 +306,126 @@ export default function LiveInterviewPage() {
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [params.id, router, session?.id, session?.startAt, session?.status]);
+
+  useEffect(() => {
+    if (!started || !camOn || session?.status === 'COMPLETED') return;
+
+    let cancelled = false;
+    let missingSince: number | null = null;
+    let warningBusy = false;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    type FaceDetectorInstance = { detect: (source: HTMLVideoElement) => Promise<Array<unknown>> };
+    type FaceDetectorCtor = new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorInstance;
+    const FaceDetector = (window as unknown as { FaceDetector?: FaceDetectorCtor }).FaceDetector;
+    const detector = FaceDetector ? new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }) : null;
+
+    const faceLooksMissing = async (video: HTMLVideoElement) => {
+      if (detector) {
+        const faces = await detector.detect(video);
+        return faces.length === 0;
+      }
+      if (!ctx) return false;
+      const w = 64;
+      const h = 48;
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      let sum = 0;
+      let sumSq = 0;
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const y = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        sum += y;
+        sumSq += y * y;
+        n += 1;
+      }
+      const mean = sum / Math.max(1, n);
+      const variance = sumSq / Math.max(1, n) - mean * mean;
+      // Covered lens / walked away: too dark, blown out, or almost no contrast.
+      return mean < 16 || mean > 248 || variance < 90;
+    };
+
+    const tick = async () => {
+      if (cancelled || endingRef.current || warningBusy || speakingRef.current) return;
+      const video = videoRef.current;
+      const active = sessionRef.current;
+      if (!video || !active?.startAt || active.status === 'COMPLETED' || video.readyState < 2) return;
+
+      let missing = false;
+      try {
+        missing = await faceLooksMissing(video);
+      } catch {
+        return;
+      }
+
+      if (!missing) {
+        missingSince = null;
+        return;
+      }
+      if (!missingSince) {
+        missingSince = Date.now();
+        return;
+      }
+      if (Date.now() - missingSince < 4000) return;
+
+      warningBusy = true;
+      missingSince = Date.now();
+      const count = active.warnings?.filter((item) => item.type === 'FACE_MISSING').length ?? 0;
+      const attempt = count + 1;
+      const message =
+        attempt >= 3
+          ? 'Please stay on camera. Face not visible — Attempt 3/3'
+          : `Please stay on camera with your face visible — Attempt ${attempt}/3`;
+      setStatus(message);
+
+      try {
+        const next = await warnLiveInterview(active.id, {
+          type: 'FACE_MISSING',
+          message,
+          severity: attempt >= 3 ? 'HIGH' : 'WARNING',
+        });
+        setSession(next);
+
+        speakingRef.current = true;
+        setListening(false);
+        await speak('Please come back on camera. Keep your face clearly visible for the interview.');
+        speakingRef.current = false;
+
+        if (attempt >= 3) {
+          endingRef.current = true;
+          setBusy(true);
+          setStatus('Interview ended — face not visible too many times.');
+          streamRef.current?.getTracks().forEach((track) => track.stop());
+          window.speechSynthesis?.cancel();
+          const ended = await endLiveInterview(active.id);
+          clearActiveInterviewTimer(active.id);
+          router.replace(`/interviews/${ended.id}/report`);
+          return;
+        }
+
+        if (listeningRef.current) {
+          startListening();
+          setListening(true);
+          lastHeard.current = Date.now();
+          setStatus('I am listening');
+          setAvatarMood('listening');
+        }
+      } catch {
+        /* ignore transient warn failures */
+      } finally {
+        warningBusy = false;
+      }
+    };
+
+    const id = window.setInterval(() => void tick(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [camOn, params.id, router, session?.status, started]);
 
   useEffect(() => {
     confirmingRef.current = confirming;
@@ -623,6 +762,7 @@ export default function LiveInterviewPage() {
       }
       const next = await startLiveInterview(params.id);
       setSession(next);
+      saveActiveInterviewTimer(next);
       askedAt.current = Date.now();
       window.requestAnimationFrame(() => {
         if (videoRef.current && streamRef.current) videoRef.current.srcObject = streamRef.current;
@@ -678,6 +818,16 @@ export default function LiveInterviewPage() {
         setStatus('AI is speaking...');
         await speak(next.conductWarning);
         speakingRef.current = false;
+        if (next.conductTerminated || next.status === 'COMPLETED') {
+          listenRef.current = false;
+          recRef.current?.abort?.();
+          streamRef.current?.getTracks().forEach((track) => track.stop());
+          window.speechSynthesis?.cancel();
+          stopAiSpeech('neutral');
+          clearActiveInterviewTimer(next.id);
+          router.replace(`/interviews/${next.id}/report`);
+          return;
+        }
         startListening();
         setListening(true);
         listeningRef.current = true;
@@ -719,6 +869,7 @@ export default function LiveInterviewPage() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       window.speechSynthesis?.cancel();
       const next = await endLiveInterview(params.id);
+      clearActiveInterviewTimer(params.id);
       router.replace(`/interviews/${next.id}/report`);
     } finally {
       setBusy(false);

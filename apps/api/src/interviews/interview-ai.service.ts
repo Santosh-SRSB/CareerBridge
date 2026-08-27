@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import type { InterviewReport, LiveInterviewQuestion, ResumeContent } from '@careerbridge/shared';
+import { detectConduct } from './interview-conduct';
 
 export type InterviewProfile = {
   fullName: string;
@@ -41,6 +42,26 @@ export class InterviewAiService {
   }
 
   async analyzeAnswer(profile: InterviewProfile, question: string, answer: string) {
+    const conduct = detectConduct(answer);
+    if (conduct === 'abuse') {
+      return {
+        analysis:
+          'This response used abusive or vulgar language. That is unprofessional and must not be scored as strong behaviour.',
+        improvedAnswer: 'I will answer this question professionally without abusive language.',
+        strengths: [] as string[],
+        weaknesses: ['Used abusive or vulgar language', 'Did not answer the question professionally'],
+        score: 0,
+      };
+    }
+    if (conduct === 'nonsense') {
+      return {
+        analysis: 'This response was not a meaningful answer to the interview question.',
+        improvedAnswer: 'I will give a clear, relevant answer based on my real experience.',
+        strengths: [] as string[],
+        weaknesses: ['Answer was meaningless or too vague'],
+        score: 5,
+      };
+    }
     const fromAi = await this.askJson<{
       analysis: string;
       improvedAnswer: string;
@@ -48,7 +69,7 @@ export class InterviewAiService {
       weaknesses: string[];
       score: number;
     }>(
-      'Analyze the candidate answer. Improve wording only using facts from the profile and the answer. Correct grammar and structure. Suggest what could be added only if it is already implied by their answer or profile. Never invent companies, years, tools, or achievements. Return JSON { analysis, improvedAnswer, strengths, weaknesses, score } where score is 0-100.',
+      'Analyze the candidate answer. Improve wording only using facts from the profile and the answer. Correct grammar and structure. Suggest what could be added only if it is already implied by their answer or profile. Never invent companies, years, tools, or achievements. If the answer contains abuse or vulgar language, score near 0 and call it out. Return JSON { analysis, improvedAnswer, strengths, weaknesses, score } where score is 0-100.',
       JSON.stringify({ profile, question, answer }),
     );
     const local = localAnalyze(question, answer, profile);
@@ -82,7 +103,7 @@ export class InterviewAiService {
     const rawOverall = avg * 0.45 + communication * 5 + behaviour * 2.5 + listening * 2.5;
     const overall = clamp(Math.round(rawOverall - completionPenalty), 0, 100);
     const fromAi = await this.askJson<Partial<InterviewReport>>(
-      'Summarize this interview. Do not invent experience. The candidate may have finished early — score only answered questions. Return JSON { summary, strengths, weaknesses, dos, donts, recommendation } recommendation one of Strongly Recommended, Recommended, Needs Improvement, Not Ready.',
+      'Summarize this interview. Do not invent experience. The candidate may have finished early — score only answered questions. If warningCounts show abuse, face missing, or tab switches, call that out clearly in summary and weaknesses, and do not praise behaviour. Return JSON { summary, strengths, weaknesses, dos, donts, recommendation } recommendation one of Strongly Recommended, Recommended, Needs Improvement, Not Ready.',
       JSON.stringify({
         profile,
         durationSec,
@@ -96,17 +117,38 @@ export class InterviewAiService {
       answeredCount === 0
         ? `No answers were submitted out of ${totalPlanned} planned questions.`
         : `${answeredCount} answer${answeredCount === 1 ? '' : 's'} given out of ${totalPlanned}. Overall scoring is based only on those ${answeredCount} response${answeredCount === 1 ? '' : 's'}.`;
+    const integrityNote =
+      (warningCounts.abuseWarnings || 0) > 0
+        ? ` Integrity: ${warningCounts.abuseWarnings} abuse warning(s) were recorded — behaviour must be marked poor.`
+        : '';
+    const recommendation = recFromScore(
+      overall,
+      fromAi?.recommendation,
+      answeredCount,
+      totalPlanned,
+      warningCounts,
+    );
+    const weaknesses = mergeIntegrityWeaknesses(
+      (fromAi?.weaknesses?.length ? fromAi.weaknesses : defaultWeaknesses(answered, answeredCount, totalPlanned)).slice(0, 6),
+      warningCounts,
+    );
     return {
       overallScore: overall,
       communication,
       behaviour,
       listening,
-      recommendation: recFromScore(overall, fromAi?.recommendation, answeredCount, totalPlanned),
-      summary: fromAi?.summary ? `${baseSummary} ${fromAi.summary}` : baseSummary,
-      strengths: (fromAi?.strengths?.length ? fromAi.strengths : defaultStrengths(answered)).slice(0, 6),
-      weaknesses: (fromAi?.weaknesses?.length ? fromAi.weaknesses : defaultWeaknesses(answered, answeredCount, totalPlanned)).slice(0, 6),
+      recommendation,
+      summary: fromAi?.summary ? `${baseSummary} ${fromAi.summary}${integrityNote}` : `${baseSummary}${integrityNote}`,
+      strengths:
+        (warningCounts.abuseWarnings || 0) >= 2
+          ? []
+          : (fromAi?.strengths?.length ? fromAi.strengths : defaultStrengths(answered)).slice(0, 6),
+      weaknesses,
       dos: (fromAi?.dos?.length ? fromAi.dos : DEFAULT_DOS).slice(0, 8),
-      donts: (fromAi?.donts?.length ? fromAi.donts : DEFAULT_DONTS).slice(0, 8),
+      donts: mergeIntegrityDonts(
+        (fromAi?.donts?.length ? fromAi.donts : DEFAULT_DONTS).slice(0, 8),
+        warningCounts,
+      ),
       answeredCount,
       totalPlanned,
       integrity: warningCounts,
@@ -558,12 +600,28 @@ function scoreCommunication(questions: LiveInterviewQuestion[]) {
 
 function scoreBehaviour(questions: LiveInterviewQuestion[], integrity?: InterviewReport['integrity']) {
   if (!questions.length) return 2;
-  const rude = questions.some((item) => /stupid|hate|idk lol|whatever/i.test(item.answer || ''));
+
+  const abuseInAnswers = questions.filter((item) => detectConduct(item.answer || '') === 'abuse').length;
+  const nonsenseInAnswers = questions.filter((item) => detectConduct(item.answer || '') === 'nonsense').length;
+  const abuse = Math.max(integrity?.abuseWarnings || 0, abuseInAnswers);
+  const nonsense = Math.max(integrity?.nonsenseWarnings || 0, nonsenseInAnswers);
+  const faceMissing = integrity?.faceMissing || 0;
+  const tabSwitches = integrity?.tabSwitches || 0;
+  const multipleFaces = integrity?.multipleFaces || 0;
+
+  // Abuse must never look like strong behaviour (fixes 9/10 after vulgar answers).
+  if (abuse >= 3) return 1;
+  if (abuse >= 2) return 2;
+  if (abuse >= 1) return 3;
+
+  const rude = questions.some((item) => /stupid|hate|idk lol|whatever|shut up/i.test(item.answer || ''));
   const complete = questions.filter((item) => (item.answer || '').length > 40).length / questions.length;
   let base = clamp(Math.round((rude ? 3 : 7) + complete * 3), 1, 10);
-  const abuse = integrity?.abuseWarnings || 0;
-  const nonsense = integrity?.nonsenseWarnings || 0;
-  base = clamp(base - abuse * 3 - nonsense * 2, 1, 10);
+  base = clamp(
+    base - nonsense * 2 - faceMissing * 2 - tabSwitches * 1 - multipleFaces * 1,
+    1,
+    10,
+  );
   return base;
 }
 
@@ -587,14 +645,42 @@ function recFromScore(
   raw?: string,
   answeredCount = 15,
   totalPlanned = 15,
+  integrity?: InterviewReport['integrity'],
 ): InterviewReport['recommendation'] {
   const allowed = ['Strongly Recommended', 'Recommended', 'Needs Improvement', 'Not Ready'] as const;
   let pick: InterviewReport['recommendation'] =
     score >= 85 ? 'Strongly Recommended' : score >= 70 ? 'Recommended' : score >= 55 ? 'Needs Improvement' : 'Not Ready';
   if (answeredCount < Math.ceil(totalPlanned * 0.4)) pick = 'Not Ready';
   else if (answeredCount < Math.ceil(totalPlanned * 0.6) && pick === 'Strongly Recommended') pick = 'Recommended';
-  if (raw && (allowed as readonly string[]).includes(raw)) return raw as InterviewReport['recommendation'];
+  if ((integrity?.abuseWarnings || 0) >= 1) pick = 'Not Ready';
+  if ((integrity?.faceMissing || 0) >= 3 && pick === 'Strongly Recommended') pick = 'Needs Improvement';
+  if (raw && (allowed as readonly string[]).includes(raw)) {
+    // Never let the model override abuse into a positive recommendation.
+    if ((integrity?.abuseWarnings || 0) >= 1) return 'Not Ready';
+    return raw as InterviewReport['recommendation'];
+  }
   return pick;
+}
+
+function mergeIntegrityWeaknesses(base: string[], integrity?: InterviewReport['integrity']) {
+  const extra: string[] = [];
+  if ((integrity?.abuseWarnings || 0) > 0) {
+    extra.push('Used abusive or vulgar language during the interview');
+  }
+  if ((integrity?.faceMissing || 0) > 0) {
+    extra.push('Left the camera / face was not visible while answering');
+  }
+  if ((integrity?.tabSwitches || 0) > 0) {
+    extra.push('Switched away from the interview tab');
+  }
+  return [...extra, ...base.filter((item) => !extra.includes(item))].slice(0, 6);
+}
+
+function mergeIntegrityDonts(base: string[], integrity?: InterviewReport['integrity']) {
+  const extra: string[] = [];
+  if ((integrity?.abuseWarnings || 0) > 0) extra.push('Never use abusive or vulgar language');
+  if ((integrity?.faceMissing || 0) > 0) extra.push('Stay on camera with your face clearly visible');
+  return [...extra, ...base.filter((item) => !extra.includes(item))].slice(0, 8);
 }
 
 function defaultStrengths(questions: LiveInterviewQuestion[]) {

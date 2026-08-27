@@ -10,6 +10,7 @@ const SLIDES = [
   { key: "education", label: "Fetching education details" },
   { key: "skills", label: "Fetching skills" },
   { key: "experience", label: "Fetching experience" },
+  { key: "projects", label: "Fetching projects" },
   { key: "interests", label: "Fetching career interest" },
   { key: "form", label: "Complete missing details" },
 ] as const;
@@ -76,7 +77,7 @@ export function ResumeCreateFlow() {
       const [data] = await Promise.all([
         parseResumeFile(file),
         (async () => {
-          for (let index = 1; index <= 4; index += 1) {
+          for (let index = 1; index <= 5; index += 1) {
             setSlide(index);
             await wait(FETCH_MS);
           }
@@ -84,7 +85,7 @@ export function ResumeCreateFlow() {
       ]);
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
       setDraft(data);
-      setSlide(5);
+      setSlide(6);
     } catch (err) {
       setSlide(0);
       setError(err instanceof Error ? err.message : "Could not read resume");
@@ -154,7 +155,7 @@ export function ResumeCreateFlow() {
           </div>
         </section>
 
-        {SLIDES.slice(1, 5).map((item, index) => {
+        {SLIDES.slice(1, 6).map((item, index) => {
           const step = index + 1;
           const live = slide === step;
           return (
@@ -187,16 +188,16 @@ export function ResumeCreateFlow() {
           );
         })}
 
-        <section className="resume-slide" aria-hidden={slide !== 5}>
+        <section className="resume-slide" aria-hidden={slide !== 6}>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-deep">Career Passport</p>
           <h1 className="font-display mt-3 text-3xl font-extrabold text-navy">Complete what is missing</h1>
           <p className="mt-3 max-w-xl text-sm text-muted">
-            Add or correct first name, last name, highest education, skills and experience.
+            Add or correct first name, last name, highest education, skills and experience. Projects from your resume are saved for the next steps.
           </p>
           <div className="resume-stage mt-8">
             <EagleMascot pose="stand" />
             <div className="resume-stage-copy">
-              {slide === 5 ? <PassportForm initial={draft} /> : null}
+              {slide === 6 ? <PassportForm initial={draft} /> : null}
             </div>
           </div>
         </section>
@@ -213,7 +214,7 @@ export function ResumeCreateFlow() {
             aria-current={index === slide ? "step" : undefined}
             disabled={busy && index !== slide}
             onClick={() => {
-              if (!busy && (index === 0 || slide === 5)) setSlide(index === 0 ? 0 : 5);
+              if (!busy && (index === 0 || slide === 6)) setSlide(index === 0 ? 0 : 6);
             }}
           />
         ))}

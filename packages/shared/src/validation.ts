@@ -1,4 +1,4 @@
-﻿import { normalizeHttpUrl } from './candidate';
+import { normalizeHttpUrl } from './candidate';
 
 export const PERSON_NAME_PATTERN = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*\.?$/;
 export const MAX_RECORD_YEAR = new Date().getFullYear() + 1;
@@ -74,6 +74,49 @@ export function salaryRangeError(minValue: string, maxValue: string) {
 export function emailError(value: string, required = true) {
   if (!value.trim()) return required ? 'Enter a valid email address.' : null;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) return 'Enter a valid email address.';
+  return null;
+}
+
+export function gstNumberError(value: string) {
+  const gst = value.trim().toUpperCase();
+  if (!gst) return 'Enter the GST number.';
+  if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gst)) {
+    return 'Enter a valid 15-character GST number.';
+  }
+  return null;
+}
+
+export function cinError(value: string) {
+  const cin = value.trim().toUpperCase();
+  if (!cin) return 'Enter the CIN.';
+  if (!/^[UL][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/.test(cin)) {
+    return 'Enter a valid CIN (Corporate Identity Number).';
+  }
+  return null;
+}
+
+export function panNumberError(value: string) {
+  const pan = value.trim().toUpperCase();
+  if (!pan) return 'Enter the company PAN number.';
+  if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+    return 'Enter a valid 10-character PAN number.';
+  }
+  return null;
+}
+
+export function companyWebsiteError(value: string) {
+  const website = value.trim();
+  if (!website) return 'Enter the company website.';
+  if (!normalizeHttpUrl(website.startsWith('http') ? website : `https://${website}`)) {
+    return 'Enter a valid company website.';
+  }
+  return null;
+}
+
+export function designationError(value: string) {
+  const designation = value.trim().replace(/\s+/g, ' ');
+  if (designation.length < 2) return 'Enter your designation.';
+  if (designation.length > 80) return 'Designation is too long.';
   return null;
 }
 

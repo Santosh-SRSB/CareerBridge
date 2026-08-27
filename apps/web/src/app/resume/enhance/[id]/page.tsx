@@ -7,6 +7,8 @@ import { ATS_ENHANCE_PLANS, type ResumeRecord } from '@careerbridge/shared';
 import { downloadResume, enhanceResume, getResume, startResumeOptimization } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { ResumePaper } from '@/components/ResumePaper';
+import { AtsResumeSheet } from '@/components/AtsResumeSheet';
+import { RoleAtsChecker } from '@/components/RoleAtsChecker';
 import { ScoreRing } from '@/components/ScoreRing';
 import { Button } from '@/components/ui/Button';
 
@@ -225,6 +227,24 @@ export default function ResumeEnhanceResultPage() {
               problemSections={optimized ? [] : problemSections}
             />
           )}
+          <div className="mt-6 overflow-hidden rounded-2xl bg-white p-3 shadow">
+            <p className="mb-2 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-primary">
+              Selected template preview
+            </p>
+            <AtsResumeSheet
+              content={afterResume!.content}
+              template={afterResume!.template}
+              withPhoto={afterResume!.content.includePhoto !== false && afterResume!.template?.startsWith('photo-')}
+              targetJobTitle={afterResume!.targetJobTitle}
+            />
+          </div>
+          <div className="mt-6">
+            <RoleAtsChecker
+              resumeId={resume!.id}
+              templateId={resume!.template}
+              defaultRole={resume!.targetJobTitle}
+            />
+          </div>
         </div>
 
         <aside className="cb-enhance-score">

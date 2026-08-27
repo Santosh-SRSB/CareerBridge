@@ -1,7 +1,18 @@
+"use client";
+
 import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CreatePassportButton } from "@/features/candidate/passport/CreatePassportButton";
+import { getStoredUser } from "@/lib/session";
 
 export function Footer() {
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    setSignedIn(Boolean(getStoredUser()?.id));
+  }, []);
+
   return (
     <footer id="signin" className="bg-navy text-white">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-3">
@@ -25,17 +36,23 @@ export function Footer() {
           </p>
           <ul className="mt-4 space-y-2 text-sm text-white/70">
             <li>
-              <CreatePassportButton className="hover:text-white">
-                Create Career Passport
-              </CreatePassportButton>
+              {signedIn ? (
+                <Link href="/dashboard" className="hover:text-white">
+                  My home
+                </Link>
+              ) : (
+                <CreatePassportButton className="hover:text-white">
+                  Create Career Passport
+                </CreatePassportButton>
+              )}
             </li>
             <li>
-              <a href="#jobs" className="hover:text-white">
+              <a href={signedIn ? "/jobs" : "#jobs"} className="hover:text-white">
                 Explore Jobs
               </a>
             </li>
             <li>
-              <a href="#passport" className="hover:text-white">
+              <a href={signedIn ? "/interviews" : "#passport"} className="hover:text-white">
                 AI Resume & Interviews
               </a>
             </li>
@@ -43,25 +60,37 @@ export function Footer() {
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-bright">
-            Sign in
+            {signedIn ? "Continue" : "Get started"}
           </p>
           <p className="mt-4 text-sm text-white/70">
-            Auth lands in the next slice. For now, this is the candidate
-            landing — registration, OTP and dashboards come next.
+            {signedIn
+              ? "Go back to your dashboard to keep building your Career Passport."
+              : "Create your free Career Passport, then explore jobs and interviews."}
           </p>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            <a
-              href="#get-started"
-              className="rounded-full bg-white px-5 py-2.5 text-center text-sm font-bold text-navy"
-            >
-              Get started free
-            </a>
-            <a
-              href="#employers"
-              className="rounded-full border border-white/20 px-5 py-2.5 text-center text-sm font-semibold text-white"
-            >
-              I&apos;m hiring
-            </a>
+            {signedIn ? (
+              <Link
+                href="/dashboard"
+                className="rounded-full bg-white px-5 py-2.5 text-center text-sm font-bold text-navy"
+              >
+                My home
+              </Link>
+            ) : (
+              <>
+                <a
+                  href="#get-started"
+                  className="rounded-full bg-white px-5 py-2.5 text-center text-sm font-bold text-navy"
+                >
+                  Get started free
+                </a>
+                <a
+                  href="#employers"
+                  className="rounded-full border border-white/20 px-5 py-2.5 text-center text-sm font-semibold text-white"
+                >
+                  I&apos;m hiring
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>
