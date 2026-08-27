@@ -258,6 +258,32 @@ export async function recommendedJobs() {
   return request<PagedJobs>('/jobs/recommended');
 }
 
+export type RecommendedCourse = {
+  id: string;
+  title: string;
+  provider: string;
+  instructor: string | null;
+  level: string;
+  duration: string;
+  blurb: string;
+  imageUrl: string | null;
+  instructorImageUrl: string | null;
+  priceLabel: string;
+  strikeLabel: string | null;
+  currency: string | null;
+  url: string;
+  matchedSkill: string;
+  source: 'impact' | 'fallback';
+};
+
+export async function recommendedCourses(limit = 12) {
+  return request<{
+    configured: boolean;
+    skills: string[];
+    items: RecommendedCourse[];
+  }>(`/courses/recommendations?limit=${limit}`);
+}
+
 export async function getJob(id: string) {
   return request<JobDetail>(`/jobs/${id}`, { auth: Boolean(getAccessToken()) });
 }

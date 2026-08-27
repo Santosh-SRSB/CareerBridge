@@ -14,16 +14,16 @@ export function GapCourseNudge({ gapMonths }: Props) {
   const gapText = formatGapLabel(months);
 
   return (
-    <Link href="/courses" className="cb-gap-course-nudge" aria-label={`Career gap ${gapText}. Get these courses to stay on track.`}>
+    <Link href="/courses" className="cb-gap-course-nudge" aria-label={`Career gap ${gapText}. See course suggestions to close your skill gaps.`}>
       <span className="cb-gap-course-nudge__pulse" aria-hidden />
       <div className="cb-gap-course-nudge__copy">
-        <p className="cb-gap-course-nudge__kicker">Career gap</p>
+        <p className="cb-gap-course-nudge__kicker">Skill gap spotted</p>
         <p className="cb-gap-course-nudge__line">
           <strong>Gap {gapText}</strong>
           <span className="cb-gap-course-nudge__sep">·</span>
-          get these courses
+          our course suggestions can help
           <span className="cb-gap-course-nudge__sep">·</span>
-          <em>be on track</em>
+          <em>open on Udemy</em>
         </p>
       </div>
       <span className="cb-gap-course-nudge__arrow" aria-hidden>
