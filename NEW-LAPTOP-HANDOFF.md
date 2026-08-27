@@ -171,13 +171,20 @@ From the repo root:
 
 ```bash
 npm install
-docker compose up -d
+docker compose up -d          # skip if Postgres is already on 127.0.0.1:5432
 npm run db:generate
 npm run db:migrate
 npm run dev
 ```
 
-- `npm run dev` starts API + web together (`concurrently`)
+| Script | What it runs | URL |
+| --- | --- | --- |
+| `npm run dev` | API + web together (`concurrently`) | 3000 + 3001 |
+| `npm run dev:api` | `nest start --watch` | http://localhost:3001/api/v1 |
+| `npm run dev:web` | `next dev --webpack` | http://localhost:3000 |
+
+Use **`dev:web` / webpack mode** for local work — the ATS resume builder and friend-editor templates (`.jsx`) need it. Plain `next dev` (Turbopack) is available as `npm run dev:turbo -w web` but is not the default.
+
 - `postinstall` builds `@careerbridge/shared`
 
 If Prisma migrate asks for a name and `init` already exists, use `npm run prisma:push -w api` instead of migrate.
@@ -199,7 +206,7 @@ If Prisma migrate asks for a name and `init` already exists, use `npm run prisma
 | Untracked junk (do not commit) | — | `apps/web/_unused_friend_app/`, `.tmp-friend-globals.css`, leftover jpg under passport features |
 
 `dev` latest product commit (as of this note):  
-`60112c5` — API, candidate passport, ATS resume builder, enhance-resume flow.
+`0f9332a` — ATS resume builder editor, passport prefill, employer KYC/GST, assessments, human mocks, matching.
 
 Landing-only commits live on `feature/live-landing` (`apps/landing`, Pages workflow, CNAME `www.srsbcareerbridge.com`, sitemap/robots).
 
@@ -258,4 +265,4 @@ On `feature/live-landing` only:
 3. Copy SMTP / OpenAI keys from the old machine if you need real email or parse.
 4. Keep `dev` for app work; only switch to `feature/live-landing` when changing the public website.
 
-Last updated: 21 Aug 2026.
+Last updated: 27 Aug 2026.
