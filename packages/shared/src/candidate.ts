@@ -17,7 +17,9 @@ export type CandidateProfile = {
   totalExperienceYears?: number;
   totalExperienceMonths?: number;
   gapReason?: string | null;
+  gapMonths?: number | null;
   source?: string | null;
+  about?: string | null;
   careerInterests: string[];
   hasExperience: string | null;
   profileCompletion: number;
@@ -138,6 +140,9 @@ export function profileLinkErrors(links: CandidateLinks) {
 export type SavePassportPayload = {
   firstName: string;
   lastName?: string;
+  city?: string;
+  about?: string;
+  careerInterests?: string[];
   stillInCollege?: boolean;
   educationStart?: string;
   educationEnd?: string;
@@ -145,6 +150,7 @@ export type SavePassportPayload = {
   totalExperienceYears?: string;
   totalExperienceMonths?: string;
   gapReason?: string;
+  gapMonths?: number;
   source?: 'resume' | 'manual';
   skills?: string[];
   education?: {
@@ -162,12 +168,23 @@ export type SavePassportPayload = {
     endDate?: string;
     stillInCompany?: boolean;
     isInternship?: boolean;
+    description?: string;
+  }[];
+  projects?: {
+    title: string;
+    role?: string;
+    year?: number;
+    description?: string;
+    url?: string;
   }[];
 };
 
 export type UpdateCandidatePayload = {
   fullName?: string;
+  firstName?: string;
+  lastName?: string;
   city?: string;
+  about?: string;
   preferredLanguage?: string;
   dateOfBirth?: string;
   gender?: string;

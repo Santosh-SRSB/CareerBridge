@@ -25,6 +25,9 @@ import type {
   ProfileCompletion,
   RequestOtpResult,
   ResumeRecord,
+  SkillAssessmentAccess,
+  SkillAssessmentSession,
+  HumanMockSession,
   UpdateCandidatePayload,
   SavePassportPayload,
   RequestOtpPayload,
@@ -39,7 +42,8 @@ async function request<T>(
   options: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  if (!isFormData) headers.set('Content-Type', 'application/json');
   if (options.auth !== false) {
     const token = getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
@@ -281,10 +285,17 @@ export async function listResumes() {
   return request<ResumeRecord[]>('/resumes');
 }
 
+export async function deleteResume(id: string) {
+  return request<{ deleted: boolean }>(`/resumes/${id}`, { method: 'DELETE' });
+}
+
 export async function createResume(payload: {
   targetJobTitle?: string;
+  title?: string;
   template?: string;
   includePhoto?: boolean;
+  blank?: boolean;
+  content?: Record<string, unknown>;
 }) {
   return request<ResumeRecord>('/resumes', {
     method: 'POST',
@@ -297,6 +308,8 @@ export async function uploadResume(payload: {
   targetJobTitle?: string;
   content: ResumeRecord['content'];
   rawText?: string;
+  template?: string;
+  includePhoto?: boolean;
 }) {
   return request<ResumeRecord>('/resumes/upload', {
     method: 'POST',
@@ -309,6 +322,43 @@ export async function enhanceResume(id: string) {
     `/resumes/${id}/enhance`,
     { method: 'POST' },
   );
+}
+
+export async function analyzeResumeRole(payload: {
+  resumeId?: string;
+  targetRole: string;
+  jobDescription?: string;
+  templateId?: string;
+  resume?: Record<string, unknown>;
+}) {
+  return request<Record<string, unknown>>('/resumes/ats/analyze', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function rewriteResumeRole(payload: {
+  resumeId?: string;
+  targetRole: string;
+  jobDescription?: string;
+  templateId?: string;
+  resume?: Record<string, unknown>;
+  analysis?: Record<string, unknown> | null;
+}) {
+  return request<Record<string, unknown>>('/resumes/ats/rewrite', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function careerGuidance(payload: {
+  resumeId?: string;
+  resume?: Record<string, unknown>;
+}) {
+  return request<Record<string, unknown>>('/resumes/career-guidance', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function startResumeOptimization(id: string, planId: string) {
@@ -343,7 +393,16 @@ export async function getResume(id: string) {
   return request<ResumeRecord>(`/resumes/${id}`);
 }
 
-export async function updateResume(id: string, payload: { title?: string; summary?: string; template?: string }) {
+export async function updateResume(
+  id: string,
+  payload: {
+    title?: string;
+    summary?: string;
+    template?: string;
+    targetJobTitle?: string;
+    content?: Record<string, unknown>;
+  },
+) {
   return request<ResumeRecord>(`/resumes/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
@@ -383,6 +442,49 @@ export async function startInterview(jobRole: string, interviewType: string) {
   });
 }
 
+export async function createLiveInterview(payload: {
+  jobRole?: string;
+  interviewType: string;
+  difficulty?: string;
+  durationLimitMin: number;
+  source: 'PASSPORT' | 'UPLOAD';
+  content?: ResumeRecord['content'];
+}) {
+  return request<InterviewSession>('/interviews/live', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function startLiveInterview(id: string) {
+  return request<InterviewSession>(`/interviews/${id}/start`, { method: 'POST' });
+}
+
+export async function answerLiveInterview(id: string, answer: string, durationSec?: number) {
+  return request<InterviewSession>(`/interviews/${id}/answers`, {
+    method: 'POST',
+    body: JSON.stringify({ answer, durationSec }),
+  });
+}
+
+export async function warnLiveInterview(
+  id: string,
+  payload: { type: string; message: string; severity: 'INFO' | 'WARNING' | 'HIGH' },
+) {
+  return request<InterviewSession>(`/interviews/${id}/warnings`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function endLiveInterview(id: string) {
+  return request<InterviewSession>(`/interviews/${id}/end`, { method: 'POST' });
+}
+
+export async function downloadInterviewReport(id: string) {
+  return request<{ pdf: string; fileName: string; mimeType: string }>(`/interviews/${id}/download-report`);
+}
+
 export async function getInterview(id: string) {
   return request<InterviewSession>(`/interviews/${id}`);
 }
@@ -395,6 +497,119 @@ export async function answerInterview(id: string, answer: string) {
   return request<InterviewSession>(`/interviews/${id}/respond`, {
     method: 'POST',
     body: JSON.stringify({ answer }),
+  });
+}
+
+export async function startSkillAssessment() {
+  return request<SkillAssessmentSession>('/assessments', { method: 'POST' });
+}
+
+export async function getSkillAssessmentAccess() {
+  return request<SkillAssessmentAccess>('/assessments/access');
+}
+
+export async function unlockSkillAssessments() {
+  return request<SkillAssessmentAccess>('/assessments/unlock', { method: 'POST' });
+}
+
+export async function getSkillAssessment(id: string) {
+  return request<SkillAssessmentSession>(`/assessments/${id}`);
+}
+
+export async function listSkillAssessments() {
+  return request<SkillAssessmentSession[]>('/assessments');
+}
+
+export async function answerSkillAssessment(
+  id: string,
+  payload: {
+    selectedIndex?: number;
+    text?: string;
+    hasAudio?: boolean;
+    hasVoice?: boolean;
+    durationMs?: number;
+    recording?: Blob;
+  },
+) {
+  if (payload.recording) {
+    const form = new FormData();
+    if (payload.text) form.append('text', payload.text);
+    form.append('hasAudio', String(Boolean(payload.hasAudio)));
+    form.append('hasVoice', String(Boolean(payload.hasVoice)));
+    form.append('durationMs', String(payload.durationMs || 0));
+    form.append('recording', payload.recording, 'answer.webm');
+    return request<SkillAssessmentSession>(`/assessments/${id}/respond`, {
+      method: 'POST',
+      body: form,
+    });
+  }
+  return request<SkillAssessmentSession>(`/assessments/${id}/respond`, {
+    method: 'POST',
+    body: JSON.stringify({
+      selectedIndex: payload.selectedIndex,
+      text: payload.text,
+      hasAudio: payload.hasAudio,
+      hasVoice: payload.hasVoice,
+      durationMs: payload.durationMs,
+    }),
+  });
+}
+
+export async function scheduleHumanMock(payload: {
+  candidateName: string;
+  candidateEmail: string;
+  scheduledAt: string;
+  interviewTrack: 'TECHNICAL' | 'NON_TECHNICAL';
+}) {
+  return request<HumanMockSession & { emailSent: boolean }>('/human-mocks', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listHumanMocks() {
+  return request<HumanMockSession[]>('/human-mocks');
+}
+
+export async function getHumanMock(id: string, token?: string) {
+  const query = token ? `?token=${encodeURIComponent(token)}` : '';
+  return request<HumanMockSession>(`/human-mocks/${id}${query}`, { auth: token ? false : true });
+}
+
+export async function joinHumanMock(id: string, role: 'candidate' | 'interviewer', token?: string) {
+  return request<HumanMockSession>(`/human-mocks/${id}/join`, {
+    method: 'POST',
+    auth: token ? false : true,
+    body: JSON.stringify({ role, token }),
+  });
+}
+
+export async function postHumanSignal(
+  id: string,
+  payload: { role: 'candidate' | 'interviewer'; kind: 'offer' | 'answer' | 'ice'; payload: unknown; token?: string },
+) {
+  return request<{ ok: boolean }>(`/human-mocks/${id}/signal`, {
+    method: 'POST',
+    auth: payload.token ? false : true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function peekHumanSignal(id: string, role: 'candidate' | 'interviewer', token?: string) {
+  const query = new URLSearchParams({ role });
+  if (token) query.set('token', token);
+  return request<{ offer: unknown; answer: unknown; ice: unknown[] }>(`/human-mocks/${id}/signal?${query}`, {
+    auth: token ? false : true,
+  });
+}
+
+export async function completeHumanMock(
+  id: string,
+  payload: { durationMs: number; hadVideo: boolean; hadVoice: boolean; interviewerJoined: boolean; transcript?: string },
+) {
+  return request<HumanMockSession>(`/human-mocks/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 
@@ -414,6 +629,59 @@ export async function saveEmployerKyc(payload: EmployerKycPayload) {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+}
+
+export type GstVerifyResult = {
+  success: boolean;
+  verified: boolean;
+  status: 'ACTIVE' | 'NOT_ACTIVE' | 'UNKNOWN';
+  message?: string;
+  requestId?: string;
+};
+
+/**
+ * GST verify returns a business payload that already includes `success`,
+ * so the API interceptor passes it through (not nested under `data`).
+ */
+export async function verifyGstin(gstin: string): Promise<GstVerifyResult> {
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  const token = getAccessToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`${API_URL}/gst/verify`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ gstin }),
+  }).catch(() => {
+    throw new Error('Cannot reach the CareerBridge API. Make sure it is running on port 3001.');
+  });
+
+  const body = (await response.json()) as
+    | GstVerifyResult
+    | ApiResponse<GstVerifyResult>
+    | { success: false; error: { code: string; message: string } };
+
+  if ('error' in body && body.success === false && body.error) {
+    if (response.status === 401 && getRefreshToken()) {
+      const refreshed = await refreshSession();
+      if (refreshed) return verifyGstin(gstin);
+    }
+    const error = new Error(body.error.message) as Error & { code: string };
+    error.code = body.error.code;
+    throw error;
+  }
+
+  // Passthrough business payload
+  if ('verified' in body && 'status' in body) {
+    return body as GstVerifyResult;
+  }
+
+  // Envelope shape (future-safe)
+  if ('data' in body && body.success && body.data) {
+    return body.data;
+  }
+
+  throw new Error('Unable to verify GSTIN right now. Please try again.');
 }
 
 export async function submitEmployerVerification(payload: EmployerAffiliationPayload) {
@@ -436,7 +704,10 @@ export async function getEmployerJob(id: string) {
 }
 
 export async function createEmployerJob(payload: Record<string, unknown>) {
-  return request<{ id: string; title: string }>('/employers/jobs', { method: 'POST', body: JSON.stringify(payload) });
+  return request<{ id: string; title: string }>('/employers/jobs', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateEmployerJob(id: string, payload: Record<string, unknown>) {

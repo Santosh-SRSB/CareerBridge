@@ -9,6 +9,7 @@ import {
   panNumberError,
 } from '@careerbridge/shared';
 import { EmployerOnboardingFrame } from '@/components/EmployerOnboardingFrame';
+import { GstinVerifyField } from '@/components/GstinVerifyField';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { getEmployerMe, saveEmployerKyc } from '@/lib/api';
@@ -19,6 +20,7 @@ export default function EmployerKycPage() {
   const [cin, setCin] = useState('');
   const [website, setWebsite] = useState('');
   const [panNumber, setPanNumber] = useState('');
+  const [gstVerified, setGstVerified] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -55,6 +57,10 @@ export default function EmployerKycPage() {
       setError(problem);
       return;
     }
+    if (!gstVerified) {
+      setError('Please verify your GSTIN before continuing.');
+      return;
+    }
     setLoading(true);
     try {
       await saveEmployerKyc({
@@ -83,14 +89,18 @@ export default function EmployerKycPage() {
     >
       <form onSubmit={onSubmit} className="space-y-3">
         <Input
-          label="GST Number"
+          label="GSTIN"
           name="gstNumber"
           required
           autoComplete="off"
-          placeholder="27ABCDE1234F1Z5"
+          placeholder="29ABCDE1234F1Z5"
           value={gstNumber}
-          onChange={(event) => setGstNumber(event.target.value.toUpperCase())}
+          onChange={(event) => {
+            setGstNumber(event.target.value.toUpperCase());
+            setGstVerified(false);
+          }}
         />
+        <GstinVerifyField gstin={gstNumber} onVerifiedChange={setGstVerified} />
         <Input
           label="CIN (Corporate Identity Number)"
           name="cin"

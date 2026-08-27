@@ -65,6 +65,12 @@ export class UpdateCandidateDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
+  about?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   preferredLanguage?: string;
 
   @ApiPropertyOptional()
@@ -272,6 +278,11 @@ export class PassportExperienceDto {
   endDate?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  description?: string;
+
+  @IsOptional()
   @IsBoolean()
   stillInCompany?: boolean;
 
@@ -288,6 +299,21 @@ export class SavePassportDto {
   @IsOptional()
   @IsString()
   lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  about?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  careerInterests?: string[];
 
   @IsOptional()
   @IsBoolean()
@@ -318,6 +344,13 @@ export class SavePassportDto {
   gapReason?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(600)
+  gapMonths?: number;
+
+  @IsOptional()
   @IsString()
   source?: string;
 
@@ -337,6 +370,12 @@ export class SavePassportDto {
   @ValidateNested({ each: true })
   @Type(() => PassportExperienceDto)
   experience?: PassportExperienceDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProjectDto)
+  projects?: ProjectDto[];
 }
 
 export class CertificationDto {

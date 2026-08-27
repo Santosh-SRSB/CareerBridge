@@ -1,4 +1,4 @@
-﻿import type { PassportSectionKey } from '@careerbridge/shared';
+import type { PassportSectionKey } from '@careerbridge/shared';
 import { PASSPORT_SECTION_COPY } from '@careerbridge/shared';
 
 export const PASSPORT_WIZARD_KEYS: PassportSectionKey[] = [
@@ -15,7 +15,18 @@ export const PASSPORT_WIZARD_KEYS: PassportSectionKey[] = [
 ];
 
 export const PASSPORT_FLOW_START = '/passport/personal?flow=1';
-export const PASSPORT_OVERVIEW = '/passport?overview=1';
+export const PASSPORT_OVERVIEW = '/passport/saved';
+export const PASSPORT_PREVIEW = '/passport/preview';
+export const FLOW_DONE_KEY = 'cb.passportFlowDone';
+
+export function isPassportFlowDone(userId?: string | null) {
+  if (typeof window === 'undefined' || !userId) return false;
+  return window.localStorage.getItem(`${FLOW_DONE_KEY}:${userId}`) === '1';
+}
+
+export function markPassportFlowDone(userId: string) {
+  window.localStorage.setItem(`${FLOW_DONE_KEY}:${userId}`, '1');
+}
 
 export function wizardStepIndex(key: PassportSectionKey) {
   return PASSPORT_WIZARD_KEYS.indexOf(key);

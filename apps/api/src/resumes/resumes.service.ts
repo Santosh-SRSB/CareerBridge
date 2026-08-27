@@ -14,6 +14,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { renderResumePdf } from './resume-pdf';
 import { ResumeOptimizeAi } from './resume-optimize-ai';
+import { analyzeRoleResume, rewriteRoleResume, recommendCareerRoles } from './ats-engine';
+import { resolveResumeTemplateId } from '@careerbridge/shared';
 
 @Injectable()
 export class ResumesService {
@@ -32,7 +34,17 @@ export class ResumesService {
     return rows.map((row) => this.toRecord(row));
   }
 
-  async create(userId: string, dto: { targetJobTitle?: string; template?: string; includePhoto?: boolean }) {
+  async create(
+    userId: string,
+    dto: {
+      targetJobTitle?: string;
+      title?: string;
+      template?: string;
+      includePhoto?: boolean;
+      blank?: boolean;
+      content?: Record<string, unknown>;
+    },
+  ) {
     const candidate = await this.prisma.candidate.findUnique({
       where: { userId },
       include: { user: true, skills: true, education: true, experiences: true },
@@ -40,16 +52,25 @@ export class ResumesService {
     if (!candidate) {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Candidate profile was not found' });
     }
-    const content = this.contentFromPassport(candidate, dto.targetJobTitle);
+    let content: ResumeContent & { _manual?: boolean; data?: Record<string, unknown> };
+    if (dto.content && typeof dto.content === 'object') {
+      content = normalizeStoredContent(dto.content);
+    } else if (dto.blank) {
+      content = blankManualContent(dto.includePhoto !== false);
+    } else {
+      content = this.contentFromPassport(candidate, dto.targetJobTitle);
+    }
     if (dto.includePhoto === false) content.includePhoto = false;
     if (dto.includePhoto === true) content.includePhoto = true;
-    const title = dto.targetJobTitle ? `${dto.targetJobTitle} Resume` : 'General Resume';
+    const title =
+      (dto.title && dto.title.trim()) ||
+      (dto.blank || dto.content ? 'Untitled resume' : dto.targetJobTitle ? `${dto.targetJobTitle} Resume` : 'General Resume');
     const created = await this.prisma.resume.create({
       data: {
         candidateId: candidate.id,
         title,
         targetJobTitle: dto.targetJobTitle || null,
-        template: dto.template || 'CLASSIC',
+        template: resolveResumeTemplateId(dto.template || 'ats-minimal'),
         summary: content.summary,
         contentJson: JSON.stringify(content),
         score: 0,
@@ -62,7 +83,14 @@ export class ResumesService {
 
   async upload(
     userId: string,
-    dto: { fileName?: string; targetJobTitle?: string; content: Partial<ResumeContent>; rawText?: string },
+    dto: {
+      fileName?: string;
+      targetJobTitle?: string;
+      content: Partial<ResumeContent>;
+      rawText?: string;
+      template?: string;
+      includePhoto?: boolean;
+    },
   ) {
     const candidate = await this.prisma.candidate.findUnique({
       where: { userId },
@@ -76,6 +104,8 @@ export class ResumesService {
       city: candidate.city,
       phone: candidate.user.phone,
     });
+    if (dto.includePhoto === false) content.includePhoto = false;
+    if (dto.includePhoto === true) content.includePhoto = true;
     const rawText = (dto.rawText || '').slice(0, 80000);
     const baseName = (dto.fileName || 'Uploaded resume').replace(/\.[^.]+$/, '').trim() || 'Uploaded resume';
     const created = await this.prisma.resume.create({
@@ -83,7 +113,7 @@ export class ResumesService {
         candidateId: candidate.id,
         title: baseName,
         targetJobTitle: dto.targetJobTitle || content.experiences[0]?.jobTitle || null,
-        template: 'CLASSIC',
+        template: resolveResumeTemplateId(dto.template || 'ats-minimal'),
         summary: content.summary,
         contentJson: JSON.stringify(content),
         rawText,
@@ -107,9 +137,22 @@ export class ResumesService {
     return this.analyze(userId, id);
   }
 
-  async update(userId: string, id: string, dto: { title?: string; targetJobTitle?: string; template?: string; summary?: string }) {
+  async update(
+    userId: string,
+    id: string,
+    dto: {
+      title?: string;
+      targetJobTitle?: string;
+      template?: string;
+      summary?: string;
+      content?: Record<string, unknown>;
+    },
+  ) {
     const resume = await this.requireResume(userId, id);
-    const content = parseContent(resume.contentJson);
+    let content = parseContent(resume.contentJson);
+    if (dto.content && typeof dto.content === 'object') {
+      content = normalizeStoredContent(dto.content);
+    }
     if (dto.summary !== undefined) content.summary = dto.summary;
     const analysis = analyzeResumeContent(content, resume.rawText || '');
     const updated = await this.prisma.resume.update({
@@ -117,7 +160,7 @@ export class ResumesService {
       data: {
         title: dto.title ?? resume.title,
         targetJobTitle: dto.targetJobTitle ?? resume.targetJobTitle,
-        template: dto.template ?? resume.template,
+        template: dto.template ? resolveResumeTemplateId(dto.template) : resume.template,
         summary: content.summary,
         contentJson: JSON.stringify(content),
         score: analysis.score,
@@ -294,6 +337,93 @@ export class ResumesService {
       fileName: `${resume.title.replace(/\s+/g, '-')}.pdf`,
       mimeType: 'application/pdf',
     };
+  }
+
+  async careerGuidance(
+    userId: string,
+    input: { resumeId?: string; resume?: Record<string, unknown> },
+  ) {
+    let payload = input.resume;
+    if (input.resumeId) {
+      const resume = await this.requireResume(userId, input.resumeId);
+      const content = parseContent(resume.contentJson);
+      payload = input.resume || toRoleAtsResume(content, resume.targetJobTitle);
+    }
+    if (!payload) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Resume data is required.' });
+    }
+    return recommendCareerRoles(payload);
+  }
+
+  async roleAnalyze(
+    userId: string,
+    input: {
+      resumeId?: string;
+      targetRole: string;
+      jobDescription?: string;
+      templateId?: string;
+      resume?: Record<string, unknown>;
+    },
+  ) {
+    const targetRole = input.targetRole?.trim();
+    if (!targetRole) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Enter a target job role.' });
+    }
+    let templateId = input.templateId || 'ats-minimal';
+    let payload = input.resume;
+    if (input.resumeId) {
+      const resume = await this.requireResume(userId, input.resumeId);
+      const content = parseContent(resume.contentJson);
+      templateId = resolveResumeTemplateId(input.templateId || resume.template);
+      payload = toRoleAtsResume(content, resume.targetJobTitle);
+    }
+    if (!payload) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Resume data is required.' });
+    }
+    return analyzeRoleResume({
+      targetRole,
+      jobDescription: input.jobDescription || '',
+      templateId,
+      resume: payload,
+    });
+  }
+
+  async roleRewrite(
+    userId: string,
+    input: {
+      resumeId?: string;
+      targetRole: string;
+      jobDescription?: string;
+      templateId?: string;
+      resume?: Record<string, unknown>;
+      analysis?: Record<string, unknown> | null;
+    },
+  ) {
+    const targetRole = input.targetRole?.trim();
+    if (!targetRole) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Enter a target job role.' });
+    }
+    let templateId = input.templateId || 'ats-minimal';
+    let payload = input.resume;
+    let ownedId: string | null = input.resumeId || null;
+    if (input.resumeId) {
+      const resume = await this.requireResume(userId, input.resumeId);
+      ownedId = resume.id;
+      const content = parseContent(resume.contentJson);
+      templateId = resolveResumeTemplateId(input.templateId || resume.template);
+      payload = input.resume || toRoleAtsResume(content, resume.targetJobTitle);
+    }
+    if (!payload) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Resume data is required.' });
+    }
+    const result = rewriteRoleResume({
+      targetRole,
+      jobDescription: input.jobDescription || '',
+      templateId,
+      resume: payload,
+      analysis: input.analysis || null,
+    });
+    return { ...result, resumeId: ownedId };
   }
 
   private async persistAnalysis(resumeId: string, content: ResumeContent, rawText: string) {
@@ -555,7 +685,7 @@ function sanitizeUploadedContent(
 
 function parseContent(raw: string): ResumeContent {
   try {
-    return JSON.parse(raw) as ResumeContent;
+    return normalizeStoredContent(JSON.parse(raw) as Record<string, unknown>);
   } catch {
     return {
       fullName: '',
@@ -568,4 +698,174 @@ function parseContent(raw: string): ResumeContent {
       languages: [],
     };
   }
+}
+
+function emptyFriendData() {
+  return {
+    fullName: '',
+    title: '',
+    email: '',
+    phone: '',
+    location: '',
+    linkedin: '',
+    website: '',
+    photo: '',
+    summary: '',
+    skills: [] as string[],
+    experience: [] as unknown[],
+    education: [] as unknown[],
+    projects: [] as unknown[],
+    certifications: [] as unknown[],
+    careerGaps: [] as unknown[],
+    targetRole: '',
+    jobDescription: '',
+  };
+}
+
+function blankManualContent(includePhoto: boolean): ResumeContent & { _manual?: boolean; data?: Record<string, unknown> } {
+  const data = emptyFriendData();
+  return {
+    _manual: true,
+    data,
+    includePhoto,
+    fullName: '',
+    city: null,
+    phone: null,
+    email: null,
+    summary: '',
+    skills: [],
+    education: [],
+    experiences: [],
+    languages: [],
+    certifications: [],
+    projects: [],
+  };
+}
+
+function friendDataToContent(data: Record<string, unknown>, includePhoto?: boolean): ResumeContent & {
+  _manual?: boolean;
+  data?: Record<string, unknown>;
+} {
+  const skills = Array.isArray(data.skills) ? data.skills.map((item) => String(item || '').trim()).filter(Boolean) : [];
+  const experience = Array.isArray(data.experience) ? data.experience : [];
+  const education = Array.isArray(data.education) ? data.education : [];
+  const projects = Array.isArray(data.projects) ? data.projects : [];
+  const certifications = Array.isArray(data.certifications) ? data.certifications : [];
+  return {
+    _manual: true,
+    data,
+    includePhoto: includePhoto ?? Boolean(data.photo),
+    fullName: String(data.fullName || ''),
+    city: data.location ? String(data.location) : null,
+    phone: data.phone ? String(data.phone) : null,
+    email: data.email ? String(data.email) : null,
+    summary: String(data.summary || ''),
+    skills,
+    education: education.map((item) => {
+      const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      const year = Number.parseInt(String(row.endDate || ''), 10);
+      return {
+        qualification: String(row.degree || row.qualification || ''),
+        institution: String(row.institution || row.school || '') || null,
+        yearCompleted: Number.isFinite(year) ? year : null,
+      };
+    }),
+    experiences: experience.map((item) => {
+      const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      const bullets = Array.isArray(row.bullets)
+        ? row.bullets.map((line) => String(line || '').trim()).filter(Boolean)
+        : [];
+      return {
+        company: String(row.company || ''),
+        jobTitle: String(row.role || row.jobTitle || ''),
+        description: bullets.length ? bullets.join('\n') : row.description ? String(row.description) : null,
+        isInternship: false,
+      };
+    }),
+    languages: [],
+    certifications: certifications
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+        return String(row.name || '').trim();
+      })
+      .filter(Boolean),
+    projects: projects.map((item) => {
+      const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      return {
+        name: String(row.name || row.title || ''),
+        description: row.description ? String(row.description) : null,
+      };
+    }),
+  };
+}
+
+function normalizeStoredContent(raw: Record<string, unknown>): ResumeContent & {
+  _manual?: boolean;
+  data?: Record<string, unknown>;
+} {
+  if (raw._manual && raw.data && typeof raw.data === 'object') {
+    return friendDataToContent(raw.data as Record<string, unknown>, raw.includePhoto as boolean | undefined);
+  }
+  if (Array.isArray(raw.experience) && !Array.isArray(raw.experiences)) {
+    return friendDataToContent(raw, raw.includePhoto as boolean | undefined);
+  }
+  return raw as unknown as ResumeContent;
+}
+
+function toRoleAtsResume(content: ResumeContent & { _manual?: boolean; data?: Record<string, unknown> }, title?: string | null) {
+  if (content._manual && content.data && typeof content.data === 'object') {
+    return {
+      ...content.data,
+      title: (content.data.title as string) || title || '',
+    };
+  }
+  return {
+    fullName: content.fullName || '',
+    title: title || '',
+    email: content.email || '',
+    phone: content.phone || '',
+    location: content.city || '',
+    linkedin: '',
+    website: '',
+    photo: '',
+    summary: content.summary || '',
+    skills: content.skills || [],
+    experience: (content.experiences || []).map((item) => ({
+      company: item.company,
+      role: item.jobTitle,
+      location: '',
+      startDate: '',
+      endDate: '',
+      current: false,
+      bullets: item.description
+        ? item.description
+            .split(/\n|•/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+        : [],
+    })),
+    education: (content.education || []).map((item, index) => ({
+      id: `education-${index}`,
+      institution: item.institution || '',
+      school: item.institution || '',
+      degree: item.qualification || '',
+      fieldOfStudy: '',
+      endDate: item.yearCompleted ? String(item.yearCompleted) : '',
+    })),
+    projects: (content.projects || []).map((item) => ({
+      name: item.name,
+      title: item.name,
+      description: item.description || '',
+      technologies: [],
+      bullets: [],
+      url: '',
+    })),
+    certifications: (content.certifications || []).map((name) => ({
+      name,
+      issuer: '',
+      date: '',
+      url: '',
+    })),
+  };
 }

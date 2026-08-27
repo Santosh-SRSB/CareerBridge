@@ -3,9 +3,12 @@ import type { PassportDraft } from '@/types/passport';
 
 export const RESUME_BUILD_KEY = 'cb.resumeBuild';
 
+export type ResumeBuildSource = 'passport' | 'manual';
+
 export type PendingResumeBuild = {
   template: string;
   photo: '0' | '1';
+  source?: ResumeBuildSource;
 };
 
 export function setPendingResumeBuild(payload: PendingResumeBuild) {
@@ -18,7 +21,12 @@ export function getPendingResumeBuild(): PendingResumeBuild | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PendingResumeBuild;
     if (!parsed?.template) return null;
-    return { template: parsed.template, photo: parsed.photo === '1' ? '1' : '0' };
+    const source = parsed.source === 'manual' ? 'manual' : parsed.source === 'passport' ? 'passport' : undefined;
+    return {
+      template: parsed.template,
+      photo: parsed.photo === '1' ? '1' : '0',
+      source,
+    };
   } catch {
     return null;
   }
@@ -29,7 +37,9 @@ export function clearPendingResumeBuild() {
 }
 
 export function resumeBuildHref(payload: PendingResumeBuild) {
-  return `/resume/build?template=${encodeURIComponent(payload.template)}&photo=${payload.photo}`;
+  const source = payload.source === 'manual' ? 'manual' : 'passport';
+  const base = source === 'manual' ? '/resume/manual' : '/resume/build';
+  return `${base}?template=${encodeURIComponent(payload.template)}&photo=${payload.photo}`;
 }
 
 export function profileToResumeContent(profile: CandidateProfile): ResumeContent {

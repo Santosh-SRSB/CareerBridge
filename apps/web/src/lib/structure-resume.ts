@@ -21,7 +21,7 @@ export async function structureResumeText(rawText: string): Promise<PassportDraf
       {
         role: "system",
         content:
-          "Extract resume facts only. Do not invent companies, titles, dates, skills, metrics or degrees. Return JSON only. Use empty strings or empty arrays when missing.",
+          "Extract resume facts only. Do not invent companies, titles, dates, skills, metrics, degrees or projects. Include every real project listed under Projects. Return JSON only. Use empty strings or empty arrays when missing.",
       },
       {
         role: "user",
@@ -47,6 +47,15 @@ export async function structureResumeText(rawText: string): Promise<PassportDraf
                 jobTitle: "",
                 isInternship: false,
                 description: "",
+              },
+            ],
+            projects: [
+              {
+                title: "",
+                role: "",
+                year: "",
+                description: "",
+                url: "",
               },
             ],
           },

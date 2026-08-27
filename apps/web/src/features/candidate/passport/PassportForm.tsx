@@ -111,6 +111,9 @@ export function PassportForm({ initial }: { initial: PassportDraft }) {
       await savePassport({
         firstName,
         lastName,
+        city: initial.city || undefined,
+        about: initial.about || undefined,
+        careerInterests: initial.careerInterests?.filter(Boolean).slice(0, 8),
         stillInCollege,
         educationStart,
         educationEnd: stillInCollege ? "" : educationEnd,
@@ -139,14 +142,25 @@ export function PassportForm({ initial }: { initial: PassportDraft }) {
                 endDate: row.endDate || undefined,
                 stillInCompany: row.stillInCompany,
                 isInternship: row.isInternship,
+                description: row.description || undefined,
               }))
             : [],
         gapReason: gapLabel ? gapReason : "",
+        gapMonths: gapLabel ? gapMonths : 0,
         source: initial.source,
+        projects: (initial.projects || [])
+          .filter((item) => item.title.trim().length >= 2)
+          .map((item) => ({
+            title: item.title.trim(),
+            role: item.role.trim() || undefined,
+            year: item.year ? Number(item.year) || undefined : undefined,
+            description: item.description.trim() || undefined,
+            url: item.url.trim() || undefined,
+          })),
       });
       sessionStorage.removeItem(DRAFT_KEY);
       setSaved(true);
-      window.setTimeout(() => router.push("/passport?overview=1"), 400);
+      window.setTimeout(() => router.push("/passport/preview"), 400);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {

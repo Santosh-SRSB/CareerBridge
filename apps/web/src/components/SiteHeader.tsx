@@ -1,27 +1,35 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/Logo';
+import { getStoredUser } from '@/lib/session';
 
 const LINKS = [
-  { href: "/#how-it-works", label: "How it works" },
-  { href: "/#passport", label: "Career Passport" },
-  { href: "/#jobs", label: "Jobs" },
-  { href: "/register?role=employer", label: "Employers" },
+  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/#passport', label: 'Career Passport' },
+  { href: '/#jobs', label: 'Jobs' },
+  { href: '/register?role=employer', label: 'Employers' },
 ];
 
 export function SiteHeader({ compact = false }: { compact?: boolean }) {
   const pathname = usePathname();
   const onLogin = pathname.startsWith('/login');
   const onRegister = pathname.startsWith('/register');
-
   const onAuth = onLogin || onRegister;
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    setSignedIn(Boolean(getStoredUser()?.id));
+  }, []);
 
   return (
     <header
       className={`sticky top-0 z-40 backdrop-blur-md transition ${
-        onAuth ? 'bg-primary/95 shadow-[0_8px_30px_rgba(10,46,44,0.28)]' : 'bg-primary/95 shadow-[0_8px_30px_rgba(10,46,44,0.25)]'
+        onAuth
+          ? 'bg-primary/95 shadow-[0_8px_30px_rgba(10,46,44,0.28)]'
+          : 'bg-primary/95 shadow-[0_8px_30px_rgba(10,46,44,0.25)]'
       }`}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3">
@@ -45,26 +53,33 @@ export function SiteHeader({ compact = false }: { compact?: boolean }) {
           </nav>
         ) : null}
         <div className="flex items-center gap-2">
-          <Link
-            href="/login"
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-              onLogin
-                ? 'bg-accent text-primary'
-                : 'border border-white/70 text-white hover:bg-white/10'
-            }`}
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/register?role=candidate"
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-              onRegister
-                ? 'bg-accent text-primary'
-                : 'bg-white text-primary hover:bg-accent'
-            }`}
-          >
-            Create Free Passport
-          </Link>
+          {signedIn ? (
+            <Link
+              href="/dashboard"
+              className="rounded-full border border-white/70 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              My home
+            </Link>
+          ) : (
+            <>
+              {!onLogin ? (
+                <Link
+                  href="/login"
+                  className="rounded-full border border-white/70 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  Sign In
+                </Link>
+              ) : null}
+              {!onRegister ? (
+                <Link
+                  href="/register?role=candidate"
+                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-primary transition hover:bg-accent"
+                >
+                  Create Free Passport
+                </Link>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
     </header>

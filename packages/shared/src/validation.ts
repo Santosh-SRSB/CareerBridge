@@ -1,4 +1,4 @@
-﻿import { normalizeHttpUrl } from './candidate';
+import { normalizeHttpUrl } from './candidate';
 
 export const PERSON_NAME_PATTERN = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*\.?$/;
 export const MAX_RECORD_YEAR = new Date().getFullYear() + 1;

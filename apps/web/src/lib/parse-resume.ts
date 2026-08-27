@@ -1,7 +1,30 @@
-import { EMPTY_DRAFT, type PassportDraft } from "@/types/passport";
+import { EMPTY_DRAFT, type PassportDraft, type PassportProject } from "@/types/passport";
 
 function asString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function asYear(value: unknown) {
+  const raw = asString(value);
+  const match = raw.match(/(20\d{2}|19\d{2})/);
+  return match?.[1] || "";
+}
+
+function mapProjects(input: unknown): PassportProject[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((row) => {
+      const item = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+      return {
+        title: asString(item.title) || asString(item.name) || asString(item.projectTitle),
+        role: asString(item.role),
+        year: asYear(item.year) || asYear(item.yearCompleted),
+        description: asString(item.description),
+        url: asString(item.url) || asString(item.link),
+      };
+    })
+    .filter((row) => row.title || row.description)
+    .slice(0, 12);
 }
 
 export function toPassportDraft(input: unknown, source: PassportDraft["source"] = "resume"): PassportDraft {
@@ -44,6 +67,8 @@ export function toPassportDraft(input: unknown, source: PassportDraft["source"] 
         .filter((row) => row.company || row.jobTitle || row.description)
     : [];
 
+  const projects = mapProjects(data.projects);
+
   return {
     firstName: asString(data.firstName),
     lastName: asString(data.lastName),
@@ -57,6 +82,7 @@ export function toPassportDraft(input: unknown, source: PassportDraft["source"] 
     totalExperienceYears: asString(data.totalExperienceYears),
     totalExperienceMonths: asString(data.totalExperienceMonths),
     experience: experience.length ? experience : EMPTY_DRAFT.experience,
+    projects,
     gapReason: asString(data.gapReason),
     skills,
     careerInterests,
@@ -68,7 +94,7 @@ function section(text: string, labels: string[]) {
   const lower = text.replace(/\r/g, "");
   for (const label of labels) {
     const re = new RegExp(
-      `${label}\\s*[:\\-]?\\s*([\\s\\S]{8,900}?)(?=\\n\\s*(education|skills|experience|work experience|career interest|interests|about|summary|projects|certification)s?\\b|$)`,
+      `${label}\\s*[:\\-]?\\s*([\\s\\S]{8,1600}?)(?=\\n\\s*(education|skills|experience|work experience|career interest|interests|about|summary|projects|certification|achievements)s?\\b|$)`,
       "i",
     );
     const match = lower.match(re);
@@ -131,6 +157,9 @@ export function parseResumeText(raw: string): PassportDraft {
     "internships",
   ]);
   const experience = parseExperienceBlock(experienceBlock);
+  const projects = parseProjectsBlock(
+    section(text, ["projects", "personal projects", "academic projects", "key projects"]),
+  );
 
   return {
     firstName,
@@ -145,6 +174,7 @@ export function parseResumeText(raw: string): PassportDraft {
     totalExperienceYears: "",
     totalExperienceMonths: "",
     experience: experience.length ? experience : EMPTY_DRAFT.experience,
+    projects,
     gapReason: "",
     skills,
     careerInterests,
@@ -170,6 +200,37 @@ function parseExperienceBlock(block: string) {
       description: lines.slice(1).join("\n") || header,
     };
   });
+}
+
+function parseProjectsBlock(block: string): PassportProject[] {
+  if (!block.trim()) return [];
+  const chunks = block.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+  const fromChunks = chunks.slice(0, 8).map((chunk) => {
+    const lines = chunk.split("\n").map((line) => line.trim()).filter(Boolean);
+    const header = lines[0]?.replace(/^[-•*]+\s*/, "") || "";
+    const year = asYear(chunk);
+    return {
+      title: header.replace(/\s*[\(\[]?\d{4}[\)\]]?\s*$/, "").trim() || header,
+      role: "",
+      year,
+      description: lines.slice(1).join(" ").trim(),
+      url: (chunk.match(/https?:\/\/\S+/i)?.[0] || "").replace(/[),.;]+$/, ""),
+    };
+  });
+  if (fromChunks.some((item) => item.title.length > 2)) {
+    return fromChunks.filter((item) => item.title.length > 1);
+  }
+  // Fallback: bullet / single-line project lists
+  return linesOf(block)
+    .slice(0, 8)
+    .map((line) => ({
+      title: line.replace(/\s*[\(\[]?\d{4}[\)\]]?\s*$/, "").trim(),
+      role: "",
+      year: asYear(line),
+      description: "",
+      url: "",
+    }))
+    .filter((item) => item.title.length > 2);
 }
 
 export function extractReadableText(buffer: Buffer) {

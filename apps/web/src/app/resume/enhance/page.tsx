@@ -1,10 +1,10 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { PassportDraft } from '@/types/passport';
 import { getCandidateMe, uploadResume } from '@/lib/api';
-import { draftToResumeContent } from '@/lib/resume-build';
+import { draftToResumeContent, getPendingResumeBuild } from '@/lib/resume-build';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { EagleMascot } from '@/features/candidate/passport/EagleMascot';
 
@@ -27,13 +27,18 @@ async function parseResumeFile(file: File) {
   return { draft: json.data, rawText: json.rawText || '' };
 }
 
-export default function ResumeEnhanceDropPage() {
+function ResumeEnhanceDropInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+
+  const pending = getPendingResumeBuild();
+  const template = searchParams.get('template') || pending?.template || 'ats-minimal';
+  const withPhoto = (searchParams.get('photo') || pending?.photo || '0') === '1';
 
   async function onFile(file: File) {
     setError('');
@@ -45,12 +50,15 @@ export default function ResumeEnhanceDropPage() {
       await new Promise((resolve) => setTimeout(resolve, 250));
       setStatus('Extracting content...');
       const content = draftToResumeContent(draft, { phone: profile.phone, city: profile.city });
+      content.includePhoto = withPhoto;
       setStatus('Analyzing resume...');
       const resume = await uploadResume({
         fileName: file.name,
         targetJobTitle: draft.careerInterests[0] || profile.careerInterests[0] || undefined,
         content,
         rawText,
+        template,
+        includePhoto: withPhoto,
       });
       setStatus('Checking ATS compatibility...');
       router.push(`/resume/enhance/${resume.id}`);
@@ -67,7 +75,8 @@ export default function ResumeEnhanceDropPage() {
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal">Resume enhancement</p>
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">Drop your resume</h1>
       <p className="mt-2 max-w-xl text-muted">
-        We will read your file, score ATS readiness, and show exactly what to fix. This first report is free.
+        Template: <strong>{template}</strong>
+        {withPhoto ? ' · with photo' : ' · without photo'}. We will score ATS readiness and show what to fix.
       </p>
 
       <div className="resume-point mt-10">
@@ -80,45 +89,40 @@ export default function ResumeEnhanceDropPage() {
           disabled={busy}
           onChange={(event) => {
             const file = event.target.files?.[0];
-            event.target.value = '';
             if (file) void onFile(file);
           }}
         />
         <button
           type="button"
-          className={`resume-drop-tip${drag ? ' is-drag' : ''}${busy ? ' is-picking' : ''}`}
+          className={`resume-drop${drag ? ' is-drag' : ''}${busy ? ' is-busy' : ''}`}
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          onDragOver={(event) => {
+          onDragEnter={(event) => {
             event.preventDefault();
             setDrag(true);
           }}
+          onDragOver={(event) => event.preventDefault()}
           onDragLeave={() => setDrag(false)}
           onDrop={(event) => {
             event.preventDefault();
             setDrag(false);
-            const file = event.dataTransfer.files[0];
+            const file = event.dataTransfer.files?.[0];
             if (file) void onFile(file);
           }}
         >
-          {busy ? (
-            <>
-              <span className="resume-drop-tip-title">{status || 'Loading...'}</span>
-              <span className="drop-loading-dots drop-loading-dots-on-dark" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="resume-drop-tip-title">Drop resume</span>
-              <span className="resume-drop-tip-sub">PDF, Word or text</span>
-            </>
-          )}
+          <strong>{busy ? status || 'Working…' : 'Drop resume here'}</strong>
+          <span>{busy ? 'Please wait' : 'PDF, DOC, DOCX, or TXT'}</span>
         </button>
-        {error ? <p className="resume-point-error">{error}</p> : null}
       </div>
+      {error ? <p className="mt-4 text-sm font-semibold text-error">{error}</p> : null}
     </CandidateShell>
+  );
+}
+
+export default function ResumeEnhanceDropPage() {
+  return (
+    <Suspense fallback={<CandidateShell>Loading…</CandidateShell>}>
+      <ResumeEnhanceDropInner />
+    </Suspense>
   );
 }

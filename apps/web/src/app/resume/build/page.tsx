@@ -5,7 +5,7 @@ import { flushSync } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { CandidateProfile, ProfileCompletion } from '@careerbridge/shared';
 import { createResume, getCandidateMe, getProfileCompletion } from '@/lib/api';
-import { LiveResumeSheet } from '@/components/LiveResumeSheet';
+import { AtsResumeSheet } from '@/components/AtsResumeSheet';
 import { downloadResumePdfFile } from '@/lib/resume-pdf';
 import {
   clearPendingResumeBuild,
@@ -43,7 +43,7 @@ function ResumeBuildInner() {
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    setPendingResumeBuild({ template, photo });
+    setPendingResumeBuild({ template, photo, source: 'passport' });
     Promise.all([getCandidateMe(), getProfileCompletion()])
       .then(([nextProfile, nextCompletion]) => {
         setProfile(nextProfile);
@@ -118,11 +118,11 @@ function ResumeBuildInner() {
       <p className="cb-build-status" aria-live="polite">
         {status}
       </p>
-      <LiveResumeSheet
+      <AtsResumeSheet
         content={content}
+        template={template}
         photoUrl={profile.photoUrl}
         withPhoto={withPhoto}
-        stage={stage}
         targetJobTitle={profile.careerInterests[0]}
       />
 
@@ -142,7 +142,7 @@ function ResumeBuildInner() {
             type="button"
             className="cb-build-passport-btn"
             onClick={() => {
-              setPendingResumeBuild({ template, photo });
+              setPendingResumeBuild({ template, photo, source: 'passport' });
               router.push(firstMissingHref(completion));
             }}
           >

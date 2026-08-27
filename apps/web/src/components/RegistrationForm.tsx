@@ -65,6 +65,7 @@ export function RegistrationForm() {
       const result = await requestOtp({
         channel,
         purpose: 'REGISTER',
+        accountType: 'CANDIDATE',
         phone,
         email: email.trim(),
         fullName: fullName.trim(),
@@ -86,12 +87,13 @@ export function RegistrationForm() {
         channel,
         purpose: 'REGISTER',
         expiresAt: Date.now() + result.expiresIn * 1000,
-        registration: {
-          email: email.trim(),
-          fullName: fullName.trim(),
-          location: location.trim(),
-          preferredLanguage,
-        },
+          registration: {
+            email: email.trim(),
+            fullName: fullName.trim(),
+            location: location.trim(),
+            preferredLanguage,
+            accountType: 'CANDIDATE',
+          },
       });
       router.push('/verify-otp');
     } catch (err) {

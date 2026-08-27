@@ -9,6 +9,14 @@ export type PassportExperience = {
   description: string;
 };
 
+export type PassportProject = {
+  title: string;
+  role: string;
+  year: string;
+  description: string;
+  url: string;
+};
+
 export type PassportDraft = {
   firstName: string;
   lastName: string;
@@ -27,6 +35,7 @@ export type PassportDraft = {
   totalExperienceYears: string;
   totalExperienceMonths: string;
   experience: PassportExperience[];
+  projects: PassportProject[];
   gapReason: string;
   skills: string[];
   careerInterests: string[];
@@ -51,6 +60,14 @@ export const EMPTY_EXPERIENCE: PassportExperience = {
   description: "",
 };
 
+export const EMPTY_PROJECT: PassportProject = {
+  title: "",
+  role: "",
+  year: "",
+  description: "",
+  url: "",
+};
+
 export const EMPTY_DRAFT: PassportDraft = {
   firstName: "",
   lastName: "",
@@ -64,6 +81,7 @@ export const EMPTY_DRAFT: PassportDraft = {
   totalExperienceYears: "",
   totalExperienceMonths: "",
   experience: [{ ...EMPTY_EXPERIENCE }],
+  projects: [],
   gapReason: "",
   skills: [],
   careerInterests: [],

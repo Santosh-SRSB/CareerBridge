@@ -1,15 +1,14 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { CandidateLinks, CandidateProfile, PassportSection, ProfileCompletion } from '@careerbridge/shared';
 import { formatLanguageSkill, parseLanguageSkills } from '@careerbridge/shared';
-import { getCandidateMe, getProfileCompletion, createResume } from '@/lib/api';
-import { getPendingResumeBuild, profileToResumeContent, resumeBuildHref } from '@/lib/resume-build';
-import { downloadResumePdfFile } from '@/lib/resume-pdf';
+import { getCandidateMe, getProfileCompletion } from '@/lib/api';
+import { clearPendingResumeBuild } from '@/lib/resume-build';
 import { getStoredUser } from '@/lib/session';
-import { PASSPORT_FLOW_START } from '@/lib/passport-flow';
+import { PASSPORT_FLOW_START, PASSPORT_OVERVIEW } from '@/lib/passport-flow';
 import { Button } from '@/components/ui/Button';
 import { BackButton } from '@/components/ui/BackButton';
 
@@ -104,28 +103,12 @@ function sectionDetails(profile: CandidateProfile, section: PassportSection): st
   return [];
 }
 
-async function saveAndDownloadResume(profile: CandidateProfile, targetJobTitle?: string) {
-  await createResume({
-    targetJobTitle: targetJobTitle || undefined,
-    template: 'CLASSIC',
-    includePhoto: Boolean(profile.photoUrl),
-  });
-  await downloadResumePdfFile({
-    content: profileToResumeContent(profile),
-    template: 'CLASSIC',
-    photoUrl: profile.photoUrl,
-    fileName: `${([profile.firstName, profile.lastName].filter(Boolean).join('-') || 'resume')}.pdf`,
-  });
-}
-
 export function PassportOverviewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const showOverview = searchParams.get('overview') === '1';
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [completion, setCompletion] = useState<ProfileCompletion | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     if (!getStoredUser()) {
@@ -136,13 +119,10 @@ export function PassportOverviewPage() {
       router.replace(PASSPORT_FLOW_START);
       return;
     }
+    // Never bounce back into ATS build / download from passport overview.
+    clearPendingResumeBuild();
     Promise.all([getCandidateMe(), getProfileCompletion()])
       .then(([nextProfile, nextCompletion]) => {
-        const pending = getPendingResumeBuild();
-        if (pending && nextCompletion.percentage >= 100) {
-          router.replace(resumeBuildHref(pending));
-          return;
-        }
         setProfile(nextProfile);
         setCompletion(nextCompletion);
       })
@@ -212,16 +192,6 @@ export function PassportOverviewPage() {
                   Add LinkedIn / GitHub / portfolio
                 </Link>
               )}
-              {activeLinks.length ? (
-                <Link href="/passport/links?flow=1" className="cb-profile-chip is-empty">
-                  Edit links
-                </Link>
-              ) : null}
-              {!profile.photoUrl ? (
-                <Link href="/passport/photo?flow=1" className="cb-profile-chip is-empty">
-                  Add photo
-                </Link>
-              ) : null}
             </div>
           </div>
         </header>
@@ -235,39 +205,13 @@ export function PassportOverviewPage() {
                 <Link href={`${item.href}?flow=1`}>{item.done ? 'Edit' : 'Add'}</Link>
               </div>
               {details.length ? (
-                item.key === 'skills' || item.key === 'preferences' || item.key === 'languages' ? (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {details.map((value) => (
-                      <span key={value} className="cb-profile-tag">
-                        {value}
-                      </span>
-                    ))}
-                  </div>
-                ) : item.key === 'projects' ? (
-                  <ul className="mt-3 space-y-3">
-                    {(profile.projects || []).map((project) => (
-                      <li key={project.id}>
-                        <p className="text-sm font-semibold text-primary">{prettyText(project.title)}</p>
-                        <p className="text-sm text-muted">
-                          {[project.role, project.year].filter(Boolean).join(' · ')}
-                        </p>
-                        {project.url ? (
-                          <a href={project.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-sm font-semibold text-teal">
-                            {project.url.replace(/^https?:\/\//, '')}
-                          </a>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <ul className="mt-3 space-y-1">
-                    {details.map((value) => (
-                      <li key={value} className="text-sm leading-6 text-primary">
-                        {value}
-                      </li>
-                    ))}
-                  </ul>
-                )
+                <ul className="mt-3 space-y-1">
+                  {details.map((value) => (
+                    <li key={value} className="text-sm leading-6 text-primary">
+                      {value}
+                    </li>
+                  ))}
+                </ul>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-muted">{item.why}</p>
               )}
@@ -277,37 +221,13 @@ export function PassportOverviewPage() {
 
         <footer className="cb-profile-footer">
           <div>
-            <p className="text-sm font-semibold text-primary">Save and build resume</p>
+            <p className="text-sm font-semibold text-primary">Finish and save resume</p>
             <p className="mt-1 text-sm text-muted">
-              We will create your resume from this Career Passport, download the PDF, then take you to your dashboard.
+              We will save your current details and take you to the dashboard. ATS download lives under Build / Enhance Resume.
             </p>
-            {saveError ? <p className="mt-2 text-sm text-error">{saveError}</p> : null}
           </div>
-          <Button
-            type="button"
-            size="md"
-            block={false}
-            loading={saving}
-            loadingLabel="Building..."
-            onClick={() => {
-              const pending = getPendingResumeBuild();
-              if (pending) {
-                router.replace(resumeBuildHref(pending));
-                return;
-              }
-              setSaveError('');
-              setSaving(true);
-              saveAndDownloadResume(profile, profile.careerInterests[0])
-                .then(() => {
-                  window.setTimeout(() => router.replace('/dashboard'), 400);
-                })
-                .catch(() => {
-                  setSaveError('We could not build and download your resume right now. Please try again.');
-                  setSaving(false);
-                });
-            }}
-          >
-            Save and build resume
+          <Button type="button" size="md" block={false} onClick={() => router.replace(PASSPORT_OVERVIEW)}>
+            Save resume &amp; continue
           </Button>
         </footer>
       </article>

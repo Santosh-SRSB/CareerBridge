@@ -6,14 +6,15 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run db:ensure && concurrently -n api,web -c blue,green \"npm run start:dev -w api\" \"npm run dev -w web\"",
+    "dev": "npm run db:ensure && concurrently -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm run start:dev -w api",
+    "dev:web": "npm run dev:webpack -w web",
     "build": "npm run build -w @careerbridge/shared && npm run build -w api && npm run build -w web",
     "db:up": "docker compose up -d",
     "db:ensure": "powershell -ExecutionPolicy Bypass -File scripts/ensure-db.ps1",
     "db:push": "npm run prisma:push -w api",
     "db:migrate": "npm run prisma:migrate -w api",
     "db:generate": "npm run prisma:generate -w api",
-    "dev:api": "npm run start:dev -w api",
     "postinstall": "npm run build -w @careerbridge/shared"
   },
   "devDependencies": {

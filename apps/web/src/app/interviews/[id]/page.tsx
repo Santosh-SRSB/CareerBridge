@@ -20,6 +20,10 @@ export default function InterviewSessionPage() {
   useEffect(() => {
     getInterview(params.id).then((item) => {
       setSession(item);
+      if (item.mode === 'LIVE_AI') {
+        router.replace(item.status === 'COMPLETED' ? `/interviews/${item.id}/report` : `/interviews/live/${item.id}`);
+        return;
+      }
       if (item.status === 'COMPLETED') router.replace(`/interviews/${item.id}/feedback`);
     });
   }, [params.id, router]);

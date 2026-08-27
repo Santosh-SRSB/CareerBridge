@@ -130,10 +130,10 @@ export function PassportPreview({
 
         <div className="relative mt-3 flex flex-col items-center">
           <Link
-            href={ready < 100 ? '/passport/personal?flow=1' : '/passport?overview=1'}
+            href={ready < 100 ? '/passport/personal?flow=1' : '/dashboard'}
             className="inline-flex h-8 items-center rounded-full bg-gradient-to-r from-[#ca8a04] to-[#eab308] px-3.5 text-xs font-extrabold text-navy shadow-[0_8px_18px_rgba(10,46,44,0.22)] transition hover:brightness-110"
           >
-            {ready < 100 ? 'Complete Passport' : 'View Passport'}
+            {ready < 100 ? 'Improve Passport' : 'Open dashboard'}
           </Link>
           <p className="cb-passport-mrz">
             {id} • {year}

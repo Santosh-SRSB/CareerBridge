@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { ApplicationRecord, CandidateProfile, JobCard, ProfileCompletion } from '@careerbridge/shared';
+import type { ApplicationRecord, CandidateProfile, InterviewSession, JobCard, ProfileCompletion } from '@careerbridge/shared';
 import {
   getCandidateMe,
   getProfileCompletion,
@@ -23,7 +23,15 @@ import { ScoreRing } from '@/components/ScoreRing';
 import { PassportStartChoices } from '@/features/candidate/passport/PassportStartChoices';
 import { PassportCard } from '@/features/candidate/passport/PassportCard';
 import { EagleMascot } from '@/features/candidate/passport/EagleMascot';
+import { SkillAssessmentPopup } from '@/components/SkillAssessmentPopup';
+import { SkillEntryCard } from '@/components/SkillEntryCard';
+import { CoursesStackCard } from '@/components/CoursesStackCard';
+import { ActiveInterviewTimerBanner } from '@/components/ActiveInterviewTimerBanner';
+import { GapCourseNudge } from '@/components/GapCourseNudge';
 import { ResumeTemplatePicker } from '@/components/ResumeTemplatePicker';
+import { isPassportFlowDone } from '@/lib/passport-flow';
+
+const SKILL_POPUP_KEY = 'cb-skill-assess-popup';
 
 function DashboardSkeleton() {
   return (
@@ -35,7 +43,8 @@ function DashboardSkeleton() {
   );
 }
 
-function hasFirstOrderPassport(profile: CandidateProfile | null) {
+function hasFirstOrderPassport(profile: CandidateProfile | null, userId?: string | null) {
+  if (isPassportFlowDone(userId)) return true;
   return Boolean(profile?.firstName && (profile.education.length || profile.highestEducation));
 }
 
@@ -43,6 +52,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [name, setName] = useState('there');
   const [city, setCity] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [completion, setCompletion] = useState<ProfileCompletion | null>(null);
   const [jobs, setJobs] = useState<JobCard[]>([]);
@@ -50,8 +60,11 @@ export default function DashboardPage() {
   const [resumeScore, setResumeScore] = useState<number | null>(null);
   const [hasResume, setHasResume] = useState(false);
   const [interviewScore, setInterviewScore] = useState<number | null>(null);
+  const [interviews, setInterviews] = useState<InterviewSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateMode, setTemplateMode] = useState<'build' | 'enhance'>('build');
+  const [skillPopup, setSkillPopup] = useState(false);
 
   useEffect(() => {
     const stored = getStoredUser();
@@ -59,6 +72,7 @@ export default function DashboardPage() {
       router.replace('/login');
       return;
     }
+    setUserId(stored.id);
     if (stored.role === 'EMPLOYER_ADMIN' || stored.role === 'EMPLOYER_RECRUITER') {
       router.replace('/employer');
       return;
@@ -84,17 +98,37 @@ export default function DashboardPage() {
         setJobs(recommended.items.slice(0, 6));
         setHasResume(resumes.length > 0);
         setResumeScore(resumes[0]?.score ?? null);
+        setInterviews(interviews);
         const done = interviews.find((item) => item.status === 'COMPLETED' && item.score != null);
         setInterviewScore(done?.score ?? null);
         setApplications(nextApplications);
+        if (hasFirstOrderPassport(nextProfile, stored.id)) {
+          const key = `${SKILL_POPUP_KEY}:${stored.id}`;
+          if (!window.localStorage.getItem(key)) setSkillPopup(true);
+        }
       })
       .catch(() => router.replace('/login'))
       .finally(() => setLoading(false));
   }, [router]);
 
-  if (loading) return <DashboardSkeleton />;
+  function dismissSkillPopup() {
+    const stored = getStoredUser();
+    if (stored?.id) window.localStorage.setItem(`${SKILL_POPUP_KEY}:${stored.id}`, '1');
+    setSkillPopup(false);
+  }
 
-  if (!hasFirstOrderPassport(profile)) {
+  if (loading) {
+    return (
+      <div className="cb-portal-page">
+        <div className="cb-portal-wrap space-y-3">
+          <ActiveInterviewTimerBanner />
+          <p className="text-sm text-muted">Loading your Career Passport...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasFirstOrderPassport(profile, userId)) {
     return (
       <div className="passport-page">
         <header className="passport-page-bar">
@@ -153,7 +187,7 @@ export default function DashboardPage() {
   return (
     <div className="cb-portal-page">
       <CandidateTopBar name={name} onSignOut={signOut} />
-      <div className="cb-portal-wrap grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_280px]">
+      <div className="cb-portal-wrap cb-dash-layout grid items-start gap-3 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(300px,340px)]">
         <div className="hidden lg:block">
           <ProfileRail
             name={name}
@@ -209,6 +243,15 @@ export default function DashboardPage() {
               >
                 <span className="relative z-10">Practice interview</span>
               </Link>
+              <Link
+                href="/assessments"
+                className="cb-skill-hero-btn inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-xs font-extrabold"
+              >
+                <span>Skill Assessment</span>
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
+                  <path d="M7 7v10h10M7 7l10 10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </Link>
             </div>
             <div className="mt-5 grid grid-cols-3 gap-2">
               <div className="cb-hero-stat">
@@ -235,15 +278,17 @@ export default function DashboardPage() {
                 </span>
                 <EagleMascot pose="point" className="cb-ats-eagle" />
                 <p>Get noticed faster</p>
-                <button type="button" className="ats-resume-btn cb-ats-pulse rounded-full" onClick={() => setTemplateOpen(true)}>
+                <button type="button" className="ats-resume-btn cb-ats-pulse rounded-full" onClick={() => { setTemplateMode('build'); setTemplateOpen(true); }}>
                   <span className="relative z-10 font-extrabold text-white">Build ATS friendly Resume</span>
                 </button>
-                <Link href="/resume/enhance" className="ats-enhance-btn cb-ats-enhance rounded-full">
+                <button type="button" className="ats-enhance-btn cb-ats-enhance rounded-full" onClick={() => { setTemplateMode('enhance'); setTemplateOpen(true); }}>
                   <span className="relative z-10 font-extrabold text-white">Enhance Resume</span>
-                </Link>
+                </button>
               </div>
             </div>
           </section>
+
+          <GapCourseNudge gapMonths={profile?.gapMonths} />
 
           <section className="cb-dash-card p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
@@ -270,7 +315,7 @@ export default function DashboardPage() {
                 View all
               </Link>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <Link href="/resume" className="cb-lift-card p-4">
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-teal">Resume</p>
                 <div className="mt-3 flex items-center gap-3">
@@ -293,6 +338,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </Link>
+              <SkillEntryCard className="md:col-span-2 xl:col-span-1" />
             </div>
           </section>
         </div>
@@ -327,6 +373,8 @@ export default function DashboardPage() {
             </ul>
           </section>
 
+          <CoursesStackCard onOpenPool={() => router.push('/courses')} />
+
           <section className="cb-dash-card p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <h2 className="min-w-0 text-base font-bold text-primary sm:text-lg">Applications</h2>
@@ -360,7 +408,12 @@ export default function DashboardPage() {
           </section>
         </div>
       </div>
-      <ResumeTemplatePicker open={templateOpen} onClose={() => setTemplateOpen(false)} />
+      <ResumeTemplatePicker
+        open={templateOpen}
+        mode={templateMode}
+        onClose={() => setTemplateOpen(false)}
+      />
+      {skillPopup ? <SkillAssessmentPopup onClose={dismissSkillPopup} /> : null}
     </div>
   );
 }

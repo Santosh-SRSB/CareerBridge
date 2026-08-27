@@ -70,6 +70,7 @@ export class CandidatesService {
         ...(dto.firstName !== undefined ? { firstName: dto.firstName.trim() } : {}),
         ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() || null } : {}),
         ...(dto.city !== undefined ? { city: dto.city.trim() } : {}),
+        ...(dto.about !== undefined ? { about: dto.about.trim() || null } : {}),
         ...(dto.preferredLanguage !== undefined ? { preferredLanguage: dto.preferredLanguage } : {}),
         ...(dto.dateOfBirth !== undefined
           ? { dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null }
@@ -94,10 +95,39 @@ export class CandidatesService {
     const jobs =
       dto.experienceLevel === 'fresher'
         ? []
-        : (dto.experience ?? []).filter((row) => row.company?.trim() || row.jobTitle?.trim());
+        : (dto.experience ?? []).filter(
+            (row) => row.company?.trim() || row.jobTitle?.trim() || row.description?.trim(),
+          );
     const years = Number.parseInt(dto.totalExperienceYears || '0', 10) || 0;
     const months = Number.parseInt(dto.totalExperienceMonths || '0', 10) || 0;
     const firstEdu = education[0];
+    const careerInterests = [...new Set((dto.careerInterests ?? []).map((item) => item.trim()).filter(Boolean))].slice(
+      0,
+      8,
+    );
+    const existingProjects = parseRecords(candidate.projects);
+    const incomingProjects = (dto.projects ?? [])
+      .map((row) => ({
+        title: row.title?.trim() || '',
+        role: row.role?.trim() || null,
+        year: typeof row.year === 'number' && Number.isFinite(row.year) ? row.year : null,
+        description: row.description?.trim() || null,
+        url: normalizeHttpUrl(row.url),
+      }))
+      .filter((row) => row.title.length >= 2);
+    const projectSeed =
+      incomingProjects.length && existingProjects.length === 0
+        ? JSON.stringify(
+            incomingProjects.map((row) => ({
+              id: randomUUID(),
+              title: row.title,
+              role: row.role,
+              year: row.year,
+              description: row.description,
+              url: row.url,
+            })),
+          )
+        : undefined;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.candidate.update({
@@ -105,6 +135,11 @@ export class CandidatesService {
         data: {
           firstName: dto.firstName.trim(),
           lastName: dto.lastName?.trim() || null,
+          ...(dto.city !== undefined ? { city: dto.city.trim() || null } : {}),
+          ...(dto.about !== undefined ? { about: dto.about.trim() || null } : {}),
+          ...(careerInterests.length
+            ? { careerInterests: JSON.stringify(careerInterests) }
+            : {}),
           highestEducation: firstEdu?.qualification.trim() || candidate.highestEducation,
           stillInCollege: Boolean(dto.stillInCollege),
           educationStart: dto.educationStart?.trim() || null,
@@ -113,6 +148,10 @@ export class CandidatesService {
           totalExperienceYears: years,
           totalExperienceMonths: months,
           gapReason: dto.gapReason?.trim() || null,
+          gapMonths:
+            typeof dto.gapMonths === 'number' && Number.isFinite(dto.gapMonths)
+              ? Math.max(0, Math.floor(dto.gapMonths))
+              : null,
           source: dto.source === 'resume' ? 'resume' : 'manual',
           hasExperience:
             dto.experienceLevel === 'experienced'
@@ -120,6 +159,7 @@ export class CandidatesService {
                 ? 'INTERNSHIP'
                 : 'YES'
               : 'NONE',
+          ...(projectSeed ? { projects: projectSeed } : {}),
         },
       });
       await tx.candidateEducation.deleteMany({ where: { candidateId: candidate.id } });
@@ -151,6 +191,7 @@ export class CandidatesService {
             jobTitle: row.jobTitle?.trim() || (row.isInternship ? 'Intern' : 'Role'),
             startDate: parseOptionalDate(row.startDate),
             endDate: row.stillInCompany ? null : parseOptionalDate(row.endDate),
+            description: row.description?.trim() || null,
             isInternship: Boolean(row.isInternship),
             stillInCompany: Boolean(row.stillInCompany),
           })),
@@ -363,10 +404,7 @@ export class CandidatesService {
     const profileCompletion = computeCompletion(candidate);
     const onboardingCompleted = Boolean(
       candidate.firstName &&
-        candidate.city &&
-        candidate.highestEducation &&
-        parseInterests(candidate.careerInterests).length > 0 &&
-        candidate.hasExperience,
+        (candidate.highestEducation || candidate.education.length > 0),
     );
     const updated = await this.prisma.candidate.update({
       where: { userId },
@@ -396,7 +434,9 @@ export class CandidatesService {
       totalExperienceYears: candidate.totalExperienceYears,
       totalExperienceMonths: candidate.totalExperienceMonths,
       gapReason: candidate.gapReason,
+      gapMonths: candidate.gapMonths ?? null,
       source: candidate.source,
+      about: candidate.about || null,
       careerInterests: parseInterests(candidate.careerInterests),
       hasExperience: candidate.hasExperience,
       profileCompletion: candidate.profileCompletion,

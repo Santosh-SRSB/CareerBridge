@@ -34,6 +34,7 @@ export default function RootLayout({
       className={`${inter.variable} ${poppins.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-fog font-sans text-ink">
+        <AuthCookieSync />
         <AppLoader />
         <AuthCookieSync />
         {children}

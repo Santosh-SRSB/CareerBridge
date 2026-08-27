@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { type ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -6,7 +6,7 @@ import { Logo } from '@/components/AuthShell';
 import { BackButton } from '@/components/ui/BackButton';
 import type { PassportSectionKey } from '@careerbridge/shared';
 import { getProfileCompletion } from '@/lib/api';
-import { PASSPORT_WIZARD_KEYS, passportStepHref, wizardStepIndex } from '@/lib/passport-flow';
+import { PASSPORT_WIZARD_KEYS, nextPassportPath, passportStepHref, wizardStepIndex } from '@/lib/passport-flow';
 
 const STEP_LABELS: Record<(typeof PASSPORT_WIZARD_KEYS)[number], string> = {
   personal: 'Personal',
@@ -118,6 +118,11 @@ export function PassportFrame({
         <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">{title}</h1>
         {subtitle ? <p className="mt-2 max-w-lg text-sm leading-6 text-muted">{subtitle}</p> : null}
         <div className="cb-wizard-stage">{children}</div>
+        <p className="mt-4 text-center text-sm">
+          <Link href={nextPassportPath(step)} className="font-semibold text-muted hover:text-teal">
+            Skip this section →
+          </Link>
+        </p>
       </div>
     </main>
   );

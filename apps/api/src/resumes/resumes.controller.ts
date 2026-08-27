@@ -15,12 +15,27 @@ class CreateResumeDto {
 
   @IsOptional()
   @IsString()
+  @MinLength(2)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
   @IsIn([...RESUME_TEMPLATES])
   template?: string;
 
   @IsOptional()
   @IsBoolean()
   includePhoto?: boolean;
+
+  /** Blank ATS editor resume (no Career Passport autofill). */
+  @IsOptional()
+  @IsBoolean()
+  blank?: boolean;
+
+  /** Friend-editor / manual JSON payload (stored under content._manual.data). */
+  @IsOptional()
+  @IsObject()
+  content?: Record<string, unknown>;
 }
 
 class UploadResumeDto {
@@ -35,6 +50,15 @@ class UploadResumeDto {
   @IsOptional()
   @IsString()
   rawText?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...RESUME_TEMPLATES])
+  template?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  includePhoto?: boolean;
 
   @IsObject()
   content!: Record<string, unknown>;
@@ -58,11 +82,51 @@ class UpdateResumeDto {
   @IsOptional()
   @IsString()
   summary?: string;
+
+  @IsOptional()
+  @IsObject()
+  content?: Record<string, unknown>;
 }
 
 class StartOptimizationDto {
   @IsString()
   planId!: string;
+}
+
+class CareerGuidanceDto {
+  @IsOptional()
+  @IsString()
+  resumeId?: string;
+
+  @IsOptional()
+  @IsObject()
+  resume?: Record<string, unknown>;
+}
+
+class RoleAtsDto {
+  @IsOptional()
+  @IsString()
+  resumeId?: string;
+
+  @IsString()
+  @MinLength(2)
+  targetRole!: string;
+
+  @IsOptional()
+  @IsString()
+  jobDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  templateId?: string;
+
+  @IsOptional()
+  @IsObject()
+  resume?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  analysis?: Record<string, unknown>;
 }
 
 @ApiTags('resumes')
@@ -80,7 +144,14 @@ export class ResumesController {
 
   @Post()
   create(@CurrentUser() user: { id: string }, @Body() dto: CreateResumeDto) {
-    return this.resumes.create(user.id, dto);
+    return this.resumes.create(user.id, {
+      targetJobTitle: dto.targetJobTitle,
+      title: dto.title,
+      template: dto.template,
+      includePhoto: dto.includePhoto,
+      blank: dto.blank,
+      content: dto.content,
+    });
   }
 
   @Post('upload')
@@ -88,9 +159,34 @@ export class ResumesController {
     return this.resumes.upload(user.id, dto);
   }
 
+  @Post('ats/analyze')
+  roleAnalyze(@CurrentUser() user: { id: string }, @Body() dto: RoleAtsDto) {
+    return this.resumes.roleAnalyze(user.id, dto);
+  }
+
+  @Post('ats/rewrite')
+  roleRewrite(@CurrentUser() user: { id: string }, @Body() dto: RoleAtsDto) {
+    return this.resumes.roleRewrite(user.id, dto);
+  }
+
+  @Post('career-guidance')
+  careerGuidance(@CurrentUser() user: { id: string }, @Body() dto: CareerGuidanceDto) {
+    return this.resumes.careerGuidance(user.id, dto);
+  }
+
+  @Post(':id/career-guidance')
+  careerGuidanceOwned(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: CareerGuidanceDto) {
+    return this.resumes.careerGuidance(user.id, { ...dto, resumeId: id });
+  }
+
   @Post(':id/enhance')
   enhance(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.resumes.enhance(user.id, id);
+  }
+
+  @Post(':id/ats-rewrite')
+  roleRewriteOwned(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: RoleAtsDto) {
+    return this.resumes.roleRewrite(user.id, { ...dto, resumeId: id });
   }
 
   @Get(':id')
