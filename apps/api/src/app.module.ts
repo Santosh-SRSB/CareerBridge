@@ -17,6 +17,8 @@ import { AdminModule } from './admin/admin.module';
 import { SkillsModule } from './skills/skills.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { GstModule } from './gst/gst.module';
+import { CoursesModule } from './courses/courses.module';
+import { AiModule } from './ai/ai.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -43,6 +45,8 @@ import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
     SkillsModule,
     IntelligenceModule,
     GstModule,
+    CoursesModule,
+    AiModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -11606,6 +11606,29 @@ button.cb-ticket-go {
   border: 1px solid rgba(10, 46, 44, 0.08);
   box-shadow: 0 10px 24px rgba(10, 46, 44, 0.05);
 }
+.cb-course-grid-card__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #e2e8f0;
+}
+.cb-course-grid-card__media > img:first-child {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cb-course-grid-card__teacher {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 10px rgba(10, 46, 44, 0.3);
+}
 .cb-course-grid-card > img {
   width: 100%;
   aspect-ratio: 1 / 1;
@@ -11626,6 +11649,9 @@ button.cb-ticket-go {
 }
 .cb-course-grid-meta strong { color: #0a2e2c; font-size: 0.85rem; }
 .cb-course-grid-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-top: 0.55rem;
   min-height: 38px;
   border: 0;
@@ -11635,6 +11661,7 @@ button.cb-ticket-go {
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
+  text-decoration: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .cb-course-stack-card {

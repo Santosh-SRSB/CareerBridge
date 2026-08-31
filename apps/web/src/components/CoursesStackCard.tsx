@@ -164,18 +164,19 @@ export function CoursesStackCard({ courses = DEFAULT_COURSES, onOpenPool }: Prop
   }, [courses]);
 
   return (
-    <section className="cb-courses-stack-card" aria-label="Courses and certifications">
+    <section className="cb-courses-stack-card" aria-label="Suggested courses for your skill gaps">
       <div className="cb-courses-stack-card__aurora" aria-hidden />
       <div className="cb-courses-stack-card__sheen" aria-hidden />
 
       <header className="cb-courses-stack-card__head">
         <p className="cb-courses-stack-card__eyebrow">
           <span className="cb-courses-stack-card__pulse" aria-hidden />
-          Keep learning
+          Gap-based picks
         </p>
-        <h2>Courses &amp; Certifications</h2>
+        <h2>Course suggestions that help</h2>
         <p className="cb-courses-stack-card__sub">
-          Stack skills that employers notice — browse the full pool anytime.
+          We analyse your skill gaps and point you to Udemy courses that can close them — open a
+          suggestion anytime.
         </p>
       </header>
 
@@ -206,7 +207,7 @@ export function CoursesStackCard({ courses = DEFAULT_COURSES, onOpenPool }: Prop
       </div>
 
       <button type="button" className="cb-courses-stack-card__cta" onClick={onOpenPool}>
-        <span>Courses &amp; Certifications</span>
+        <span>Get course suggestions</span>
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden>
           <path
             d="M5 12h12M13 6l6 6-6 6"

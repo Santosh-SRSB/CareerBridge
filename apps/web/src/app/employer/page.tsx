@@ -152,7 +152,7 @@ export default function EmployerDashboardPage() {
               {data.recent.map((item) => (
                 <Link
                   key={item.applicationId}
-                  href={`/employer/jobs/${item.jobId}`}
+                  href={item.jobId ? `/employer/jobs/${item.jobId}` : '/employer/jobs'}
                   className="flex items-center justify-between gap-3 rounded-2xl border border-primary/8 bg-fog/40 px-4 py-3 transition hover:border-teal/40 hover:bg-white"
                 >
                   <div className="min-w-0">

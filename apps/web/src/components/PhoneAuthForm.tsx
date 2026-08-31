@@ -22,7 +22,7 @@ export function PhoneAuthForm({
 }) {
   const router = useRouter();
   const [channel, setChannel] = useState<OtpChannel>('EMAIL');
-  const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
+  const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');

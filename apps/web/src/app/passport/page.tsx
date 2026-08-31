@@ -103,7 +103,7 @@ function sectionDetails(profile: CandidateProfile, section: PassportSection): st
   return [];
 }
 
-export function PassportOverviewPage() {
+function PassportOverviewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const showOverview = searchParams.get('overview') === '1';

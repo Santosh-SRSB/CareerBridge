@@ -106,8 +106,14 @@ export function ProfileRail({
   const displayCity = prettyText(city || 'India');
 
   return (
-    <aside className="space-y-4">
-      <HoverTilt>
+    <div className="cb-profile-rail">
+      {showNav ? (
+        <nav className="cb-dash-card cb-profile-rail__nav hidden p-2 lg:block" aria-label="Candidate">
+          <PortalNav />
+        </nav>
+      ) : null}
+
+      <HoverTilt className="cb-profile-rail__passport">
         <PassportPreview
           name={displayName}
           location={displayCity}
@@ -119,13 +125,7 @@ export function ProfileRail({
           passportId={passportId}
         />
       </HoverTilt>
-
-      {showNav ? (
-        <nav className="cb-dash-card hidden p-2 lg:block" aria-label="Candidate">
-          <PortalNav />
-        </nav>
-      ) : null}
-    </aside>
+    </div>
   );
 }
 

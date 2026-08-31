@@ -184,7 +184,7 @@ export function SkillSpokenAnswer({
 
   function startRecording() {
     const media = streamRef.current;
-    if (!isLive(media)) {
+    if (!isLive(media) || !media) {
       setCameraError('Open the camera first and wait until you see your face.');
       return;
     }

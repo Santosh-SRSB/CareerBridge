@@ -707,7 +707,7 @@ export type EmployerDashboard = {
     jobTitle: string;
     status: string;
     applicationId: string;
-    jobId: string;
+    jobId?: string;
   }>;
 };
 
