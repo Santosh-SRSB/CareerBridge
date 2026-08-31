@@ -15,6 +15,7 @@ import {
 import { getStoredUser } from '@/lib/session';
 import type { JobCard } from '@careerbridge/shared';
 import { CandidateTopBar } from '@/components/CandidatePortal';
+import { ResumeTemplatePicker } from '@/components/ResumeTemplatePicker';
 import { IconSidebar } from '@/features/candidate/home/IconSidebar';
 import { HomePassportSection } from '@/features/candidate/home/HomePassportSection';
 import { HomeDashboardSection } from '@/features/candidate/home/HomeDashboardSection';
@@ -53,6 +54,8 @@ export default function DashboardPage() {
   const [ready, setReady] = useState(false);
   const [passport, setPassport] = useState<PassportView | null>(null);
   const [jobs, setJobs] = useState<JobCard[]>([]);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateMode, setTemplateMode] = useState<'build' | 'enhance'>('build');
 
   useEffect(() => {
     const stored = getStoredUser();
@@ -107,9 +110,32 @@ export default function DashboardPage() {
       });
   }, [router]);
 
+  useEffect(() => {
+    if (!ready) return;
+    const scrollToHash = () => {
+      const id = window.location.hash.replace(/^#/, '');
+      if (!id) return;
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    scrollToHash();
+    window.addEventListener('hashchange', scrollToHash);
+    return () => window.removeEventListener('hashchange', scrollToHash);
+  }, [ready, passport]);
+
   async function signOut() {
     await logout();
     router.replace('/');
+  }
+
+  function openAtsBuilder() {
+    setTemplateMode('build');
+    setTemplateOpen(true);
+  }
+
+  function openAtsEnhance() {
+    setTemplateMode('enhance');
+    setTemplateOpen(true);
   }
 
   if (!ready) {
@@ -123,7 +149,7 @@ export default function DashboardPage() {
         <div className="cb-home-content">
           <CandidateTopBar name={name} onSignOut={signOut} />
           <main className="cb-home-main" aria-label="Dashboard">
-            <div className="cb-home-top">
+            <div className="cb-home-top" id="home">
               <header className="cb-home-welcome">
                 <h1>
                   <span className="cb-home-welcome__line">Welcome to your dashboard,</span>
@@ -163,7 +189,7 @@ export default function DashboardPage() {
               </header>
             </div>
 
-            <div className="cb-home-stage">
+            <div className="cb-home-stage" id="passport">
               {passport ? (
                 <HomePassportSection
                   name={passport.name}
@@ -180,18 +206,31 @@ export default function DashboardPage() {
               ) : null}
             </div>
 
-            <HomeDashboardSection
-              onBuildResume={() => router.push('/resume/build')}
-              onEnhanceResume={() => router.push('/resume/enhance')}
-            />
-            <HomeSkillAssessmentSection />
-            <HomeInterviewSection />
-            <HomeCoursesHeroSection />
-            <HomeJobsSection jobs={jobs} city={passport?.city} />
+            <div id="resume">
+              <HomeDashboardSection onBuildResume={openAtsBuilder} onEnhanceResume={openAtsEnhance} />
+            </div>
+            <div id="skill">
+              <HomeSkillAssessmentSection />
+            </div>
+            <div id="interview">
+              <HomeInterviewSection />
+            </div>
+            <div id="courses">
+              <HomeCoursesHeroSection />
+            </div>
+            <div id="jobs">
+              <HomeJobsSection jobs={jobs} city={passport?.city} />
+            </div>
           </main>
           <HomeSrsbFooter />
         </div>
       </div>
+
+      <ResumeTemplatePicker
+        open={templateOpen}
+        mode={templateMode}
+        onClose={() => setTemplateOpen(false)}
+      />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   projectTechnologies,
 } from "@/components/resume-templates/helpers.js";
 import AtsAnalysisPanel from "@/components/AtsAnalysisPanel.jsx";
+import ResumeSuggestionBlockModal from "@/components/ResumeSuggestionBlockModal.jsx";
 import { useResumePageFit, usePreviewScale, RESUME_PAGE } from "@/components/resume-templates/pageFit.js";
 
 function analysisFingerprint(resume) {
@@ -107,6 +108,7 @@ export default function ManualResumeEditor({ resumeId }) {
   const [rewriteResult, setRewriteResult] = useState(null);
   const [viewingRewrite, setViewingRewrite] = useState(false);
   const [undoSnapshot, setUndoSnapshot] = useState(null);
+  const [suggestionModalOpen, setSuggestionModalOpen] = useState(false);
   const [editorStep, setEditorStep] = useState("personal");
   const [navError, setNavError] = useState("");
   const [certUrlErrors, setCertUrlErrors] = useState({});
@@ -440,6 +442,70 @@ export default function ManualResumeEditor({ resumeId }) {
       setStatus("Resume updated successfully.");
     } catch (err) {
       setStatus("Rewrite applied in the editor — click Save to keep it.");
+      setError(err.message);
+    }
+  }
+
+  async function handleOpenSuggestions(autoTargetRole) {
+    const role = (autoTargetRole || resume?.data?.targetRole || "").trim();
+    if (!role) {
+      setRewriteError("Please specify a target job role in Review & ATS to generate tailored suggestions.");
+      goToStep("review");
+      return;
+    }
+    setSuggestionModalOpen(true);
+    if (!rewriteResult) {
+      await handleRewrite();
+    }
+  }
+
+  function handleApplySuggestionBlock(sectionKey, blockData) {
+    setUndoSnapshot({ ...(resume.data || {}) });
+    setResume((prev) => {
+      const nextData = {
+        ...prev.data,
+        [sectionKey]: blockData,
+      };
+      // Persist in background
+      api.updateResume(resume.id, {
+        title: resume.title,
+        templateId: resume.templateId,
+        data: nextData,
+      }).catch(() => {});
+      return {
+        ...prev,
+        data: nextData,
+      };
+    });
+    setStatus(`Approved AI suggestion for ${sectionKey} — updated resume in real-time.`);
+  }
+
+  async function handleApplyAllSuggestions(rewrittenData) {
+    if (!rewrittenData) return;
+    setUndoSnapshot({ ...(resume.data || {}) });
+    const nextData = {
+      ...rewrittenData,
+      photo: resume.data.photo,
+      targetRole: resume.data.targetRole,
+      jobDescription: resume.data.jobDescription,
+      education: normalizeEducationList(rewrittenData.education),
+      projects: normalizeProjectList(rewrittenData.projects),
+      certifications: normalizeCertificationList(rewrittenData.certifications),
+      careerGaps: normalizeCareerGapList(rewrittenData.careerGaps || rewrittenData.careerBreaks),
+    };
+    setResume((prev) => ({ ...prev, data: nextData }));
+    setRewriteResult(null);
+    setViewingRewrite(false);
+    setAnalysis(null);
+    try {
+      await api.updateResume(resume.id, {
+        title: resume.title,
+        templateId: resume.templateId,
+        data: nextData,
+      });
+      setStatus("All AI suggestions approved and saved to resume.");
+    } catch (err) {
+      setStatus("All AI suggestions reflected in the editor — click Save to persist.");
       setError(err.message);
     }
   }
@@ -878,6 +944,14 @@ export default function ManualResumeEditor({ resumeId }) {
         />
         <div className="toolbar-actions">
           {status && <span className="save-status">{status}</span>}
+          <button
+            type="button"
+            className="btn cb-ai-toolbar-btn"
+            onClick={() => handleOpenSuggestions()}
+            disabled={rewriting}
+          >
+            {rewriting ? "Generating suggestions…" : "✨ AI Suggestions & Review"}
+          </button>
           <button className="btn btn-ghost" onClick={handlePrint}>Export / Print PDF</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : "Save"}
@@ -990,7 +1064,17 @@ export default function ManualResumeEditor({ resumeId }) {
 
           {editorStep === "summary" && (
           <section className="form-section">
-            <h2>Professional summary</h2>
+            <div className="form-section-head">
+              <h2>Professional summary</h2>
+              <button
+                type="button"
+                className="btn btn-ghost btn-small"
+                onClick={() => handleOpenSuggestions()}
+                disabled={rewriting}
+              >
+                ✨ AI Suggestions
+              </button>
+            </div>
             <label>Summary
               <textarea
                 rows={5}
@@ -1006,7 +1090,17 @@ export default function ManualResumeEditor({ resumeId }) {
           <section className="form-section">
             <div className="form-section-head">
               <h2>Experience</h2>
-              <button className="btn btn-small" type="button" onClick={() => addListItem("experience", { ...EMPTY_EXPERIENCE, bullets: [""] })}>+ Add</button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-small"
+                  onClick={() => handleOpenSuggestions()}
+                  disabled={rewriting}
+                >
+                  ✨ AI Suggestions
+                </button>
+                <button className="btn btn-small" type="button" onClick={() => addListItem("experience", { ...EMPTY_EXPERIENCE, bullets: [""] })}>+ Add</button>
+              </div>
             </div>
             {(resume.data.experience || []).map((job, i) => (
               <div className="list-item" key={i}>
@@ -1277,7 +1371,17 @@ export default function ManualResumeEditor({ resumeId }) {
 
           {editorStep === "skills" && (
           <section className="form-section">
-            <h2>Skills</h2>
+            <div className="form-section-head">
+              <h2>Skills</h2>
+              <button
+                type="button"
+                className="btn btn-ghost btn-small"
+                onClick={() => handleOpenSuggestions()}
+                disabled={rewriting}
+              >
+                ✨ AI Suggestions
+              </button>
+            </div>
             <label>
               Type a skill, then press Enter or comma to add it
               <div className="skill-tag-input">
@@ -1312,7 +1416,17 @@ export default function ManualResumeEditor({ resumeId }) {
           <section className="form-section">
             <div className="form-section-head">
               <h2>Projects</h2>
-              <button className="btn btn-small" type="button" onClick={addProject}>+ Add</button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-small"
+                  onClick={() => handleOpenSuggestions()}
+                  disabled={rewriting}
+                >
+                  ✨ AI Suggestions
+                </button>
+                <button className="btn btn-small" type="button" onClick={addProject}>+ Add</button>
+              </div>
             </div>
             {(resume.data.projects || []).map((p) => (
               <div className="list-item" key={p.id}>
@@ -1533,6 +1647,23 @@ export default function ManualResumeEditor({ resumeId }) {
           </div>
         </div>
       </div>
+
+      <ResumeSuggestionBlockModal
+        open={suggestionModalOpen}
+        onClose={() => setSuggestionModalOpen(false)}
+        originalData={resume.data}
+        rewrittenData={rewriteResult?.rewrittenResume}
+        targetRole={resume.data?.targetRole || ""}
+        scoreBefore={rewriteResult?.estimatedScoreBefore}
+        scoreAfter={rewriteResult?.estimatedScoreAfter}
+        onApplyBlock={handleApplySuggestionBlock}
+        onApplyAll={handleApplyAllSuggestions}
+        onKeepAll={() => {
+          setStatus("Kept original resume data.");
+        }}
+        loading={rewriting}
+        onRefresh={() => handleRewrite()}
+      />
     </div>
   );
 }

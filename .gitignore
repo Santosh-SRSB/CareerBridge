@@ -16,3 +16,7 @@ Thumbs.db
 apps/api/generated
 docker-data
 .postgres-data
+gcp-*.json
+*.pem
+apps/web/public/candidate-resumes/
+

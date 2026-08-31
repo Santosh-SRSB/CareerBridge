@@ -136,7 +136,7 @@ export function HeroProof() {
     };
   }, []);
 
-  const beat = phase < 3 ? beats[phase] : null;
+  const beat = phase < 3 ? (beats as readonly { value: number; label: string; title: string; detail: string }[])[phase] : null;
 
   return (
     <div className="hero-proof">

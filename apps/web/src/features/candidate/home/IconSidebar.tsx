@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 type NavItem = {
   id: string;
@@ -30,7 +30,7 @@ const NAV: NavItem[] = [
   },
   {
     id: 'passport',
-    href: '/passport?overview=1',
+    href: '/dashboard#passport',
     label: 'Passport',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -47,7 +47,7 @@ const NAV: NavItem[] = [
   },
   {
     id: 'resume',
-    href: '/resume',
+    href: '/dashboard#resume',
     label: 'Resume',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -63,7 +63,7 @@ const NAV: NavItem[] = [
   },
   {
     id: 'skill',
-    href: '/assessments',
+    href: '/dashboard#skill',
     label: 'Skill assessment',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -85,7 +85,7 @@ const NAV: NavItem[] = [
   },
   {
     id: 'interview',
-    href: '/interviews',
+    href: '/dashboard#interview',
     label: 'Interviews',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -96,7 +96,7 @@ const NAV: NavItem[] = [
   },
   {
     id: 'courses',
-    href: '/courses',
+    href: '/dashboard#courses',
     label: 'Courses',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -112,7 +112,7 @@ const NAV: NavItem[] = [
   },
   {
     id: 'job',
-    href: '/jobs',
+    href: '/dashboard#jobs',
     label: 'Jobs',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -132,12 +132,34 @@ const SEGMENT_COUNT = NAV.length - 1;
 const PASSPORT_INDEX = 1;
 
 function navPath(href: string) {
-  return href.split('?')[0];
+  return href.split('#')[0].split('?')[0];
 }
 
-function isActive(pathname: string, href: string) {
+function navHash(href: string) {
+  const i = href.indexOf('#');
+  return i >= 0 ? href.slice(i + 1) : '';
+}
+
+function isActive(pathname: string, hash: string, href: string) {
   const path = navPath(href);
-  if (path === '/dashboard') return pathname === '/dashboard';
+  const targetHash = navHash(href);
+  const itemId = targetHash || (path === '/dashboard' ? 'home' : '');
+
+  // Keep section icons active when user is inside the full tool pages
+  if (itemId === 'resume' && (pathname.startsWith('/resume') || pathname.startsWith('/resume/builder'))) {
+    return true;
+  }
+  if (itemId === 'skill' && pathname.startsWith('/assessments')) return true;
+  if (itemId === 'interview' && pathname.startsWith('/interviews')) return true;
+  if (itemId === 'courses' && pathname.startsWith('/courses')) return true;
+  if (itemId === 'job' && pathname.startsWith('/jobs')) return true;
+  if (itemId === 'passport' && pathname.startsWith('/passport')) return true;
+
+  if (path === '/dashboard') {
+    if (pathname !== '/dashboard') return false;
+    if (!targetHash) return !hash || hash === 'home';
+    return hash === targetHash;
+  }
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
@@ -149,8 +171,16 @@ function progressHeightPercent(passportReady: number) {
 
 export function IconSidebar({ passportReady = 0 }: { passportReady?: number }) {
   const pathname = usePathname();
+  const [hash, setHash] = useState('');
   const progress = progressHeightPercent(passportReady);
   const passportComplete = passportReady >= 100;
+
+  useEffect(() => {
+    const sync = () => setHash(window.location.hash.replace(/^#/, ''));
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, [pathname]);
 
   return (
     <aside className="cb-icon-sidebar" aria-label="Main navigation">
@@ -164,7 +194,7 @@ export function IconSidebar({ passportReady = 0 }: { passportReady?: number }) {
           <span className="cb-icon-sidebar__sweep" />
         </div>
         {NAV.map((item) => {
-          const active = isActive(pathname, item.href);
+          const active = isActive(pathname, hash, item.href);
           const isJob = item.id === 'job';
           return (
             <Link
@@ -172,6 +202,23 @@ export function IconSidebar({ passportReady = 0 }: { passportReady?: number }) {
               href={item.href}
               className={`cb-icon-sidebar__item${active ? ' is-active' : ''}${isJob ? ' is-job' : ''}`}
               aria-current={active ? 'page' : undefined}
+              onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
+                const targetHash = navHash(item.href);
+                if (pathname === '/dashboard' && targetHash) {
+                  event.preventDefault();
+                  const el = document.getElementById(targetHash);
+                  if (el) {
+                    window.history.replaceState(null, '', `#${targetHash}`);
+                    setHash(targetHash);
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                } else if (pathname === '/dashboard' && item.id === 'home') {
+                  event.preventDefault();
+                  window.history.replaceState(null, '', '/dashboard');
+                  setHash('');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
             >
               <span className="cb-icon-sidebar__icon">{item.icon}</span>
               <span className="cb-icon-sidebar__flyout" aria-hidden>

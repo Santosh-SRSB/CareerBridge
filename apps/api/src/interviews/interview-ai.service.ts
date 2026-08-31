@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 import type { InterviewReport, LiveInterviewQuestion, ResumeContent } from '@careerbridge/shared';
 import { detectConduct } from './interview-conduct';
+import { AiGatewayService } from '../ai/ai-gateway.service';
 
 export type InterviewProfile = {
   fullName: string;
@@ -25,7 +24,7 @@ type BuiltQuestion = {
 
 @Injectable()
 export class InterviewAiService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly aiGateway: AiGatewayService) {}
 
   firstQuestion(profile: InterviewProfile, interviewType = 'MIXED') {
     return scriptedQuestion(profile, [], undefined, interviewType);
@@ -156,27 +155,16 @@ export class InterviewAiService {
   }
 
   private async askJson<T>(system: string, user: string): Promise<T | null> {
-    const apiKey =
-      this.config.get<string>('OPENAI_API_KEY')?.trim() ||
-      this.config.get<string>('Open_Ai_Api_key')?.trim() ||
-      '';
-    if (!apiKey) return null;
-    try {
-      const client = new OpenAI({ apiKey });
-      const completion = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
+    if (!this.aiGateway.isConfigured()) return null;
+    const res = await this.aiGateway.generate<T>({
+      task: 'INTERVIEW_EVALUATION',
+      systemPrompt: system,
+      userPrompt: user.slice(0, 12000),
+      options: {
         temperature: 0.3,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user.slice(0, 12000) },
-        ],
-      });
-      const raw = completion.choices[0]?.message?.content;
-      return raw ? (JSON.parse(raw) as T) : null;
-    } catch {
-      return null;
-    }
+      },
+    });
+    return res.data;
   }
 }
 

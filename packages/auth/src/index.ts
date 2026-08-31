@@ -1,0 +1,6 @@
+export type UserRole =
+  | 'CANDIDATE'
+  | 'EMPLOYER_ADMIN'
+  | 'EMPLOYER_RECRUITER'
+  | 'PLATFORM_ADMIN'
+  | 'PLATFORM_OPERATOR';

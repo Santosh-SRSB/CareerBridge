@@ -6,6 +6,7 @@ import { PassportPreview } from '@/components/PassportPreview';
 import { PASSPORT_FLOW_START } from '@/lib/passport-flow';
 
 type MissingItem = { label: string; href: string };
+type TipPhase = 'tip' | 'found' | 'pills' | 'button';
 
 type Props = {
   name: string;

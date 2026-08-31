@@ -3210,6 +3210,15 @@
   padding: 1.25rem 1rem 2.5rem 2.25rem;
 }
 
+#passport,
+#resume,
+#skill,
+#interview,
+#courses,
+#jobs {
+  scroll-margin-top: 1.25rem;
+}
+
 @media (min-width: 640px) {
   .cb-home-main {
     padding: 1.35rem 1.5rem 2.5rem 2.75rem;

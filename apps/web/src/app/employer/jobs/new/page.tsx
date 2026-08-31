@@ -244,7 +244,7 @@ export default function NewJobPage() {
     void persistSkills([...skills, next]);
   }
 
-  const customSelectedSkills = skills.filter((skill) => !JOB_SKILL_SUGGESTIONS.includes(skill));
+  const customSelectedSkills = skills.filter((skill) => !(JOB_SKILL_SUGGESTIONS as readonly string[]).includes(skill));
 
   function updateQuestion(id: string, patch: Partial<ScreeningQuestion>) {
     setQuestions((currentQuestions) =>

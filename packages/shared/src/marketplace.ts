@@ -701,6 +701,7 @@ export type EmployerDashboard = {
     jobTitle: string;
     status: string;
     applicationId: string;
+    jobId?: string;
   }>;
 };
 
@@ -718,6 +719,7 @@ export type EmployerApplication = {
   };
   job: { id: string; title: string };
   match?: JobMatch;
+  screeningAnswers?: Array<{ questionId: string; prompt?: string; answer: string }>;
 };
 
 export type CatalogSkill = {

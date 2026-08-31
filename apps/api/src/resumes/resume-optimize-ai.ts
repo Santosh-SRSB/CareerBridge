@@ -1,6 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 import {
   validateRewrite,
   type AtsFact,
@@ -8,57 +6,31 @@ import {
   type ResumeChangeRecord,
   type ResumeContent,
 } from '@careerbridge/shared';
+import { AiGatewayService } from '../ai/ai-gateway.service';
 
 @Injectable()
 export class ResumeOptimizeAi {
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly aiGateway: AiGatewayService) {}
 
   async rewrite(
     content: ResumeContent,
     issues: AtsIssue[],
     facts: AtsFact[],
   ): Promise<{ content: ResumeContent; changes: ResumeChangeRecord[] } | null> {
-    const apiKey =
-      this.config.get<string>('OPENAI_API_KEY')?.trim() ||
-      this.config.get<string>('Open_Ai_Api_key')?.trim() ||
-      '';
-    if (!apiKey) return null;
+    if (!this.aiGateway.isConfigured()) return null;
 
-    const client = new OpenAI({ apiKey });
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You improve resume wording only. Never invent companies, titles, dates, skills, metrics, certifications, team sizes, users, or achievements. Return JSON { changes: [{ section, originalText, suggestedText, reason }] }. Each suggestion must be a wording improvement of originalText.',
-        },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            content,
-            facts: facts.map((item) => ({ type: item.type, value: item.value })),
-            issues: issues.slice(0, 12).map((item) => ({
-              section: item.section,
-              problem: item.problem,
-              recommendation: item.recommendation,
-              originalExample: item.originalExample,
-            })),
-          }),
-        },
-      ],
-    });
+    const parsed = await this.aiGateway.rewriteResume(
+      content,
+      issues.slice(0, 12).map((item) => ({
+        section: item.section,
+        problem: item.problem,
+        recommendation: item.recommendation,
+        originalExample: item.originalExample,
+      })),
+      facts.map((item) => ({ type: item.type, value: item.value })),
+    );
 
-    const raw = completion.choices[0]?.message?.content;
-    if (!raw) return null;
-    let parsed: { changes?: Array<{ section: string; originalText: string; suggestedText: string; reason: string }> };
-    try {
-      parsed = JSON.parse(raw) as typeof parsed;
-    } catch {
-      return null;
-    }
+    if (!parsed || !parsed.changes) return null;
 
     const next: ResumeContent = JSON.parse(JSON.stringify(content)) as ResumeContent;
     const accepted: ResumeChangeRecord[] = [];
