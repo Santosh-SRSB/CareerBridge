@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
 import { GeminiProvider } from './providers/gemini.provider';
 import { OpenAIProvider } from './providers/openai.provider';
 import { AiProvider } from './providers/ai-provider.interface';
+
 import {
   AiGenerateRequest,
   AiGenerateResponse,
@@ -25,6 +27,7 @@ export class AiGatewayService {
 
   constructor(
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
     private readonly gemini: GeminiProvider,
     private readonly openai: OpenAIProvider,
   ) {}
@@ -114,22 +117,42 @@ export class AiGatewayService {
       );
 
       // Telemetry log according to Volume 2 Section 2C.27 (ai_interactions)
-      this.logger.log(
-        JSON.stringify({
-          event: 'AI_INTERACTION',
-          task: request.task,
-          provider: provider.name,
-          model: result.model,
-          promptVersion,
-          inputTokens: result.inputTokens,
-          outputTokens: result.outputTokens,
-          latencyMs,
-          estimatedCostUsd,
-          success: Boolean(result.data),
-          userId: request.options?.userId,
-          requestId: request.options?.requestId,
-        }),
-      );
+      const telemetryPayload = {
+        event: 'AI_INTERACTION',
+        task: request.task,
+        provider: provider.name,
+        model: result.model,
+        promptVersion,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        latencyMs,
+        estimatedCostUsd,
+        success: Boolean(result.data),
+        userId: request.options?.userId,
+        requestId: request.options?.requestId,
+      };
+      this.logger.log(JSON.stringify(telemetryPayload));
+
+      // Persist telemetry record to database if Prisma is available
+      try {
+        (this.prisma as any).aiInteraction?.create({
+          data: {
+            userId: request.options?.userId || null,
+            operation: request.task,
+            provider: provider.name,
+            model: result.model,
+            promptVersion,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            latencyMs,
+            status: result.data ? 'SUCCESS' : 'FAILED',
+            estimatedCostUsd,
+            requestId: request.options?.requestId || null,
+          },
+        }).catch((err: any) => {
+          this.logger.warn(`Failed to persist AI interaction to DB: ${err.message}`);
+        });
+      } catch {}
 
       return {
         success: Boolean(result.data),

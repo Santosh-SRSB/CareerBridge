@@ -653,3 +653,49 @@ model GstVerificationAudit {
   @@index([createdAt])
   @@map("gst_verification_audits")
 }
+
+/// AI Interaction Telemetry & Cost Log (Volume 2 HLD Section 2A.20 & Section 2C.27)
+model AiInteraction {
+  id               String   @id @default(uuid())
+  userId           String?  @map("user_id")
+  operation        String   // RESUME_REWRITE, RESUME_REVIEW, INTERVIEW_EVALUATION, etc.
+  provider         String   // gemini, openai, fallback
+  model            String
+  promptVersion    String   @map("prompt_version")
+  inputTokens      Int      @default(0) @map("input_tokens")
+  outputTokens     Int      @default(0) @map("output_tokens")
+  latencyMs        Int      @default(0) @map("latency_ms")
+  status           String   @default("SUCCESS") // SUCCESS, FAILED
+  estimatedCostUsd Float    @default(0.0) @map("estimated_cost_usd")
+  requestId        String?  @map("request_id")
+  error            String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([operation])
+  @@index([provider])
+  @@index([createdAt])
+  @@map("ai_interactions")
+}
+
+/// Centralized Audit Log (Volume 2 HLD Section 2A.25)
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id")
+  action       String   // e.g. EMPLOYER_VIEWED_CANDIDATE, RESUME_OPTIMIZED, JOB_CREATED
+  resourceType String   @map("resource_type") // CANDIDATE, RESUME, JOB, APPLICATION, etc.
+  resourceId   String?  @map("resource_id")
+  oldValue     String?  @map("old_value") @db.Text
+  newValue     String?  @map("new_value") @db.Text
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  requestId    String?  @map("request_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+

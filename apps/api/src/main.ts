@@ -2,9 +2,13 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { CloudJsonLogger } from './common/logger/cloud-json-logger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const isCloudOrProd = process.env.NODE_ENV === 'production' || Boolean(process.env.GCP_PROJECT_ID);
+  const app = await NestFactory.create(AppModule, {
+    logger: isCloudOrProd ? new CloudJsonLogger() : ['log', 'error', 'warn', 'debug', 'verbose'],
+  });
 
   app.setGlobalPrefix('api/v1');
   app.enableCors({
