@@ -3,7 +3,13 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { photoFileError } from '@careerbridge/shared';
-import { PassportFrame, WizardActions } from '@/components/PassportFrame';
+import {
+  PassportFrame,
+  PassportLoading,
+  WizardActions,
+  passportPrimaryButtonClass,
+  passportSecondaryButtonClass,
+} from '@/components/PassportFrame';
 import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
 import { getCandidateMe, updateCandidateMe } from '@/lib/api';
@@ -57,7 +63,7 @@ export default function PassportPhotoPage() {
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
+  if (!ready) return <PassportLoading />;
 
   return (
     <PassportFrame
@@ -65,12 +71,12 @@ export default function PassportPhotoPage() {
       subtitle="Optional. A clear photo helps employers recognise you."
       step="photo"
     >
-      <form onSubmit={onSubmit} className="cb-passport-panel space-y-5 p-6 sm:p-7">
+      <form onSubmit={onSubmit} className="space-y-5">
         <div className="flex flex-col items-center gap-4">
-          <div className="cb-profile-photo-lg">
+          <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-slate-100 bg-slate-50 text-sm font-bold text-slate-400 shadow-xs">
             {photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrl} alt="Profile" />
+              <img src={photoUrl} alt="Profile" className="h-full w-full object-cover" />
             ) : (
               <span>Photo</span>
             )}
@@ -83,7 +89,14 @@ export default function PassportPhotoPage() {
             onChange={(event) => void onPick(event.target.files?.[0])}
           />
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button type="button" size="md" block={false} variant="secondary" onClick={() => inputRef.current?.click()}>
+            <Button
+              type="button"
+              size="md"
+              block={false}
+              variant="outline"
+              className={passportSecondaryButtonClass}
+              onClick={() => inputRef.current?.click()}
+            >
               {photoUrl ? 'Change photo' : 'Upload photo'}
             </Button>
             {photoUrl ? (
@@ -100,9 +113,16 @@ export default function PassportPhotoPage() {
             ) : null}
           </div>
         </div>
-        {error ? <p className="text-sm text-error">{error}</p> : null}
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>
-          <Button type="submit" size="md" block={false} loading={loading} loadingLabel="Saving...">
+          <Button
+            type="submit"
+            size="md"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={passportPrimaryButtonClass}
+          >
             {photoUrl ? 'Save and continue' : 'Skip for now'}
           </Button>
         </WizardActions>

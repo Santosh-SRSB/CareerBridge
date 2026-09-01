@@ -2,97 +2,122 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { OnboardingFrame } from '@/components/OnboardingFrame';
+import { ONBOARDING_DOMAINS } from '@careerbridge/shared';
+import {
+  OnboardingActions,
+  OnboardingFrame,
+  OnboardingQuestion,
+  onboardingOptionButtonClass,
+  onboardingPrimaryButtonClass,
+} from '@/components/OnboardingFrame';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { getCandidateMe, updateCandidateMe } from '@/lib/api';
+import { nextOnboardingStepPath } from '@/lib/onboarding-flow';
+import { useOnboardingGate } from '@/hooks/useOnboardingGate';
 
-export default function OnboardingNamePage() {
+export default function OnboardingDomainPage() {
   const router = useRouter();
-  const [fullName, setFullName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [gender, setGender] = useState('');
+  const [domain, setDomain] = useState('');
+  const [customDomain, setCustomDomain] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
+  const gateReady = useOnboardingGate(2);
+  const [profileReady, setProfileReady] = useState(false);
+  const ready = gateReady && profileReady;
 
   useEffect(() => {
-    const user = getStoredUser();
-    if (!user) {
-      router.replace('/login');
-      return;
-    }
+    if (!gateReady) return;
     getCandidateMe()
       .then((profile) => {
-        const name = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
-        setFullName(name);
-        setDateOfBirth(profile.dateOfBirth || '');
-        setGender(profile.gender || '');
+        const saved = profile.careerInterests?.[0] || '';
+        if (ONBOARDING_DOMAINS.includes(saved as (typeof ONBOARDING_DOMAINS)[number])) {
+          setDomain(saved);
+        } else if (saved) {
+          setDomain('Other');
+          setCustomDomain(saved);
+        }
       })
-      .finally(() => setReady(true));
-  }, [router]);
+      .finally(() => setProfileReady(true));
+  }, [gateReady]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (fullName.trim().length < 2) {
-      setError('Enter your full name.');
+    const value = domain === 'Other' ? customDomain.trim() : domain;
+    if (!value) {
+      setError('Select your domain.');
+      return;
+    }
+    if (domain === 'Other' && value.length < 2) {
+      setError('Enter your domain.');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      const profile = await updateCandidateMe({
-        fullName: fullName.trim(),
-        dateOfBirth: dateOfBirth || undefined,
-        gender: gender || undefined,
-      });
-      patchStoredUser({ firstName: profile.firstName });
-      router.push('/onboarding/location');
+      await updateCandidateMe({ careerInterests: [value] });
+      router.push(nextOnboardingStepPath(2));
     } catch {
-      setError('We could not save your details right now. Please try again.');
+      setError('We could not save your domain right now. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
-  if (!ready) return null;
+  function onSkip() {
+    router.push(nextOnboardingStepPath(2));
+  }
+
+  if (!ready) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
+        Loading...
+      </main>
+    );
+  }
 
   return (
-    <OnboardingFrame step={1} title="Let's get to know you" subtitle="What should we call you?">
-      <form onSubmit={onSubmit} className="space-y-5">
-        <Input
-          label="Full name"
-          name="fullName"
-          required
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-        />
-        <Input
-          label="Date of birth"
-          name="dateOfBirth"
-          type="date"
-          value={dateOfBirth}
-          onChange={(event) => setDateOfBirth(event.target.value)}
-        />
-        <label className="block" htmlFor="gender">
-          <span className="mb-1.5 block text-sm font-medium">Gender</span>
-          <select
-            id="gender"
-            value={gender}
-            onChange={(event) => setGender(event.target.value)}
-            className="w-full rounded-sm border border-primary/20 bg-surface px-3 py-3 text-base"
+    <OnboardingFrame step={2}>
+      <form onSubmit={onSubmit} className="space-y-6">
+        <OnboardingQuestion title="What is your domain?">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {ONBOARDING_DOMAINS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setDomain(item)}
+                className={onboardingOptionButtonClass(domain === item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          {domain === 'Other' ? (
+            <Input
+              label=""
+              name="customDomain"
+              required
+              value={customDomain}
+              onChange={(event) => setCustomDomain(event.target.value)}
+              placeholder="Type your domain"
+            />
+          ) : null}
+        </OnboardingQuestion>
+
+        {error ? <p className="text-xs font-semibold text-error">{error}</p> : null}
+
+        <OnboardingActions onSkip={onSkip}>
+          <Button
+            type="submit"
+            size="sm"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={onboardingPrimaryButtonClass}
           >
-            <option value="">Prefer not to say</option>
-            <option value="FEMALE">Female</option>
-            <option value="MALE">Male</option>
-            <option value="OTHER">Other</option>
-          </select>
-        </label>
-        {error ? <p className="text-sm text-error">{error}</p> : null}
-        <Button type="submit" loading={loading} loadingLabel="Saving...">
-          Continue
-        </Button>
+            Continue
+          </Button>
+        </OnboardingActions>
       </form>
     </OnboardingFrame>
   );

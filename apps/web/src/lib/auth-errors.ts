@@ -26,6 +26,10 @@ export function authErrorMessage(err: unknown, stage: 'request' | 'verify') {
     if (code === 'TOO_MANY_ATTEMPTS') {
       return "You've reached the maximum number of attempts. Please request a new OTP.";
     }
+    if (code === 'ACCOUNT_EXISTS' || code === 'DUPLICATE_RESOURCE') {
+      if (err instanceof Error && err.message) return err.message;
+      return 'An account already exists with this email or mobile. Please sign in.';
+    }
     if (err instanceof Error && err.message) {
       return err.message;
     }
@@ -35,8 +39,9 @@ export function authErrorMessage(err: unknown, stage: 'request' | 'verify') {
   if (code === 'ACCOUNT_NOT_FOUND') {
     return 'No account found for this number. Create your free Career Passport.';
   }
-  if (code === 'ACCOUNT_EXISTS') {
-    return 'An account already exists. Please sign in.';
+  if (code === 'ACCOUNT_EXISTS' || code === 'DUPLICATE_RESOURCE') {
+    if (err instanceof Error && err.message) return err.message;
+    return 'An account already exists with this email or mobile. Please sign in.';
   }
   if (code === 'TOO_MANY_ATTEMPTS') {
     return "You've reached the maximum number of attempts. Please try again later.";

@@ -4,7 +4,12 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CandidateLinks } from '@careerbridge/shared';
 import { profileLinkErrors } from '@careerbridge/shared';
-import { PassportFrame, WizardActions } from '@/components/PassportFrame';
+import {
+  PassportFrame,
+  PassportLoading,
+  WizardActions,
+  passportPrimaryButtonClass,
+} from '@/components/PassportFrame';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
@@ -56,17 +61,17 @@ export default function PassportLinksPage() {
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
+  if (!ready) return <PassportLoading />;
 
   const hasAny = Object.values(links).some((item) => item?.trim());
 
   return (
     <PassportFrame
       title="Professional links"
-      subtitle="Optional. Paste the real profile URL for each site ΓÇö LinkedIn for LinkedIn, GitHub for GitHub."
+      subtitle="Optional. Paste the real profile URL for each site — LinkedIn for LinkedIn, GitHub for GitHub."
       step="links"
     >
-      <form onSubmit={onSubmit} className="cb-passport-panel space-y-4 p-6 sm:p-7">
+      <form onSubmit={onSubmit} className="space-y-4">
         <Input
           label="LinkedIn"
           name="linkedin"
@@ -99,9 +104,16 @@ export default function PassportLinksPage() {
           placeholder="https://your-site.com"
           error={fieldErrors.website}
         />
-        {error ? <p className="text-sm text-error">{error}</p> : null}
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>
-          <Button type="submit" size="md" block={false} loading={loading} loadingLabel="Saving...">
+          <Button
+            type="submit"
+            size="md"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={passportPrimaryButtonClass}
+          >
             {hasAny ? 'Finish Passport' : 'Skip and finish'}
           </Button>
         </WizardActions>

@@ -84,7 +84,7 @@ export async function requestOtp(payload: RequestOtpPayload) {
 export async function loginWithPassword(
   identifier: string,
   password: string,
-  accountType: 'CANDIDATE' | 'EMPLOYER' = 'CANDIDATE',
+  accountType: 'CANDIDATE' | 'EMPLOYER' | 'SUPER_ADMIN' | 'ADMIN' = 'CANDIDATE',
 ) {
   const session = await request<AuthSession>('/auth/login', {
     method: 'POST',
@@ -292,6 +292,13 @@ export async function applyToJob(jobId: string, resumeId?: string) {
   return request<ApplicationRecord>(`/jobs/${jobId}/applications`, {
     method: 'POST',
     body: JSON.stringify({ resumeId }),
+  });
+}
+
+export async function withdrawApplication(id: string) {
+  return request<ApplicationRecord>(`/applications/${id}/withdraw`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   });
 }
 
@@ -738,12 +745,104 @@ export async function updateEmployerJob(id: string, payload: Record<string, unkn
 
 export async function saveEmployerJobSkillProfile(
   jobId: string,
-  payload: { requiredSkills: string[]; educationMin?: string },
+  payload: {
+    requiredSkills: string[];
+    preferredSkills?: string[];
+    experienceYearsMin?: number;
+    educationMin?: string;
+    interviewReadinessMin?: number;
+  },
 ) {
   return request(`/employers/jobs/${jobId}/skill-profile`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+}
+
+export async function extractEmployerJobSkills(jobId: string) {
+  return request<{
+    requiredSkills: string[];
+    preferredSkills: string[];
+    experienceYearsMin?: number;
+    educationMin?: string | null;
+    interviewReadinessMin?: number;
+  }>(`/employers/jobs/${jobId}/skill-profile/extract`, {
+    method: 'POST',
+  });
+}
+
+export async function recomputeJobMatches(jobId: string) {
+  return request<JobMatchRow[]>(`/employers/jobs/${jobId}/matches/recompute`, {
+    method: 'POST',
+  });
+}
+
+export async function listJobMatches(jobId: string) {
+  return request<JobMatchRow[]>(`/employers/jobs/${jobId}/matches`);
+}
+
+export type JobMatchRow = {
+  id: string;
+  jobId: string;
+  applicationId: string | null;
+  rank: number;
+  totalScore: number;
+  skillsScore: number;
+  experienceScore: number;
+  interviewReadinessScore: number;
+  reasons: string[];
+  gaps: string[];
+  computedAt: string;
+  candidate: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    city: string | null;
+    skills: string[];
+  } | null;
+};
+
+export async function recordHiringOutcome(
+  applicationId: string,
+  outcome: 'HIRED' | 'OFFER_EXTENDED' | 'OFFER_DECLINED' | 'REJECTED' | 'POSITION_FILLED',
+  notes?: string,
+) {
+  return request(`/employers/applications/${applicationId}/outcome`, {
+    method: 'POST',
+    body: JSON.stringify({ outcome, notes }),
+  });
+}
+
+export type EmployerPaymentRow = {
+  id: string;
+  jobId: string;
+  hiringOutcomeId: string;
+  amountPaise: number;
+  currency: string;
+  status: string;
+  provider: string | null;
+  description: string | null;
+  createdAt: string;
+  paidAt: string | null;
+};
+
+export async function listEmployerPayments() {
+  return request<EmployerPaymentRow[]>('/employers/me/payments');
+}
+
+export async function getJobPostingPayment(jobId: string) {
+  return request<EmployerPaymentRow & { unlocked?: boolean }>(
+    `/employers/jobs/${jobId}/posting-payment`,
+  );
+}
+
+export async function markEmployerPaymentPaid(id: string) {
+  return request<{ id: string; status: string; paidAt: string | null; jobId?: string | null; unlocked?: boolean }>(
+    `/employers/me/payments/${id}/mark-paid`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 export async function publishEmployerJob(id: string) {
@@ -775,6 +874,94 @@ export async function getAdminDashboard() {
 
 export async function getAdminList(path: string) {
   return request<unknown[]>(`/admin/${path}`);
+}
+
+export async function listPlatformAdmins() {
+  return request<import('@careerbridge/shared').PlatformAdminRecord[]>('/admin/admins');
+}
+
+export async function createPlatformAdmin(payload: {
+  email: string;
+  fullName: string;
+  password: string;
+}) {
+  return request('/admin/admins', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function suspendPlatformAdmin(id: string) {
+  return request(`/admin/admins/${id}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function listPublicStates() {
+  return request<import('@careerbridge/shared').LocationState[]>('/locations/states', { auth: false });
+}
+
+export async function listPublicCities(stateId: string) {
+  return request<import('@careerbridge/shared').LocationCity[]>(
+    `/locations/cities?stateId=${encodeURIComponent(stateId)}`,
+    { auth: false },
+  );
+}
+
+export async function adminListStates() {
+  return request<
+    Array<{
+      id: string;
+      name: string;
+      code: string | null;
+      active: boolean;
+      _count: { cities: number };
+    }>
+  >('/admin/states');
+}
+
+export async function adminCreateState(payload: { name: string; code?: string }) {
+  return request('/admin/states', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function adminUpdateState(
+  id: string,
+  payload: { name?: string; code?: string; active?: boolean },
+) {
+  return request(`/admin/states/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function adminDeleteState(id: string) {
+  return request(`/admin/states/${id}`, { method: 'DELETE' });
+}
+
+export async function adminListCities(stateId?: string) {
+  const q = stateId ? `?stateId=${encodeURIComponent(stateId)}` : '';
+  return request<
+    Array<{
+      id: string;
+      name: string;
+      active: boolean;
+      stateId: string;
+      state: { id: string; name: string; code: string | null };
+    }>
+  >(`/admin/cities${q}`);
+}
+
+export async function adminCreateCity(payload: { stateId: string; name: string }) {
+  return request('/admin/cities', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function adminUpdateCity(
+  id: string,
+  payload: { name?: string; stateId?: string; active?: boolean },
+) {
+  return request(`/admin/cities/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function adminDeleteCity(id: string) {
+  return request(`/admin/cities/${id}`, { method: 'DELETE' });
 }
 
 export async function logout() {
