@@ -1,0 +1,149 @@
+import Link from 'next/link';
+
+function prettyText(value: string) {
+  return value
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function PassportSeal({ value }: { value: number }) {
+  const safe = Math.min(100, Math.max(0, value));
+  const radius = 28;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (safe / 100) * circumference;
+
+  return (
+    <div className="cb-passport-ready relative h-[72px] w-[72px] shrink-0">
+      <svg viewBox="0 0 72 72" className="h-full w-full -rotate-90">
+        <circle cx="36" cy="36" r={radius} fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="6" />
+        <circle
+          cx="36"
+          cy="36"
+          r={radius}
+          fill="none"
+          stroke="#eab308"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+        <span className="text-xl font-extrabold leading-none tracking-tight text-[#eab308]">{safe}</span>
+        <span className="text-[7px] font-bold uppercase tracking-[0.16em] text-white">Ready</span>
+      </div>
+    </div>
+  );
+}
+
+export function PassportPreview({
+  name = 'Priya Sharma',
+  location = 'Bengaluru',
+  role,
+  ready = 64,
+  skills = ['SQL', 'Excel'],
+  photoUrl,
+  resumeScore = 70,
+  interviewScore = null,
+  passportId,
+}: {
+  name?: string;
+  location?: string;
+  role?: string;
+  ready?: number;
+  skills?: string[];
+  photoUrl?: string | null;
+  resumeScore?: number | null;
+  interviewScore?: number | null;
+  passportId?: string;
+}) {
+  const displayName = prettyText(name);
+  const displayPlace = prettyText(location);
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+  const year = new Date().getFullYear();
+  const id = passportId || 'CB-2048';
+
+  return (
+    <article className="cb-passport-light">
+      <span className="cb-passport-spine" aria-hidden />
+      <span className="cb-passport-grain" aria-hidden />
+      <span className="cb-passport-guilloche" aria-hidden />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="cb-passport-photo relative shrink-0 overflow-hidden">
+              {photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-sm font-extrabold tracking-tight">{initials || 'CB'}</span>
+              )}
+              <span className="cb-id-chip" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-extrabold uppercase tracking-[0.22em] text-[#eab308]">
+                Career Passport
+              </p>
+              <h3 className="truncate text-base font-extrabold leading-tight text-white">{displayName}</h3>
+              <p className="truncate text-[11px] text-white/55">
+                {displayPlace}
+                {role ? ` · ${role}` : ''}
+              </p>
+            </div>
+          </div>
+          <span className="shrink-0 rounded-pill bg-[#eab308] px-2 py-0.5 text-[9px] font-extrabold text-[#0a2e2c]">
+            FREE
+          </span>
+        </div>
+
+        <div className="mt-3.5 flex items-center gap-3">
+          <PassportSeal value={ready} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-medium leading-snug text-white/55">
+              Profile rising to a stronger match.
+            </p>
+            {skills.length ? (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {skills.slice(0, 3).map((skill) => (
+                  <span key={skill} className="cb-passport-skill-pill">
+                    {prettyText(skill)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="relative mt-3 grid grid-cols-2 gap-2">
+          <div className="cb-passport-stat">
+            <p>Resume</p>
+            <strong>{resumeScore ?? '—'}</strong>
+          </div>
+          <div className="cb-passport-stat">
+            <p>Interview</p>
+            <strong>{interviewScore ?? '—'}</strong>
+          </div>
+        </div>
+
+        <div className="relative mt-3 flex flex-col items-center">
+          <Link
+            href={ready < 100 ? '/passport/personal' : '/passport'}
+            className="inline-flex h-8 items-center rounded-full bg-[#eab308] px-3.5 text-xs font-extrabold text-[#0a2e2c] shadow-[0_8px_18px_rgba(0,0,0,0.28)] transition hover:brightness-110"
+          >
+            {ready < 100 ? 'Improve Passport' : 'Open dashboard'}
+          </Link>
+          <p className="cb-passport-mrz">
+            {id} • {year}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}

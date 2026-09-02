@@ -1,0 +1,210 @@
+import { normalizeHttpUrl } from './candidate';
+
+export const PERSON_NAME_PATTERN = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*\.?$/;
+export const MAX_RECORD_YEAR = new Date().getFullYear() + 1;
+export const PHOTO_MAX_BYTES = 8 * 1024 * 1024;
+export const PHOTO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+export function personNameError(value: string, emptyMessage = 'Enter your full name.') {
+  const name = value.trim().replace(/\s+/g, ' ');
+  if (name.length < 2) return emptyMessage;
+  if (name.length > 80) return 'Name is too long.';
+  if (!PERSON_NAME_PATTERN.test(name)) return 'Enter a valid name using letters only.';
+  return null;
+}
+
+export function dateOfBirthError(value: string, required = true) {
+  if (!value.trim()) return required ? 'Enter your date of birth.' : null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Enter a valid date of birth.';
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (date > today) return 'Date of birth cannot be in the future.';
+  const age = (today.getTime() - date.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  if (age < 14) return 'You must be at least 14 years old.';
+  if (age > 80) return 'Enter a realistic date of birth.';
+  return null;
+}
+
+export function yearError(value: string, required = false) {
+  if (!value.trim()) return required ? 'Enter the year.' : null;
+  if (!/^\d{4}$/.test(value)) return 'Enter a 4-digit year.';
+  const year = Number(value);
+  if (year < 1970 || year > MAX_RECORD_YEAR) return `Enter a year between 1970 and ${MAX_RECORD_YEAR}.`;
+  return null;
+}
+
+export function yearNumberError(year?: number | null) {
+  if (year == null) return null;
+  return yearError(String(year));
+}
+
+export function dateRangeError(start: string, end: string, currentRole = false) {
+  if (start) {
+    const startDate = new Date(start);
+    if (Number.isNaN(startDate.getTime())) return 'Enter a valid start date.';
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (startDate > today) return 'Start date cannot be in the future.';
+  }
+  if (!currentRole && start && end) {
+    const endDate = new Date(end);
+    if (Number.isNaN(endDate.getTime())) return 'Enter a valid end date.';
+    if (endDate < new Date(start)) return 'End date cannot be before the start date.';
+  }
+  return null;
+}
+
+export function optionalUrlError(value: string) {
+  if (!value.trim()) return null;
+  if (!normalizeHttpUrl(value)) return 'Enter a valid website link.';
+  return null;
+}
+
+export function salaryRangeError(minValue: string, maxValue: string) {
+  const min = Number(minValue);
+  const max = Number(maxValue);
+  if (minValue && !Number.isFinite(min)) return 'Enter a valid starting salary.';
+  if (maxValue && !Number.isFinite(max)) return 'Enter a valid maximum salary.';
+  if (minValue && maxValue && min > max) return 'Maximum salary cannot be less than starting salary.';
+  if ((minValue && min < 0) || (maxValue && max < 0)) return 'Salary cannot be negative.';
+  return null;
+}
+
+export const VALID_TLDS = new Set([
+  'com', 'org', 'net', 'edu', 'gov', 'mil', 'int', 'co', 'io', 'ai', 'in',
+  'co.in', 'net.in', 'org.in', 'gen.in', 'firm.in', 'ind.in',
+  'uk', 'co.uk', 'ca', 'au', 'com.au', 'de', 'fr', 'jp', 'cn', 'sg', 'ae', 'sa',
+  'tech', 'info', 'biz', 'dev', 'app', 'online', 'site', 'store', 'cloud', 'me', 'tv'
+]);
+
+export function validateEmailAddress(value: string, required = true): string | null {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return required ? 'Email address is required.' : null;
+  }
+
+  // 1. Basic format & length checks
+  if (trimmed.length > 254) {
+    return 'Email address is too long (maximum 254 characters).';
+  }
+
+  if (trimmed.includes(' ')) {
+    return 'Email address cannot contain spaces.';
+  }
+
+  const atParts = trimmed.split('@');
+  if (atParts.length === 1) {
+    return 'Email must include "@" symbol (e.g. name@gmail.com).';
+  }
+  if (atParts.length > 2) {
+    return 'Email address can only contain one "@" symbol.';
+  }
+
+  const [username, domain] = atParts;
+
+  // 2. Local part (username) validation
+  if (!username) {
+    return 'Enter the username part before "@" in email.';
+  }
+  if (username.length < 2) {
+    return 'Email username must be at least 2 characters.';
+  }
+  if (username.length > 64) {
+    return 'Email username is too long (maximum 64 characters).';
+  }
+  if (!/^[a-z0-9]+([._%+-][a-z0-9]+)*$/.test(username)) {
+    return 'Email username contains invalid characters or consecutive dots.';
+  }
+
+  // 3. Domain part validation
+  if (!domain) {
+    return 'Enter the domain name after "@" (e.g. gmail.com).';
+  }
+  if (domain.length < 4) {
+    return 'Enter a valid domain name (e.g. gmail.com).';
+  }
+  if (!domain.includes('.')) {
+    return 'Domain must include a dot (e.g. gmail.com).';
+  }
+  if (domain.startsWith('.') || domain.endsWith('.')) {
+    return 'Domain cannot start or end with a dot.';
+  }
+  if (domain.includes('..')) {
+    return 'Domain cannot contain consecutive dots.';
+  }
+
+  const domainParts = domain.split('.');
+  const domainName = domainParts[0];
+  const tld = domainParts.slice(1).join('.');
+
+  if (!domainName || domainName.length < 2) {
+    return 'Domain name is too short (e.g. "gmail" in gmail.com).';
+  }
+  if (!/^[a-z0-9-]+$/.test(domainName) || domainName.startsWith('-') || domainName.endsWith('-')) {
+    return 'Domain name contains invalid characters.';
+  }
+
+  const lastTld = domainParts[domainParts.length - 1];
+  if (!lastTld || lastTld.length < 2) {
+    return 'Domain extension (e.g. .com) is too short.';
+  }
+  if (!/^[a-z]+$/.test(lastTld)) {
+    return 'Domain extension can only contain letters.';
+  }
+
+  return null;
+}
+
+export function emailError(value: string, required = true) {
+  return validateEmailAddress(value, required);
+}
+
+export function gstNumberError(value: string) {
+  const gst = value.trim().toUpperCase();
+  if (!gst) return 'Enter the GST number.';
+  if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gst)) {
+    return 'Enter a valid 15-character GST number.';
+  }
+  return null;
+}
+
+export function cinError(value: string) {
+  const cin = value.trim().toUpperCase();
+  if (!cin) return 'Enter the CIN.';
+  if (!/^[UL][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/.test(cin)) {
+    return 'Enter a valid CIN (Corporate Identity Number).';
+  }
+  return null;
+}
+
+export function panNumberError(value: string) {
+  const pan = value.trim().toUpperCase();
+  if (!pan) return 'Enter the company PAN number.';
+  if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+    return 'Enter a valid 10-character PAN number.';
+  }
+  return null;
+}
+
+export function companyWebsiteError(value: string) {
+  const website = value.trim();
+  if (!website) return 'Enter the company website.';
+  if (!normalizeHttpUrl(website.startsWith('http') ? website : `https://${website}`)) {
+    return 'Enter a valid company website.';
+  }
+  return null;
+}
+
+export function designationError(value: string) {
+  const designation = value.trim().replace(/\s+/g, ' ');
+  if (designation.length < 2) return 'Enter your designation.';
+  if (designation.length > 80) return 'Designation is too long.';
+  return null;
+}
+
+export function photoFileError(type: string, size: number) {
+  if (!PHOTO_MIME_TYPES.includes(type.toLowerCase())) return 'Choose a JPG, PNG, or WebP photo.';
+  if (size > PHOTO_MAX_BYTES) return 'Photo must be 8 MB or smaller.';
+  return null;
+}
