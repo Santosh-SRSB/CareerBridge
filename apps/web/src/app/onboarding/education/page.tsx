@@ -3,50 +3,67 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { EDUCATION_LEVELS } from '@careerbridge/shared';
-import { OnboardingFrame } from '@/components/OnboardingFrame';
+import {
+  OnboardingActions,
+  OnboardingFrame,
+  OnboardingQuestion,
+  onboardingOptionButtonClass,
+  onboardingPrimaryButtonClass,
+} from '@/components/OnboardingFrame';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { getStoredUser } from '@/lib/session';
 import { addEducation, getCandidateMe, updateCandidateMe } from '@/lib/api';
+import { nextOnboardingStepPath } from '@/lib/onboarding-flow';
+import { useOnboardingGate } from '@/hooks/useOnboardingGate';
+
+const STANDARD_LEVELS = EDUCATION_LEVELS.filter((level) => level !== 'Other');
 
 export default function OnboardingEducationPage() {
   const router = useRouter();
   const [qualification, setQualification] = useState('');
-  const [institution, setInstitution] = useState('');
-  const [yearCompleted, setYearCompleted] = useState('');
+  const [otherEducation, setOtherEducation] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
+  const gateReady = useOnboardingGate(3);
+  const [profileReady, setProfileReady] = useState(false);
+  const ready = gateReady && profileReady;
 
   useEffect(() => {
-    if (!getStoredUser()) {
-      router.replace('/login');
-      return;
-    }
+    if (!gateReady) return;
     getCandidateMe()
-      .then((profile) => setQualification(profile.highestEducation || ''))
-      .finally(() => setReady(true));
-  }, [router]);
+      .then((profile) => {
+        const saved = profile.highestEducation || profile.education[0]?.qualification || '';
+        if (STANDARD_LEVELS.includes(saved as (typeof STANDARD_LEVELS)[number])) {
+          setQualification(saved);
+        } else if (saved) {
+          setQualification('Other');
+          setOtherEducation(saved);
+        }
+      })
+      .finally(() => setProfileReady(true));
+  }, [gateReady]);
+
+  function selectLevel(level: string) {
+    setQualification(level);
+    if (level !== 'Other') setOtherEducation('');
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!qualification) {
-      setError('Select your highest education.');
+    const value = qualification === 'Other' ? otherEducation.trim() : qualification;
+    if (!value) {
+      setError(qualification === 'Other' ? 'Enter your highest education.' : 'Select your highest education.');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      let profile = await getCandidateMe();
-      await updateCandidateMe({ highestEducation: qualification });
+      const profile = await getCandidateMe();
+      await updateCandidateMe({ highestEducation: value });
       if (!profile.education.length) {
-        await addEducation({
-          qualification,
-          institution: institution || undefined,
-          yearCompleted: yearCompleted ? Number(yearCompleted) : undefined,
-        });
+        await addEducation({ qualification: value });
       }
-      router.push('/onboarding/interests');
+      router.push(nextOnboardingStepPath(3));
     } catch {
       setError('We could not save your education right now. Please try again.');
     } finally {
@@ -54,44 +71,60 @@ export default function OnboardingEducationPage() {
     }
   }
 
-  if (!ready) return null;
+  function onSkip() {
+    router.push(nextOnboardingStepPath(3));
+  }
+
+  if (!ready) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
+        Loading...
+      </main>
+    );
+  }
 
   return (
-    <OnboardingFrame step={3} title="What is your highest education?" subtitle="You can add more later in your Career Passport.">
-      <form onSubmit={onSubmit} className="space-y-5">
-        <div className="grid grid-cols-2 gap-2">
-          {EDUCATION_LEVELS.map((level) => (
-            <button
-              key={level}
-              type="button"
-              onClick={() => setQualification(level)}
-              className={`rounded-sm border px-3 py-3 text-sm font-semibold ${
-                qualification === level
-                  ? 'border-primary bg-primary text-accent'
-                  : 'border-primary/20 bg-surface text-primary'
-              }`}
-            >
-              {level}
-            </button>
-          ))}
-        </div>
-        <Input
-          label="Institution (optional)"
-          name="institution"
-          value={institution}
-          onChange={(event) => setInstitution(event.target.value)}
-        />
-        <Input
-          label="Year completed (optional)"
-          name="yearCompleted"
-          inputMode="numeric"
-          value={yearCompleted}
-          onChange={(event) => setYearCompleted(event.target.value.replace(/\D/g, '').slice(0, 4))}
-        />
-        {error ? <p className="text-sm text-error">{error}</p> : null}
-        <Button type="submit" loading={loading} loadingLabel="Saving...">
-          Continue
-        </Button>
+    <OnboardingFrame step={3}>
+      <form onSubmit={onSubmit} className="space-y-6">
+        <OnboardingQuestion title="What is your highest education?">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {EDUCATION_LEVELS.map((level) => (
+              <button
+                key={level}
+                type="button"
+                onClick={() => selectLevel(level)}
+                className={onboardingOptionButtonClass(qualification === level)}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+          {qualification === 'Other' ? (
+            <Input
+              label=""
+              name="otherEducation"
+              required
+              value={otherEducation}
+              onChange={(event) => setOtherEducation(event.target.value)}
+              placeholder="Type your highest education"
+            />
+          ) : null}
+        </OnboardingQuestion>
+
+        {error ? <p className="text-xs font-semibold text-error">{error}</p> : null}
+
+        <OnboardingActions onSkip={onSkip}>
+          <Button
+            type="submit"
+            size="sm"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={onboardingPrimaryButtonClass}
+          >
+            Continue
+          </Button>
+        </OnboardingActions>
       </form>
     </OnboardingFrame>
   );

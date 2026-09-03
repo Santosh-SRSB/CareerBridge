@@ -74,7 +74,7 @@ export default function EmployerVerifyPage() {
       subtitle="Confirm that you are authorized to recruit for this company."
       backHref="/employer/kyc"
     >
-      <form onSubmit={onSubmit} className="space-y-3">
+      <form onSubmit={onSubmit} className="ep-kyc">
         <Input
           label="Company Name"
           name="companyName"
@@ -103,12 +103,17 @@ export default function EmployerVerifyPage() {
           value={designation}
           onChange={(event) => setDesignation(event.target.value)}
         />
-        <div className="rounded-md bg-primary-soft/70 px-3.5 py-3 text-sm text-muted">
-          Verification may use company domain, official email OTP, company documents or admin
-          approval where needed.
-        </div>
-        {error ? <p className="text-sm text-error">{error}</p> : null}
-        <Button type="submit" variant="tertiary" loading={loading} loadingLabel="Submitting...">
+        <p className="ep-kyc__hint">
+          May use company domain, email OTP, documents, or admin approval.
+        </p>
+        {error ? <p className="ep-kyc__error">{error}</p> : null}
+        <Button
+          type="submit"
+          variant="primary"
+          loading={loading}
+          loadingLabel="Submitting..."
+          className="ep-kyc__cta"
+        >
           Submit Verification
         </Button>
       </form>

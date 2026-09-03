@@ -3,8 +3,7 @@ import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 import { SiteHeader } from '@/components/SiteHeader';
 import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
-import { AuthHeroFx } from '@/components/AuthHeroFx';
-import { TiltCard } from '@/components/TiltCard';
+import { AuthSplitHero } from '@/components/AuthSplitHero';
 
 export { Logo };
 
@@ -13,6 +12,12 @@ export function AuthShell({
   subtitle,
   backHref,
   marketing = true,
+  maxWidthClass = 'max-w-[500px]',
+  scene = 'candidate',
+  panelTitle,
+  panelCopy,
+  showLogo = true,
+  compact = false,
   children,
 }: {
   title: string;
@@ -22,24 +27,67 @@ export function AuthShell({
   panelTitle?: string;
   panelCopy?: string;
   marketing?: boolean;
+  maxWidthClass?: string;
+  showLogo?: boolean;
+  compact?: boolean;
   children: ReactNode;
 }) {
   if (!marketing) {
     return (
-      <main className="relative min-h-screen">
+      <main
+        className={`relative min-h-screen bg-fog ${compact ? 'ep-auth-compact' : ''} ${
+          compact ? 'flex items-center justify-center' : ''
+        }`}
+      >
         <AnimatedBackdrop />
-        <div className="relative mx-auto max-w-md px-5 py-8">
-          <div className="flex items-center justify-between">
-            <Logo />
-            {backHref ? (
-              <Link href={backHref} className="text-sm font-semibold text-accent">
-                ← Back
-              </Link>
-            ) : null}
+        <div
+          className={`relative mx-auto w-full ${maxWidthClass} ${
+            compact ? 'px-4 py-4 sm:py-5' : 'px-5 py-8'
+          }`}
+        >
+          {showLogo || backHref ? (
+            <div
+              className={`flex items-center ${
+                showLogo && backHref
+                  ? 'justify-between'
+                  : showLogo
+                    ? 'justify-start'
+                    : 'justify-end'
+              }`}
+            >
+              {showLogo ? <Logo /> : null}
+              {backHref ? (
+                <Link href={backHref} className="text-sm font-semibold text-teal hover:underline">
+                  ← Back
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+          <h1
+            className={`${
+              showLogo || backHref ? (compact ? 'mt-3' : 'mt-8') : compact ? 'mt-0' : 'mt-2'
+            } font-black tracking-tight text-primary ${
+              compact ? 'text-xl sm:text-2xl text-center' : 'text-2xl sm:text-3xl'
+            }`}
+          >
+            {title}
+          </h1>
+          {subtitle ? (
+            <p
+              className={`text-muted ${
+                compact ? 'mt-1 text-xs text-center' : 'mt-2 text-sm'
+              }`}
+            >
+              {subtitle}
+            </p>
+          ) : null}
+          <div
+            className={`rounded-2xl bg-white shadow-xl border border-primary/10 ${
+              compact ? 'mt-3 p-4 sm:p-5' : 'mt-6 p-6 sm:p-8'
+            }`}
+          >
+            {children}
           </div>
-          <h1 className="mt-8 text-3xl font-extrabold tracking-tight text-primary">{title}</h1>
-          {subtitle ? <p className="mt-2 text-muted">{subtitle}</p> : null}
-          <div className="cb-card mt-6 p-6">{children}</div>
           <div id="recaptcha-container" />
         </div>
       </main>
@@ -47,26 +95,59 @@ export function AuthShell({
   }
 
   return (
-    <main className="min-h-screen bg-primary">
+    <main className="min-h-screen w-full flex flex-col bg-[#f0f4f8] text-[#0f172a]">
       <SiteHeader />
-      <section className="relative flex min-h-[calc(100dvh-4.5rem)] items-center justify-center overflow-hidden px-5 py-10">
-        <AuthHeroFx />
-        <div className="relative z-10 w-full max-w-[360px]">
-          {backHref ? (
-            <Link href={backHref} className="mb-3 inline-block text-sm font-semibold text-orange transition hover:text-white">
-              ← Back
-            </Link>
-          ) : null}
-          <TiltCard>
-            <div className="h-1 bg-gradient-to-r from-orange via-white to-teal" />
-            <div className="px-5 pt-4 text-center">
-              <h1 className="text-xl font-extrabold tracking-tight text-primary">{title}</h1>
+      <div className="flex-1 flex items-center justify-center p-3 sm:p-5 md:p-8">
+        {/* Main 2-column container card matching the reference design */}
+        <div className="relative w-full max-w-5xl lg:max-w-6xl xl:max-w-[1160px] bg-white rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.08)] overflow-hidden grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] border border-slate-200/80">
+          
+          {/* Left Hero Column (Responsive: visible cleanly on mobile & desktop) */}
+          <AuthSplitHero
+            headline={panelTitle || (scene === 'employer' ? 'Hire verified talent simply and quickly' : 'Find your dream job simply and quickly')}
+            subhead={panelCopy || (scene === 'employer' ? 'Connect directly with scored candidates, track verified skills, and streamline your recruitment.' : 'Build your verified Career Passport, practice with AI interviews, and get discovered by top companies.')}
+            scene={scene}
+          />
+
+          {/* Right Form Column */}
+          <div className="flex flex-col justify-between p-6 sm:p-8 md:p-10 lg:p-10 xl:p-12 bg-white">
+            <div className="w-full max-w-[420px] mx-auto my-auto">
+              {backHref ? (
+                <Link href={backHref} className="mb-3 inline-block text-xs font-bold text-[#0284c7] hover:underline">
+                  ← Back
+                </Link>
+              ) : null}
+
+              {/* Form Title & Subtitle */}
+              <div className="mb-4">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0f172a] leading-tight">
+                  {title}
+                </h1>
+                {subtitle ? (
+                  <p className="mt-1 text-xs sm:text-sm text-slate-500 leading-relaxed font-normal">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </div>
+
+              {/* Injected Form Component */}
+              <div className="cb-auth-portal">
+                {children}
+              </div>
             </div>
-            <div className="px-5 pb-5 pt-3">{children}</div>
-          </TiltCard>
+
+            {/* Bottom Form Footer Notes */}
+            <div className="mt-6 pt-4 border-t border-slate-100 text-center text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-1.5">
+              <div className="flex items-center gap-3 font-medium">
+                <Link href="/terms" className="hover:text-slate-600 transition">Terms of Service</Link>
+                <span>|</span>
+                <Link href="/privacy" className="hover:text-slate-600 transition">Privacy Policy</Link>
+              </div>
+              <p className="font-medium">CareerBridge 2026. All rights reserved.</p>
+            </div>
+          </div>
         </div>
-        <div id="recaptcha-container" />
-      </section>
+      </div>
+      <div id="recaptcha-container" />
     </main>
   );
 }

@@ -57,16 +57,17 @@ export async function POST(request: Request) {
       skillCount: skills.length,
     });
 
-    const user = await prisma.user.create({
+    const phone = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const user: any = await (prisma.user as any).create({
       data: {
+        phone,
+        externalAuthId: phone,
         userType: "CANDIDATE",
         candidate: {
           create: {
             firstName,
             lastName,
             city,
-            about,
-            source,
             profileCompletion,
             education: { create: educationRows },
             skills: { create: skills.map((name: string) => ({ name })) },

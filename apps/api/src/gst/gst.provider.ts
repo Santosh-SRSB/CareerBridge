@@ -9,6 +9,10 @@ export type GstProviderLookupResult = {
   status: GstInternalStatus;
   responseCode?: string;
   durationMs: number;
+  /** GST trade name (brand / trading style). */
+  tradeName?: string | null;
+  /** Registered legal name of the taxpayer. */
+  legalName?: string | null;
 };
 
 type CachedToken = {
@@ -45,13 +49,16 @@ export class IrisIrpGstProvider {
     const cfg = this.gstConfig.get();
     const started = Date.now();
 
-    if (cfg.mockEnabled && !cfg.configured) {
-      return this.mockLookup(gstin, started);
+    // Prefer local mock for sandbox when credentials are missing (employer KYC still works in dev).
+    if (cfg.mockEnabled || !cfg.configured) {
+      if (cfg.mockEnabled || cfg.environment === 'sandbox') {
+        return this.mockLookup(gstin, started);
+      }
     }
 
     if (!cfg.configured) {
       throw new GstConfigError(
-        'IRIS IRP credentials are not configured. Set real sandbox values in apps/api/.env (see .env.example).',
+        'IRIS IRP credentials are not configured. Set GSTINAPI_KEY (gstinapi.in) or GST_MOCK_ENABLED=true for local testing.',
       );
     }
 
@@ -59,10 +66,12 @@ export class IrisIrpGstProvider {
       const token = await this.getAuthToken(cfg);
       const payload = await this.fetchWithRetry(cfg, gstin, token);
       const status = this.extractStatus(payload);
+      const names = this.extractNames(payload);
       return {
         status,
         responseCode: String((payload as { Status?: string | number }).Status ?? 'OK'),
         durationMs: Date.now() - started,
+        ...names,
       };
     } catch (err) {
       if (err instanceof GstProviderError && err.httpStatus === 401) {
@@ -71,10 +80,12 @@ export class IrisIrpGstProvider {
           const token = await this.getAuthToken(cfg, true);
           const payload = await this.fetchWithRetry(cfg, gstin, token);
           const status = this.extractStatus(payload);
+          const names = this.extractNames(payload);
           return {
             status,
             responseCode: String((payload as { Status?: string | number }).Status ?? 'OK'),
             durationMs: Date.now() - started,
+            ...names,
           };
         } catch (retryErr) {
           throw retryErr;
@@ -99,7 +110,13 @@ export class IrisIrpGstProvider {
     this.logger.warn(
       `GST mock lookup for ${maskGstin(gstin)} → ${status} (GST_MOCK_ENABLED=true; not a live IRIS call)`,
     );
-    return { status, responseCode: 'MOCK', durationMs: Date.now() - started };
+    return {
+      status,
+      responseCode: 'MOCK',
+      durationMs: Date.now() - started,
+      tradeName: 'CareerBridge Demo Tradename',
+      legalName: 'CareerBridge Demo Private Limited',
+    };
   }
 
   private async getAuthToken(cfg: GstRuntimeConfig, force = false): Promise<CachedToken> {
@@ -232,6 +249,31 @@ export class IrisIrpGstProvider {
       data.TxpType;
 
     return normalizeGstStatus(raw);
+  }
+
+  private extractNames(payload: Record<string, unknown>): {
+    tradeName: string | null;
+    legalName: string | null;
+  } {
+    let data: Record<string, unknown> = payload;
+    if (payload.Data && typeof payload.Data === 'object') {
+      data = payload.Data as Record<string, unknown>;
+    } else if (payload.data && typeof payload.data === 'object') {
+      data = payload.data as Record<string, unknown>;
+    }
+
+    const pick = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = data[key];
+        if (typeof value === 'string' && value.trim()) return value.trim();
+      }
+      return null;
+    };
+
+    return {
+      tradeName: pick('TradeName', 'tradeName', 'trade_name', 'Nba', 'nba', 'trademark'),
+      legalName: pick('LegalName', 'legalName', 'legal_name', 'Lgnm', 'lgnm', 'Name'),
+    };
   }
 
   private async httpJson(

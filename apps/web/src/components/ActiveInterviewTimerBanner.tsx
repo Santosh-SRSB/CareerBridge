@@ -176,7 +176,7 @@ export function ActiveInterviewTimerBanner({ interviews, compact = false }: Prop
 
   return (
     <Link
-      href={`/interviews/human/${timer.id}/room`}
+      href={`/interviews/human/${timer.id}`}
       className={`cb-interview-timer-banner${urgent ? ' is-urgent' : ''}${compact ? ' is-compact' : ''}`}
       aria-live="polite"
     >

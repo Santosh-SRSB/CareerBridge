@@ -1,8 +1,8 @@
-import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsString, MinLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class PasswordLoginDto {
-  @ApiProperty({ example: '+919876543210' })
+  @ApiProperty({ example: 'you@example.com' })
   @IsString()
   identifier: string;
 
@@ -11,8 +11,7 @@ export class PasswordLoginDto {
   @MinLength(8, { message: 'Enter your password.' })
   password: string;
 
-  @ApiPropertyOptional({ enum: ['CANDIDATE', 'EMPLOYER'] })
-  @IsOptional()
-  @IsIn(['CANDIDATE', 'EMPLOYER'])
-  accountType?: 'CANDIDATE' | 'EMPLOYER';
+  @ApiProperty({ enum: ['CANDIDATE', 'EMPLOYER', 'SUPER_ADMIN', 'ADMIN'] })
+  @IsIn(['CANDIDATE', 'EMPLOYER', 'SUPER_ADMIN', 'ADMIN'])
+  accountType: 'CANDIDATE' | 'EMPLOYER' | 'SUPER_ADMIN' | 'ADMIN';
 }

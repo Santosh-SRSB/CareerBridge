@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { HUMAN_INTERVIEW_PRICE_INR, HUMAN_MOCK_RULES } from '@careerbridge/shared';
 import { CandidateShell } from '@/components/CandidatePortal';
-import { SkillMascot } from '@/components/SkillMascot';
+import { HumanInterviewArt } from '@/components/HumanInterviewArt';
 import { humanInterviewPaid, markHumanInterviewPaid } from '@/lib/human-interview-pay';
 
 export default function HumanInterviewPayPage() {
@@ -53,8 +53,8 @@ export default function HumanInterviewPayPage() {
         </p>
 
         <div className="cb-hire-stage">
-          <article className="cb-hire-hero">
-            <SkillMascot pose="coach" className="cb-hire-eagle" alt="CareerBridge eagle" />
+          <article className="cb-hire-hero is-art">
+            <HumanInterviewArt priority />
             <p>Live interview</p>
             <b>₹{HUMAN_INTERVIEW_PRICE_INR}</b>
             <span>READY</span>

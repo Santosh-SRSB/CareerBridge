@@ -9,7 +9,13 @@ import {
   serializeLanguageSkills,
   type LanguageSkill,
 } from '@careerbridge/shared';
-import { Chip, PassportFrame, WizardActions } from '@/components/PassportFrame';
+import {
+  Chip,
+  PassportFrame,
+  PassportLoading,
+  WizardActions,
+  passportPrimaryButtonClass,
+} from '@/components/PassportFrame';
 import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
 import { getCandidateMe, updateCandidateMe } from '@/lib/api';
@@ -66,7 +72,7 @@ export default function PassportLanguagesPage() {
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
+  if (!ready) return <PassportLoading />;
 
   return (
     <PassportFrame
@@ -74,7 +80,7 @@ export default function PassportLanguagesPage() {
       subtitle="Select every language you can use at work, then choose how well you know it. The first one is your preferred language."
       step="languages"
     >
-      <form onSubmit={onSubmit} className="cb-passport-panel space-y-4 p-6 sm:p-7">
+      <form onSubmit={onSubmit} className="space-y-4">
         <div className="flex flex-wrap gap-1.5">
           {PREFERRED_LANGUAGES.map((item) => (
             <Chip key={item} selected={languages.some((lang) => lang.name === item)} onClick={() => toggle(item)}>
@@ -84,10 +90,10 @@ export default function PassportLanguagesPage() {
         </div>
         {languages.length ? (
           <div className="space-y-3">
-            <p className="text-sm font-semibold text-primary">Proficiency</p>
+            <p className="text-xs font-bold text-slate-700">Proficiency</p>
             {languages.map((item) => (
-              <div key={item.name} className="rounded-xl border border-primary/8 bg-[#f6fbf7] p-3">
-                <p className="text-sm font-bold text-primary">{item.name}</p>
+              <div key={item.name} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-bold text-slate-900">{item.name}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {LANGUAGE_LEVELS.map((level) => (
                     <Chip key={level} selected={item.level === level} onClick={() => setLevel(item.name, level)}>
@@ -97,12 +103,19 @@ export default function PassportLanguagesPage() {
                 </div>
               </div>
             ))}
-            <p className="text-sm text-muted">Preferred: {languages[0].name}</p>
+            <p className="text-sm text-slate-500">Preferred: {languages[0].name}</p>
           </div>
         ) : null}
-        {error ? <p className="text-sm text-error">{error}</p> : null}
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>
-          <Button type="submit" size="md" block={false} loading={loading} loadingLabel="Saving...">
+          <Button
+            type="submit"
+            size="md"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={passportPrimaryButtonClass}
+          >
             Save and continue
           </Button>
         </WizardActions>

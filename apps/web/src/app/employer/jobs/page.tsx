@@ -4,10 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EmployerJobSummary } from '@careerbridge/shared';
 import { listEmployerJobs } from '@/lib/api';
-import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { BrandMascot } from '@/components/BrandMascot';
+import { EmployerShellFallback, EmployerPageHeader } from '@/components/EmployerPortal';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
-import { Button } from '@/components/ui/Button';
 
 function jobStatusLabel(status: string) {
   if (status === 'PUBLISHED') return 'Active';
@@ -122,133 +120,134 @@ export default function EmployerJobsPage() {
   }, [jobs]);
 
   return (
-    <EmployerShellFallback>
-      <section className="cb-employer-page cb-list-studio space-y-4">
-        <header className="cb-list-studio__hero cb-list-studio__hero--jobs">
-          <div className="relative z-10 min-w-0">
-            <p className="text-sm font-semibold text-[#eab308]">Hiring pipeline</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-              Manage Jobs
-            </h1>
-            <p className="mt-2 max-w-lg text-sm text-white/75 sm:text-base">
-              Track openings, publish drafts, and keep every role moving.
-            </p>
-            <Link
-              href="/employer/jobs/new"
-              className="cb-btn-shimmer mt-4 inline-flex rounded-full bg-gradient-to-r from-[#ca8a04] to-[#eab308] px-5 py-2.5 text-sm font-bold text-navy shadow-[0_12px_28px_rgba(202,138,4,0.28)] transition duration-300 ease-out hover:brightness-110"
-            >
+    <EmployerShellFallback title="My Jobs">
+      <div className="ep-desk">
+        <EmployerPageHeader
+          title="My Jobs"
+          subtitle="Create, publish, pause, and close job postings."
+          action={
+            <Link href="/employer/jobs/new" className="ep-btn-gold">
               + Post New Job
             </Link>
-          </div>
-          <BrandMascot pose="checklist" motion="float" size="md" className="relative z-10 shrink-0" />
-        </header>
+          }
+        />
 
         {!loading && jobs.length ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="ep-stats">
             {[
-              { label: 'Total roles', value: stats.total },
-              { label: 'Active', value: stats.active },
-              { label: 'Draft / paused', value: stats.drafts },
-              { label: 'Applicants', value: stats.applicants },
+              {
+                label: 'Total roles',
+                value: stats.total,
+                tone: '',
+                hint: 'All openings',
+                icon: (
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M8 9h8M8 12.5h8M8 16h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Active',
+                value: stats.active,
+                tone: 'ep-stat__icon--teal',
+                hint: 'Live now',
+                icon: (
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <circle cx="12" cy="12" r="7.5" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M9.2 12.2l1.9 1.9 3.7-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Draft / paused',
+                value: stats.drafts,
+                tone: 'ep-stat__icon--gold',
+                hint: 'Needs action',
+                icon: (
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <rect x="9" y="6" width="2.4" height="12" rx="0.6" fill="currentColor" />
+                    <rect x="12.6" y="6" width="2.4" height="12" rx="0.6" fill="currentColor" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Applicants',
+                value: stats.applicants,
+                tone: 'ep-stat__icon--soft',
+                hint: 'Across roles',
+                icon: (
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="1.8" />
+                    <circle cx="16" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M4.5 18c.6-2.4 2.4-3.6 4.5-3.6s3.9 1.2 4.5 3.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                ),
+              },
             ].map((item) => (
-              <div key={item.label} className="cb-lift-card rounded-2xl bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{item.label}</p>
-                <p className="cb-metric-value mt-1 text-2xl font-extrabold text-primary">{item.value}</p>
+              <div key={item.label} className="ep-card ep-stat">
+                <div className={`ep-stat__icon ${item.tone}`}>{item.icon}</div>
+                <p>{item.label}</p>
+                <strong>{item.value}</strong>
+                <em>{item.hint}</em>
               </div>
             ))}
           </div>
         ) : null}
 
-        <div className="cb-list-studio__panel">
-          {loading ? (
-            <div className="space-y-3">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="cb-shimmer h-24 rounded-2xl bg-fog/80" />
-              ))}
-            </div>
-          ) : null}
-          {error ? <p className="text-sm text-error">{error}</p> : null}
+        <article className="ep-card ep-list-card">
+          {loading ? <p className="p-4 text-sm text-muted">Loading jobs…</p> : null}
+          {error ? <p className="p-4 text-sm text-error">{error}</p> : null}
 
           {!loading && !error && !jobs.length ? (
-            <div className="cb-mascot-empty rounded-2xl border border-dashed border-primary/15 bg-gradient-to-b from-fog/80 to-white px-4 py-10">
-              <BrandMascot pose="laptop" motion="pop" size="md" />
-              <p className="font-semibold text-primary">No jobs yet</p>
-              <p className="max-w-sm text-sm text-muted">
-                Post your first opening to start matching candidates.
-              </p>
-              <Link href="/employer/jobs/new" className="mt-1 inline-block">
-                <Button type="button" className="!rounded-full">
-                  + Post New Job
-                </Button>
+            <div className="ep-empty px-5 py-10">
+              <p>No jobs yet</p>
+              <p className="ep-empty__sub">Create your first job posting.</p>
+              <Link href="/employer/jobs/new" className="ep-btn-gold mt-3 inline-flex rounded-xl px-4 py-2 text-sm font-extrabold">
+                + Create Job
               </Link>
             </div>
           ) : null}
 
-          <div className="space-y-3">
-            {jobs.map((job, index) => (
-              <Link
-                key={job.id}
-                href={`/employer/jobs/${job.id}`}
-                className="cb-job-row group block"
-                style={{ animationDelay: `${index * 40}ms` }}
-              >
-                <div className="flex items-start gap-3 sm:gap-4">
-                  <span className={`${jobIconTone(job.status)} hidden sm:flex`} aria-hidden>
-                    <JobRoleIcon status={job.status} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-bold text-primary group-hover:text-teal">
-                          {job.title}
-                        </p>
-                        <p className="mt-1 text-sm text-muted">
-                          {job.applicantCount > 0
-                            ? `${job.applicantCount} applicant${job.applicantCount === 1 ? '' : 's'} · ${postedLabel(job)}`
-                            : `No application yet · ${postedLabel(job)}`}
-                        </p>
-                        <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary/55">
-                          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" aria-hidden>
-                            <path
-                              d="M8 8.6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"
-                              stroke="currentColor"
-                              strokeWidth="1.4"
-                            />
-                            <path
-                              d="M3.2 7.4c1.3-3.2 2.9-4.8 4.8-4.8s3.5 1.6 4.8 4.8c-1.3 3.2-2.9 4.8-4.8 4.8S4.5 10.6 3.2 7.4Z"
-                              stroke="currentColor"
-                              strokeWidth="1.4"
-                            />
-                          </svg>
-                          {job.city}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${jobStatusTone(job.status)}`}
-                      >
-                        {jobStatusLabel(job.status)}
-                      </span>
-                    </div>
-                    <div
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                    >
-                      <JobStatusActions
-                        jobId={job.id}
-                        status={job.status}
-                        compact
-                        onUpdated={load}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
+          {!loading && jobs.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="ep-wire-table min-w-[640px]">
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Status</th>
+                    <th>Applications</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => (
+                    <tr key={job.id}>
+                      <td>
+                        <p className="font-extrabold text-primary">{job.title}</p>
+                        <p className="text-xs text-muted">{job.city || '—'} · {postedLabel(job)}</p>
+                      </td>
+                      <td>
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${jobStatusTone(job.status)}`}>
+                          {jobStatusLabel(job.status)}
+                        </span>
+                      </td>
+                      <td className="font-semibold">{job.applicantCount || 0}</td>
+                      <td>
+                        <div className="ep-wire-actions">
+                          <Link href={`/employer/jobs/${job.id}`}>View</Link>
+                          <Link href={`/employer/jobs/new?edit=${encodeURIComponent(job.id)}`}>Edit</Link>
+                          <JobStatusActions jobId={job.id} status={job.status} compact onUpdated={load} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </article>
+      </div>
     </EmployerShellFallback>
   );
 }

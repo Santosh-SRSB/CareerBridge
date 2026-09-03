@@ -84,7 +84,7 @@ export function GroupedSelect({
 
   return (
     <div ref={rootRef} className={`relative min-w-0 space-y-2 ${open ? 'z-[90]' : 'z-20'}`}>
-      <p className="mb-1.5 text-sm font-semibold text-primary">{label}</p>
+      {label ? <p className="mb-1.5 text-sm font-semibold text-primary">{label}</p> : null}
       <button
         type="button"
         id={id}

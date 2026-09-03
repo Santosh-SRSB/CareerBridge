@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { FirebaseService } from './firebase.service';
 import { EmailService } from './email.service';
+import { Msg91Service } from './msg91.service';
 import { JwtStrategy } from './jwt.strategy';
 
 @Module({
@@ -21,7 +22,7 @@ import { JwtStrategy } from './jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, FirebaseService, EmailService, JwtStrategy],
+  providers: [AuthService, FirebaseService, EmailService, Msg91Service, JwtStrategy],
   exports: [AuthService, EmailService],
 })
 export class AuthModule {}

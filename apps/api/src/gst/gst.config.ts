@@ -88,7 +88,7 @@ export class GstConfigService implements OnModuleInit {
 
     const timeoutMs = Number(this.config.get('GST_API_TIMEOUT_MS') || 15000);
     const maxRetries = Number(this.config.get('GST_API_MAX_RETRIES') || 2);
-    const mockEnabled = (this.config.get<string>('GST_MOCK_ENABLED') || 'false').toLowerCase() === 'true';
+    const mockEnabled = (this.config.get<string>('GST_MOCK_ENABLED') || 'true').toLowerCase() === 'true';
 
     const secrets = [baseUrl, clientId, clientSecret, username, password, requesterGstin];
     const isPlaceholder = secrets.some((v) => !v || PLACEHOLDER_MARKERS.some((m) => v.includes(m)));

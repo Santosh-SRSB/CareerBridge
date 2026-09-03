@@ -1,8 +1,6 @@
-export interface EmployerProfile {
-  id: string;
-  companyName: string;
-  industry?: string;
-  location?: string;
-  website?: string;
-  description?: string;
-}
+export type {
+  EmployerCandidatePassport,
+  EmployerCandidateSearchResult,
+  EmployerInterviewRecord,
+  EmployerInterviewStatus,
+} from '@careerbridge/shared';

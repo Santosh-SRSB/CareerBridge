@@ -6,8 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { humanInterviewJoinState, type HumanMockSession } from '@careerbridge/shared';
 import { getHumanMock } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
+import { HumanInterviewArt } from '@/components/HumanInterviewArt';
 import { HumanInterviewGate } from '@/components/HumanInterviewGate';
-import { SkillMascot } from '@/components/SkillMascot';
 
 function whenLabel(value: string) {
   return new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -38,11 +38,12 @@ export default function HumanMockDetailsPage() {
     return (
       <CandidateShell>
         <div className="cb-hire is-wide">
-          <section className="cb-hire-hero">
-            <SkillMascot pose="guide" className="cb-hire-eagle" alt="" />
-            <p>Booked meeting</p>
-            <b>Loading your booking…</b>
-            <span className="cb-hire-shimmer">Please wait</span>
+          <section className="cb-hire-meet">
+            <HumanInterviewArt />
+            <div className="cb-hire-meet-body">
+              <p className="cb-hire-kicker">Booked meeting</p>
+              <b className="cb-hire-meet-title">Loading your booking…</b>
+            </div>
           </section>
         </div>
       </CandidateShell>
@@ -51,6 +52,7 @@ export default function HumanMockDetailsPage() {
 
   const join = humanInterviewJoinState(session.scheduledAt, now);
   const done = session.status === 'COMPLETED';
+  const open = join.canJoin || session.status === 'LIVE';
 
   async function copy(value: string) {
     await navigator.clipboard.writeText(value);
@@ -66,51 +68,55 @@ export default function HumanMockDetailsPage() {
         <ol className="cb-hire-steps">
           <li>1 Pay</li>
           <li>2 Schedule</li>
-          <li className="is-on cb-hire-shimmer">3 Meet</li>
+          <li className="is-on">3 Meet</li>
         </ol>
 
-        <div className="cb-hire-stage">
-          <aside className="cb-hire-hero">
-            <SkillMascot pose="guide" className="cb-hire-eagle" alt="CareerBridge eagle" />
-            <p>Booked meeting</p>
-            <b>{session.jobRole}</b>
-            <span className="cb-hire-shimmer">{whenLabel(session.scheduledAt)}</span>
-            <ul>
+        <section className="cb-hire-meet">
+          <HumanInterviewArt priority />
+          <div className="cb-hire-meet-body">
+            <p className="cb-hire-kicker">Booked meeting</p>
+            <h1 className="cb-hire-meet-title">{session.jobRole}</h1>
+            <p className="cb-hire-meet-when">{whenLabel(session.scheduledAt)}</p>
+            <ul className="cb-hire-meet-meta">
               <li>
                 {session.candidateName || 'You'} with {session.interviewerName || 'Interviewer'}
               </li>
               {session.candidateEmail ? <li>{session.candidateEmail}</li> : null}
               <li>
-                {session.emailSent ? 'Invite sent to your email and to the interviewer.' : 'Join from here if email is not set up yet.'}
+                {session.emailSent
+                  ? 'Invite sent to your email and to the interviewer.'
+                  : 'Join from here if email is not set up yet.'}
               </li>
             </ul>
-          </aside>
 
-          <div>
             {done ? (
-              <Link href={`/interviews/human/${session.id}/score`} className="cb-hire-btn cb-hire-shimmer">
+              <Link href={`/interviews/human/${session.id}/score`} className="cb-hire-btn">
                 See score
               </Link>
-            ) : join.canJoin || session.status === 'LIVE' ? (
-              <section className="cb-hire-card">
-                <p className="cb-hire-ok">The live room is open now. You can enter.</p>
-                <Link href={`/interviews/human/${session.id}/room`} className="cb-hire-btn cb-hire-shimmer">
+            ) : open ? (
+              <div className="cb-hire-meet-action">
+                <p className="cb-hire-ok">The live room is open. You can enter now.</p>
+                <Link href={`/interviews/human/${session.id}/room`} className="cb-hire-btn">
                   Enter live room
                 </Link>
-              </section>
+              </div>
             ) : (
               <HumanInterviewGate session={session} compact />
             )}
 
-            <section className="cb-hire-card">
+            <div className="cb-hire-meet-link">
               <p className="cb-hire-kicker">Interviewer link</p>
               <code className="cb-hire-code">{session.interviewerJoinUrl}</code>
-              <button type="button" className="cb-hire-ghost" onClick={() => void copy(session.interviewerJoinUrl)}>
+              <button
+                type="button"
+                className="cb-hire-ghost"
+                onClick={() => void copy(session.interviewerJoinUrl)}
+              >
                 {copied ? 'Copied' : 'Copy interviewer link'}
               </button>
-            </section>
+            </div>
           </div>
-        </div>
+        </section>
       </div>
     </CandidateShell>
   );

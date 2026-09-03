@@ -25,7 +25,7 @@ const STEPS = [
 
 function firstMissingHref(completion: ProfileCompletion) {
   const missing = completion.sections.find((item) => !item.done && item.weight > 0);
-  return missing ? `${missing.href}?flow=1` : PASSPORT_FLOW_START;
+  return missing ? missing.href : PASSPORT_FLOW_START;
 }
 
 function ResumeBuildInner() {

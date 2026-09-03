@@ -135,7 +135,7 @@ export default function AssessmentsPage() {
             )}
             {error ? <p className="cb-folio-error">{error}</p> : null}
             {needsPassport ? (
-              <Link href="/passport/personal?flow=1" className="cb-folio-link">
+              <Link href="/passport/personal" className="cb-folio-link">
                 Complete Passport
               </Link>
             ) : null}

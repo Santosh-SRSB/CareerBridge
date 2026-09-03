@@ -1,191 +1,155 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import type { CandidateProfile } from '@careerbridge/shared';
-import { getCandidateMe } from '@/lib/api';
-import { api } from '@/features/resume-manual/manual-resume-api';
-import { passportToFriendResumeData } from '@/lib/passport-to-friend-resume';
-import { clearPendingResumeBuild, setPendingResumeBuild } from '@/lib/resume-build';
-import { DRAFT_KEY, type PassportDraft } from '@/types/passport';
-import '@/features/resume-manual/manual-editor.css';
-
-function readPassportDraft(): PassportDraft | null {
-  try {
-    const raw = sessionStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as PassportDraft;
-  } catch {
-    return null;
-  }
-}
-
-/** Fill gaps when passport was saved before about/interests/descriptions were persisted. */
-function mergeDraftIntoProfile(profile: CandidateProfile, draft: PassportDraft | null): CandidateProfile {
-  if (!draft) return profile;
-  return {
-    ...profile,
-    firstName: profile.firstName || draft.firstName || profile.firstName,
-    lastName: profile.lastName || draft.lastName || profile.lastName,
-    city: profile.city || draft.city || profile.city,
-    about: profile.about?.trim() ? profile.about : draft.about || profile.about,
-    careerInterests:
-      profile.careerInterests?.length > 0
-        ? profile.careerInterests
-        : (draft.careerInterests || []).filter(Boolean),
-    skills:
-      profile.skills?.length > 0
-        ? profile.skills
-        : (draft.skills || []).filter(Boolean).map((name, index) => ({ id: `draft-skill-${index}`, name })),
-    education:
-      profile.education?.length > 0
-        ? profile.education
-        : (draft.education || [])
-            .filter((item) => item.qualification || item.institution)
-            .map((item, index) => ({
-              id: `draft-edu-${index}`,
-              qualification: item.qualification,
-              institution: item.institution || null,
-              fieldOfStudy: item.fieldOfStudy || null,
-              yearCompleted: Number.parseInt(item.yearCompleted, 10) || null,
-              startDate: draft.educationStart || null,
-              endDate: draft.stillInCollege ? null : draft.educationEnd || item.yearCompleted || null,
-            })),
-    experiences:
-      profile.experiences?.length > 0
-        ? profile.experiences.map((item, index) => {
-            const fromDraft = draft.experience?.[index];
-            if (item.description?.trim() || !fromDraft?.description?.trim()) return item;
-            return { ...item, description: fromDraft.description };
-          })
-        : (draft.experience || [])
-            .filter((item) => item.company || item.jobTitle || item.description)
-            .map((item, index) => ({
-              id: `draft-exp-${index}`,
-              company: item.company,
-              jobTitle: item.jobTitle,
-              startDate: item.startDate || null,
-              endDate: item.endDate || null,
-              description: item.description || null,
-              isInternship: Boolean(item.isInternship),
-              stillInCompany: Boolean(item.stillInCompany),
-            })),
-    projects:
-      profile.projects?.length > 0
-        ? profile.projects
-        : (draft.projects || [])
-            .filter((item) => item.title?.trim())
-            .map((item, index) => ({
-              id: `draft-project-${index}`,
-              title: item.title,
-              role: item.role || null,
-              year: item.year ? Number(item.year) || null : null,
-              description: item.description || null,
-              url: item.url || null,
-            })),
-    highestEducation: profile.highestEducation || draft.education?.[0]?.qualification || profile.highestEducation,
-    educationStart: profile.educationStart || draft.educationStart || profile.educationStart,
-    educationEnd: profile.educationEnd || draft.educationEnd || profile.educationEnd,
-  };
-}
-
-function BuilderStartInner() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const source = searchParams.get('source') === 'manual' ? 'manual' : 'passport';
-  const template = searchParams.get('template') || 'ats-minimal';
-  const photo = searchParams.get('photo') === '1' ? '1' : '0';
-  const includePhoto = photo === '1';
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    setPendingResumeBuild({ template, photo, source });
-    let cancelled = false;
-
-    (async () => {
-      try {
-        let data: Record<string, unknown> = {
-          fullName: '',
-          title: '',
-          email: '',
-          phone: '',
-          location: '',
-          linkedin: '',
-          website: '',
-          photo: null,
-          summary: '',
-          experience: [],
-          education: [],
-          skills: [],
-          projects: [],
-          certifications: [],
-          careerGaps: [],
-          targetRole: '',
-          jobDescription: '',
-        };
-
-        if (source === 'passport') {
-          const profile = await getCandidateMe();
-          const draft = readPassportDraft();
-          data = passportToFriendResumeData(mergeDraftIntoProfile(profile, draft), { includePhoto });
-        }
-
-        const resume = await api.createResume({
-          title: source === 'passport' ? 'Passport resume' : 'Untitled resume',
-          templateId: template,
-          includePhoto,
-          data,
-        });
-
-        if (cancelled) return;
-        clearPendingResumeBuild();
-        router.replace(`/resume/builder/${resume.id}`);
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Could not start the resume builder.');
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [includePhoto, photo, router, source, template]);
-
-  return (
-    <div className="cb-manual-resume-root">
-      <div className="guidance-page">
-        <p className="muted small">Resume builder</p>
-        <h1>{source === 'passport' ? 'Loading from Career Passport…' : 'Opening blank editor…'}</h1>
-        <p className="muted">
-          {source === 'passport'
-            ? 'We are filling your resume from your passport. You can edit any missing fields next.'
-            : 'Creating a blank ATS resume with your selected template.'}
-        </p>
-        {error ? (
-          <div className="alert" style={{ marginTop: 16 }}>
-            <p>{error}</p>
-            <button className="btn btn-primary" type="button" onClick={() => router.push('/dashboard')}>
-              Back to dashboard
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { Button } from '@/components/ui/Button';
 
 export default function ResumeBuilderStartPage() {
+  const router = useRouter();
+  const [name, setName] = useState('Rahul Kumar');
+  const [summary, setSummary] = useState(
+    'Customer-focused professional with strong communication skills and a passion for helping people.',
+  );
+  const [skills, setSkills] = useState(['English', 'Communication', 'Customer handling']);
+
+  const steps = [
+    { label: 'Personal', active: true, done: true },
+    { label: 'Education', active: true, done: false },
+    { label: 'Experience', active: false, done: false },
+    { label: 'Skills', active: false, done: false },
+    { label: 'Review', active: false, done: false },
+  ];
+
+  function handleSaveAndContinue() {
+    router.push('/resume/preview');
+  }
+
   return (
-    <Suspense
-      fallback={
-        <div className="cb-manual-resume-root">
-          <div className="guidance-page">
-            <p className="muted">Starting resume builder…</p>
+    <CandidateAppShell activeTab="profile" showBack title="Build your resume" maxWidth="max-w-4xl">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            Build your resume
+          </h1>
+          <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
+            Fill in your details once and generate an ATS-ready professional resume.
+          </p>
+        </div>
+
+        {/* Horizontal Stepper */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs">
+          <div className="flex items-center justify-between relative px-2 max-w-2xl mx-auto">
+            <div className="absolute top-1/2 left-4 right-4 -translate-y-1/2 h-0.5 bg-slate-200 z-0" />
+            <div className="absolute top-1/2 left-4 w-1/4 -translate-y-1/2 h-0.5 bg-[#0a2e2c] z-0" />
+            {steps.map((step, idx) => (
+              <div key={step.label} className="flex flex-col items-center gap-1.5 z-10">
+                <div
+                  className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
+                    idx === 0
+                      ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white text-[9px] font-bold'
+                      : idx === 1
+                        ? 'border-[#0a2e2c] bg-white'
+                        : 'border-slate-300 bg-white'
+                  }`}
+                >
+                  {idx === 0 ? '✓' : ''}
+                </div>
+                <span
+                  className={`text-[11px] font-bold ${
+                    idx <= 1 ? 'text-[#0a2e2c]' : 'text-slate-400'
+                  }`}
+                >
+                  {step.label}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
-      }
-    >
-      <BuilderStartInner />
-    </Suspense>
+
+        {/* Form Fields Card */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+          <div className="grid grid-cols-1 gap-5">
+            {/* Name */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Full Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/10"
+              />
+            </div>
+
+            {/* Professional Summary */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Professional summary
+              </label>
+              <textarea
+                rows={3}
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium text-slate-800 outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/10"
+              />
+            </div>
+
+            {/* Experience */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Work Experience
+              </label>
+              <button
+                type="button"
+                className="w-full rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 py-4 text-xs font-bold text-slate-700 hover:bg-slate-100/70 transition"
+              >
+                + Add work experience or internship
+              </button>
+            </div>
+
+            {/* Education */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Education
+              </label>
+              <button
+                type="button"
+                className="w-full rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 py-4 text-xs font-bold text-slate-700 hover:bg-slate-100/70 transition"
+              >
+                + Add degree, diploma or high school
+              </button>
+            </div>
+
+            {/* Skills */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Skills
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="rounded-full bg-slate-100 border border-slate-200 px-3.5 py-1.5 text-xs font-bold text-slate-700"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <div className="pt-4 border-t border-slate-100 flex justify-end">
+            <Button
+              type="button"
+              onClick={handleSaveAndContinue}
+              className="w-full sm:w-auto px-8 py-3.5 text-sm font-bold bg-[#0a2e2c] hover:bg-[#072422] text-white shadow-md hover:shadow-lg transition rounded-xl"
+            >
+              Save and continue →
+            </Button>
+          </div>
+        </div>
+      </div>
+    </CandidateAppShell>
   );
 }

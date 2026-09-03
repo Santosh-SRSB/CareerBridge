@@ -8,7 +8,7 @@ import {
   type HumanMockSession,
 } from '@careerbridge/shared';
 
-import { SkillMascot } from '@/components/SkillMascot';
+import { HumanInterviewArt } from '@/components/HumanInterviewArt';
 
 function whenLabel(value: string) {
   return new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -42,12 +42,18 @@ export function HumanInterviewGate({
 
   return (
     <section className={compact ? 'cb-hold is-card' : 'cb-hold is-studio'}>
-      <SkillMascot pose="guide" className="cb-hire-eagle" alt="" />
+      {compact ? null : <HumanInterviewArt className="is-gate" priority />}
       <p className="cb-hold-alert">Room is locked until 5 minutes before the meeting.</p>
-      <p className="cb-hold-kicker">Human interview</p>
-      <h1>{session.jobRole}</h1>
-      <p className="cb-hold-when">Meeting time · {whenLabel(session.scheduledAt)}</p>
-      <p className="cb-hold-clock cb-hire-shimmer">{formatInterviewCountdown(state.remainingMs)}</p>
+      {compact ? null : (
+        <>
+          <p className="cb-hold-kicker">Human interview</p>
+          <h1>{session.jobRole}</h1>
+          <p className="cb-hold-when">Meeting time · {whenLabel(session.scheduledAt)}</p>
+        </>
+      )}
+      <p className="cb-hold-clock" aria-live="polite">
+        {formatInterviewCountdown(state.remainingMs)}
+      </p>
       <p className="cb-hold-open">Link opens at {whenLabel(state.opensAt)}</p>
       <p className="cb-hold-note">
         {session.interviewerName || 'Your interviewer'} will join then. Come back when the timer ends.

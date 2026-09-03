@@ -39,8 +39,9 @@ export class EmailService {
         `,
       );
       this.logger.log(`OTP email sent to ${to}`);
-    } catch {
-      this.logger.error('Failed to send OTP email');
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to send OTP email: ${detail}`);
       throw new HttpException(
         {
           code: ErrorCode.INTERNAL_ERROR,
@@ -130,7 +131,11 @@ export class EmailService {
       host,
       port,
       secure: port === 465,
+      requireTLS: port === 587,
       auth: { user, pass },
+      tls: {
+        minVersion: 'TLSv1.2',
+      },
     });
     await transporter.sendMail({ from, to, subject, text, html });
     return true;

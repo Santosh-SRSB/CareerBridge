@@ -10,7 +10,7 @@ const links = [
   { href: "#how-it-works", label: "How it works" },
   { href: "#passport", label: "Career Passport" },
   { href: "#jobs", label: "Jobs" },
-  { href: "#employers", label: "Employers" },
+  { href: "/employer/welcome", label: "Employers" },
 ];
 
 const DEFAULT_LINK = "Jobs";

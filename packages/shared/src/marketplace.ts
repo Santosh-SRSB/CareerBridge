@@ -266,6 +266,7 @@ export type JobCard = {
   category: string;
   requiredSkills: string[];
   preferredSkills: string[];
+  verified?: boolean;
   match?: JobMatch;
 };
 
@@ -275,6 +276,7 @@ export type JobDetail = JobCard & {
   benefits: string | null;
   status: string;
   applied: boolean;
+  verified?: boolean;
   department?: string | null;
   hiringManager?: string | null;
   openings?: number;
@@ -689,6 +691,8 @@ export type EmployerKycPayload = {
   cin: string;
   website: string;
   panNumber: string;
+  /** Trade name / trademark from GST verify (stored as companyName when provided). */
+  trademark?: string;
 };
 
 export type EmployerAffiliationPayload = {
@@ -704,6 +708,7 @@ export type EmployerDashboard = {
   interviews: number;
   recent: Array<{
     candidateName: string;
+    candidateId?: string;
     jobTitle: string;
     status: string;
     applicationId: string;
@@ -722,10 +727,111 @@ export type EmployerApplication = {
     city: string | null;
     skills: string[];
     highestEducation: string | null;
+    experienceYears?: number;
   };
   job: { id: string; title: string };
   match?: JobMatch;
   screeningAnswers?: ScreeningAnswer[];
+};
+
+export type EmployerCandidateSearchResult = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  city: string | null;
+  highestEducation: string | null;
+  experienceYears: number;
+  profileCompletion: number;
+  skills: string[];
+  latestRole: { title: string; company: string } | null;
+  matchScore: number | null;
+  appliedToEmployer: boolean;
+  applicationId?: string | null;
+};
+
+/** Job posting fee in paise (₹999). Each paid unit unlocks a batch of matched profiles. */
+export const EMPLOYER_JOB_POSTING_FEE_PAISE = 99900;
+export const EMPLOYER_CANDIDATES_PER_POSTING_FEE = 10;
+
+export function employerCandidateUnlockLimit(amountPaise: number) {
+  if (amountPaise < EMPLOYER_JOB_POSTING_FEE_PAISE) return 0;
+  return Math.floor(amountPaise / EMPLOYER_JOB_POSTING_FEE_PAISE) * EMPLOYER_CANDIDATES_PER_POSTING_FEE;
+}
+
+export type EmployerCandidateSearchResponse = {
+  jobId: string;
+  unlocked: boolean;
+  unlockLimit: number;
+  totalMatched: number;
+  candidates: EmployerCandidateSearchResult[];
+};
+
+export type EmployerCandidatePassport = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  city: string | null;
+  state: string | null;
+  highestEducation: string | null;
+  experienceYears: number;
+  experienceMonths: number;
+  profileCompletion: number;
+  about: string | null;
+  openToRelocating: boolean;
+  skills: string[];
+  education: Array<{
+    qualification: string;
+    institution: string | null;
+    fieldOfStudy: string | null;
+    yearCompleted: number | null;
+  }>;
+  experiences: Array<{
+    company: string;
+    jobTitle: string;
+    isInternship: boolean;
+    stillInCompany: boolean;
+  }>;
+  hasResume: boolean;
+  application: {
+    id: string;
+    status: string;
+    jobId: string;
+    jobTitle: string;
+  } | null;
+  match: { score: number; reasons: string[]; gaps: string[] } | null;
+  view: 'CONTROLLED_PASSPORT';
+};
+
+export type EmployerInterviewStatus =
+  | 'PROPOSED'
+  | 'SCHEDULED'
+  | 'CONFIRMED'
+  | 'RESCHEDULE_REQUESTED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type EmployerInterviewRecord = {
+  id: string;
+  applicationId: string;
+  jobId: string;
+  candidateId: string;
+  scheduledAt: string;
+  durationMin: number;
+  mode: string;
+  location: string | null;
+  status: EmployerInterviewStatus;
+  notes: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  applicationStatus: string;
+  candidate: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    city: string | null;
+    skills: string[];
+  };
+  job: { id: string; title: string };
 };
 
 export type CatalogSkill = {
@@ -741,4 +847,20 @@ export type AdminDashboard = {
   openJobs: number;
   applications: number;
   interviews: number;
+  admins?: number;
+  states?: number;
+  cities?: number;
+};
+
+export type LocationState = {
+  id: string;
+  name: string;
+  code?: string | null;
+};
+
+export type LocationCity = {
+  id: string;
+  name: string;
+  stateId: string;
+  state?: LocationState;
 };

@@ -58,7 +58,7 @@ export function isDevOtpEnabled() {
 }
 
 export function usesFirebasePhoneOtp() {
-  return !isDevOtpEnabled();
+  return !isDevOtpEnabled() && process.env.NEXT_PUBLIC_MSG91_OTP !== 'true';
 }
 
 function wrapFirebaseError(err: unknown): never {

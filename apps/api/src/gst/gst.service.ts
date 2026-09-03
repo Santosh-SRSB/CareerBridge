@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GstConfigService } from './gst.config';
 import { GstConfigError, GstProviderError, gstValidationException } from './gst.errors';
-import { IrisIrpGstProvider } from './gst.provider';
+import type { GstProviderLookupResult } from './gst.provider';
+import { GstProviderRouter } from './gst.provider.router';
 import { verifiedFromStatus, type GstInternalStatus } from './gst.status';
 import { maskGstin, normalizeGstin, validateGstinFormat } from './gst.validator';
 
@@ -15,6 +16,14 @@ export type GstVerifyResult = {
   verified: boolean;
   status: GstInternalStatus;
   message?: string;
+  /** Trade name / trademark from GST registry (gstinapi `trade_name`). */
+  trademark?: string | null;
+  tradeName?: string | null;
+  legalName?: string | null;
+};
+
+type GstLookupProvider = {
+  getGstinDetails(gstin: string): Promise<GstProviderLookupResult>;
 };
 
 @Injectable()
@@ -23,17 +32,19 @@ export class GstService {
 
   constructor(
     private readonly gstConfig: GstConfigService,
-    private readonly provider: IrisIrpGstProvider,
+    @Inject('GstProvider') private readonly provider: GstLookupProvider,
     private readonly prisma: PrismaService,
+    private readonly router: GstProviderRouter,
   ) {}
 
   health() {
     const cfg = this.gstConfig.get();
+    const providerName = this.router.activeProviderName();
     return {
-      configured: cfg.configured,
+      configured: cfg.configured || providerName === 'GSTINAPI',
       environment: cfg.environment,
-      provider: cfg.provider,
-      mockEnabled: cfg.mockEnabled && !cfg.configured,
+      provider: providerName,
+      mockEnabled: cfg.mockEnabled && !cfg.configured && providerName !== 'GSTINAPI',
     };
   }
 
@@ -45,8 +56,9 @@ export class GstService {
     }
 
     const cfg = this.gstConfig.get();
+    const providerName = this.router.activeProviderName();
     this.logger.log(
-      `GST verification requested gstin=${maskGstin(gstin)} env=${cfg.environment} provider=${cfg.provider}`,
+      `GST verification requested gstin=${maskGstin(gstin)} env=${cfg.environment} provider=${providerName}`,
     );
 
     const started = Date.now();
@@ -55,19 +67,38 @@ export class GstService {
       const status = result.status;
       const verified = verifiedFromStatus(status);
 
+      const names = {
+        trademark: result.tradeName ?? null,
+        tradeName: result.tradeName ?? null,
+        legalName: result.legalName ?? null,
+      };
+
       const payload: GstVerifyResult =
         status === 'UNKNOWN'
           ? {
               success: false,
               verified: false,
               status: 'UNKNOWN',
-              message: 'GSTIN verification is temporarily unavailable. Please try again.',
+              message:
+                result.responseCode === '404'
+                  ? 'This GSTIN was not found. Double-check the 15-character number (test tip: try 24AAKPV8888P1ZB from gstinapi.in docs).'
+                  : 'Could not confirm this GSTIN right now. Please try again.',
+              ...names,
             }
-          : {
-              success: true,
-              verified,
-              status,
-            };
+          : status === 'NOT_ACTIVE'
+            ? {
+                success: true,
+                verified: false,
+                status: 'NOT_ACTIVE',
+                message: 'This GSTIN exists but is not Active. Enter an Active GSTIN to continue.',
+                ...names,
+              }
+            : {
+                success: true,
+                verified,
+                status,
+                ...names,
+              };
 
       await this.safeAudit({
         gstin,
@@ -76,6 +107,7 @@ export class GstService {
         environment: cfg.environment,
         responseCode: result.responseCode || null,
         userId,
+        provider: providerName,
       });
 
       this.logger.log(
@@ -86,7 +118,7 @@ export class GstService {
       const durationMs = Date.now() - started;
       if (err instanceof GstConfigError || err instanceof GstProviderError) {
         this.logger.error(
-          `GST verification failed durationMs=${durationMs}: ${err instanceof GstProviderError ? `http=${err.httpStatus}` : 'config'}`,
+          `GST verification failed durationMs=${durationMs}: ${err.message}`,
         );
         await this.safeAudit({
           gstin,
@@ -96,12 +128,13 @@ export class GstService {
           responseCode:
             err instanceof GstProviderError ? String(err.httpStatus ?? 'ERR') : 'CONFIG',
           userId,
+          provider: providerName,
         });
         return {
           success: false,
           verified: false,
           status: 'UNKNOWN',
-          message: 'GSTIN verification is temporarily unavailable. Please try again.',
+          message: err.message,
         };
       }
       throw err;
@@ -115,6 +148,7 @@ export class GstService {
     environment: string;
     responseCode: string | null;
     userId?: string;
+    provider: string;
   }) {
     try {
       await this.prisma.gstVerificationAudit.create({
@@ -122,7 +156,7 @@ export class GstService {
           gstin: input.gstin,
           verificationStatus: input.verificationStatus,
           verified: input.verified,
-          provider: 'IRIS_IRP',
+          provider: input.provider,
           environment: input.environment,
           responseCode: input.responseCode,
           userId: input.userId || null,

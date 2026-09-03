@@ -3,7 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ErrorCode as SharedError } from '@careerbridge/shared';
+import { ConfigService } from '@nestjs/config';
+import { ErrorCode as SharedError, employerCandidateUnlockLimit } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 
@@ -12,6 +13,7 @@ export class MatchingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
+    private readonly config: ConfigService,
   ) {}
 
   async getSkillProfile(userId: string, jobId: string) {
@@ -101,7 +103,20 @@ export class MatchingService {
   }
 
   async recomputeMatches(userId: string, jobId: string) {
-    const job = await this.requireJob(userId, jobId);
+    await this.assertJobUnlocked(userId, jobId);
+    await this.recomputeMatchesForJob(jobId);
+    return this.listMatches(userId, jobId);
+  }
+
+  /** Internal recompute (no employer ownership check) — used after candidate apply. */
+  async recomputeMatchesForJob(jobId: string) {
+    const job = await this.prisma.job.findUnique({ where: { id: jobId } });
+    if (!job) {
+      throw new NotFoundException({
+        code: SharedError.RESOURCE_NOT_FOUND,
+        message: 'Job was not found',
+      });
+    }
     const profile = await this.prisma.jobSkillProfile.findUnique({ where: { jobId: job.id } });
     const requiredSkills = profile
       ? parseList(profile.requiredSkillsJson)
@@ -110,19 +125,20 @@ export class MatchingService {
 
     const applications = await this.prisma.application.findMany({
       where: { jobId: job.id, status: { not: 'WITHDRAWN' } },
+      select: { id: true, candidateId: true },
+    });
+    const applicationByCandidate = new Map(applications.map((row) => [row.candidateId, row.id]));
+
+    const candidates = await this.prisma.candidate.findMany({
       include: {
-        candidate: {
-          include: {
-            skills: true,
-            interviews: { where: { score: { not: null } }, select: { score: true } },
-            resumes: { select: { id: true }, take: 1 },
-          },
-        },
+        skills: true,
+        interviews: { where: { score: { not: null } }, select: { score: true } },
+        resumes: { select: { id: true }, take: 1 },
       },
+      take: 200,
     });
 
-    const scored = applications.map((application) => {
-      const candidate = application.candidate;
+    const scored = candidates.map((candidate) => {
       const base = this.intelligence.match(
         {
           city: candidate.city,
@@ -153,9 +169,12 @@ export class MatchingService {
         profileCompletion: candidate.profileCompletion || 0,
       });
       const skillsScore = Math.min(40, base.skillScore);
-      const totalScore = Math.min(100, skillsScore + experienceScore + Math.round(interviewReadinessScore * 0.3));
+      const totalScore = Math.min(
+        100,
+        skillsScore + experienceScore + Math.round(interviewReadinessScore * 0.3),
+      );
       return {
-        applicationId: application.id,
+        applicationId: applicationByCandidate.get(candidate.id) || null,
         candidateId: candidate.id,
         skillsScore,
         experienceScore,
@@ -167,9 +186,10 @@ export class MatchingService {
     });
 
     scored.sort((a, b) => b.totalScore - a.totalScore);
+    const top = scored.slice(0, 40);
 
     await this.prisma.$transaction(
-      scored.map((item, index) =>
+      top.map((item, index) =>
         this.prisma.candidateMatch.upsert({
           where: {
             jobId_candidateId: { jobId: job.id, candidateId: item.candidateId },
@@ -202,14 +222,116 @@ export class MatchingService {
       ),
     );
 
-    return this.listMatches(userId, jobId);
-  }
-
-  async listMatches(userId: string, jobId: string) {
-    const job = await this.requireJob(userId, jobId);
     const rows = await this.prisma.candidateMatch.findMany({
       where: { jobId: job.id },
       orderBy: [{ rank: 'asc' }, { totalScore: 'desc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      jobId: row.jobId,
+      applicationId: row.applicationId,
+      rank: row.rank,
+      totalScore: row.totalScore,
+      skillsScore: row.skillsScore,
+      experienceScore: row.experienceScore,
+      interviewReadinessScore: row.interviewReadinessScore,
+    }));
+  }
+
+  jobPostingProviderRef(jobId: string) {
+    return `job_post:${jobId}`;
+  }
+
+  async ensureJobPostingPayment(employerId: string, jobId: string, jobTitle: string) {
+    if (this.skipPostingPaymentGate()) {
+      const providerRef = this.jobPostingProviderRef(jobId);
+      const existing = await this.prisma.employerPayment.findFirst({
+        where: { employerId, jobId, providerRef },
+      });
+      if (existing) return existing;
+      return this.prisma.employerPayment.create({
+        data: {
+          employerId,
+          jobId,
+          amountPaise: 0,
+          currency: 'INR',
+          status: 'PAID',
+          provider: 'FREE',
+          providerRef,
+          description: `Free access · ${jobTitle}`,
+          paidAt: new Date(),
+        },
+      });
+    }
+    const providerRef = this.jobPostingProviderRef(jobId);
+    const existing = await this.prisma.employerPayment.findFirst({
+      where: { employerId, jobId, providerRef },
+    });
+    if (existing) return existing;
+    return this.prisma.employerPayment.create({
+      data: {
+        employerId,
+        jobId,
+        amountPaise: 99900,
+        currency: 'INR',
+        status: 'PENDING',
+        provider: 'STATIC',
+        providerRef,
+        description: `Job posting fee · ${jobTitle}`,
+      },
+    });
+  }
+
+  async isJobPostingPaid(employerId: string, jobId: string) {
+    const payment = await this.prisma.employerPayment.findFirst({
+      where: {
+        employerId,
+        jobId,
+        providerRef: this.jobPostingProviderRef(jobId),
+        status: 'PAID',
+      },
+    });
+    return Boolean(payment);
+  }
+
+  async getJobPostingPayment(userId: string, jobId: string) {
+    const employer = await this.requireEmployer(userId);
+    await this.requireJob(userId, jobId);
+    const job = await this.prisma.job.findUnique({ where: { id: jobId } });
+    const payment = await this.ensureJobPostingPayment(
+      employer.id,
+      jobId,
+      job?.title || 'Job',
+    );
+    return {
+      id: payment.id,
+      jobId: payment.jobId,
+      amountPaise: payment.amountPaise,
+      currency: payment.currency,
+      status: payment.status,
+      provider: payment.provider,
+      description: payment.description,
+      paidAt: payment.paidAt?.toISOString() || null,
+      createdAt: payment.createdAt.toISOString(),
+      unlocked: payment.status === 'PAID' || this.skipPostingPaymentGate(),
+      unlockLimit:
+        payment.status === 'PAID'
+          ? employerCandidateUnlockLimit(payment.amountPaise)
+          : this.skipPostingPaymentGate()
+            ? 40
+            : 0,
+    };
+  }
+
+  async listMatches(userId: string, jobId: string) {
+    await this.assertJobUnlocked(userId, jobId);
+    const employer = await this.requireEmployer(userId);
+    const job = await this.requireJob(userId, jobId);
+    const unlockLimit = await this.candidateUnlockLimit(employer.id, jobId);
+    const rows = await this.prisma.candidateMatch.findMany({
+      where: { jobId: job.id },
+      orderBy: [{ rank: 'asc' }, { totalScore: 'desc' }],
+      take: unlockLimit > 0 ? unlockLimit : 0,
     });
     const candidates = await this.prisma.candidate.findMany({
       where: { id: { in: rows.map((row) => row.candidateId) } },
@@ -293,7 +415,7 @@ export class MatchingService {
     ]);
 
     let payment = null as Awaited<ReturnType<typeof this.prisma.employerPayment.findFirst>> | null;
-    if (outcome === 'HIRED') {
+    if (outcome === 'HIRED' && !this.skipPostingPaymentGate()) {
       payment = await this.prisma.employerPayment.upsert({
         where: { hiringOutcomeId: hiringOutcome.id },
         create: {
@@ -374,13 +496,78 @@ export class MatchingService {
     }
     const updated = await this.prisma.employerPayment.update({
       where: { id: payment.id },
-      data: { status: 'PAID', paidAt: new Date(), provider: payment.provider || 'MANUAL' },
+      data: { status: 'PAID', paidAt: new Date(), provider: payment.provider || 'STATIC' },
     });
+    if (payment.jobId && payment.providerRef?.startsWith('job_post:')) {
+      await this.recomputeMatchesForJob(payment.jobId);
+    }
     return {
       id: updated.id,
       status: updated.status,
       paidAt: updated.paidAt?.toISOString() || null,
+      jobId: updated.jobId,
+      unlocked: true,
     };
+  }
+
+  async candidateUnlockLimit(employerId: string, jobId: string) {
+    if (this.skipPostingPaymentGate()) return 40;
+    const payment = await this.prisma.employerPayment.findFirst({
+      where: {
+        employerId,
+        jobId,
+        providerRef: this.jobPostingProviderRef(jobId),
+        status: 'PAID',
+      },
+    });
+    if (!payment) return 0;
+    return employerCandidateUnlockLimit(payment.amountPaise);
+  }
+
+  async assertCandidateVisibleForJob(userId: string, jobId: string, candidateId: string) {
+    const employer = await this.requireEmployer(userId);
+    await this.assertJobUnlocked(userId, jobId);
+    const applied = await this.prisma.application.findFirst({
+      where: {
+        jobId,
+        candidateId,
+        status: { not: 'WITHDRAWN' },
+        job: { employerId: employer.id },
+      },
+    });
+    if (applied) return;
+
+    const limit = await this.candidateUnlockLimit(employer.id, jobId);
+    const match = await this.prisma.candidateMatch.findUnique({
+      where: { jobId_candidateId: { jobId, candidateId } },
+    });
+    if (!match || match.rank == null || match.rank > limit) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message:
+          'This candidate profile is not included in your current payment plan. Pay the job posting fee or upgrade to view more matches.',
+      });
+    }
+  }
+
+  async assertJobUnlocked(userId: string, jobId: string) {
+    if (this.skipPostingPaymentGate()) return;
+    const employer = await this.requireEmployer(userId);
+    await this.requireJob(userId, jobId);
+    const paid = await this.isJobPostingPaid(employer.id, jobId);
+    if (!paid) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: 'Complete the job posting payment to unlock matched candidate profiles.',
+      });
+    }
+  }
+
+  /** Free by default. Set EMPLOYER_SKIP_POSTING_PAYMENT=false to re-enable fees. */
+  private skipPostingPaymentGate() {
+    const raw = this.config.get<string>('EMPLOYER_SKIP_POSTING_PAYMENT')?.trim().toLowerCase();
+    if (raw === 'false' || raw === '0' || raw === 'no') return false;
+    return true;
   }
 
   private fallbackProfile(job: {

@@ -4,8 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getEmployerJob } from '@/lib/api';
-import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { BrandMascot } from '@/components/BrandMascot';
+import { EmployerShellFallback, EmployerPageHeader } from '@/components/EmployerPortal';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
 import { Button } from '@/components/ui/Button';
 
@@ -18,71 +17,120 @@ function JobPostedBody() {
   useEffect(() => {
     const fromQuery = searchParams.get('title')?.trim() || '';
     if (fromQuery) setTitle(fromQuery);
-    getEmployerJob(params.id)
+    void getEmployerJob(params.id)
       .then((job) => {
-        if (typeof job.title === 'string' && job.title.trim()) {
-          setTitle(job.title.trim());
-        }
-        if (typeof job.status === 'string') {
-          setStatus(job.status);
-        }
+        if (typeof job.title === 'string' && job.title.trim()) setTitle(job.title.trim());
+        if (typeof job.status === 'string') setStatus(job.status);
       })
       .catch(() => undefined);
   }, [params.id, searchParams]);
 
   return (
-    <EmployerShellFallback>
-      <section className="cb-dash-card mx-auto max-w-lg overflow-hidden px-5 py-8 text-center sm:px-8 sm:py-10">
-        <div className="mx-auto flex justify-center">
-          <BrandMascot pose="checklist" motion="pop" size="lg" priority />
-        </div>
+    <EmployerShellFallback title="Job posted">
+      <div className="ep-desk">
+        <EmployerPageHeader
+          title="Job posted"
+          subtitle={`Your ${title || 'job'} opening is live. Matched candidate profiles are ready to review.`}
+        />
 
-        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">
-          Job Posted Successfully!
-        </h1>
-        <p className="mx-auto mt-3 max-w-sm text-sm text-muted sm:text-base">
-          Your{' '}
-          <span className="font-semibold text-primary">{title || 'job'}</span> opening is now live and available
-          to matching candidates.
-        </p>
+        <div className="ep-posted">
+          <article className="ep-card ep-posted__hero">
+            <div className="ep-posted__badge" aria-hidden>
+              ✓
+            </div>
+            <div>
+              <p className="ep-posted__kicker">Published</p>
+              <h2>Job posted successfully</h2>
+              <p>
+                <strong>{title || 'Your role'}</strong> is live on CareerBridge. Hiring is free for
+                now — review matched candidates anytime.
+              </p>
+            </div>
+            <div className="ep-posted__chips">
+              <span>{status.replaceAll('_', ' ')}</span>
+              <span>Free access</span>
+            </div>
+          </article>
 
-        <div className="mx-auto mt-6 max-w-sm">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Position controls</p>
-          <JobStatusActions
-            jobId={params.id}
-            status={status}
-            onUpdated={async () => {
-              const job = await getEmployerJob(params.id);
-              if (typeof job.status === 'string') setStatus(job.status);
-            }}
-          />
-        </div>
+          <div className="ep-posted__grid">
+            <article className="ep-card ep-posted__pay is-done">
+              <div className="ep-card__head">
+                <div>
+                  <h2>Ready to hire</h2>
+                  <p>Matched profiles are available for this role.</p>
+                </div>
+              </div>
+              <Link href={`/employer/jobs/${params.id}`} className="ep-btn-gold">
+                View matched candidates
+              </Link>
+            </article>
 
-        <div className="mt-8 flex flex-col gap-3">
-          <Link href={`/employer/jobs/${params.id}`}>
-            <Button type="button">View Job</Button>
-          </Link>
-          <Link href="/employer/jobs/new">
-            <Button type="button" variant="secondary">
-              Post Another Job
-            </Button>
-          </Link>
-          <Link href="/employer/jobs" className="pt-1 text-sm font-semibold text-teal hover:underline">
-            Go to Manage Jobs
-          </Link>
+            <article className="ep-card">
+              <div className="ep-card__head">
+                <h2>Next steps</h2>
+              </div>
+              <ul className="ep-posted__steps">
+                <li>
+                  <span>1</span>
+                  <div>
+                    <strong>Review matches</strong>
+                    <p>Shortlist candidates by skill fit.</p>
+                  </div>
+                </li>
+                <li>
+                  <span>2</span>
+                  <div>
+                    <strong>Schedule interviews</strong>
+                    <p>Invite strong profiles to talk.</p>
+                  </div>
+                </li>
+                <li>
+                  <span>3</span>
+                  <div>
+                    <strong>Move to hire</strong>
+                    <p>Update application status as you decide.</p>
+                  </div>
+                </li>
+              </ul>
+              <div className="ep-posted__actions">
+                <Link href={`/employer/jobs/${params.id}`}>
+                  <Button type="button" size="sm" block={false} className="ep-btn-save">
+                    Open pipeline
+                  </Button>
+                </Link>
+                <Link href="/employer/jobs/new" className="ep-link">
+                  Post another job →
+                </Link>
+                <Link href="/employer/jobs" className="ep-link">
+                  Go to My Jobs →
+                </Link>
+              </div>
+            </article>
+          </div>
+
+          <article className="ep-card">
+            <div className="ep-card__head">
+              <h2>Position controls</h2>
+              <p>Pause or close this role anytime</p>
+            </div>
+            <JobStatusActions
+              jobId={params.id}
+              status={status}
+              onUpdated={async () => {
+                const job = await getEmployerJob(params.id);
+                if (typeof job.status === 'string') setStatus(job.status);
+              }}
+            />
+          </article>
         </div>
-      </section>
+      </div>
     </EmployerShellFallback>
   );
 }
 
 export default function JobPostedPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="p-8 text-sm text-muted">Loading confirmation...</main>
-      }
-    >
+    <Suspense>
       <JobPostedBody />
     </Suspense>
   );

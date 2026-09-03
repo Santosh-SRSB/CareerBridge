@@ -30,7 +30,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
   login(@Body() dto: PasswordLoginDto) {
     return this.auth.loginWithPassword(dto.identifier, dto.password, dto.accountType);

@@ -11,7 +11,7 @@ export class VerifyOtpDto {
   @IsString()
   idToken?: string;
 
-  @ApiPropertyOptional({ description: '6-digit OTP for email OTP, or local AUTH_DEV_OTP. Mobile Firebase OTP uses idToken instead.' })
+  @ApiPropertyOptional({ description: '4-digit OTP for mobile (MSG91), 6-digit for email, or local AUTH_DEV_OTP.' })
   @IsOptional()
   @IsString()
   @Length(4, 8)

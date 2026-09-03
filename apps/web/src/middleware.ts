@@ -14,6 +14,9 @@ export function middleware(request: NextRequest) {
   if (pathname === '/employer/register' || pathname.startsWith('/employer/register/')) {
     return NextResponse.next();
   }
+  if (pathname === '/employer/welcome' || pathname.startsWith('/employer/welcome/')) {
+    return NextResponse.next();
+  }
 
   const signedIn = request.cookies.get(AUTH_COOKIE)?.value === '1';
   if (signedIn) {

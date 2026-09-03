@@ -10,8 +10,23 @@ import {
 } from '@careerbridge/shared';
 import { getCandidateMe, scheduleHumanMock } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
-import { SkillMascot } from '@/components/SkillMascot';
+import { HumanInterviewArt } from '@/components/HumanInterviewArt';
 import { humanInterviewPaid } from '@/lib/human-interview-pay';
+
+const TRACK_OPTIONS: { track: HumanInterviewTrack; label: string; hint: string }[] = (
+  HUMAN_INTERVIEW_TRACK_OPTIONS?.length
+    ? HUMAN_INTERVIEW_TRACK_OPTIONS
+    : [
+        { track: 'TECHNICAL' as const, label: 'Technical interview' },
+        { track: 'NON_TECHNICAL' as const, label: 'Non-technical interview' },
+      ]
+).map((option) => ({
+  ...option,
+  hint:
+    option.track === 'TECHNICAL'
+      ? 'Coding, systems, and role skills'
+      : 'HR, behavioural, and soft skills',
+}));
 
 function pad(value: number) {
   return String(value).padStart(2, '0');
@@ -26,6 +41,14 @@ function defaultParts() {
   };
 }
 
+/** Parse date+time inputs as local wall clock (avoids UTC surprises). */
+function localDateTime(date: string, time: string) {
+  const [y, m, d] = date.split('-').map(Number);
+  const [hh, mm] = time.split(':').map(Number);
+  if (![y, m, d, hh, mm].every((n) => Number.isFinite(n))) return null;
+  return new Date(y, m - 1, d, hh, mm, 0, 0);
+}
+
 export default function ScheduleHumanMockPage() {
   const router = useRouter();
   const initial = useMemo(defaultParts, []);
@@ -34,7 +57,7 @@ export default function ScheduleHumanMockPage() {
   const [email, setEmail] = useState('');
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(initial.time);
-  const [track, setTrack] = useState<HumanInterviewTrack | null>(null);
+  const [track, setTrack] = useState<HumanInterviewTrack>('NON_TECHNICAL');
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState('');
@@ -71,9 +94,13 @@ export default function ScheduleHumanMockPage() {
       setError('Enter your name.');
       return;
     }
-    const when = new Date(`${date}T${time}`);
-    if (Number.isNaN(when.getTime())) {
+    const when = localDateTime(date, time);
+    if (!when || Number.isNaN(when.getTime())) {
       setError('Pick a date and a time.');
+      return;
+    }
+    if (when.getTime() < Date.now() - 60_000) {
+      setError('Pick a future date and time (at least a few minutes from now).');
       return;
     }
     setBooking(true);
@@ -106,8 +133,8 @@ export default function ScheduleHumanMockPage() {
         </ol>
 
         <div className="cb-hire-stage">
-          <aside className="cb-hire-hero">
-            <SkillMascot pose="guide" className="cb-hire-eagle" alt="CareerBridge eagle" />
+          <aside className="cb-hire-hero is-art">
+            <HumanInterviewArt />
             <p>Pick a slot</p>
             <b>Choose your interview type, then book a time.</b>
             <span>Link opens 5 minutes before</span>
@@ -118,15 +145,15 @@ export default function ScheduleHumanMockPage() {
           ) : !jobRole ? (
             <section className="cb-hire-card">
               <p className="font-bold text-primary">Add a job role to your Career Passport first.</p>
-              <Link href="/passport/personal?flow=1" className="cb-hire-btn cb-hire-shimmer">
+              <Link href="/passport/personal" className="cb-hire-btn cb-hire-shimmer">
                 Complete Passport
               </Link>
             </section>
           ) : (
             <form onSubmit={onSubmit} className="cb-hire-card">
-              <p className="cb-hire-kicker">Interview type</p>
+              <p className="cb-hire-kicker">1. Interview type</p>
               <div className="cb-hire-track-grid" role="radiogroup" aria-label="Interview type">
-                {HUMAN_INTERVIEW_TRACK_OPTIONS.map((option) => {
+                {TRACK_OPTIONS.map((option) => {
                   const selected = track === option.track;
                   return (
                     <button
@@ -141,12 +168,13 @@ export default function ScheduleHumanMockPage() {
                       }}
                     >
                       <strong>{option.label}</strong>
+                      <em>{option.hint}</em>
                     </button>
                   );
                 })}
               </div>
 
-              <p className="cb-hire-kicker">Role from Passport</p>
+              <p className="cb-hire-kicker">2. Role from Passport</p>
               <p className="cb-hire-role">{jobRole}</p>
               <label>
                 Your name
@@ -156,6 +184,7 @@ export default function ScheduleHumanMockPage() {
                 Your email
                 <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
               </label>
+              <p className="cb-hire-kicker">3. Date &amp; time</p>
               <div className="cb-hire-split">
                 <label className="cb-hire-whenbox">
                   Date
@@ -167,12 +196,11 @@ export default function ScheduleHumanMockPage() {
                 </label>
               </div>
               <p className="cb-hire-note">
-                {track
-                  ? 'We will send the interviewer invite from the backend after you book.'
-                  : 'Choose Technical or Non-technical, then pick your time.'}
+                Selected: <strong>{TRACK_OPTIONS.find((o) => o.track === track)?.label}</strong>. We email the
+                interviewer after you book.
               </p>
               {error ? <p className="cb-hire-alert">{error}</p> : null}
-              <button type="submit" disabled={booking || !track} className="cb-hire-btn cb-hire-shimmer">
+              <button type="submit" disabled={booking} className="cb-hire-btn cb-hire-shimmer">
                 {booking ? 'Booking…' : 'Book this time'}
               </button>
             </form>

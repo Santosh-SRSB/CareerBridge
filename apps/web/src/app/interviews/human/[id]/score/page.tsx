@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import type { HumanMockSession } from '@careerbridge/shared';
 import { getHumanMock } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
+import { HumanInterviewArt } from '@/components/HumanInterviewArt';
 import { SkillMascot } from '@/components/SkillMascot';
 
 function ScoreRing({ value }: { value: number }) {
@@ -43,11 +44,11 @@ export default function HumanMockScorePage() {
       <CandidateShell>
         <div className="cb-hire is-wide">
           <section className="cb-hire-result">
-            <div className="cb-hire-hero">
-              <SkillMascot pose="graduate" className="cb-hire-eagle" alt="" />
+            <div className="cb-hire-hero is-art">
+              <HumanInterviewArt />
               <p>Interview result</p>
               <b>Scoring your session</b>
-              <span className="cb-hire-shimmer">Reading transcript</span>
+              <span>Reading transcript</span>
             </div>
             <div className="cb-hire-scorecard">
               <div className="cb-hire-skel is-ring cb-hire-shimmer" />
@@ -98,11 +99,11 @@ export default function HumanMockScorePage() {
         </Link>
 
         <section className="cb-hire-result">
-          <div className="cb-hire-hero">
-            <SkillMascot pose="graduate" className="cb-hire-eagle" alt="CareerBridge eagle" />
+          <div className="cb-hire-hero is-art">
+            <HumanInterviewArt />
             <p>Interview result</p>
             <b>{session.jobRole}</b>
-            <span className="cb-hire-shimmer">{session.interviewerName || 'Interviewer'}</span>
+            <span>{session.interviewerName || 'Interviewer'}</span>
             {when ? <em className="cb-hire-when">{when}</em> : null}
           </div>
           <div className="cb-hire-scorecard">

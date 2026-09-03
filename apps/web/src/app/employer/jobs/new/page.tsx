@@ -1,12 +1,13 @@
 'use client';
 
-import { FormEvent, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   JOB_EDUCATION_LEVELS,
   JOB_EXPERIENCE_RANGES,
   JOB_SKILL_SUGGESTIONS,
   JOB_TYPES,
+  PREFERRED_LANGUAGES,
   WORK_MODES,
   salaryRangeError,
   type CreateJobPayload,
@@ -15,12 +16,13 @@ import {
 } from '@careerbridge/shared';
 import {
   createEmployerJob,
+  extractEmployerJobSkills,
+  getEmployerJob,
   publishEmployerJob,
   saveEmployerJobSkillProfile,
   updateEmployerJob,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { BrandMascot } from '@/components/BrandMascot';
 import { Input } from '@/components/ui/Input';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { CategorySelect } from '@/components/ui/CategorySelect';
@@ -28,10 +30,34 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 
 const STEPS = [
-  { id: 1, short: 'Basics', title: 'Post a New Job', subtitle: 'Name the role and where it sits in your team.' },
-  { id: 2, short: 'Details', title: 'Job Details', subtitle: 'Location, work style, and compensation band.' },
-  { id: 3, short: 'Fit', title: 'Requirements', subtitle: 'Skills and experience that define a strong match.' },
-  { id: 4, short: 'Screen', title: 'Screening', subtitle: 'Must-have questions before someone applies.' },
+  {
+    id: 1,
+    short: 'Basics',
+    title: 'Create Job',
+    subtitle: 'Job title, department, employment type, and location.',
+    icon: '①',
+  },
+  {
+    id: 2,
+    short: 'Requirements',
+    title: 'Job Requirements',
+    subtitle: 'Experience, skills, education, and languages.',
+    icon: '②',
+  },
+  {
+    id: 3,
+    short: 'Details',
+    title: 'Job Details',
+    subtitle: 'Salary range, description, and benefits.',
+    icon: '③',
+  },
+  {
+    id: 4,
+    short: 'Preview',
+    title: 'Preview Job',
+    subtitle: 'Review everything before you publish.',
+    icon: '④',
+  },
 ] as const;
 
 const WORK_MODE_LABELS: Record<(typeof WORK_MODES)[number], string> = {
@@ -62,12 +88,10 @@ function ChoiceGrid({
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
 }) {
-  const cols =
-    options.length <= 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4';
   return (
     <fieldset className="min-w-0">
       <legend className="mb-2 text-sm font-semibold text-primary">{label}</legend>
-      <div className={`grid gap-2 ${cols}`}>
+      <div className="ep-choice">
         {options.map((option) => {
           const active = value === option.value;
           return (
@@ -75,11 +99,7 @@ function ChoiceGrid({
               key={option.value}
               type="button"
               onClick={() => onChange(option.value)}
-              className={`rounded-2xl border px-3 py-3 text-sm font-bold transition duration-300 ease-out ${
-                active
-                  ? 'border-transparent bg-primary text-accent shadow-[0_10px_24px_rgba(10,46,44,0.22)]'
-                  : 'border-primary/12 bg-white/80 text-primary hover:border-teal/40 hover:bg-white'
-              }`}
+              className={`ep-choice__btn ${active ? 'is-on' : ''}`}
             >
               {option.label}
             </button>
@@ -110,7 +130,7 @@ function SelectField({
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-primary/12 bg-white/90 px-3.5 py-3 text-base outline-none transition duration-200 ease-out focus:border-teal/50 focus:shadow-[0_0_0_3px_rgba(13,148,136,0.12)]"
+        className="ep-create__control"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -124,6 +144,8 @@ function SelectField({
 
 export default function NewJobPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editJobId = searchParams.get('edit') || '';
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState('');
   const [department, setDepartment] = useState('');
@@ -134,12 +156,16 @@ export default function NewJobPage() {
   const [workMode, setWorkMode] = useState<(typeof WORK_MODES)[number]>('HYBRID');
   const [jobType, setJobType] = useState<(typeof JOB_TYPES)[number]>('FULL_TIME');
   const [experience, setExperience] = useState<(typeof JOB_EXPERIENCE_RANGES)[number]>('2 - 4 Years');
-  const [salaryMin, setSalaryMin] = useState('800000');
-  const [salaryMax, setSalaryMax] = useState('1200000');
+  const [salaryMin, setSalaryMin] = useState('18000');
+  const [salaryMax, setSalaryMax] = useState('22000');
+  const [languages, setLanguages] = useState<string[]>(['English', 'Tamil']);
+  const [benefits, setBenefits] = useState<string[]>([]);
+  const [benefitDraft, setBenefitDraft] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [customSkill, setCustomSkill] = useState('');
   const [draftJobId, setDraftJobId] = useState<string | null>(null);
   const [skillsBusy, setSkillsBusy] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const draftJobIdRef = useRef<string | null>(null);
   const [educationMin, setEducationMin] =
     useState<(typeof JOB_EDUCATION_LEVELS)[number]>("Bachelor's Degree");
@@ -160,6 +186,94 @@ export default function NewJobPage() {
   ]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [bootLoading, setBootLoading] = useState(Boolean(editJobId));
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    if (!editJobId) return;
+    let cancelled = false;
+    setBootLoading(true);
+    getEmployerJob(editJobId)
+      .then((job) => {
+        if (cancelled) return;
+        setDraftId(editJobId);
+        setIsEditing(true);
+        setTitle(String(job.title || ''));
+        setDepartment(String(job.department || ''));
+        setHiringManager(String(job.hiringManager || ''));
+        setOpenings(String(job.openings || 1));
+        setCategory(String(job.category || 'Software Development'));
+        setCity(String(job.city || ''));
+        if (job.workMode && (WORK_MODES as readonly string[]).includes(String(job.workMode))) {
+          setWorkMode(job.workMode as (typeof WORK_MODES)[number]);
+        }
+        if (job.jobType && (JOB_TYPES as readonly string[]).includes(String(job.jobType))) {
+          setJobType(job.jobType as (typeof JOB_TYPES)[number]);
+        }
+        if (job.experience && (JOB_EXPERIENCE_RANGES as readonly string[]).includes(String(job.experience))) {
+          setExperience(job.experience as (typeof JOB_EXPERIENCE_RANGES)[number]);
+        }
+        if (job.educationMin && (JOB_EDUCATION_LEVELS as readonly string[]).includes(String(job.educationMin))) {
+          setEducationMin(job.educationMin as (typeof JOB_EDUCATION_LEVELS)[number]);
+        }
+        const annualMin = Number(job.salaryMin) || 0;
+        const annualMax = Number(job.salaryMax) || 0;
+        setSalaryMin(annualMin ? String(Math.round(annualMin / 12)) : '18000');
+        setSalaryMax(annualMax ? String(Math.round(annualMax / 12)) : '22000');
+        setDescription(String(job.description || ''));
+        try {
+          const parsedSkills = JSON.parse(String(job.requiredSkills || '[]'));
+          if (Array.isArray(parsedSkills)) setSkills(parsedSkills.map(String));
+        } catch {
+          /* ignore */
+        }
+        try {
+          const benefitRaw = String(job.benefits || '');
+          const benefitLines = benefitRaw
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+          const langLine = benefitLines.find((line) => line.toLowerCase().startsWith('languages:'));
+          if (langLine) {
+            setLanguages(
+              langLine
+                .replace(/^languages:\s*/i, '')
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean),
+            );
+          }
+          setBenefits(benefitLines.filter((line) => !line.toLowerCase().startsWith('languages:')));
+        } catch {
+          /* ignore */
+        }
+        try {
+          const parsedQs = JSON.parse(String(job.screeningQuestionsJson || '[]'));
+          if (Array.isArray(parsedQs) && parsedQs.length) {
+            setQuestions(
+              parsedQs.map((item: ScreeningQuestion) => ({
+                id: item.id || newQuestionId(),
+                prompt: item.prompt || '',
+                type: item.type || 'YES_NO',
+                required: item.required !== false,
+                options: item.options || [],
+              })),
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load job for editing.');
+      })
+      .finally(() => {
+        if (!cancelled) setBootLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editJobId]);
 
   const current = STEPS[step - 1];
   const progressPct = useMemo(() => Math.round((step / STEPS.length) * 100), [step]);
@@ -171,24 +285,31 @@ export default function NewJobPage() {
 
   function buildPayload(publish = false): CreateJobPayload {
     const trimmedDescription = description.trim();
+    const monthlyMin = Number(salaryMin) || 0;
+    const monthlyMax = Number(salaryMax) || 0;
+    const benefitLines = [
+      ...benefits,
+      languages.length ? `Languages: ${languages.join(', ')}` : '',
+    ].filter(Boolean);
     return {
       title: title.trim(),
       department: department.trim(),
       hiringManager: hiringManager.trim() || undefined,
-      openings: Number(openings),
+      openings: Number(openings) || 1,
       category,
       city: city.trim(),
       workMode,
       jobType,
       experience,
-      salaryMin: Number(salaryMin),
-      salaryMax: Number(salaryMax),
+      salaryMin: monthlyMin * 12,
+      salaryMax: monthlyMax * 12,
       requiredSkills: skills,
       educationMin,
       description:
         trimmedDescription.length >= 20
           ? trimmedDescription
           : 'Draft job posting — requirements in progress.',
+      benefits: benefitLines.length ? benefitLines.join('\n') : undefined,
       screeningQuestions: questions
         .map((item) => ({
           ...item,
@@ -244,6 +365,38 @@ export default function NewJobPage() {
     void persistSkills([...skills, next]);
   }
 
+  async function onExtractSkills() {
+    if (description.trim().length < 20) {
+      setError('Add a job description first (at least 20 characters), then extract skills.');
+      return;
+    }
+    setExtracting(true);
+    setError('');
+    try {
+      const jobId = await ensureDraftJob();
+      await updateEmployerJob(jobId, {
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        experience,
+        educationMin,
+      });
+      const profile = await extractEmployerJobSkills(jobId);
+      const next = Array.from(
+        new Set([...(profile.requiredSkills || []), ...(profile.preferredSkills || [])].map((s) => s.trim()).filter(Boolean)),
+      );
+      if (!next.length) {
+        setError('No skills found in the description. Add skills manually.');
+        return;
+      }
+      await persistSkills(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not extract skills.');
+    } finally {
+      setExtracting(false);
+    }
+  }
+
   const customSelectedSkills = skills.filter((skill) => !(JOB_SKILL_SUGGESTIONS as readonly string[]).includes(skill));
 
   function updateQuestion(id: string, patch: Partial<ScreeningQuestion>) {
@@ -277,22 +430,14 @@ export default function NewJobPage() {
     if (nextStep <= 1) return null;
     if (title.trim().length < 2) return 'Enter a job title.';
     if (department.trim().length < 2) return 'Enter the department.';
-    if (!/^\d+$/.test(openings) || Number(openings) < 1) return 'Enter at least 1 opening.';
-    if (category.trim().length < 2) return 'Select a job category.';
-    if (nextStep <= 2) return null;
     if (city.trim().length < 2) return 'Select or enter the job location.';
+    if (nextStep <= 2) return null;
+    if (!skills.length) return 'Select at least one required skill.';
+    if (nextStep <= 3) return null;
     const salaryError = salaryRangeError(salaryMin, salaryMax);
     if (salaryError) return salaryError;
-    if (nextStep <= 3) return null;
-    if (!skills.length) return 'Select at least one required skill.';
     if (description.trim().length < 20) return 'Add a job description of at least 20 characters.';
     if (nextStep <= 4) return null;
-    for (const question of questions) {
-      if (question.prompt.trim().length < 3) return 'Each screening question needs a clear prompt.';
-      if (question.type === 'SINGLE_CHOICE' && (question.options || []).filter(Boolean).length < 2) {
-        return 'Choice questions need at least 2 options.';
-      }
-    }
     return null;
   }
 
@@ -344,6 +489,10 @@ export default function NewJobPage() {
 
       if (draftJobIdRef.current) {
         await updateEmployerJob(draftJobIdRef.current, payload);
+        if (isEditing) {
+          router.replace(`/employer/jobs/${draftJobIdRef.current}`);
+          return;
+        }
         await publishEmployerJob(draftJobIdRef.current);
         router.replace(
           `/employer/jobs/${draftJobIdRef.current}/posted?title=${encodeURIComponent(payload.title)}`,
@@ -360,427 +509,339 @@ export default function NewJobPage() {
     }
   }
 
+  if (bootLoading) {
+    return (
+      <EmployerShellFallback title="Edit Job">
+        <div className="ep-create">
+          <p className="text-sm text-muted">Loading job…</p>
+        </div>
+      </EmployerShellFallback>
+    );
+  }
+
   return (
-    <EmployerShellFallback>
-      <section className="cb-job-wizard cb-employer-page relative z-10 overflow-visible">
-        <div className="cb-job-wizard__stage grid overflow-visible lg:grid-cols-[200px_minmax(0,1fr)]">
-          <aside className="cb-job-wizard__rail hidden lg:flex">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#eab308]/90">
-              Job studio
+    <EmployerShellFallback title={isEditing ? 'Edit Job' : 'Submit Job'}>
+      <div className="ep-create">
+        <p className="ep-dash__eyebrow">Home · Jobs · {isEditing ? 'Edit' : 'Create'}</p>
+        <header className="ep-dash__hello">
+          <div>
+            <h1 className="ep-dash__title">
+              {isEditing ? (
+                <>
+                  Edit <span>job</span>
+                </>
+              ) : (
+                <>
+                  Create <span>job</span>
+                </>
+              )}
+            </h1>
+            <p className="ep-dash__sub">
+              {isEditing
+                ? 'Update basics, requirements, and details — then save.'
+                : 'Job title, department, employment type, and location.'}
             </p>
-            <ol className="mt-6 flex flex-1 flex-col gap-1">
-              {STEPS.map((item, index) => {
-                const active = item.id === step;
-                const done = item.id < step;
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (item.id < step) {
-                          setError('');
-                          setStep(item.id);
-                        }
-                      }}
-                      className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition duration-300 ease-out ${
-                        active
-                          ? 'bg-white/12 text-white'
-                          : done
-                            ? 'text-white/85 hover:bg-white/8'
-                            : 'text-white/45'
-                      }`}
-                    >
-                      <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold transition duration-300 ${
-                          active
-                            ? 'bg-[#eab308] text-navy shadow-[0_8px_20px_rgba(234,179,8,0.35)]'
-                            : done
-                              ? 'bg-teal/40 text-white'
-                              : 'border border-white/25 text-white/60'
-                        }`}
-                      >
-                        {done ? '✓' : index + 1}
-                      </span>
-                      <span>
-                        <span className="block text-sm font-bold">{item.short}</span>
-                        <span className="block text-[11px] text-white/55">{item.title}</span>
-                      </span>
-                    </button>
-                    {index < STEPS.length - 1 ? (
-                      <span className="ml-7 block h-3 w-px bg-white/15" aria-hidden />
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ol>
-            <div className="mt-auto pt-6">
-              <BrandMascot pose="laptop" motion="float" size="sm" className="opacity-95" />
+          </div>
+        </header>
+
+        <nav className="ep-flow-steps" aria-label="Job posting steps">
+          {STEPS.map((item, index) => {
+            const active = item.id === step;
+            const done = item.id < step;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  if (item.id < step) {
+                    setError('');
+                    setStep(item.id);
+                  }
+                }}
+                className={`ep-flow-steps__item ${active ? 'is-active' : ''} ${done ? 'is-done' : ''}`}
+              >
+                <span className="ep-flow-steps__icon" aria-hidden>
+                  {done ? '✓' : index + 1}
+                </span>
+                <span className="ep-flow-steps__label">{item.short}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="ep-flow-progress">
+          <div className="ep-flow-progress__meta">
+            <span>
+              Step {step} of {STEPS.length} · {current.short}
+            </span>
+            <strong>{progressPct}%</strong>
+          </div>
+          <div className="ep-flow-progress__bar">
+            <span style={{ width: `${progressPct}%` }} />
+          </div>
+        </div>
+
+        <article className="ep-card ep-flow-card">
+          <div className="ep-flow-card__head">
+            <div>
+              <h2>{current.title}</h2>
+              <p>{current.subtitle}</p>
             </div>
-          </aside>
-
-          <div className="cb-job-wizard__panel relative z-20 overflow-visible p-5 sm:p-7">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-primary/8 pb-5">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-teal">
-                  Step {step} of {STEPS.length}
-                  <span className="mx-2 text-primary/20">·</span>
-                  <span className="text-muted">{current.short}</span>
-                </p>
-                <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary sm:text-[2rem]">
-                  {current.title}
-                </h1>
-                <p className="mt-2 max-w-xl text-sm text-muted sm:text-base">{current.subtitle}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="hidden h-12 w-12 overflow-hidden sm:block md:hidden">
-                  <BrandMascot pose="checklist" motion="none" size="sm" />
-                </div>
-                <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Progress</p>
-                  <p className="text-2xl font-extrabold tabular-nums text-primary">{progressPct}%</p>
-                </div>
-              </div>
+            <div className="ep-flow-card__tip">
+              <span>Tip</span>
+              Clear titles and skills improve match quality.
             </div>
+          </div>
 
-            <div className="mt-4 flex gap-1.5 lg:hidden">
-              {STEPS.map((item) => (
-                <span
-                  key={item.id}
-                  className={`h-1.5 flex-1 rounded-full transition-all duration-500 ease-out ${
-                    item.id <= step ? 'bg-gradient-to-r from-[#ca8a04] to-[#eab308]' : 'bg-primary-soft'
-                  }`}
-                />
-              ))}
-            </div>
-
-            <form
-              key={step}
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (step < STEPS.length) goNext();
-                else void onSubmit(event);
-              }}
-              className="cb-job-wizard__form relative z-30 mt-6 space-y-5"
-            >
-              {step === 1 ? (
-                <div className="space-y-4">
-                  <div className="cb-job-wizard__block grid gap-4 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                      <Input
-                        label="Job Title"
-                        name="title"
-                        required
-                        placeholder="Software Developer"
-                        value={title}
-                        onChange={(event) => setTitle(event.target.value)}
-                      />
-                    </div>
-                    <Input
-                      label="Department"
-                      name="department"
-                      required
-                      placeholder="Engineering"
-                      value={department}
-                      onChange={(event) => setDepartment(event.target.value)}
-                    />
-                    <Input
-                      label="Number of Openings"
-                      name="openings"
-                      required
-                      inputMode="numeric"
-                      placeholder="3"
-                      value={openings}
-                      onChange={(event) => setOpenings(event.target.value.replace(/\D/g, ''))}
-                    />
-                    <div className="sm:col-span-2">
-                      <Input
-                        label="Hiring Manager"
-                        name="hiringManager"
-                        placeholder="Select Manager (optional)"
-                        value={hiringManager}
-                        onChange={(event) => setHiringManager(event.target.value)}
-                        hint="Optional for now — useful when multiple recruiters share one company account."
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <CategorySelect required value={category} onChange={setCategory} />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {step === 2 ? (
-                <div className="space-y-5">
-                  <CitySelect label="Location" required value={city} onChange={setCity} />
-                  <ChoiceGrid
-                    label="Work Mode"
-                    value={workMode}
-                    onChange={(value) => setWorkMode(value as (typeof WORK_MODES)[number])}
-                    options={WORK_MODES.map((mode) => ({ value: mode, label: WORK_MODE_LABELS[mode] }))}
+          <form
+            key={step}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (step < STEPS.length) goNext();
+              else void onSubmit(event);
+            }}
+            className="ep-flow-form"
+          >
+            {step === 1 ? (
+              <div className="ep-flow-block grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Input
+                    label="Job Title"
+                    name="title"
+                    required
+                    placeholder="Customer Service Executive"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
                   />
+                </div>
+                <Input
+                  label="Department"
+                  name="department"
+                  required
+                  placeholder="Customer Support"
+                  value={department}
+                  onChange={(event) => setDepartment(event.target.value)}
+                />
+                <div className="sm:col-span-2">
+                  <CitySelect label="Location" required value={city} onChange={setCity} />
+                </div>
+                <div className="sm:col-span-2">
                   <ChoiceGrid
-                    label="Employment Type"
+                    label="Job Type"
                     value={jobType}
                     onChange={(value) => setJobType(value as (typeof JOB_TYPES)[number])}
                     options={JOB_TYPES.map((type) => ({ value: type, label: JOB_TYPE_LABELS[type] }))}
                   />
-                  <SelectField
-                    label="Experience"
-                    required
-                    value={experience}
-                    onChange={(value) => setExperience(value as (typeof JOB_EXPERIENCE_RANGES)[number])}
-                    options={JOB_EXPERIENCE_RANGES.map((item) => ({ value: item, label: item }))}
-                  />
-                  <div className="cb-job-wizard__block grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Input
-                      label="Salary / CTC from (₹ / year)"
-                      name="salaryMin"
-                      inputMode="numeric"
-                      placeholder="800000"
-                      value={salaryMin}
-                      onChange={(event) => setSalaryMin(event.target.value.replace(/\D/g, ''))}
+                </div>
+              </div>
+            ) : null}
+
+            {step === 2 ? (
+              <div className="space-y-5">
+                <SelectField
+                  label="Experience"
+                  required
+                  value={experience}
+                  onChange={(value) => setExperience(value as (typeof JOB_EXPERIENCE_RANGES)[number])}
+                  options={JOB_EXPERIENCE_RANGES.map((item) => ({ value: item, label: item }))}
+                />
+                <div className="ep-flow-block">
+                  <p className="mb-3 text-sm font-semibold text-primary">Required Skills</p>
+                  <div className="flex flex-wrap gap-2">
+                    {JOB_SKILL_SUGGESTIONS.map((item) => {
+                      const active = skills.includes(item);
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          disabled={skillsBusy}
+                          onClick={() => toggleSkill(item)}
+                          className={`ep-choice__btn ${active ? 'is-on' : ''}`}
+                        >
+                          {item}
+                          {active ? ' ×' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      value={customSkill}
+                      onChange={(event) => setCustomSkill(event.target.value)}
+                      placeholder="Search skill…"
+                      className="ep-create__control min-w-0 flex-1"
                     />
-                    <Input
-                      label="Salary / CTC to (₹ / year)"
-                      name="salaryMax"
-                      inputMode="numeric"
-                      placeholder="1200000"
-                      value={salaryMax}
-                      onChange={(event) => setSalaryMax(event.target.value.replace(/\D/g, ''))}
-                    />
+                    <Button type="button" variant="secondary" block={false} size="sm" disabled={skillsBusy} onClick={addCustomSkill}>
+                      Add
+                    </Button>
                   </div>
                 </div>
-              ) : null}
-
-              {step === 3 ? (
-                <div className="space-y-5">
-                  <div className="cb-job-wizard__block">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-primary">Required Skills</p>
-                      {skillsBusy ? (
-                        <p className="text-xs font-semibold text-teal">Saving to job…</p>
-                      ) : draftJobId ? (
-                        <p className="text-xs font-medium text-muted">Synced with job draft</p>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {JOB_SKILL_SUGGESTIONS.map((item) => {
-                        const active = skills.includes(item);
-                        return (
-                          <span
-                            key={item}
-                            className={`inline-flex items-center gap-1 rounded-full border pl-3.5 text-sm font-semibold transition duration-300 ease-out ${
-                              active
-                                ? 'border-transparent bg-primary text-accent shadow-[0_8px_18px_rgba(10,46,44,0.2)]'
-                                : 'border-primary/15 bg-white text-primary hover:border-teal/45'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              disabled={skillsBusy}
-                              onClick={() => toggleSkill(item)}
-                              className={`py-2 ${active ? 'pr-1' : 'pr-3.5'} disabled:cursor-not-allowed disabled:opacity-60`}
-                            >
-                              {item}
-                            </button>
-                            {active ? (
-                              <button
-                                type="button"
-                                disabled={skillsBusy}
-                                aria-label={`Remove ${item}`}
-                                title="Remove"
-                                onClick={() => removeSkill(item)}
-                                className="mr-1.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm leading-none text-accent/90 hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                ×
-                              </button>
-                            ) : null}
-                          </span>
-                        );
-                      })}
-                      {customSelectedSkills.map((item) => (
-                        <span
-                          key={`custom-${item}`}
-                          className="inline-flex items-center gap-1 rounded-full border border-transparent bg-primary pl-3.5 text-sm font-semibold text-accent shadow-[0_8px_18px_rgba(10,46,44,0.2)]"
+                <SelectField
+                  label="Education"
+                  required
+                  value={educationMin}
+                  onChange={(value) => setEducationMin(value as (typeof JOB_EDUCATION_LEVELS)[number])}
+                  options={JOB_EDUCATION_LEVELS.map((item) => ({ value: item, label: item }))}
+                />
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-primary">Languages</p>
+                  <div className="flex flex-wrap gap-2">
+                    {PREFERRED_LANGUAGES.map((lang) => {
+                      const active = languages.includes(lang);
+                      return (
+                        <button
+                          key={lang}
+                          type="button"
+                          onClick={() =>
+                            setLanguages((current) =>
+                              active ? current.filter((item) => item !== lang) : [...current, lang],
+                            )
+                          }
+                          className={`ep-choice__btn ${active ? 'is-on' : ''}`}
                         >
-                          <span className="py-2 pr-1">{item}</span>
+                          {lang}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {step === 3 ? (
+              <div className="space-y-5">
+                <div className="ep-flow-block grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Input
+                    label="Salary from (₹ / month)"
+                    name="salaryMin"
+                    inputMode="numeric"
+                    placeholder="18000"
+                    value={salaryMin}
+                    onChange={(event) => setSalaryMin(event.target.value.replace(/\D/g, ''))}
+                  />
+                  <Input
+                    label="Salary to (₹ / month)"
+                    name="salaryMax"
+                    inputMode="numeric"
+                    placeholder="22000"
+                    value={salaryMax}
+                    onChange={(event) => setSalaryMax(event.target.value.replace(/\D/g, ''))}
+                  />
+                </div>
+                <Textarea
+                  label="Job Description"
+                  name="description"
+                  required
+                  placeholder="Describe responsibilities, day-to-day work, and what success looks like…"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                />
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-primary">Benefits</p>
+                  {benefits.length ? (
+                    <ul className="mb-2 flex flex-wrap gap-2">
+                      {benefits.map((item) => (
+                        <li
+                          key={item}
+                          className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary"
+                        >
+                          {item}
                           <button
                             type="button"
-                            disabled={skillsBusy}
+                            onClick={() => setBenefits((rows) => rows.filter((row) => row !== item))}
                             aria-label={`Remove ${item}`}
-                            title="Remove"
-                            onClick={() => removeSkill(item)}
-                            className="mr-1.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm leading-none text-accent/90 hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             ×
                           </button>
-                        </span>
+                        </li>
                       ))}
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <input
-                        value={customSkill}
-                        onChange={(event) => setCustomSkill(event.target.value)}
-                        placeholder="Add a custom skill"
-                        className="min-w-0 flex-1 rounded-2xl border border-primary/12 bg-white/90 px-3 py-2.5 text-sm outline-none focus:border-teal/50"
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        block={false}
-                        size="md"
-                        disabled={skillsBusy}
-                        onClick={addCustomSkill}
-                        className="!rounded-2xl"
-                      >
-                        Add
-                      </Button>
-                    </div>
-                    {skills.length ? (
-                      <p className="mt-2 text-xs text-muted">Selected: {skills.join(', ')}</p>
-                    ) : null}
-                  </div>
-                  <SelectField
-                    label="Minimum Education"
-                    required
-                    value={educationMin}
-                    onChange={(value) => setEducationMin(value as (typeof JOB_EDUCATION_LEVELS)[number])}
-                    options={JOB_EDUCATION_LEVELS.map((item) => ({ value: item, label: item }))}
-                  />
-                  <Textarea
-                    label="Job Description"
-                    name="description"
-                    required
-                    placeholder="Build scalable web applications, APIs and collaborate with cross-functional teams..."
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                  />
-                </div>
-              ) : null}
-
-              {step === 4 ? (
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-[#eab308]/35 bg-gradient-to-br from-[#fff8e7] to-white px-4 py-3 text-sm text-primary">
-                    Screening questions are optional, but help filter candidates like Naukri must-haves.
-                    Candidates answer these when they apply.
-                  </div>
-                  {questions.map((question, index) => (
-                    <div
-                      key={question.id}
-                      className="cb-job-wizard__block relative overflow-visible rounded-2xl border border-primary/10 bg-white/90 p-4 shadow-[0_8px_24px_rgba(10,46,44,0.04)]"
+                    </ul>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <input
+                      value={benefitDraft}
+                      onChange={(e) => setBenefitDraft(e.target.value)}
+                      placeholder="e.g. Health insurance"
+                      className="ep-create__control min-w-0 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      block={false}
+                      size="sm"
+                      onClick={() => {
+                        const next = benefitDraft.trim();
+                        if (!next || benefits.includes(next)) return;
+                        setBenefits((rows) => [...rows, next]);
+                        setBenefitDraft('');
+                      }}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="flex items-center gap-2 text-sm font-bold text-primary">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-accent">
-                            {index + 1}
-                          </span>
-                          Question {index + 1}
-                        </p>
-                        <button
-                          type="button"
-                          className="text-sm font-semibold text-error transition hover:opacity-80"
-                          onClick={() => removeQuestion(question.id)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      <div className="mt-3 space-y-3">
-                        <Input
-                          label="Prompt"
-                          name={`prompt-${question.id}`}
-                          placeholder="e.g. Are you willing to relocate?"
-                          value={question.prompt}
-                          onChange={(event) => updateQuestion(question.id, { prompt: event.target.value })}
-                        />
-                        <SelectField
-                          label="Answer type"
-                          value={question.type}
-                          onChange={(value) =>
-                            updateQuestion(question.id, {
-                              type: value as ScreeningQuestionType,
-                              options:
-                                value === 'SINGLE_CHOICE'
-                                  ? question.options?.length
-                                    ? question.options
-                                    : ['Option 1', 'Option 2']
-                                  : [],
-                            })
-                          }
-                          options={[
-                            { value: 'YES_NO', label: 'Yes / No' },
-                            { value: 'SHORT_TEXT', label: 'Short text' },
-                            { value: 'SINGLE_CHOICE', label: 'Single choice' },
-                          ]}
-                        />
-                        {question.type === 'SINGLE_CHOICE' ? (
-                          <Input
-                            label="Choices (comma separated)"
-                            name={`options-${question.id}`}
-                            placeholder="Immediate, 15 days, 30 days, 60 days"
-                            value={(question.options || []).join(', ')}
-                            onChange={(event) =>
-                              updateQuestion(question.id, {
-                                options: event.target.value
-                                  .split(',')
-                                  .map((item) => item.trim())
-                                  .filter(Boolean),
-                              })
-                            }
-                          />
-                        ) : null}
-                        <label className="flex items-center gap-2 text-sm text-primary">
-                          <input
-                            type="checkbox"
-                            checked={question.required !== false}
-                            onChange={(event) =>
-                              updateQuestion(question.id, { required: event.target.checked })
-                            }
-                          />
-                          Required
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                  <Button type="button" variant="secondary" onClick={addQuestion} className="!rounded-2xl">
-                    + Add screening question
-                  </Button>
+                      + Add Benefit
+                    </Button>
+                  </div>
                 </div>
+              </div>
+            ) : null}
+
+            {step === 4 ? (
+              <div className="ep-create__preview">
+                <div>
+                  <h3 className="text-lg font-extrabold text-primary">{title || 'Job title'}</h3>
+                  <p className="mt-1 text-sm text-muted">
+                    {department || 'Department'} · {city || 'Location'} · ₹{salaryMin || '0'}–₹{salaryMax || '0'} / month
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted">Requirements</p>
+                  <ul className="mt-2 space-y-1 text-sm text-primary">
+                    <li>✓ {experience}</li>
+                    <li>✓ {educationMin}</li>
+                    {skills.map((skill) => (
+                      <li key={skill}>✓ {skill}</li>
+                    ))}
+                    {languages.length ? <li>✓ {languages.join(', ')}</li> : null}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted">About the job</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-primary">{description || '—'}</p>
+                </div>
+              </div>
+            ) : null}
+
+            {error ? (
+                <p className="ep-alert ep-alert--error">{error}</p>
               ) : null}
 
-              {error ? (
-                <p className="rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
-                  {error}
-                </p>
-              ) : null}
-
-              <div className="flex flex-col gap-3 border-t border-primary/8 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="ep-flow-foot">
                 {step > 1 ? (
                   <Button
                     type="button"
                     variant="secondary"
+                    size="sm"
                     onClick={goBack}
                     block={false}
-                    className="!rounded-full !px-6"
+                    className="ep-create__back"
                   >
                     Back
                   </Button>
                 ) : (
-                  <span className="hidden text-sm text-muted sm:inline">Ready when you are.</span>
+                  <span className="ep-flow-foot__hint">Ready when you are.</span>
                 )}
                 <Button
                   type="submit"
+                  size="sm"
                   loading={loading}
-                  loadingLabel={step === STEPS.length ? 'Publishing...' : 'Please wait...'}
+                  loadingLabel={step === STEPS.length ? (isEditing ? 'Saving…' : 'Publishing…') : 'Please wait…'}
                   block={false}
-                  className="cb-btn-shimmer !rounded-full !bg-gradient-to-r !from-[#0a2e2c] !to-[#134e4a] !px-8 !text-white"
+                  className="ep-btn-save"
                 >
-                  {step === STEPS.length ? 'Publish Job' : 'Continue'}
+                  {step === STEPS.length ? (isEditing ? 'Save Job' : 'Publish Job') : 'Continue'}
                 </Button>
               </div>
             </form>
-          </div>
-        </div>
-      </section>
+        </article>
+      </div>
     </EmployerShellFallback>
   );
 }

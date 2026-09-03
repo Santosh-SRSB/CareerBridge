@@ -366,66 +366,6 @@ export class IntelligenceService {
       ],
     };
   }
-
-  /** Rule-based skill extraction from job text (AI-ready hook). */
-  extractSkillsFromJobText(input: {
-    title: string;
-    description: string;
-    requiredSkills?: string[];
-    preferredSkills?: string[];
-  }) {
-    const known = [
-      'react',
-      'node.js',
-      'nodejs',
-      'javascript',
-      'typescript',
-      'python',
-      'java',
-      'sql',
-      'aws',
-      'communication',
-      'customer service',
-      'sales',
-      'excel',
-      'html',
-      'css',
-      'teamwork',
-      'data entry',
-    ];
-    const blob = `${input.title} ${input.description} ${(input.requiredSkills || []).join(' ')}`.toLowerCase();
-    const found = known.filter((skill) => blob.includes(skill.replace('.js', '')));
-    const normalized = Array.from(
-      new Set([
-        ...(input.requiredSkills || []).map((item) => item.trim()).filter(Boolean),
-        ...found.map((item) => titleCase(item === 'nodejs' ? 'Node.js' : item)),
-      ]),
-    );
-    const yearsMatch = blob.match(/(\d+)\+?\s*(?:years|yrs)/);
-    return {
-      requiredSkills: normalized.slice(0, 12),
-      preferredSkills: (input.preferredSkills || []).map((item) => item.trim()).filter(Boolean),
-      experienceYearsMin: yearsMatch ? Number(yearsMatch[1]) : 0,
-      interviewReadinessMin: 50,
-      extractionRaw: {
-        method: 'rule_based_v1',
-        matchedTerms: found,
-      },
-    };
-  }
-
-  interviewReadinessScore(input: {
-    interviewScores: number[];
-    hasResume: boolean;
-    profileCompletion: number;
-  }) {
-    const bestInterview = input.interviewScores.length
-      ? Math.max(...input.interviewScores)
-      : 0;
-    const resumeBoost = input.hasResume ? 15 : 0;
-    const profileBoost = Math.round((input.profileCompletion / 100) * 20);
-    return clamp(Math.round(bestInterview * 0.65 + resumeBoost + profileBoost));
-  }
 }
 
 function titleCase(value: string) {

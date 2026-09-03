@@ -32,21 +32,70 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
   }
 
   if (status === 'CLOSED') {
-    return <p className="text-sm font-semibold text-muted">This position is closed.</p>;
+    if (compact) return null;
+    return <p className="text-xs font-semibold text-muted">This position is closed.</p>;
+  }
+
+  if (compact) {
+    return (
+      <>
+        {status === 'PUBLISHED' ? (
+          <>
+            <button
+              type="button"
+              className="ep-wire-action"
+              disabled={busy !== null}
+              onClick={() => void run('pause', () => pauseEmployerJob(jobId))}
+            >
+              {busy === 'pause' ? '…' : 'Pause'}
+            </button>
+            <button
+              type="button"
+              className="ep-wire-action ep-wire-action--muted"
+              disabled={busy !== null}
+              onClick={() => void run('close', () => closeEmployerJob(jobId))}
+            >
+              {busy === 'close' ? '…' : 'Close'}
+            </button>
+          </>
+        ) : null}
+        {status === 'PAUSED' || status === 'DRAFT' ? (
+          <>
+            <button
+              type="button"
+              className="ep-wire-action"
+              disabled={busy !== null}
+              onClick={() => void run('publish', () => publishEmployerJob(jobId))}
+            >
+              {busy === 'publish' ? '…' : status === 'PAUSED' ? 'Resume' : 'Publish'}
+            </button>
+            {status === 'PAUSED' ? (
+              <button
+                type="button"
+                className="ep-wire-action ep-wire-action--muted"
+                disabled={busy !== null}
+                onClick={() => void run('close', () => closeEmployerJob(jobId))}
+              >
+                {busy === 'close' ? '…' : 'Close'}
+              </button>
+            ) : null}
+          </>
+        ) : null}
+      </>
+    );
   }
 
   return (
-    <div className={`flex flex-wrap gap-2 ${compact ? '' : 'mt-3'}`}>
+    <div className="mt-3 flex flex-wrap gap-1.5">
       {status === 'PUBLISHED' ? (
         <>
           <Button
             type="button"
             variant="secondary"
-            size="md"
+            size="sm"
             block={false}
             loading={busy === 'pause'}
-            loadingLabel="Pausing..."
-            className="!rounded-full"
+            loadingLabel="…"
             onClick={() => run('pause', () => pauseEmployerJob(jobId))}
           >
             Pause
@@ -54,14 +103,13 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
           <Button
             type="button"
             variant="destructive"
-            size="md"
+            size="sm"
             block={false}
             loading={busy === 'close'}
-            loadingLabel="Closing..."
-            className="!rounded-full"
+            loadingLabel="…"
             onClick={() => run('close', () => closeEmployerJob(jobId))}
           >
-            Close position
+            Close
           </Button>
         </>
       ) : null}
@@ -69,27 +117,25 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
         <>
           <Button
             type="button"
-            size="md"
+            size="sm"
             block={false}
             loading={busy === 'publish'}
-            loadingLabel="Publishing..."
-            className="!rounded-full"
+            loadingLabel="…"
             onClick={() => run('publish', () => publishEmployerJob(jobId))}
           >
-            {status === 'PAUSED' ? 'Resume posting' : 'Publish now'}
+            {status === 'PAUSED' ? 'Resume' : 'Publish'}
           </Button>
           {status === 'PAUSED' ? (
             <Button
               type="button"
               variant="destructive"
-              size="md"
+              size="sm"
               block={false}
               loading={busy === 'close'}
-              loadingLabel="Closing..."
-              className="!rounded-full"
+              loadingLabel="…"
               onClick={() => run('close', () => closeEmployerJob(jobId))}
             >
-              Close position
+              Close
             </Button>
           ) : null}
         </>

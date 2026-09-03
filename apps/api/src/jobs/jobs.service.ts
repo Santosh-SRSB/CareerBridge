@@ -2,12 +2,14 @@ import { ConflictException, HttpException, HttpStatus, Injectable, NotFoundExcep
 import { ErrorCode } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
+import { MatchingService } from '../matching/matching.service';
 
 @Injectable()
 export class JobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
+    private readonly matching: MatchingService,
   ) {}
 
   async list(
@@ -59,14 +61,18 @@ export class JobsService {
 
   async detail(id: string, userId?: string) {
     const job = await this.prisma.job.findUnique({ where: { id }, include: { employer: true } });
-    if (!job || job.status === 'DRAFT') {
+    if (!job || job.status !== 'PUBLISHED') {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Job was not found' });
     }
     const candidate = userId ? await this.loadCandidate(userId) : null;
     const applied = candidate
       ? Boolean(
-          await this.prisma.application.findUnique({
-            where: { candidateId_jobId: { candidateId: candidate.id, jobId: id } },
+          await this.prisma.application.findFirst({
+            where: {
+              candidateId: candidate.id,
+              jobId: id,
+              status: { not: 'WITHDRAWN' },
+            },
           }),
         )
       : false;
@@ -77,6 +83,7 @@ export class JobsService {
       benefits: job.benefits,
       status: job.status,
       applied,
+      verified: job.employer.verified,
       department: job.department,
       hiringManager: job.hiringManager,
       openings: job.openings,
@@ -135,6 +142,11 @@ export class JobsService {
             screeningAnswersJson: JSON.stringify(answers),
           },
         });
+    try {
+      await this.matching.recomputeMatchesForJob(jobId);
+    } catch {
+      // Ranking is best-effort; application still succeeds.
+    }
     return this.applicationView(application.id);
   }
 
@@ -221,6 +233,7 @@ export class JobsService {
       category: job.category,
       requiredSkills,
       preferredSkills,
+      verified: Boolean((job.employer as { verified?: boolean }).verified),
       match,
     };
   }

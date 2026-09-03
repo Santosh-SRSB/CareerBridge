@@ -66,6 +66,8 @@ export function GstinVerifyField({ gstin, onVerifiedChange }: Props) {
     }
   }
 
+  const trademark = (result?.trademark || result?.tradeName || '').trim();
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -83,6 +85,11 @@ export function GstinVerifyField({ gstin, onVerifiedChange }: Props) {
         </Button>
       </div>
       {feedback ? <p className={`text-sm font-medium ${feedbackClass}`}>{feedback}</p> : null}
+      {trademark ? (
+        <p className="text-sm text-muted">
+          Trademark / trade name: <strong className="text-ink">{trademark}</strong>
+        </p>
+      ) : null}
     </div>
   );
 }

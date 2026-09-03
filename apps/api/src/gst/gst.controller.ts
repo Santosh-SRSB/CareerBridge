@@ -17,7 +17,7 @@ export class GstController {
 
   /** Internal configuration health — no secrets. Employer/admin only. */
   @Get('health')
-  @Roles(UserType.EMPLOYER_ADMIN, UserType.EMPLOYER_RECRUITER, UserType.PLATFORM_ADMIN)
+  @Roles(UserType.EMPLOYER_ADMIN, UserType.EMPLOYER_RECRUITER, UserType.PLATFORM_ADMIN, UserType.SUPER_ADMIN)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   health() {
     return this.gst.health();
@@ -28,7 +28,7 @@ export class GstController {
    * the global interceptor passes it through as the HTTP body (plus requestId).
    */
   @Post('verify')
-  @Roles(UserType.EMPLOYER_ADMIN, UserType.EMPLOYER_RECRUITER, UserType.PLATFORM_ADMIN)
+  @Roles(UserType.EMPLOYER_ADMIN, UserType.EMPLOYER_RECRUITER, UserType.PLATFORM_ADMIN, UserType.SUPER_ADMIN)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   verify(@Body() dto: VerifyGstDto, @CurrentUser() user: { id: string }) {
     return this.gst.verify(dto.gstin, user.id);

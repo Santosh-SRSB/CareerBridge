@@ -17,12 +17,24 @@ export function EmployerOnboardingFrame({
   children: ReactNode;
 }) {
   return (
-    <AuthShell title={title} subtitle={subtitle} backHref={backHref} marketing={false}>
-      <p className="mb-4 text-sm text-muted">{step} of 2</p>
-      <div className="mb-6 h-1.5 overflow-hidden rounded-pill bg-primary-soft">
-        <div className="h-full bg-accent" style={{ width: `${(step / 2) * 100}%` }} />
+    <AuthShell
+      title={title}
+      subtitle={subtitle}
+      backHref={backHref}
+      marketing={false}
+      showLogo={false}
+      compact
+    >
+      <div className="ep-onboard">
+        <div className="ep-onboard__meta">
+          <p className="ep-onboard__step">{step} of 2</p>
+          <p className="ep-onboard__hint">{step === 1 ? 'Company KYC' : 'Affiliation'}</p>
+        </div>
+        <div className="ep-onboard__track" aria-hidden>
+          <div className="ep-onboard__fill" style={{ width: `${(step / 2) * 100}%` }} />
+        </div>
+        {children}
       </div>
-      {children}
     </AuthShell>
   );
 }

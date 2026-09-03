@@ -6,7 +6,12 @@ import { postAuthPath } from '@/lib/phone';
 import { clearSession, getAccessToken, getRefreshToken, getStoredUser, isEmployerRole, saveSession } from '@/lib/session';
 
 function isPublicEmployerPath(pathname: string) {
-  return pathname === '/employer/register' || pathname.startsWith('/employer/register/');
+  return (
+    pathname === '/employer/register' ||
+    pathname.startsWith('/employer/register/') ||
+    pathname === '/employer/welcome' ||
+    pathname.startsWith('/employer/welcome/')
+  );
 }
 
 export function EmployerAuthGate({ children }: { children: ReactNode }) {

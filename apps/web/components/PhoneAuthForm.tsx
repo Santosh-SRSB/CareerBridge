@@ -9,14 +9,14 @@ import { OtpChannelToggle } from '@/components/OtpChannelToggle';
 import { COUNTRIES, DEFAULT_COUNTRY, isValidNational, toE164 } from '@/lib/phone';
 import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
-import { isDevOtpEnabled, isFirebaseConfigured, sendFirebaseOtp } from '@/lib/firebase';
+import { isDevOtpEnabled, isFirebaseConfigured, sendFirebaseOtp, usesFirebasePhoneOtp } from '@/lib/firebase';
 import { authErrorMessage } from '@/lib/auth-errors';
 import type { AuthPurpose, OtpChannel } from '@careerbridge/shared';
 
 export function PhoneAuthForm({ purpose }: { purpose: AuthPurpose }) {
   const router = useRouter();
   const [channel, setChannel] = useState<OtpChannel>('MOBILE');
-  const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
+  const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -43,7 +43,7 @@ export function PhoneAuthForm({ purpose }: { purpose: AuthPurpose }) {
         phone,
         email: email.trim() || undefined,
       });
-      if (channel === 'MOBILE' && phone && !isDevOtpEnabled()) {
+      if (channel === 'MOBILE' && phone && usesFirebasePhoneOtp()) {
         if (!isFirebaseConfigured()) {
           throw new Error('Firebase OTP is not configured yet.');
         }

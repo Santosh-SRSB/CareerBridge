@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { dateOfBirthError, personNameError } from '@careerbridge/shared';
-import { PassportFrame, WizardActions } from '@/components/PassportFrame';
+import { PassportFrame, PassportLoading, WizardActions, passportPrimaryButtonClass } from '@/components/PassportFrame';
 import { Input } from '@/components/ui/Input';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { Button } from '@/components/ui/Button';
@@ -74,7 +74,7 @@ export default function PassportPersonalPage() {
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
+  if (!ready) return <PassportLoading />;
 
   return (
     <PassportFrame
@@ -82,17 +82,30 @@ export default function PassportPersonalPage() {
       subtitle="Employers need to know who you are and where you are based."
       step="personal"
     >
-      <form onSubmit={onSubmit} className="cb-passport-panel space-y-4 p-6 sm:p-7">
-        <Input label="Full name" name="fullName" required value={fullName} onChange={(event) => setFullName(event.target.value)} />
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Input
+          label="Full name"
+          name="fullName"
+          required
+          value={fullName}
+          onChange={(event) => setFullName(event.target.value.replace(/[^a-zA-Z\s.'-]/g, ''))}
+        />
         <CitySelect label="Current city" required value={city} onChange={setCity} />
-        <Input label="Date of birth" name="dateOfBirth" type="date" required value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+        <Input
+          label="Date of birth"
+          name="dateOfBirth"
+          type="date"
+          required
+          value={dateOfBirth}
+          onChange={(event) => setDateOfBirth(event.target.value)}
+        />
         <label className="block" htmlFor="gender">
-          <span className="mb-1.5 block text-sm font-semibold text-primary">Gender</span>
+          <span className="mb-1.5 block text-xs font-bold text-slate-700">Gender</span>
           <select
             id="gender"
             value={gender}
             onChange={(event) => setGender(event.target.value)}
-            className="w-full rounded-md border border-primary/10 bg-[#faf8f3] px-3.5 py-3.5 text-base outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/10"
           >
             <option value="">Prefer not to say</option>
             <option value="FEMALE">Female</option>
@@ -102,10 +115,17 @@ export default function PassportPersonalPage() {
         </label>
         {phone ? <Input label="Mobile number" name="phone" value={phone} readOnly /> : null}
         {email ? <Input label="Email" name="email" value={email} readOnly /> : null}
-        {error ? <p className="text-sm text-error">{error}</p> : null}
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>
-          <Button type="submit" size="md" block={false} loading={loading} loadingLabel="Saving...">
-            Save and continue
+          <Button
+            type="submit"
+            loading={loading}
+            loadingLabel="Saving..."
+            size="md"
+            block={false}
+            className={passportPrimaryButtonClass}
+          >
+            Save changes
           </Button>
         </WizardActions>
       </form>

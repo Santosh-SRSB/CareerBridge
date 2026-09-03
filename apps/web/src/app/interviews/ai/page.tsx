@@ -1,236 +1,146 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createLiveInterview, getCandidateMe, listResumes } from '@/lib/api';
-import { draftToResumeContent } from '@/lib/resume-build';
-import type { PassportDraft } from '@/types/passport';
-import { CandidateShell } from '@/components/CandidatePortal';
+import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { Button } from '@/components/ui/Button';
-import { EagleMascot } from '@/features/candidate/passport/EagleMascot';
 
-const TYPES = [
-  { id: 'RESUME', label: 'Resume-based' },
-  { id: 'HR', label: 'HR only' },
-  { id: 'TECHNICAL', label: 'Technical only' },
-  { id: 'BEHAVIOURAL', label: 'Behavioural' },
-  { id: 'ROLE', label: 'Role-based' },
-  { id: 'MIXED', label: 'Mixed' },
-];
-
-async function parseResumeFile(file: File) {
-  const form = new FormData();
-  form.append('file', file);
-  const response = await fetch('/api/v1/candidates/resume/parse', { method: 'POST', body: form });
-  const json = (await response.json()) as { success?: boolean; data?: PassportDraft; error?: { message?: string } };
-  if (!response.ok || !json.success || !json.data) throw new Error(json.error?.message || 'Could not read that resume.');
-  return json.data;
-}
-
-export default function AiInterviewSetupPage() {
+export default function AIMockInterviewSetupPage() {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const pickStarted = useRef(0);
-  const [step, setStep] = useState<'source' | 'brief'>('source');
-  const [source, setSource] = useState<'PASSPORT' | 'UPLOAD'>('PASSPORT');
-  const [type, setType] = useState('RESUME');
-  const [duration, setDuration] = useState(15);
-  const [consent, setConsent] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [drag, setDrag] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [uploadContent, setUploadContent] = useState<ReturnType<typeof draftToResumeContent> | null>(null);
+  const [role, setRole] = useState('Customer service executive');
+  const [interviewType, setInterviewType] = useState<'General' | 'Role specific'>('General');
+  const [questionsCount, setQuestionsCount] = useState('5');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!picking) return;
-    const onFocus = () => {
-      if (Date.now() - pickStarted.current < 450) return;
-      setPicking(false);
-    };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [picking]);
-
-  const openPicker = () => {
-    if (busy || picking) return;
-    setPicking(true);
-    pickStarted.current = Date.now();
-    window.setTimeout(() => inputRef.current?.click(), 400);
-  };
-
-  async function onDrop(file: File) {
-    setError('');
-    setBusy(true);
-    try {
-      const [draft, profile] = await Promise.all([parseResumeFile(file), getCandidateMe()]);
-      setUploadContent(draftToResumeContent(draft, { phone: profile.phone, city: profile.city }));
-      setSource('UPLOAD');
-      setStep('brief');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not read that resume.');
-    } finally {
-      setBusy(false);
-      setPicking(false);
-    }
-  }
-
-  async function start() {
-    if (!consent) {
-      setError('Please accept the interview consent to continue.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    try {
-      if (source === 'PASSPORT') {
-        const resumes = await listResumes().catch(() => []);
-        if (!resumes.length) {
-          const me = await getCandidateMe();
-          if (!me.firstName) throw new Error('Create your Career Passport first, or drop a resume.');
-        }
-      }
-      const session = await createLiveInterview({
-        interviewType: type,
-        durationLimitMin: duration,
-        source,
-        content: source === 'UPLOAD' && uploadContent ? uploadContent : undefined,
-      });
-      router.push(`/interviews/live/${session.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start the interview.');
-    } finally {
-      setBusy(false);
-    }
+  function handleStart() {
+    setLoading(true);
+    setTimeout(() => {
+      router.push('/interviews/mock/question');
+    }, 300);
   }
 
   return (
-    <CandidateShell>
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal">AI Live Interview</p>
-      <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">
-        {step === 'source' ? 'How should the AI interview you?' : 'Before you start'}
-      </h1>
+    <CandidateAppShell activeTab="interviews" showBack title="AI mock interview" maxWidth="max-w-3xl">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            AI Mock Interview Setup
+          </h1>
+          <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
+            Simulate real interview questions, practice speech answers, and receive detailed AI evaluation.
+          </p>
+        </div>
 
-      {step === 'source' ? (
-        <div className="mt-8 grid gap-5 md:grid-cols-2">
-          <button
-            type="button"
-            className="cb-interview-choice is-ai"
-            onClick={() => {
-              setSource('PASSPORT');
-              setStep('brief');
-            }}
-          >
-            <span className="cb-interview-choice-photo is-passport">
-              <Image
-                src="/mascots/passport-without-resume.png"
-                alt=""
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 400px"
-              />
-            </span>
-            <strong>Go with your Career Passport</strong>
-            <p>Questions come from your saved education, skills, experience and projects. No extra upload.</p>
-          </button>
-          <div className="cb-interview-choice is-human cb-interview-upload-card">
-            <strong>Drop your latest resume</strong>
-            <p>We read the file and interview from that version instead of the Passport.</p>
-            <div className="resume-point mt-2">
-              <EagleMascot pose="point" />
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".pdf,.doc,.docx,.txt"
-                className="sr-only"
-                disabled={busy}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  setPicking(false);
-                  event.target.value = '';
-                  if (file) void onDrop(file);
-                }}
-              />
-              <button
-                type="button"
-                className={`resume-drop-tip${drag ? ' is-drag' : ''}${picking ? ' is-picking' : ''}`}
-                disabled={busy}
-                onClick={openPicker}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDrag(true);
-                }}
-                onDragLeave={() => setDrag(false)}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setDrag(false);
-                  const file = event.dataTransfer.files[0];
-                  if (file) void onDrop(file);
-                }}
-              >
-                {picking || busy ? (
-                  <>
-                    <span className="resume-drop-tip-title">{busy ? 'Reading' : 'Loading'}</span>
-                    <span className="drop-loading-dots drop-loading-dots-on-dark" aria-hidden="true">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="resume-drop-tip-title">Upload resume</span>
-                    <span className="resume-drop-tip-sub">PDF, Word or text</span>
-                  </>
-                )}
-              </button>
-              {error ? <p className="resume-point-error">{error}</p> : null}
+        {/* Form Card */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+          <div className="space-y-5">
+            {/* Job Role */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Target Job Role</label>
+              <div className="relative">
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/10"
+                >
+                  <option value="Customer service executive">Customer service executive</option>
+                  <option value="Front office executive">Front office executive</option>
+                  <option value="Sales executive">Sales executive</option>
+                  <option value="Retail associate">Retail associate</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Interview Type */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Interview Format</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label
+                  onClick={() => setInterviewType('General')}
+                  className={`flex items-center gap-3 rounded-xl border p-4 cursor-pointer transition ${
+                    interviewType === 'General'
+                      ? 'border-[#0a2e2c] bg-emerald-50/50 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    checked={interviewType === 'General'}
+                    onChange={() => setInterviewType('General')}
+                    className="h-4 w-4 text-[#0a2e2c] focus:ring-[#0a2e2c]"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-slate-900 block">General HR Screening</span>
+                    <span className="text-xs text-slate-500">Core strengths, behavior, communication</span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setInterviewType('Role specific')}
+                  className={`flex items-center gap-3 rounded-xl border p-4 cursor-pointer transition ${
+                    interviewType === 'Role specific'
+                      ? 'border-[#0a2e2c] bg-emerald-50/50 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    checked={interviewType === 'Role specific'}
+                    onChange={() => setInterviewType('Role specific')}
+                    className="h-4 w-4 text-[#0a2e2c] focus:ring-[#0a2e2c]"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-slate-900 block">Role Specific Scenarios</span>
+                    <span className="text-xs text-slate-500">Customer complaints, processes, tools</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Number of questions */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Number of Questions
+              </label>
+              <div className="relative">
+                <select
+                  value={questionsCount}
+                  onChange={(e) => setQuestionsCount(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/10"
+                >
+                  <option value="3">3 Questions (Quick ~5 mins)</option>
+                  <option value="5">5 Questions (Standard ~10 mins)</option>
+                  <option value="10">10 Questions (Comprehensive ~20 mins)</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="cb-dash-card mt-6 max-w-2xl space-y-4 p-5">
-          <ul className="space-y-2 text-sm text-primary">
-            <li>Make sure your microphone and camera work.</li>
-            <li>Sit in a quiet, well-lit place with your face visible.</li>
-            <li>Do not switch tabs or use another person for help.</li>
-            <li>Answer in your own words. You can Quit anytime — we still analyse what you said.</li>
-          </ul>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm font-bold">
-              Type
-              <select className="mt-1 w-full rounded-md border border-primary/15 px-2 py-2" value={type} onChange={(e) => setType(e.target.value)}>
-                {TYPES.map((item) => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </select>
-              <span className="mt-1 block text-xs font-normal text-muted">
-                First question is always introduce yourself. HR stays HR. Technical stays on your stacks. Mixed is intro, project, tech, then HR.
-              </span>
-            </label>
-            <label className="text-sm font-bold">
-              Duration
-              <select className="mt-1 w-full rounded-md border border-primary/15 px-2 py-2" value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
-                <option value={15}>15 minutes</option>
-                <option value={30}>30 minutes</option>
-                <option value={45}>45 minutes</option>
-              </select>
-            </label>
-          </div>
-          <label className="flex items-start gap-2 text-sm text-muted">
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-            I understand microphone and camera may be used, answers are processed by AI, integrity signals (tab switch, mic) may be recorded, and authorised recruiters may view the report.
-          </label>
-          {error ? <p className="text-sm text-error">{error}</p> : null}
-          <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="secondary" onClick={() => setStep('source')}>Back</Button>
-            <Button type="button" disabled={busy} onClick={() => void start()}>
-              {busy ? 'Opening AI room...' : 'Continue to AI room'}
+
+          {/* Start Button */}
+          <div className="pt-4 border-t border-slate-100 flex justify-end">
+            <Button
+              type="button"
+              loading={loading}
+              onClick={handleStart}
+              className="w-full sm:w-auto px-8 py-3.5 text-sm font-bold bg-[#0a2e2c] hover:bg-[#072422] text-white shadow-md hover:shadow-lg transition rounded-xl"
+            >
+              Start mock interview →
             </Button>
           </div>
         </div>
-      )}
-    </CandidateShell>
+      </div>
+    </CandidateAppShell>
   );
 }

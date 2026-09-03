@@ -3,6 +3,8 @@ import { randomUUID } from 'crypto';
 import {
   ErrorCode,
   PASSPORT_SECTION_COPY,
+  computeProfileOverviewCompletion,
+  profileOverviewMissingLabels,
   type PassportSection,
   normalizeHttpUrl,
   optionalUrlError,
@@ -34,11 +36,12 @@ export class CandidatesService {
   async completion(userId: string) {
     const candidate = await this.loadCandidate(userId);
     const sections = buildSections(candidate);
+    const percentage = computeProfileOverviewCompletion(sections, candidate.skills.length);
     return {
-      percentage: candidate.profileCompletion,
+      percentage,
       onboardingCompleted: candidate.onboardingCompleted,
       sections,
-      missing: sections.filter((item) => !item.done && item.weight > 0).map((item) => item.label),
+      missing: profileOverviewMissingLabels(sections, candidate.skills.length),
     };
   }
 
@@ -70,6 +73,7 @@ export class CandidatesService {
         ...(dto.firstName !== undefined ? { firstName: dto.firstName.trim() } : {}),
         ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() || null } : {}),
         ...(dto.city !== undefined ? { city: dto.city.trim() } : {}),
+        ...(dto.preferredWorkCity !== undefined ? { preferredWorkCity: dto.preferredWorkCity.trim() } : {}),
         ...(dto.about !== undefined ? { about: dto.about.trim() || null } : {}),
         ...(dto.preferredLanguage !== undefined ? { preferredLanguage: dto.preferredLanguage } : {}),
         ...(dto.dateOfBirth !== undefined
@@ -80,8 +84,15 @@ export class CandidatesService {
         ...(dto.highestEducation !== undefined ? { highestEducation: dto.highestEducation } : {}),
         ...(careerInterests !== undefined ? { careerInterests } : {}),
         ...(dto.hasExperience !== undefined ? { hasExperience: dto.hasExperience } : {}),
+        ...(dto.totalExperienceYears !== undefined
+          ? { totalExperienceYears: Number.parseInt(dto.totalExperienceYears, 10) || 0 }
+          : {}),
+        ...(dto.totalExperienceMonths !== undefined
+          ? { totalExperienceMonths: Number.parseInt(dto.totalExperienceMonths, 10) || 0 }
+          : {}),
         ...(dto.photoUrl !== undefined ? { photoUrl: dto.photoUrl || null } : {}),
         ...(dto.links !== undefined ? { profileLinks: JSON.stringify(cleanLinks(dto.links)) } : {}),
+        ...(dto.onboardingCompleted !== undefined ? { onboardingCompleted: dto.onboardingCompleted } : {}),
       },
     });
 
@@ -402,13 +413,9 @@ export class CandidatesService {
   private async recompute(userId: string) {
     const candidate = await this.loadCandidate(userId);
     const profileCompletion = computeCompletion(candidate);
-    const onboardingCompleted = Boolean(
-      candidate.firstName &&
-        (candidate.highestEducation || candidate.education.length > 0),
-    );
     const updated = await this.prisma.candidate.update({
       where: { userId },
-      data: { profileCompletion, onboardingCompleted },
+      data: { profileCompletion },
       include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
     return this.toProfile(updated);
@@ -420,6 +427,7 @@ export class CandidatesService {
       firstName: candidate.firstName,
       lastName: candidate.lastName,
       city: candidate.city,
+      preferredWorkCity: candidate.preferredWorkCity,
       phone: candidate.user?.phone || null,
       email: candidate.user?.email || null,
       preferredLanguage: candidate.preferredLanguage,
@@ -506,9 +514,9 @@ function parseInterests(raw: string) {
 }
 
 function sectionDone(candidate: NonNullable<CandidateRecord>, key: PassportSection['key']) {
-  if (key === 'personal') return Boolean(candidate.firstName);
+  if (key === 'personal') return Boolean(candidate.firstName && candidate.city);
   if (key === 'education') return Boolean(candidate.highestEducation || candidate.education.length);
-  if (key === 'skills') return candidate.skills.length > 0;
+  if (key === 'skills') return candidate.skills.length >= 3;
   if (key === 'experience') {
     return (
       candidate.hasExperience === 'NONE' ||
@@ -581,7 +589,6 @@ function buildSections(candidate: NonNullable<CandidateRecord>): PassportSection
 }
 
 function computeCompletion(candidate: NonNullable<CandidateRecord>) {
-  return buildSections(candidate)
-    .filter((item) => item.done)
-    .reduce((sum, item) => sum + item.weight, 0);
+  const sections = buildSections(candidate);
+  return computeProfileOverviewCompletion(sections, candidate.skills.length);
 }

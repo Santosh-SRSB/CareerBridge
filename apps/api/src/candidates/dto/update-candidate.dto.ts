@@ -62,6 +62,12 @@ export class UpdateCandidateDto {
   @MinLength(2, { message: 'Enter your current city.' })
   city?: string;
 
+  @ApiPropertyOptional({ example: 'Bengaluru' })
+  @IsOptional()
+  @IsString()
+  @MinLength(2, { message: 'Select where you would like to work.' })
+  preferredWorkCity?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -108,6 +114,16 @@ export class UpdateCandidateDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  totalExperienceYears?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  totalExperienceMonths?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   photoUrl?: string | null;
 
   @ApiPropertyOptional()
@@ -115,6 +131,11 @@ export class UpdateCandidateDto {
   @ValidateNested()
   @Type(() => ProfileLinksDto)
   links?: ProfileLinksDto;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  onboardingCompleted?: boolean;
 }
 
 export class PreferencesDto {

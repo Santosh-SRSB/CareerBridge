@@ -14,6 +14,7 @@ import { HumanMocksModule } from './human-mocks/human-mocks.module';
 import { MatchingModule } from './matching/matching.module';
 import { EmployersModule } from './employers/employers.module';
 import { AdminModule } from './admin/admin.module';
+import { LocationsModule } from './locations/locations.module';
 import { SkillsModule } from './skills/skills.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { GstModule } from './gst/gst.module';
@@ -28,7 +29,10 @@ import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env', 'apps/api/.env'],
+    }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     PrismaModule,
     AuthModule,
@@ -42,6 +46,7 @@ import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
     MatchingModule,
     EmployersModule,
     AdminModule,
+    LocationsModule,
     SkillsModule,
     IntelligenceModule,
     GstModule,

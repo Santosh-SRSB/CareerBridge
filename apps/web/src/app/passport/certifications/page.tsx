@@ -3,7 +3,14 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { yearError, type CandidateCertification } from '@careerbridge/shared';
-import { PassportFrame, WizardActions } from '@/components/PassportFrame';
+import {
+  PassportFrame,
+  PassportLoading,
+  PassportRecord,
+  WizardActions,
+  passportPrimaryButtonClass,
+  passportSecondaryButtonClass,
+} from '@/components/PassportFrame';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
@@ -91,7 +98,7 @@ export default function PassportCertificationsPage() {
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
+  if (!ready) return <PassportLoading />;
 
   return (
     <PassportFrame
@@ -99,25 +106,16 @@ export default function PassportCertificationsPage() {
       subtitle="Add certificates, courses, or licenses that help you stand out."
       step="certifications"
     >
-      <form onSubmit={onAdd} className="cb-passport-panel space-y-4 p-6 sm:p-7">
+      <form onSubmit={onAdd} className="space-y-4">
         {items.length ? (
           <div className="space-y-2">
             {items.map((item) => (
-              <div key={item.id} className="cb-wizard-record">
-                <div>
-                  <p className="text-sm font-semibold text-primary">{item.name}</p>
-                  <p className="text-xs text-muted">
-                    {[item.issuer, item.year, item.credentialId].filter(Boolean).join(' · ') || 'Saved'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-error"
-                  onClick={async () => setItems((await removeCertification(item.id)).certifications)}
-                >
-                  Remove
-                </button>
-              </div>
+              <PassportRecord
+                key={item.id}
+                title={item.name}
+                subtitle={[item.issuer, item.year, item.credentialId].filter(Boolean).join(' · ') || 'Saved'}
+                onRemove={() => void removeCertification(item.id).then((profile) => setItems(profile.certifications))}
+              />
             ))}
           </div>
         ) : null}
@@ -151,7 +149,7 @@ export default function PassportCertificationsPage() {
           onChange={(event) => setCredentialId(event.target.value)}
           placeholder="Optional ID or license number"
         />
-        {error ? <p className="text-sm text-error">{error}</p> : null}
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>
           <Button
             type="submit"
@@ -159,12 +157,20 @@ export default function PassportCertificationsPage() {
             block={false}
             loading={loading}
             loadingLabel="Saving..."
-            variant="secondary"
-            className="cb-wizard-secondary"
+            variant="outline"
+            className={passportSecondaryButtonClass}
           >
             Add certificate
           </Button>
-          <Button type="button" size="md" block={false} loading={loading} loadingLabel="Saving..." onClick={() => void onContinue()}>
+          <Button
+            type="button"
+            size="md"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={passportPrimaryButtonClass}
+            onClick={() => void onContinue()}
+          >
             {items.length || name.trim() ? 'Save and continue' : 'Skip for now'}
           </Button>
         </WizardActions>

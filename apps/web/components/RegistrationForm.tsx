@@ -10,7 +10,7 @@ import { COUNTRIES, DEFAULT_COUNTRY, isValidNational, toE164 } from '@/lib/phone
 import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
 import { setPendingPassword } from '@/lib/pending-password';
-import { isDevOtpEnabled, isFirebaseConfigured, sendFirebaseOtp } from '@/lib/firebase';
+import { isFirebaseConfigured, sendFirebaseOtp, usesFirebasePhoneOtp } from '@/lib/firebase';
 import { authErrorMessage } from '@/lib/auth-errors';
 import { PREFERRED_LANGUAGES, REGISTRATION_PASSWORD_HINT, registrationPasswordError } from '@careerbridge/shared';
 import type { OtpChannel } from '@careerbridge/shared';
@@ -18,7 +18,7 @@ import type { OtpChannel } from '@careerbridge/shared';
 export function RegistrationForm() {
   const router = useRouter();
   const [channel, setChannel] = useState<OtpChannel>('MOBILE');
-  const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
+  const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -72,7 +72,7 @@ export function RegistrationForm() {
         preferredLanguage,
         password,
       });
-      if (channel === 'MOBILE' && !isDevOtpEnabled()) {
+      if (channel === 'MOBILE' && usesFirebasePhoneOtp()) {
         if (!isFirebaseConfigured()) {
           throw new Error('Firebase OTP is not configured yet.');
         }

@@ -13,6 +13,7 @@ enum UserType {
   CANDIDATE
   EMPLOYER_ADMIN
   EMPLOYER_RECRUITER
+  SUPER_ADMIN
   PLATFORM_ADMIN
   PLATFORM_OPERATOR
 }
@@ -61,7 +62,9 @@ model Candidate {
   userId                String   @unique @map("user_id")
   firstName             String?  @map("first_name")
   lastName              String?  @map("last_name")
+  state                 String?
   city                  String?
+  preferredWorkCity     String?  @map("preferred_work_city")
   preferredLanguage     String?  @map("preferred_language")
   dateOfBirth           DateTime? @map("date_of_birth")
   gender                String?
@@ -187,6 +190,15 @@ enum ApplicationStatus {
   HIRED
 }
 
+enum EmployerInterviewStatus {
+  PROPOSED
+  SCHEDULED
+  CONFIRMED
+  RESCHEDULE_REQUESTED
+  COMPLETED
+  CANCELLED
+}
+
 enum EmployerVerificationStatus {
   UNVERIFIED
   KYC_COMPLETE
@@ -239,6 +251,7 @@ model Employer {
   jobs           Job[]
   payments       EmployerPayment[]
   hiringOutcomes HiringOutcome[]
+  interviews     EmployerInterview[]
 
   @@map("employers")
 }
@@ -274,6 +287,7 @@ model Job {
   matches        CandidateMatch[]
   hiringOutcomes HiringOutcome[]
   payments       EmployerPayment[]
+  interviews     EmployerInterview[]
 
   @@index([status, city])
   @@index([category])
@@ -409,11 +423,12 @@ model Application {
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
 
-  candidate     Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  job           Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  resume        Resume?         @relation(fields: [resumeId], references: [id], onDelete: SetNull)
-  match         CandidateMatch?
-  hiringOutcome HiringOutcome?
+  candidate          Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job                Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume             Resume?             @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  match              CandidateMatch?
+  hiringOutcome      HiringOutcome?
+  employerInterviews EmployerInterview[]
 
   @@unique([candidateId, jobId])
   @@index([jobId])
@@ -506,6 +521,32 @@ model EmployerPayment {
 
   @@index([employerId, status])
   @@map("employer_payments")
+}
+
+model EmployerInterview {
+  id            String                  @id @default(uuid())
+  employerId    String                  @map("employer_id")
+  applicationId String                  @map("application_id")
+  jobId         String                  @map("job_id")
+  candidateId   String                  @map("candidate_id")
+  scheduledAt   DateTime                @map("scheduled_at")
+  durationMin   Int                     @default(30) @map("duration_min")
+  mode          String                  @default("VIDEO")
+  location      String?                 @db.Text
+  status        EmployerInterviewStatus @default(SCHEDULED)
+  notes         String?                 @db.Text
+  confirmedAt   DateTime?               @map("confirmed_at")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  employer    Employer    @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  job         Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([employerId, scheduledAt])
+  @@index([applicationId])
+  @@index([jobId])
+  @@map("employer_interviews")
 }
 
 model Interview {
@@ -654,3 +695,30 @@ model GstVerificationAudit {
   @@index([createdAt])
   @@map("gst_verification_audits")
 }
+
+model State {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String?  @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  cities    City[]
+
+  @@map("states")
+}
+
+model City {
+  id        String   @id @default(uuid())
+  stateId   String   @map("state_id")
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  state     State    @relation(fields: [stateId], references: [id], onDelete: Cascade)
+
+  @@unique([stateId, name])
+  @@index([stateId])
+  @@map("cities")
+}
+

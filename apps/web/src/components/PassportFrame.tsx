@@ -1,49 +1,14 @@
 'use client';
 
-import { type ReactNode, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Logo } from '@/components/AuthShell';
-import { BackButton } from '@/components/ui/BackButton';
+import { type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import type { PassportSectionKey } from '@careerbridge/shared';
-import { getProfileCompletion } from '@/lib/api';
-import { PASSPORT_WIZARD_KEYS, nextPassportPath, passportStepHref, wizardStepIndex } from '@/lib/passport-flow';
-
-const STEP_LABELS: Record<(typeof PASSPORT_WIZARD_KEYS)[number], string> = {
-  personal: 'Personal',
-  photo: 'Photo',
-  education: 'Education',
-  skills: 'Skills',
-  experience: 'Experience',
-  preferences: 'Preferences',
-  languages: 'Languages',
-  certifications: 'Certificates',
-  projects: 'Projects',
-  links: 'Links',
-};
-
-export function CandidateHeader({
-  backHref,
-  backLabel = '← Back',
-}: {
-  backHref?: string;
-  backLabel?: string;
-}) {
-  return (
-    <header className="flex items-center justify-between gap-3">
-      <Logo />
-      {backHref ? (
-        <Link href={backHref} className="text-sm font-bold text-teal hover:underline">
-          {backLabel}
-        </Link>
-      ) : null}
-    </header>
-  );
-}
+import { CandidateAppShell } from '@/components/CandidateAppShell';
 
 export function PassportFrame({
   title,
   subtitle,
-  step,
+  step: _step,
   children,
 }: {
   title: string;
@@ -51,85 +16,74 @@ export function PassportFrame({
   step?: PassportSectionKey;
   children: ReactNode;
 }) {
-  const index = step ? wizardStepIndex(step) : -1;
-  const total = PASSPORT_WIZARD_KEYS.length;
-  const [doneKeys, setDoneKeys] = useState<PassportSectionKey[]>([]);
-
-  useEffect(() => {
-    getProfileCompletion()
-      .then((completion) => {
-        setDoneKeys(completion.sections.filter((item) => item.done).map((item) => item.key));
-      })
-      .catch(() => setDoneKeys([]));
-  }, [step]);
-
-  if (index < 0 || !step) {
-    return (
-      <main className="cb-app">
-        <CandidateHeader backHref="/dashboard" backLabel="← Back" />
-        <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">{title}</h1>
-        {subtitle ? <p className="mt-1 max-w-2xl text-sm text-muted">{subtitle}</p> : null}
-        <div className="mt-4">{children}</div>
-      </main>
-    );
-  }
+  const router = useRouter();
 
   return (
-    <main className="cb-wizard">
-      <div className="cb-wizard-inner">
-        <BackButton fallback="/dashboard" className="cb-wizard-home" />
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-teal">Career Passport</p>
-        <ol className="cb-wizard-steps" aria-label="Jump to any passport section">
-          {PASSPORT_WIZARD_KEYS.map((key, stepIndex) => {
-            const active = stepIndex === index;
-            const done = doneKeys.includes(key);
-            const state = active ? 'active' : done ? 'done' : 'todo';
-            const label = STEP_LABELS[key];
-            const body = (
-              <>
-                <span className="cb-wizard-dot">{done && !active ? '✓' : stepIndex + 1}</span>
-                <span className="cb-wizard-step-label">{label}</span>
-              </>
-            );
+    <CandidateAppShell
+      activeTab="profile"
+      showBack
+      title={title}
+      headerVariant="simple"
+      maxWidth="max-w-lg"
+      onBack={() => router.push('/passport')}
+    >
+      <div className="space-y-5">
+        <div className="space-y-1">
+          <h1 className="text-xl font-extrabold tracking-tight text-slate-900">{title}</h1>
+          {subtitle ? <p className="text-sm leading-relaxed text-slate-500">{subtitle}</p> : null}
+        </div>
 
-            return (
-              <li key={key} className={`cb-wizard-step is-${state}`}>
-                {active ? (
-                  <span className="cb-wizard-step-link" aria-current="step">
-                    {body}
-                  </span>
-                ) : (
-                  <Link
-                    href={passportStepHref(key)}
-                    className="cb-wizard-step-link"
-                    aria-label={`Open ${label}, step ${stepIndex + 1} of ${total}`}
-                  >
-                    {body}
-                  </Link>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-        <p className="mt-3 text-sm font-bold text-muted">
-          Step {index + 1} of {total} · {STEP_LABELS[step]}
-        </p>
-        <p className="mt-1 text-xs font-semibold text-teal">Tap a section name to open it</p>
-        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">{title}</h1>
-        {subtitle ? <p className="mt-2 max-w-lg text-sm leading-6 text-muted">{subtitle}</p> : null}
-        <div className="cb-wizard-stage">{children}</div>
-        <p className="mt-4 text-center text-sm">
-          <Link href={nextPassportPath(step)} className="font-semibold text-muted hover:text-teal">
-            Skip this section →
-          </Link>
-        </p>
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs">{children}</div>
       </div>
-    </main>
+    </CandidateAppShell>
+  );
+}
+
+export const passportPrimaryButtonClass =
+  'w-full sm:w-auto px-8 py-3 text-sm font-bold bg-[#3b6cf4] hover:bg-[#2f5ed4] text-white rounded-xl shadow-sm';
+
+export const passportSecondaryButtonClass =
+  'w-full sm:w-auto px-6 py-3 text-sm font-bold rounded-xl border-slate-200 text-slate-800';
+
+export function PassportLoading() {
+  return (
+    <CandidateAppShell activeTab="profile" showBack title="My profile" headerVariant="simple">
+      <div className="p-8 text-center text-sm text-slate-500">Loading profile...</div>
+    </CandidateAppShell>
+  );
+}
+
+export function PassportRecord({
+  title,
+  subtitle,
+  detail,
+  onRemove,
+}: {
+  title: string;
+  subtitle?: string;
+  detail?: string;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-slate-900">{title}</p>
+        {subtitle ? <p className="text-xs text-slate-500">{subtitle}</p> : null}
+        {detail ? <p className="mt-1 text-xs text-slate-500">{detail}</p> : null}
+      </div>
+      <button type="button" className="shrink-0 text-xs font-semibold text-error" onClick={onRemove}>
+        Remove
+      </button>
+    </div>
   );
 }
 
 export function WizardActions({ children }: { children: ReactNode }) {
-  return <div className="cb-wizard-actions">{children}</div>;
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-5 mt-5">
+      {children}
+    </div>
+  );
 }
 
 export function Chip({
@@ -147,7 +101,11 @@ export function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`cb-chip ${selected ? 'is-on' : ''} ${className}`.trim()}
+      className={`inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-bold transition ${
+        selected
+          ? 'border-[#3b6cf4] bg-[#3b6cf4] text-white shadow-xs'
+          : 'border-slate-200 bg-white text-slate-700 hover:border-[#3b6cf4]/30 hover:bg-slate-50'
+      } ${className}`.trim()}
     >
       {children}
     </button>
