@@ -16,7 +16,6 @@ const NAV = [
   { href: '/jobs', label: 'Jobs' },
   { href: '/passport?overview=1', label: 'Passport' },
   { href: '/courses', label: 'Courses' },
-  { href: '/resume', label: 'Resume' },
   { href: '/interviews', label: 'Interviews' },
   { href: '/assessments', label: 'Skill assessment' },
 ];
@@ -73,7 +72,7 @@ export function CandidateTopBar({
             onClick={onSignOut}
             className="inline-flex h-10 shrink-0 items-center rounded-full border-[1.5px] border-white/55 px-5 text-sm font-semibold text-white transition hover:bg-white/10"
           >
-            Sign out
+            Logout
           </button>
         </div>
       </div>
@@ -170,8 +169,11 @@ export function CandidateShell({
   }, []);
 
   async function signOut() {
-    await logout();
-    router.replace('/');
+    try {
+      await logout();
+    } finally {
+      router.replace('/');
+    }
   }
 
   const cinema = scene === 'ok' || scene === 'cam';

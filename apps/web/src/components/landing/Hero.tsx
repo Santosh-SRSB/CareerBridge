@@ -1,7 +1,7 @@
+import Link from "next/link";
 import { PassportDeck } from "@/components/landing/PassportDeck";
 import { HeroSky } from "@/components/landing/HeroSky";
 import { HeroProof } from "@/components/landing/HeroProof";
-import { CreatePassportButton } from "@/features/candidate/passport/CreatePassportButton";
 
 export function Hero() {
   return (
@@ -36,17 +36,20 @@ export function Hero() {
             seekers.
           </p>
 
-          <div className="flex flex-wrap gap-4">
-            <CreatePassportButton className="btn-hero-primary inline-flex items-center justify-center rounded-[10px] px-7 py-4 text-[15px] font-bold transition hover:-translate-y-0.5">
-              Create Free Career Passport
-            </CreatePassportButton>
-            <a
-              href="#jobs"
-              className="btn-hero-secondary inline-flex items-center justify-center rounded-[10px] px-7 py-4 text-[15px] font-bold transition"
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[15px] font-bold text-navy">
+            <Link href="/login" className="underline-offset-4 transition hover:text-orange hover:underline">
+              Login
+            </Link>
+            <span className="text-muted/50" aria-hidden="true">
+              |
+            </span>
+            <Link
+              href="/register?role=candidate"
+              className="underline-offset-4 transition hover:text-orange hover:underline"
             >
-              Explore Jobs
-            </a>
-          </div>
+              Signup
+            </Link>
+          </p>
 
           <HeroProof />
         </div>

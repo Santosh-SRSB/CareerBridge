@@ -14,8 +14,8 @@ export const PASSPORT_WIZARD_KEYS: PassportSectionKey[] = [
   'links',
 ];
 
-export const PASSPORT_FLOW_START = '/passport/personal?flow=1';
-export const PASSPORT_OVERVIEW = '/passport/saved';
+export const PASSPORT_FLOW_START = '/profile';
+export const PASSPORT_OVERVIEW = '/profile';
 export const PASSPORT_PREVIEW = '/passport/preview';
 export const FLOW_DONE_KEY = 'cb.passportFlowDone';
 
@@ -32,26 +32,18 @@ export function wizardStepIndex(key: PassportSectionKey) {
   return PASSPORT_WIZARD_KEYS.indexOf(key);
 }
 
-export function nextPassportPath(afterKey?: PassportSectionKey) {
-  if (!afterKey) return PASSPORT_FLOW_START;
-  const nextKey = PASSPORT_WIZARD_KEYS[wizardStepIndex(afterKey) + 1];
-  return nextKey ? `${PASSPORT_SECTION_COPY[nextKey].href}?flow=1` : PASSPORT_OVERVIEW;
+export function nextPassportPath(_afterKey?: PassportSectionKey) {
+  return PASSPORT_OVERVIEW;
 }
 
 export function passportStepHref(key: PassportSectionKey) {
-  return `${PASSPORT_SECTION_COPY[key].href}?flow=1`;
+  return PASSPORT_SECTION_COPY[key].href;
 }
 
-export function previousPassportPath(key: PassportSectionKey) {
-  const index = wizardStepIndex(key);
-  if (index <= 0) return '/dashboard';
-  const prevKey = PASSPORT_WIZARD_KEYS[index - 1];
-  return passportStepHref(prevKey);
+export function previousPassportPath(_key: PassportSectionKey) {
+  return PASSPORT_OVERVIEW;
 }
 
-export function goToNextPassportStep(
-  router: { replace: (href: string) => void },
-  afterKey?: PassportSectionKey,
-) {
-  router.replace(nextPassportPath(afterKey));
+export function goToNextPassportStep(router: { replace: (href: string) => void }, _afterKey?: PassportSectionKey) {
+  router.replace(PASSPORT_OVERVIEW);
 }

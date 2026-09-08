@@ -25,6 +25,7 @@ enum UserStatus {
 enum AuthPurpose {
   LOGIN
   REGISTER
+  RESET_PASSWORD
 }
 
 enum OtpChannel {
@@ -46,7 +47,10 @@ model User {
 
   candidate     Candidate?
   employer      Employer?
+  adminProfile  Admin?
   refreshTokens RefreshToken[]
+  notifications Notification[]
+  deviceTokens  DeviceToken[]
 
   @@unique([email, userType])
   @@unique([phone, userType])
@@ -55,12 +59,30 @@ model User {
   @@map("users")
 }
 
+model Admin {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  fullName     String?    @map("full_name")
+  status       UserStatus @default(ACTIVE)
+  userId       String     @unique @map("user_id")
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastLoginAt  DateTime?  @map("last_login_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("admins")
+}
+
 model Candidate {
   id                    String   @id @default(uuid())
   userId                String   @unique @map("user_id")
   firstName             String?  @map("first_name")
   lastName              String?  @map("last_name")
+  state                 String?
   city                  String?
+  preferredWorkCity     String?  @map("preferred_work_city")
   preferredLanguage     String?  @map("preferred_language")
   dateOfBirth           DateTime? @map("date_of_birth")
   gender                String?
@@ -85,6 +107,11 @@ model Candidate {
   onboardingCompleted   Boolean  @default(false) @map("onboarding_completed")
   profileCompletion     Int      @default(0) @map("profile_completion")
   assessmentCredits     Int      @default(1) @map("assessment_credits")
+  whatsappOptIn         Boolean  @default(false) @map("whatsapp_opt_in")
+  whatsappOptInAt       DateTime? @map("whatsapp_opt_in_at")
+  whatsappOptInSource   String?  @map("whatsapp_opt_in_source")
+  whatsappNumber        String?  @map("whatsapp_number")
+  whatsappVerified      Boolean  @default(false) @map("whatsapp_verified")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
@@ -98,6 +125,9 @@ model Candidate {
   skillAssessments  SkillAssessment[]
   assessmentPurchases AssessmentPurchase[]
   humanMockInterviews HumanMockInterview[]
+  employerInterviews  EmployerInterview[]
+  whatsappMessages    WhatsAppMessage[]
+  savedJobs           SavedJob[]
 
   @@map("candidates")
 }
@@ -238,6 +268,7 @@ model Employer {
   jobs           Job[]
   payments       EmployerPayment[]
   hiringOutcomes HiringOutcome[]
+  interviews     EmployerInterview[]
 
   @@map("employers")
 }
@@ -273,10 +304,58 @@ model Job {
   matches        CandidateMatch[]
   hiringOutcomes HiringOutcome[]
   payments       EmployerPayment[]
+  interviews     EmployerInterview[]
+  savedBy        SavedJob[]
 
   @@index([status, city])
   @@index([category])
   @@map("jobs")
+}
+
+model SavedJob {
+  id          String   @id @default(uuid())
+  candidateId String   @map("candidate_id")
+  jobId       String   @map("job_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, jobId])
+  @@index([candidateId, createdAt])
+  @@map("saved_jobs")
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  title     String
+  body      String
+  type      String    @default("SYSTEM")
+  link      String?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String
+  platform  String   @default("WEB")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, token])
+  @@index([userId])
+  @@map("device_tokens")
 }
 
 enum ResumeKind {
@@ -304,6 +383,19 @@ model Resume {
   version        Int        @default(1)
   kind           ResumeKind @default(ORIGINAL)
   parentResumeId String?    @map("parent_resume_id")
+  pdfStoragePath String?    @map("pdf_storage_path")
+  pdfStorageUri  String?    @map("pdf_storage_uri")
+  pdfPublicUrl   String?    @map("pdf_public_url")
+  pdfUploadedAt  DateTime?  @map("pdf_uploaded_at")
+  sourceKind         String?   @default("BUILDER") @map("source_kind")
+  sourceFileName     String?   @map("source_file_name")
+  sourceMimeType     String?   @map("source_mime_type")
+  sourceFileSize     Int?      @map("source_file_size")
+  sourceStoragePath  String?   @map("source_storage_path")
+  sourceStorageUri   String?   @map("source_storage_uri")
+  processingStatus   String?   @default("READY") @map("processing_status")
+  processingError    String?   @map("processing_error") @db.Text
+  extractionMetaJson String?   @map("extraction_meta_json") @db.Text
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
@@ -413,6 +505,7 @@ model Application {
   resume        Resume?         @relation(fields: [resumeId], references: [id], onDelete: SetNull)
   match         CandidateMatch?
   hiringOutcome HiringOutcome?
+  employerInterviews EmployerInterview[]
 
   @@unique([candidateId, jobId])
   @@index([jobId])
@@ -445,6 +538,8 @@ model CandidateMatch {
   skillsScore             Int      @default(0) @map("skills_score")
   experienceScore         Int      @default(0) @map("experience_score")
   interviewReadinessScore Int      @default(0) @map("interview_readiness_score")
+  /// Cosine similarity 0–100 from Gemini embeddings (Volume 2 hybrid matching).
+  semanticScore           Int      @default(0) @map("semantic_score")
   totalScore              Int      @default(0) @map("total_score")
   rank                    Int?
   reasonsJson             String   @default("[]") @map("reasons_json")
@@ -505,6 +600,91 @@ model EmployerPayment {
 
   @@index([employerId, status])
   @@map("employer_payments")
+}
+
+enum EmployerInterviewStatus {
+  PROPOSED
+  SCHEDULED
+  CONFIRMED
+  RESCHEDULE_REQUESTED
+  COMPLETED
+  CANCELLED
+}
+
+model EmployerInterview {
+  id            String                  @id @default(uuid())
+  employerId    String                  @map("employer_id")
+  applicationId String                  @map("application_id")
+  jobId         String                  @map("job_id")
+  candidateId   String                  @map("candidate_id")
+  scheduledAt   DateTime                @map("scheduled_at")
+  scheduledEnd  DateTime?               @map("scheduled_end")
+  timezone      String                  @default("Asia/Kolkata")
+  durationMin   Int                     @default(30) @map("duration_min")
+  mode          String                  @default("VIDEO")
+  location      String?                 @db.Text
+  meetingUrl    String?                 @map("meeting_url") @db.Text
+  status        EmployerInterviewStatus @default(SCHEDULED)
+  notes         String?                 @db.Text
+  confirmedAt   DateTime?               @map("confirmed_at")
+  whatsappStatus String?                @map("whatsapp_status")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  employer    Employer    @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  job         Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate   Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  whatsappMessages WhatsAppMessage[]
+
+  @@index([employerId, scheduledAt])
+  @@index([applicationId])
+  @@index([jobId])
+  @@index([candidateId, scheduledAt])
+  @@map("employer_interviews")
+}
+
+enum WhatsAppMessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum WhatsAppDeliveryStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED
+}
+
+model WhatsAppMessage {
+  id                 String                   @id @default(uuid())
+  candidateId        String?                  @map("candidate_id")
+  interviewId        String?                  @map("interview_id")
+  toPhone            String                   @map("to_phone")
+  fromPhone          String?                  @map("from_phone")
+  messageType        String                   @map("message_type")
+  templateName       String?                  @map("template_name")
+  whatsappMessageId  String?                  @unique @map("whatsapp_message_id")
+  direction          WhatsAppMessageDirection
+  status             WhatsAppDeliveryStatus   @default(QUEUED)
+  payloadJson        String?                  @map("payload_json") @db.Text
+  errorJson          String?                  @map("error_json") @db.Text
+  sentAt             DateTime?                @map("sent_at")
+  deliveredAt        DateTime?                @map("delivered_at")
+  readAt             DateTime?                @map("read_at")
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+
+  candidate Candidate?         @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  interview EmployerInterview? @relation(fields: [interviewId], references: [id], onDelete: SetNull)
+
+  @@index([candidateId, createdAt])
+  @@index([interviewId, createdAt])
+  @@index([toPhone, createdAt])
+  @@index([status])
+  @@map("whatsapp_messages")
 }
 
 model Interview {
@@ -658,8 +838,8 @@ model GstVerificationAudit {
 model AiInteraction {
   id               String   @id @default(uuid())
   userId           String?  @map("user_id")
-  operation        String   // RESUME_REWRITE, RESUME_REVIEW, INTERVIEW_EVALUATION, etc.
-  provider         String   // gemini, openai, fallback
+  operation        String   // RESUME_REWRITE, RESUME_REVIEW, INTERVIEW_EVALUATION, EMBEDDING, etc.
+  provider         String   // gemini, fallback
   model            String
   promptVersion    String   @map("prompt_version")
   inputTokens      Int      @default(0) @map("input_tokens")
@@ -676,6 +856,24 @@ model AiInteraction {
   @@index([provider])
   @@index([createdAt])
   @@map("ai_interactions")
+}
+
+/// Vector embeddings for hybrid matching + RAG (Volume 2A.21). Stored as JSON floats for MVP portability.
+model Embedding {
+  id            String   @id @default(uuid())
+  entityType    String   @map("entity_type") // CANDIDATE | JOB | RESUME | SKILL | KNOWLEDGE
+  entityId      String   @map("entity_id")
+  contentHash   String   @map("content_hash")
+  embeddingJson String   @map("embedding_json") @db.Text
+  model         String
+  dimensions    Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([entityType, entityId])
+  @@index([entityType])
+  @@index([contentHash])
+  @@map("embeddings")
 }
 
 /// Centralized Audit Log (Volume 2 HLD Section 2A.25)

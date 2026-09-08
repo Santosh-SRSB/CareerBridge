@@ -3,7 +3,15 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { EXPERIENCE_OPTIONS, dateRangeError, type CandidateExperience } from '@careerbridge/shared';
-import { Chip, PassportFrame, WizardActions } from '@/components/PassportFrame';
+import {
+  Chip,
+  PassportFrame,
+  PassportLoading,
+  PassportRecord,
+  WizardActions,
+  passportPrimaryButtonClass,
+  passportSecondaryButtonClass,
+} from '@/components/PassportFrame';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
@@ -15,7 +23,7 @@ function formatRange(start?: string | null, end?: string | null) {
   if (!start && !end) return '';
   const startLabel = start ? new Date(start).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'Start';
   const endLabel = end ? new Date(end).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'Present';
-  return `${startLabel} ΓÇô ${endLabel}`;
+  return `${startLabel} – ${endLabel}`;
 }
 
 export default function PassportExperiencePage() {
@@ -127,7 +135,7 @@ export default function PassportExperiencePage() {
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
+  if (!ready) return <PassportLoading />;
 
   const showJobForm = hasExperience && hasExperience !== 'NONE';
 
@@ -137,33 +145,24 @@ export default function PassportExperiencePage() {
       subtitle="Even internships and first jobs help employers understand what you can do."
       step="experience"
     >
-      <form onSubmit={onAdd} className="cb-passport-panel space-y-4 p-6 sm:p-7">
+      <form onSubmit={onAdd} className="space-y-4">
         {items.length ? (
           <div className="space-y-2">
             {items.map((item) => (
-              <div key={item.id} className="cb-wizard-record">
-                <div>
-                  <p className="text-sm font-semibold text-primary">{item.jobTitle}</p>
-                  <p className="text-xs text-muted">
-                    {[item.company, formatRange(item.startDate, item.endDate), item.isInternship ? 'Internship' : '']
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-error"
-                  onClick={async () => setItems((await removeExperience(item.id)).experiences)}
-                >
-                  Remove
-                </button>
-              </div>
+              <PassportRecord
+                key={item.id}
+                title={item.jobTitle}
+                subtitle={[item.company, formatRange(item.startDate, item.endDate), item.isInternship ? 'Internship' : '']
+                  .filter(Boolean)
+                  .join(' · ')}
+                onRemove={() => void removeExperience(item.id).then((profile) => setItems(profile.experiences))}
+              />
             ))}
           </div>
         ) : null}
 
         <div>
-          <p className="mb-2 text-sm font-semibold text-primary">Your experience</p>
+          <p className="mb-2 text-xs font-bold text-slate-700">Your experience</p>
           <div className="flex flex-wrap gap-1.5">
             {EXPERIENCE_OPTIONS.map((option) => (
               <Chip
@@ -191,10 +190,10 @@ export default function PassportExperiencePage() {
                 disabled={currentRole}
               />
             </div>
-            <label className="flex items-center gap-3 text-sm font-semibold text-primary">
+            <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
               <input
                 type="checkbox"
-                className="size-4 shrink-0"
+                className="size-4 shrink-0 rounded border-slate-300 text-[#0a2e2c] focus:ring-[#0a2e2c]/20"
                 checked={currentRole}
                 onChange={(event) => setCurrentRole(event.target.checked)}
               />
@@ -209,7 +208,7 @@ export default function PassportExperiencePage() {
             />
           </>
         ) : null}
-        {error ? <p className="text-sm text-error">{error}</p> : null}
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>
           {showJobForm ? (
             <Button
@@ -218,13 +217,21 @@ export default function PassportExperiencePage() {
               block={false}
               loading={loading}
               loadingLabel="Saving..."
-              variant="secondary"
-              className="cb-wizard-secondary"
+              variant="outline"
+              className={passportSecondaryButtonClass}
             >
               Add job
             </Button>
           ) : null}
-          <Button type="button" size="md" block={false} loading={loading} loadingLabel="Saving..." onClick={() => void onContinue()}>
+          <Button
+            type="button"
+            size="md"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={passportPrimaryButtonClass}
+            onClick={() => void onContinue()}
+          >
             Save and continue
           </Button>
         </WizardActions>

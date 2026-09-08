@@ -14,12 +14,15 @@ import { HumanMocksModule } from './human-mocks/human-mocks.module';
 import { MatchingModule } from './matching/matching.module';
 import { EmployersModule } from './employers/employers.module';
 import { AdminModule } from './admin/admin.module';
+import { LocationsModule } from './locations/locations.module';
 import { SkillsModule } from './skills/skills.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { GstModule } from './gst/gst.module';
 import { CoursesModule } from './courses/courses.module';
 import { AiModule } from './ai/ai.module';
 import { StorageModule } from './common/storage/storage.module';
+import { WhatsAppModule } from './whatsapp/whatsapp.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -30,7 +33,12 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: process.env.NODE_ENV === 'production' ? 60 : 300,
+      },
+    ]),
     PrismaModule,
     AuthModule,
     CandidatesModule,
@@ -43,12 +51,15 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     MatchingModule,
     EmployersModule,
     AdminModule,
+    LocationsModule,
     SkillsModule,
     IntelligenceModule,
     GstModule,
     CoursesModule,
     AiModule,
     StorageModule,
+    WhatsAppModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
   providers: [

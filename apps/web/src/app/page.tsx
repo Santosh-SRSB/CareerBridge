@@ -5,11 +5,13 @@ import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { JobsTeaser } from "@/components/landing/JobsTeaser";
 import { Navbar } from "@/components/landing/Navbar";
+import { SignedInHomeRedirect } from "@/components/landing/SignedInHomeRedirect";
 import { SkillMarquee } from "@/components/landing/SkillMarquee";
 
 export default function Home() {
   return (
     <div id="top" className="min-h-full bg-fog">
+      <SignedInHomeRedirect />
       <Navbar />
       <main>
         <Hero />

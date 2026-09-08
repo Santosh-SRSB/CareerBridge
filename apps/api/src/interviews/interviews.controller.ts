@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
-import { IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min, MinLength, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 import { InterviewsService } from './interviews.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -30,7 +30,18 @@ class LiveCreateDto {
   jobRole?: string;
 
   @IsString()
-  @IsIn(['HR', 'TECHNICAL', 'BEHAVIOURAL', 'ROLE', 'RESUME', 'MIXED', 'CUSTOMER_SERVICE', 'SITUATIONAL'])
+  @IsIn([
+    'HR',
+    'TECHNICAL',
+    'BEHAVIOURAL',
+    'GENERIC',
+    'ROLE',
+    'ROLE_BASED',
+    'RESUME',
+    'MIXED',
+    'CUSTOMER_SERVICE',
+    'SITUATIONAL',
+  ])
   interviewType!: string;
 
   @IsOptional()
@@ -38,10 +49,17 @@ class LiveCreateDto {
   @IsIn(['Beginner', 'Intermediate', 'Advanced', 'FRESHER', 'YEAR_1', 'YEAR_2_3', 'YEAR_4_PLUS'])
   difficulty?: string;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(3)
+  @Max(15)
+  questionCount?: number;
+
   @Type(() => Number)
   @IsInt()
   @Min(10)
-  @Max(45)
+  @Max(90)
   durationLimitMin!: number;
 
   @IsString()
@@ -54,6 +72,7 @@ class LiveCreateDto {
 }
 
 class LiveAnswerDto {
+  @ValidateIf((dto: LiveAnswerDto) => dto.answerMode !== 'AUDIO')
   @IsString()
   @MinLength(2, { message: 'Please answer the question.' })
   answer!: string;
@@ -63,6 +82,11 @@ class LiveAnswerDto {
   @IsInt()
   @Min(0)
   durationSec?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['TEXT', 'AUDIO'])
+  answerMode?: 'TEXT' | 'AUDIO';
 }
 
 class WarningDto {
@@ -107,7 +131,7 @@ export class InterviewsController {
 
   @Post(':id/answers')
   answerLive(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: LiveAnswerDto) {
-    return this.interviews.answerLive(user.id, id, dto.answer, dto.durationSec);
+    return this.interviews.answerLive(user.id, id, dto.answer, dto.durationSec, dto.answerMode);
   }
 
   @Post(':id/warnings')
@@ -120,7 +144,12 @@ export class InterviewsController {
     return this.interviews.endLive(user.id, id);
   }
 
-  @Get(':id/download-report')
+  @Post(':id/complete')
+  complete(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.interviews.endLive(user.id, id);
+  }
+
+  @Get([':id/report', ':id/download-report'])
   pdf(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.interviews.downloadReport(user.id, id);
   }

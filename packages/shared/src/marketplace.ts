@@ -22,6 +22,25 @@ export const JOB_EDUCATION_LEVELS = [
   'Doctorate',
 ] as const;
 
+export const JOB_DEPARTMENTS = [
+  'Engineering',
+  'Product',
+  'Design',
+  'Sales',
+  'Marketing',
+  'Customer Support',
+  'Human Resources',
+  'Finance',
+  'Operations',
+  'IT / Technology',
+  'Legal',
+  'Administration',
+  'Healthcare',
+  'Hospitality',
+  'Logistics',
+  'Retail',
+] as const;
+
 export const SCREENING_QUESTION_TYPES = ['YES_NO', 'SHORT_TEXT', 'SINGLE_CHOICE'] as const;
 
 export const JOB_SKILL_SUGGESTIONS = [
@@ -193,6 +212,7 @@ export const RESUME_TEMPLATES = [
   'photo-modern',
   'photo-corporate',
   'photo-elegant',
+  'resume-template-01',
 ] as const;
 
 export const ATS_PHOTO_TEMPLATES = [
@@ -217,6 +237,7 @@ export function resolveResumeTemplateId(id?: string | null) {
   if (value === 'CLASSIC') return 'ats-classic';
   if (value === 'MODERN') return 'ats-modern';
   if (value === 'SIMPLE') return 'ats-minimal';
+  if (value === 'resume-template-01') return 'ats-minimal';
   return value;
 }
 
@@ -266,7 +287,10 @@ export type JobCard = {
   category: string;
   requiredSkills: string[];
   preferredSkills: string[];
+  /** Required experience label from the employer job post (e.g. Fresher, 1-3 years). */
+  experience?: string | null;
   match?: JobMatch;
+  saved?: boolean;
 };
 
 export type JobDetail = JobCard & {
@@ -316,6 +340,10 @@ export type ResumeRecord = {
   kind?: 'ORIGINAL' | 'OPTIMIZED';
   parentResumeId?: string | null;
   updatedAt: string;
+  pdfStoragePath?: string | null;
+  pdfStorageUri?: string | null;
+  pdfPublicUrl?: string | null;
+  pdfUploadedAt?: string | null;
   analysis?: import('./ats').ResumeAnalysis;
   plans?: Array<{ id: string; label: string; minScore: number; maxScore: number; amount: number }>;
 };
@@ -364,6 +392,7 @@ export type LiveInterviewQuestion = {
   answer?: string;
   answeredAt?: string;
   answerDurationSec?: number;
+  answerMode?: 'TEXT' | 'AUDIO';
   analysis?: string;
   improvedAnswer?: string;
   score?: number;
@@ -720,6 +749,107 @@ export type EmployerApplication = {
   job: { id: string; title: string };
   match?: JobMatch;
   screeningAnswers?: Array<{ questionId: string; prompt?: string; answer: string }>;
+};
+
+export type EmployerCandidateSearchResult = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  city: string | null;
+  highestEducation: string | null;
+  experienceYears: number;
+  profileCompletion: number;
+  skills: string[];
+  latestRole: { title: string; company: string } | null;
+  matchScore: number | null;
+  appliedToEmployer: boolean;
+  applicationId?: string | null;
+};
+
+/** Job posting fee in paise (₹999). Each paid unit unlocks a batch of matched profiles. */
+export const EMPLOYER_JOB_POSTING_FEE_PAISE = 99900;
+export const EMPLOYER_CANDIDATES_PER_POSTING_FEE = 10;
+
+export function employerCandidateUnlockLimit(amountPaise: number) {
+  if (amountPaise < EMPLOYER_JOB_POSTING_FEE_PAISE) return 0;
+  return Math.floor(amountPaise / EMPLOYER_JOB_POSTING_FEE_PAISE) * EMPLOYER_CANDIDATES_PER_POSTING_FEE;
+}
+
+export type EmployerCandidateSearchResponse = {
+  jobId: string;
+  unlocked: boolean;
+  unlockLimit: number;
+  totalMatched: number;
+  candidates: EmployerCandidateSearchResult[];
+};
+
+export type EmployerCandidatePassport = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  city: string | null;
+  state: string | null;
+  highestEducation: string | null;
+  experienceYears: number;
+  experienceMonths: number;
+  profileCompletion: number;
+  about: string | null;
+  openToRelocating: boolean;
+  skills: string[];
+  education: Array<{
+    qualification: string;
+    institution: string | null;
+    fieldOfStudy: string | null;
+    yearCompleted: number | null;
+  }>;
+  experiences: Array<{
+    company: string;
+    jobTitle: string;
+    isInternship: boolean;
+    stillInCompany: boolean;
+  }>;
+  hasResume: boolean;
+  resumeId: string | null;
+  application: {
+    id: string;
+    status: string;
+    jobId: string;
+    jobTitle: string;
+  } | null;
+  match: { score: number; reasons: string[]; gaps: string[] } | null;
+  view: 'CONTROLLED_PASSPORT';
+};
+
+export type EmployerInterviewStatus =
+  | 'PROPOSED'
+  | 'SCHEDULED'
+  | 'CONFIRMED'
+  | 'RESCHEDULE_REQUESTED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type EmployerInterviewRecord = {
+  id: string;
+  applicationId: string;
+  jobId: string;
+  candidateId: string;
+  scheduledAt: string;
+  durationMin: number;
+  mode: string;
+  location: string | null;
+  status: EmployerInterviewStatus;
+  notes: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  applicationStatus: string;
+  candidate: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    city: string | null;
+    skills: string[];
+  };
+  job: { id: string; title: string };
 };
 
 export type CatalogSkill = {

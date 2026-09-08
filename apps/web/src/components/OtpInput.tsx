@@ -44,7 +44,7 @@ export function OtpInput({ value, onChange, length = 6 }: Props) {
             const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
             onChange(pasted);
           }}
-          className="h-12 w-11 rounded-sm border border-primary/20 bg-surface text-center text-lg font-semibold"
+          className="h-12 w-11 rounded-xl border border-primary/20 bg-[#f8faf9] text-center text-xl font-bold text-primary outline-none transition focus:border-teal focus:bg-white focus:ring-2 focus:ring-teal/20"
           aria-label={`Digit ${index + 1}`}
         />
       ))}

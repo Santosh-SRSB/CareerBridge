@@ -4,45 +4,49 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { ApplicationRecord } from '@careerbridge/shared';
-import { getApplication } from '@/lib/api';
-import { CandidateShell } from '@/components/CandidatePortal';
+import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { Button } from '@/components/ui/Button';
+import { fetchApplication } from '@/lib/candidate-marketplace-api';
 
 export default function ApplicationConfirmationPage() {
   const params = useParams<{ id: string }>();
   const [application, setApplication] = useState<ApplicationRecord | null>(null);
 
   useEffect(() => {
-    getApplication(params.id).then(setApplication);
+    fetchApplication(params.id).then(setApplication);
   }, [params.id]);
 
   if (!application) {
     return (
-      <CandidateShell>
-        <p className="text-muted">Confirming your application...</p>
-      </CandidateShell>
+      <CandidateAppShell activeTab="applications">
+        <p className="text-slate-500">Confirming your application...</p>
+      </CandidateAppShell>
     );
   }
 
   return (
-    <CandidateShell>
-      <div className="cb-dash-card mx-auto max-w-xl p-6 text-center sm:p-8">
-        <p className="text-4xl text-success">✓</p>
-        <h1 className="mt-4 text-2xl font-extrabold text-primary sm:text-3xl">Application submitted</h1>
-        <p className="mt-3 text-muted">Your application has been sent to {application.job.companyName}.</p>
-        <p className="mt-4 break-words text-lg font-bold text-primary">{application.job.title}</p>
-        <p className="mt-2 text-sm text-muted">Applied → Under Review</p>
-        <Link
-          href={`/applications/${application.id}`}
-          className="mt-6 inline-flex h-8 items-center rounded-full bg-[#14b8a6] px-3.5 text-xs font-extrabold text-[#0a2e2c]"
-        >
-          Track Application
-        </Link>
-        <div className="mt-4">
-          <Link href="/jobs" className="font-bold text-teal hover:underline">
-            Find more jobs
+    <CandidateAppShell activeTab="applications" maxWidth="max-w-3xl">
+      <div className="mx-auto w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+        <p className="text-5xl text-emerald-600">✓</p>
+        <h1 className="mt-4 text-2xl font-extrabold text-slate-900">Application Submitted</h1>
+        <p className="mt-4 text-lg font-bold text-slate-800">{application.job.title}</p>
+        <p className="mt-3 text-sm text-slate-600">
+          Your application has been sent successfully.
+        </p>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Link href={`/applications/${application.id}`}>
+            <Button type="button" className="w-full sm:w-auto">
+              Track Application
+            </Button>
+          </Link>
+          <Link href="/jobs">
+            <Button type="button" variant="outline" className="w-full sm:w-auto">
+              Find More Jobs
+            </Button>
           </Link>
         </div>
       </div>
-    </CandidateShell>
+    </CandidateAppShell>
   );
 }

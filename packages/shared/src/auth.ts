@@ -2,6 +2,7 @@ export const UserType = {
   CANDIDATE: 'CANDIDATE',
   EMPLOYER_ADMIN: 'EMPLOYER_ADMIN',
   EMPLOYER_RECRUITER: 'EMPLOYER_RECRUITER',
+  SUPER_ADMIN: 'SUPER_ADMIN',
   PLATFORM_ADMIN: 'PLATFORM_ADMIN',
   PLATFORM_OPERATOR: 'PLATFORM_OPERATOR',
 } as const;
@@ -11,6 +12,7 @@ export type UserType = (typeof UserType)[keyof typeof UserType];
 export const AuthPurpose = {
   LOGIN: 'LOGIN',
   REGISTER: 'REGISTER',
+  RESET_PASSWORD: 'RESET_PASSWORD',
 } as const;
 
 export type AuthPurpose = (typeof AuthPurpose)[keyof typeof AuthPurpose];
@@ -22,7 +24,35 @@ export const OtpChannel = {
 
 export type OtpChannel = (typeof OtpChannel)[keyof typeof OtpChannel];
 
+/** Candidate / employer portals only — never platform roles. */
 export type AccountKind = 'CANDIDATE' | 'EMPLOYER';
+
+/** Password login portal — Super Admin and Admin are separate. */
+export type LoginAccountType = AccountKind | 'SUPER_ADMIN' | 'ADMIN';
+
+export const PLATFORM_USER_TYPES = [
+  UserType.SUPER_ADMIN,
+  UserType.PLATFORM_ADMIN,
+  UserType.PLATFORM_OPERATOR,
+] as const;
+
+export type PlatformUserType = (typeof PLATFORM_USER_TYPES)[number];
+
+export function isPlatformUserType(role: string | null | undefined): role is PlatformUserType {
+  return (
+    role === UserType.SUPER_ADMIN ||
+    role === UserType.PLATFORM_ADMIN ||
+    role === UserType.PLATFORM_OPERATOR
+  );
+}
+
+export function isSuperAdminType(role: string | null | undefined) {
+  return role === UserType.SUPER_ADMIN;
+}
+
+export function isAdminStaffType(role: string | null | undefined) {
+  return role === UserType.PLATFORM_ADMIN || role === UserType.PLATFORM_OPERATOR;
+}
 
 export type AuthUser = {
   id: string;
@@ -86,13 +116,18 @@ export function formatLanguageSkill(item: LanguageSkill) {
 }
 
 export type RegistrationDraft = {
-  email: string;
+  email?: string;
+  phone?: string;
   fullName: string;
-  location: string;
+  location?: string;
+  state?: string;
+  city?: string;
   preferredLanguage?: string;
   accountType?: 'CANDIDATE' | 'EMPLOYER';
   companyName?: string;
   industry?: string;
+  /** Explicit consent for WhatsApp interview notifications. */
+  whatsappOptIn?: boolean;
 };
 
 export type RequestOtpPayload = {
@@ -102,30 +137,54 @@ export type RequestOtpPayload = {
   purpose: AuthPurpose;
   fullName?: string;
   location?: string;
+  state?: string;
+  city?: string;
   preferredLanguage?: string;
   password?: string;
   accountType?: 'CANDIDATE' | 'EMPLOYER';
   companyName?: string;
   industry?: string;
+  whatsappOptIn?: boolean;
 };
 
 export const REGISTRATION_PASSWORD_HINT =
-  'At least 8 characters, 1 uppercase letter, letters and numbers only. No special characters.';
+  'At least 8 characters, 1 uppercase letter, 1 number, and 1 special character (!@#$%^&*).';
 
 export function registrationPasswordError(password: string): string | null {
   if (!password || password.length < 8) {
     return 'Password must be at least 8 characters.';
   }
-  if (/[^A-Za-z0-9]/.test(password)) {
-    return 'Password cannot contain special characters.';
-  }
   if (!/[A-Z]/.test(password)) {
     return 'Password must include at least one uppercase letter.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must include at least one number.';
+  }
+  if (!/[!@#$%^&*()_\-+=[\]{};':"\\|,.<>/?`~]/.test(password)) {
+    return 'Password must include at least one special character.';
   }
   return null;
 }
 
-export const REGISTRATION_PASSWORD_PATTERN = /^(?=.*[A-Z])[A-Za-z0-9]{8,}$/;
+export const REGISTRATION_PASSWORD_PATTERN =
+  /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_\-+=[\]{};':"\\|,.<>/?`~]).{8,}$/;
+
+/** Stronger rules for Super Admin / Admin accounts. */
+export function platformPasswordError(password: string): string | null {
+  if (!password || password.length < 12) {
+    return 'Admin password must be at least 12 characters.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Admin password must include an uppercase letter.';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Admin password must include a lowercase letter.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Admin password must include a number.';
+  }
+  return null;
+}
 
 export type RequestOtpResult = {
   requestId: string;
@@ -140,3 +199,13 @@ export type VerifyOtpPayload = {
 };
 
 export type VerifyOtpResult = AuthSession | { registered: true; signInRequired: true };
+
+export type PlatformAdminRecord = {
+  id: string;
+  email: string | null;
+  phone: string;
+  userType: PlatformUserType;
+  status: string;
+  createdAt: string;
+  lastLoginAt: string | null;
+};

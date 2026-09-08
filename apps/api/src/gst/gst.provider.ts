@@ -2,11 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createDecipheriv, publicEncrypt, randomBytes, constants } from 'crypto';
 import { GstConfigService, GstRuntimeConfig } from './gst.config';
 import { GstConfigError, GstProviderError } from './gst.errors';
+import { pickTradeName, unwrapGstPayload } from './gst.payload';
 import { maskGstin } from './gst.validator';
 import { normalizeGstStatus, type GstInternalStatus } from './gst.status';
 
 export type GstProviderLookupResult = {
   status: GstInternalStatus;
+  tradeName: string | null;
   responseCode?: string;
   durationMs: number;
 };
@@ -45,6 +47,10 @@ export class IrisIrpGstProvider {
     const cfg = this.gstConfig.get();
     const started = Date.now();
 
+    if (cfg.gstinApiKey) {
+      return this.gstinApiLookup(gstin, cfg, started);
+    }
+
     if (cfg.mockEnabled && !cfg.configured) {
       return this.mockLookup(gstin, started);
     }
@@ -61,6 +67,7 @@ export class IrisIrpGstProvider {
       const status = this.extractStatus(payload);
       return {
         status,
+        tradeName: pickTradeName(unwrapGstPayload(payload)),
         responseCode: String((payload as { Status?: string | number }).Status ?? 'OK'),
         durationMs: Date.now() - started,
       };
@@ -73,6 +80,7 @@ export class IrisIrpGstProvider {
           const status = this.extractStatus(payload);
           return {
             status,
+            tradeName: pickTradeName(unwrapGstPayload(payload)),
             responseCode: String((payload as { Status?: string | number }).Status ?? 'OK'),
             durationMs: Date.now() - started,
           };
@@ -85,21 +93,83 @@ export class IrisIrpGstProvider {
   }
 
   private mockLookup(gstin: string, started: number): GstProviderLookupResult {
-    // Deterministic sandbox UI testing only — never used when live credentials are configured.
-    const inactiveMarker = process.env.GST_MOCK_INACTIVE_GSTIN?.toUpperCase();
-    const activeMarker = process.env.GST_MOCK_ACTIVE_GSTIN?.toUpperCase() || '29AAAAA0000A1Z5';
-    let status: GstInternalStatus = 'ACTIVE';
-    if (inactiveMarker && gstin === inactiveMarker) {
-      status = 'NOT_ACTIVE';
-    } else if (gstin === activeMarker) {
-      status = 'ACTIVE';
-    } else if (gstin.endsWith('Z0') || gstin.endsWith('Z1')) {
-      status = 'NOT_ACTIVE';
+    const activeMarker = process.env.GST_MOCK_ACTIVE_GSTIN?.toUpperCase() || '29AAAAA0000A1ZY';
+    if (gstin === activeMarker) {
+      this.logger.warn(
+        `GST mock lookup for ${maskGstin(gstin)} → ACTIVE (GST_MOCK_ENABLED=true; not a live call)`,
+      );
+      return {
+        status: 'ACTIVE',
+        tradeName: 'SRSB TRADE MARK',
+        responseCode: 'MOCK',
+        durationMs: Date.now() - started,
+      };
     }
+    const status: GstInternalStatus = 'NOT_ACTIVE';
     this.logger.warn(
-      `GST mock lookup for ${maskGstin(gstin)} → ${status} (GST_MOCK_ENABLED=true; not a live IRIS call)`,
+      `GST mock lookup for ${maskGstin(gstin)} → ${status} (GST_MOCK_ENABLED=true; not a live call)`,
     );
-    return { status, responseCode: 'MOCK', durationMs: Date.now() - started };
+    return { status, tradeName: null, responseCode: 'MOCK', durationMs: Date.now() - started };
+  }
+
+  private async gstinApiLookup(
+    gstin: string,
+    cfg: GstRuntimeConfig,
+    started: number,
+  ): Promise<GstProviderLookupResult> {
+    const url = `https://www.gstinapi.in/v1/gstin/${encodeURIComponent(gstin)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'x-api-key': cfg.gstinApiKey,
+        },
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      let json: Record<string, unknown> = {};
+      try {
+        json = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      } catch {
+        throw new GstProviderError('gstinapi.in returned a non-JSON response.', 502, true);
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        throw new GstProviderError('gstinapi.in rejected the API key.', res.status, false);
+      }
+      if (res.status === 429 || res.status >= 500) {
+        throw new GstProviderError(`gstinapi.in returned ${res.status}.`, res.status, true);
+      }
+
+      const data = unwrapGstPayload(json);
+      const found = json.success === true && Boolean(data && (data.gstin || data.status || data.trade_name || data.legal_name));
+      if (!found || res.status === 404) {
+        return {
+          status: 'NOT_ACTIVE',
+          tradeName: null,
+          responseCode: String(json.code ?? res.status),
+          durationMs: Date.now() - started,
+        };
+      }
+
+      return {
+        status: normalizeGstStatus(data.status),
+        tradeName: pickTradeName(data),
+        responseCode: String(json.code ?? res.status),
+        durationMs: Date.now() - started,
+      };
+    } catch (err) {
+      if (err instanceof GstProviderError) throw err;
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new GstProviderError('gstinapi.in request timed out.', 408, true);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private async getAuthToken(cfg: GstRuntimeConfig, force = false): Promise<CachedToken> {
@@ -214,14 +284,7 @@ export class IrisIrpGstProvider {
   }
 
   private extractStatus(payload: Record<string, unknown>): GstInternalStatus {
-    // Prefer nested Data object after decryption; fall back to common field names.
-    let data: Record<string, unknown> = payload;
-    if (payload.Data && typeof payload.Data === 'object') {
-      data = payload.Data as Record<string, unknown>;
-    } else if (payload.data && typeof payload.data === 'object') {
-      data = payload.data as Record<string, unknown>;
-    }
-
+    const data = unwrapGstPayload(payload);
     const raw =
       data.Status ??
       data.status ??

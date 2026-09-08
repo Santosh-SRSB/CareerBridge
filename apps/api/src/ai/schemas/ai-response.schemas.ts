@@ -1,8 +1,18 @@
+export interface ResumeReviewSuggestion {
+  section: string;
+  issue: string;
+  currentText: string;
+  improvedText: string;
+}
+
 export interface ResumeReviewResult {
   score: number;
   strengths: string[];
   improvements: string[];
   missingSkills: string[];
+  suggestedSections?: Record<string, string>;
+  /** Actionable Accept/Ignore edits for the resume Improve UI */
+  suggestions?: ResumeReviewSuggestion[];
 }
 
 export interface ResumeRewriteChange {

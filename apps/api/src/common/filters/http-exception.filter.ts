@@ -23,6 +23,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let code: string = ErrorCode.INTERNAL_ERROR;
     let message = 'Something went wrong. Please try again.';
 
+    if (!(exception instanceof HttpException)) {
+      // Surface unexpected errors in API logs (Prisma schema drift, etc.)
+      // eslint-disable-next-line no-console
+      console.error('[HttpExceptionFilter]', exception);
+
+      const prismaCode =
+        exception && typeof exception === 'object' && 'code' in exception
+          ? String((exception as { code?: string }).code)
+          : '';
+      if (prismaCode === 'P2002') {
+        status = HttpStatus.CONFLICT;
+        code = ErrorCode.DUPLICATE_RESOURCE;
+        message = 'An account already exists with this email or mobile. Please sign in.';
+      }
+    }
+
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const payload = exception.getResponse();

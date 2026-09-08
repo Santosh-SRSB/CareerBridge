@@ -3,7 +3,14 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { optionalUrlError, yearError, type CandidateProject } from '@careerbridge/shared';
-import { PassportFrame, WizardActions } from '@/components/PassportFrame';
+import {
+  PassportFrame,
+  PassportLoading,
+  PassportRecord,
+  WizardActions,
+  passportPrimaryButtonClass,
+  passportSecondaryButtonClass,
+} from '@/components/PassportFrame';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
@@ -100,7 +107,7 @@ export default function PassportProjectsPage() {
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
+  if (!ready) return <PassportLoading />;
 
   return (
     <PassportFrame
@@ -108,29 +115,17 @@ export default function PassportProjectsPage() {
       subtitle="Projects and volunteer work can fill gaps if you are just starting out."
       step="projects"
     >
-      <form onSubmit={onAdd} className="cb-passport-panel space-y-4 p-6 sm:p-7">
+      <form onSubmit={onAdd} className="space-y-4">
         {items.length ? (
           <div className="space-y-2">
             {items.map((item) => (
-              <div key={item.id} className="cb-wizard-record">
-                <div>
-                  <p className="text-sm font-semibold text-primary">{item.title}</p>
-                  <p className="text-xs text-muted">
-                    {[item.role, item.year].filter(Boolean).join(' · ')}
-                  </p>
-                  {item.description ? <p className="mt-1 text-xs text-muted">{item.description}</p> : null}
-                  {item.url ? (
-                    <p className="mt-1 truncate text-xs font-semibold text-teal">{item.url}</p>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-error"
-                  onClick={async () => setItems((await removeProject(item.id)).projects)}
-                >
-                  Remove
-                </button>
-              </div>
+              <PassportRecord
+                key={item.id}
+                title={item.title}
+                subtitle={[item.role, item.year].filter(Boolean).join(' · ')}
+                detail={item.description || (item.url ? item.url : undefined)}
+                onRemove={() => void removeProject(item.id).then((profile) => setItems(profile.projects))}
+              />
             ))}
           </div>
         ) : null}
@@ -171,7 +166,7 @@ export default function PassportProjectsPage() {
           onChange={(event) => setUrl(event.target.value)}
           placeholder="github.com/you/project or live demo"
         />
-        {error ? <p className="text-sm text-error">{error}</p> : null}
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>
           <Button
             type="submit"
@@ -179,12 +174,20 @@ export default function PassportProjectsPage() {
             block={false}
             loading={loading}
             loadingLabel="Saving..."
-            variant="secondary"
-            className="cb-wizard-secondary"
+            variant="outline"
+            className={passportSecondaryButtonClass}
           >
             Add project
           </Button>
-          <Button type="button" size="md" block={false} loading={loading} loadingLabel="Saving..." onClick={() => void onContinue()}>
+          <Button
+            type="button"
+            size="md"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={passportPrimaryButtonClass}
+            onClick={() => void onContinue()}
+          >
             {items.length || title.trim() ? 'Save and continue' : 'Skip for now'}
           </Button>
         </WizardActions>

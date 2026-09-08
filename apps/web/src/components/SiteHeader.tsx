@@ -2,27 +2,42 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Logo } from '@/components/Logo';
-import { getStoredUser } from '@/lib/session';
+import { logout } from '@/lib/api';
+import { getStoredUser, homePathForUser } from '@/lib/session';
+import type { AuthUser } from '@careerbridge/shared';
 
 const LINKS = [
   { href: '/#how-it-works', label: 'How it works' },
   { href: '/#passport', label: 'Career Passport' },
   { href: '/#jobs', label: 'Jobs' },
-  { href: '/register?role=employer', label: 'Employers' },
+  { href: '/employer/welcome', label: 'Employers' },
 ];
 
 export function SiteHeader({ compact = false }: { compact?: boolean }) {
   const pathname = usePathname();
+  const router = useRouter();
   const onLogin = pathname.startsWith('/login');
   const onRegister = pathname.startsWith('/register');
   const onAuth = onLogin || onRegister;
-  const [signedIn, setSignedIn] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    setSignedIn(Boolean(getStoredUser()?.id));
+    setUser(getStoredUser());
   }, []);
+
+  const signedIn = Boolean(user?.id);
+  const homeHref = homePathForUser(user);
+
+  async function onLogout() {
+    try {
+      await logout();
+    } finally {
+      setUser(null);
+      router.replace('/');
+    }
+  }
 
   return (
     <header
@@ -52,33 +67,41 @@ export function SiteHeader({ compact = false }: { compact?: boolean }) {
             })}
           </nav>
         ) : null}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {signedIn ? (
-            <Link
-              href="/dashboard"
-              className="rounded-full border border-white/70 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-            >
-              My home
-            </Link>
-          ) : (
             <>
+              <Link
+                href={homeHref}
+                className="rounded-full border border-white/70 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+              >
+                My home
+              </Link>
+              <button
+                type="button"
+                onClick={() => void onLogout()}
+                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-primary transition hover:bg-accent"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <p className="flex items-center gap-2 text-sm font-semibold text-white">
               {!onLogin ? (
-                <Link
-                  href="/login"
-                  className="rounded-full border border-white/70 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-                >
-                  Sign In
+                <Link href="/login" className="transition hover:text-accent">
+                  Login
                 </Link>
+              ) : null}
+              {!onLogin && !onRegister ? (
+                <span className="text-white/45" aria-hidden="true">
+                  |
+                </span>
               ) : null}
               {!onRegister ? (
-                <Link
-                  href="/register?role=candidate"
-                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-primary transition hover:bg-accent"
-                >
-                  Create Free Passport
+                <Link href="/register?role=candidate" className="transition hover:text-accent">
+                  Signup
                 </Link>
               ) : null}
-            </>
+            </p>
           )}
         </div>
       </div>

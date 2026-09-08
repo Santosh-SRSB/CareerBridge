@@ -29,6 +29,10 @@ export class GeminiProvider implements AiProvider {
     return this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.5-flash';
   }
 
+  getEmbeddingModel(): string {
+    return this.config.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() || 'text-embedding-004';
+  }
+
   private getClient(): GoogleGenAI {
     const apiKey = this.getApiKey();
     if (!apiKey) {
@@ -84,5 +88,28 @@ export class GeminiProvider implements AiProvider {
       this.logger.error(`Gemini generation error: ${(err as Error).message}`);
       throw err;
     }
+  }
+
+  async embed(text: string, options?: { model?: string; dimensions?: number }): Promise<{
+    values: number[];
+    model: string;
+  }> {
+    const client = this.getClient();
+    const model = options?.model || this.getEmbeddingModel();
+    const trimmed = text.trim().slice(0, 8000);
+    if (!trimmed) {
+      return { values: [], model };
+    }
+
+    const response = await client.models.embedContent({
+      model,
+      contents: trimmed,
+      config: options?.dimensions
+        ? { outputDimensionality: options.dimensions }
+        : undefined,
+    });
+
+    const values = response.embeddings?.[0]?.values || [];
+    return { values: [...values], model };
   }
 }

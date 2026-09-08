@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const jobs = [
   {
     title: "Customer Service Executive",
@@ -38,12 +40,12 @@ export function JobsTeaser() {
               Roles that fit you, not a pile of listings.
             </h2>
           </div>
-          <a
-            href="#get-started"
+          <Link
+            href="/register?role=candidate"
             className="text-sm font-bold text-navy underline decoration-orange decoration-2 underline-offset-4"
           >
-            Create a Passport to apply
-          </a>
+            Sign up to apply
+          </Link>
         </div>
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">

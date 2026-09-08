@@ -116,6 +116,72 @@ export function SkillsSection({ data, title = "Skills" }) {
   );
 }
 
+export function TechnicalSkillsSection({ data, title = "Technical Skills" }) {
+  const groups = nonEmptyList(data.technicalSkills)
+    ? data.technicalSkills.filter((g) => g.category || nonEmptyList(g.skills))
+    : nonEmptyList(data.skills)
+      ? [{ category: "", skills: data.skills }]
+      : [];
+  if (!groups.length) return null;
+  return (
+    <section>
+      <h2>{title}</h2>
+      {groups.map((group, i) => (
+        <p key={i}>
+          {group.category ? (
+            <>
+              <strong>{group.category}:</strong> {group.skills.join(", ")}
+            </>
+          ) : (
+            group.skills.join(" | ")
+          )}
+        </p>
+      ))}
+    </section>
+  );
+}
+
+export function AchievementsCertificationsSection({
+  data,
+  title = "Achievements & Certifications",
+}) {
+  const achievements = (data.achievements || []).filter(
+    (a) => a.title || a.description || a.organization || a.date,
+  );
+  const certs = (data.certifications || []).filter(
+    (c) => c.name || c.issuer || c.date || c.url || c.link,
+  );
+  if (!achievements.length && !certs.length) return null;
+  return (
+    <section>
+      <h2>{title}</h2>
+      {achievements.length > 0 && (
+        <ul>
+          {achievements.map((a, i) => (
+            <li key={a.id || `ach-${i}`}>
+              <strong>{a.title}</strong>
+              {a.organization ? ` — ${a.organization}` : ""}
+              {a.date ? ` (${a.date})` : ""}
+              {a.description ? `: ${a.description}` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+      {certs.length > 0 && (
+        <ul className={achievements.length ? "cert-list" : undefined}>
+          {certs.map((c, i) => (
+            <li key={c.id || `cert-${i}`}>
+              {c.name}
+              {c.issuer ? ` — ${c.issuer}` : ""}
+              {c.date ? ` (${c.date})` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function ProjectsSection({ data, title = "Projects" }) {
   if (!nonEmptyList(data.projects)) return null;
   const projects = data.projects.filter((p) => {

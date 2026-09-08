@@ -75,4 +75,24 @@ export class AdminService {
       create: { name: name.trim(), category },
     });
   }
+
+  async listAdmins() {
+    const rows = await this.prisma.admin.findMany({
+      include: {
+        user: { select: { phone: true, userType: true, status: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      phone: row.user.phone,
+      userType: row.user.userType,
+      status: row.status,
+      createdAt: row.createdAt.toISOString(),
+      lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
+      fullName: row.fullName,
+    }));
+  }
 }

@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GstConfigService } from './gst.config';
 import { GstConfigError, GstProviderError, gstValidationException } from './gst.errors';
 import { IrisIrpGstProvider } from './gst.provider';
-import { verifiedFromStatus, type GstInternalStatus } from './gst.status';
+import { type GstInternalStatus } from './gst.status';
 import { maskGstin, normalizeGstin, validateGstinFormat } from './gst.validator';
 
 /**
@@ -15,6 +15,7 @@ export type GstVerifyResult = {
   verified: boolean;
   status: GstInternalStatus;
   message?: string;
+  trademark?: string | null;
 };
 
 @Injectable()
@@ -53,7 +54,7 @@ export class GstService {
     try {
       const result = await this.provider.getGstinDetails(gstin);
       const status = result.status;
-      const verified = verifiedFromStatus(status);
+      const usingMock = cfg.provider === 'MOCK';
 
       const payload: GstVerifyResult =
         status === 'UNKNOWN'
@@ -61,13 +62,25 @@ export class GstService {
               success: false,
               verified: false,
               status: 'UNKNOWN',
+              trademark: null,
               message: 'GSTIN verification is temporarily unavailable. Please try again.',
             }
-          : {
-              success: true,
-              verified,
-              status,
-            };
+          : status === 'ACTIVE'
+            ? {
+                success: true,
+                verified: true,
+                status: 'ACTIVE',
+                trademark: result.tradeName,
+              }
+            : {
+                success: true,
+                verified: false,
+                status: 'NOT_ACTIVE',
+                trademark: null,
+                message: usingMock
+                  ? `Local mock only. For live Active + trade name lookup, set GSTINAPI_KEY in apps/api/.env. Demo Active GSTIN: ${process.env.GST_MOCK_ACTIVE_GSTIN || '29AAAAA0000A1ZY'}.`
+                  : 'This GSTIN is not active.',
+              };
 
       await this.safeAudit({
         gstin,

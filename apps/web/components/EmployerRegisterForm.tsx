@@ -21,7 +21,7 @@ export function EmployerRegisterForm() {
   const [city, setCity] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
+  const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

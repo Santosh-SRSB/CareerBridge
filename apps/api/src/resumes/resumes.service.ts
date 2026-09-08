@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ATS_ENHANCE_PLANS,
   ErrorCode,
@@ -12,17 +12,28 @@ import {
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
+import { AiGatewayService } from '../ai/ai-gateway.service';
+import { StorageService } from '../common/storage/storage.service';
+import { CloudTasksService } from '../common/tasks/cloud-tasks.service';
 import { renderResumePdf } from './resume-pdf';
 import { ResumeOptimizeAi } from './resume-optimize-ai';
+import { ResumeProcessorService } from './resume-processor.service';
 import { analyzeRoleResume, rewriteRoleResume, recommendCareerRoles } from './ats-engine';
 import { resolveResumeTemplateId } from '@careerbridge/shared';
+import { isThinResumeContent, parseExtractedResumeText } from './parse-extracted-resume';
 
 @Injectable()
 export class ResumesService {
+  private readonly logger = new Logger(ResumesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
     private readonly optimizeAi: ResumeOptimizeAi,
+    private readonly aiGateway: AiGatewayService,
+    private readonly storage: StorageService,
+    private readonly cloudTasks: CloudTasksService,
+    private readonly processor: ResumeProcessorService,
   ) {}
 
   async list(userId: string) {
@@ -34,6 +45,77 @@ export class ResumesService {
     return rows.map((row) => this.toRecord(row));
   }
 
+  /**
+   * Structure raw resume text via AI Gateway (Gemini only). Used by web parse route.
+   */
+  async structureText(rawText: string) {
+    const text = (rawText || '').trim();
+    if (!text) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Resume text is required',
+      });
+    }
+
+    if (this.aiGateway.isConfigured()) {
+      const structured = await this.aiGateway.structureResumeText(text);
+      if (structured) {
+        return {
+          ...structured,
+          stillInCollege: false,
+          educationStart: '',
+          educationEnd: '',
+          experienceLevel:
+            structured.experience?.length > 0 ? ('experienced' as const) : ('fresher' as const),
+          totalExperienceYears: '',
+          totalExperienceMonths: '',
+          gapReason: '',
+          source: 'resume' as const,
+        };
+      }
+    }
+
+    // Deterministic fallback when Gemini is unavailable — never OpenAI.
+    const parsed = parseExtractedResumeText(text);
+    const nameParts = (parsed.fullName || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' ') || '',
+      city: parsed.city || '',
+      about: parsed.summary || '',
+      education: (parsed.education || []).map((row) => ({
+        qualification: row.qualification || '',
+        institution: row.institution || '',
+        fieldOfStudy: '',
+        yearCompleted: row.yearCompleted != null ? String(row.yearCompleted) : '',
+      })),
+      stillInCollege: false,
+      educationStart: '',
+      educationEnd: '',
+      experienceLevel:
+        (parsed.experiences || []).length > 0 ? ('experienced' as const) : ('fresher' as const),
+      totalExperienceYears: '',
+      totalExperienceMonths: '',
+      experience: (parsed.experiences || []).map((row) => ({
+        company: row.company || '',
+        jobTitle: row.jobTitle || '',
+        isInternship: Boolean(row.isInternship),
+        description: row.description || '',
+      })),
+      projects: (parsed.projects || []).map((row) => ({
+        title: row.name || '',
+        role: '',
+        year: '',
+        description: row.description || '',
+        url: '',
+      })),
+      gapReason: '',
+      skills: parsed.skills || [],
+      careerInterests: [],
+      source: 'resume' as const,
+    };
+  }
+
   async create(
     userId: string,
     dto: {
@@ -43,6 +125,7 @@ export class ResumesService {
       includePhoto?: boolean;
       blank?: boolean;
       content?: Record<string, unknown>;
+      summary?: string;
     },
   ) {
     const candidate = await this.prisma.candidate.findUnique({
@@ -59,6 +142,9 @@ export class ResumesService {
       content = blankManualContent(dto.includePhoto !== false);
     } else {
       content = this.contentFromPassport(candidate, dto.targetJobTitle);
+    }
+    if (dto.summary !== undefined) {
+      content.summary = dto.summary;
     }
     if (dto.includePhoto === false) content.includePhoto = false;
     if (dto.includePhoto === true) content.includePhoto = true;
@@ -78,7 +164,9 @@ export class ResumesService {
       },
     });
     const analysis = await this.persistAnalysis(created.id, content, '');
-    return this.toRecord({ ...created, score: analysis.score }, analysis);
+    await this.safeSyncPdfForResume(created.id, userId, 'create');
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: created.id } });
+    return this.toRecord({ ...fresh, score: analysis.score }, analysis);
   }
 
   async upload(
@@ -122,7 +210,220 @@ export class ResumesService {
       },
     });
     const analysis = await this.persistAnalysis(created.id, content, rawText);
-    return this.toRecord({ ...created, score: analysis.score }, analysis);
+    await this.safeSyncPdfForResume(created.id, userId, 'create');
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: created.id } });
+    return this.toRecord({ ...fresh, score: analysis.score }, analysis);
+  }
+
+  async uploadFile(
+    userId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
+    targetJobTitle?: string,
+  ) {
+    const candidate = await this.requireCandidate(userId);
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+    ];
+    const mime = (file.mimetype || '').toLowerCase();
+    const name = file.originalname || 'resume.pdf';
+    const okExt = /\.(pdf|doc|docx|png|jpe?g)$/i.test(name);
+    if (!allowed.includes(mime) && !okExt) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Upload a PDF, Word document, or clear image (PNG/JPG).',
+      });
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Resume file must be 8MB or smaller.',
+      });
+    }
+
+    const baseName = name.replace(/\.[^.]+$/, '').trim() || 'Uploaded resume';
+    const created = await this.prisma.resume.create({
+      data: {
+        candidateId: candidate.id,
+        title: baseName,
+        targetJobTitle: targetJobTitle || null,
+        template: resolveResumeTemplateId('ats-minimal'),
+        summary: null,
+        contentJson: JSON.stringify({
+          fullName: [candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || 'Candidate',
+          city: candidate.city,
+          phone: null,
+          email: null,
+          summary: '',
+          skills: [],
+          education: [],
+          experiences: [],
+          languages: [],
+        }),
+        score: 0,
+        kind: 'ORIGINAL',
+        sourceKind: 'UPLOAD',
+        sourceFileName: name,
+        sourceMimeType: mime || 'application/octet-stream',
+        sourceFileSize: file.size,
+        processingStatus: 'PENDING',
+      },
+    });
+
+    // Flat path only: resumes/harsh.pdf (no candidate/upload subfolders)
+    const storagePath = this.storage.resumeObjectPath(name, created.id.slice(0, 8));
+    let storageUri: string | null = null;
+    try {
+      const uploaded = await this.storage.uploadFile(storagePath, file.buffer, {
+        contentType: mime || 'application/octet-stream',
+        metadata: {
+          candidateId: candidate.id,
+          resumeId: created.id,
+          source: 'upload',
+        },
+      });
+      storageUri = uploaded.gcsUri;
+      await this.prisma.resume.update({
+        where: { id: created.id },
+        data: {
+          sourceStoragePath: storagePath,
+          sourceStorageUri: uploaded.gcsUri,
+          pdfStoragePath: storagePath,
+          pdfStorageUri: uploaded.gcsUri,
+          pdfPublicUrl: uploaded.publicUrl,
+          pdfUploadedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      this.logger.error(`GCS upload failed for resume ${created.id}: ${(err as Error).message}`);
+      // Keep local processing with in-memory buffer even if GCS fails in local/dev.
+    }
+
+    await this.cloudTasks.enqueueResumeProcessing(created.id, userId, () =>
+      this.processor.processUploadedResume(created.id, userId, file.buffer),
+    );
+
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: created.id } });
+    return {
+      ...this.toRecord(fresh),
+      processingStatus: fresh.processingStatus,
+      processingError: fresh.processingError,
+      sourceStorageUri: storageUri || fresh.sourceStorageUri,
+    };
+  }
+
+  async processingStatus(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const status = resume.processingStatus || 'READY';
+    const staleMs = Date.now() - new Date(resume.updatedAt).getTime();
+    if ((status === 'PENDING' || status === 'PROCESSING') && staleMs > 8000) {
+      void this.processor.processUploadedResume(id, userId).catch((err) => {
+        this.logger.error(`Retry processing failed for ${id}: ${(err as Error).message}`);
+      });
+    }
+    return {
+      id: resume.id,
+      processingStatus: status,
+      processingError: resume.processingError,
+      score: resume.score,
+      message:
+        status === 'COMPLETED'
+          ? 'Resume analysed successfully.'
+          : status === 'FAILED'
+            ? resume.processingError || 'Processing failed.'
+            : status === 'PROCESSING'
+              ? 'Extracting text and analysing with AI…'
+              : status === 'PENDING'
+                ? 'Queued for processing…'
+                : 'Ready',
+    };
+  }
+
+  async processWorker(payload: { resumeId: string; userId: string }) {
+    return this.processor.processUploadedResume(payload.resumeId, payload.userId);
+  }
+
+  async savePrimary(
+    userId: string,
+    dto: {
+      title?: string;
+      targetJobTitle?: string;
+      template?: string;
+      content: Record<string, unknown>;
+      resumeId?: string;
+      skipCloudSync?: boolean;
+    },
+  ) {
+    const candidate = await this.requireCandidate(userId);
+    const content = normalizeStoredContent(dto.content);
+    const title =
+      (dto.title && dto.title.trim()) ||
+      (dto.targetJobTitle ? `${dto.targetJobTitle} Resume` : `${content.fullName || 'My'} Resume`);
+    const template = resolveResumeTemplateId(dto.template || 'ats-minimal');
+
+    let resumeId = dto.resumeId;
+    if (resumeId) {
+      await this.requireResume(userId, resumeId);
+    } else {
+      const existing = await this.prisma.resume.findFirst({
+        where: { candidateId: candidate.id, kind: 'ORIGINAL', parentResumeId: null },
+        orderBy: { updatedAt: 'desc' },
+      });
+      resumeId = existing?.id;
+    }
+
+    let row;
+    if (resumeId) {
+      const current = await this.requireResume(userId, resumeId);
+      const analysis = analyzeResumeContent(content, current.rawText || '');
+      row = await this.prisma.resume.update({
+        where: { id: resumeId },
+        data: {
+          title,
+          targetJobTitle: dto.targetJobTitle || current.targetJobTitle,
+          template,
+          summary: content.summary,
+          contentJson: JSON.stringify(content),
+          score: analysis.score,
+        },
+      });
+      await this.persistAnalysis(row.id, content, current.rawText || '');
+    } else {
+      row = await this.prisma.resume.create({
+        data: {
+          candidateId: candidate.id,
+          title,
+          targetJobTitle: dto.targetJobTitle || null,
+          template,
+          summary: content.summary,
+          contentJson: JSON.stringify(content),
+          score: 0,
+          kind: 'ORIGINAL',
+        },
+      });
+      await this.persistAnalysis(row.id, content, '');
+    }
+
+    let storage: {
+      pdfStoragePath: string;
+      pdfStorageUri: string;
+      pdfPublicUrl: string;
+    } | null = null;
+    let storageError: string | null = null;
+    if (!dto.skipCloudSync) {
+      try {
+        storage = await this.syncPdfForResume(row.id, userId);
+      } catch (err) {
+        storageError = err instanceof Error ? err.message : 'Cloud storage upload failed';
+        this.logger.error(`savePrimary GCS sync failed for resume ${row.id}: ${storageError}`);
+      }
+    }
+    const analysis = await this.analyze(userId, row.id);
+    return { ...analysis, storage, storageError };
   }
 
   async enhance(userId: string, id: string) {
@@ -167,11 +468,16 @@ export class ResumesService {
         version: resume.kind === 'ORIGINAL' ? resume.version : resume.version + 1,
       },
     });
-    return this.toRecord(updated, analysis);
+    await this.safeSyncPdfForResume(updated.id, userId, 'update');
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: updated.id } });
+    return this.toRecord(fresh, analysis);
   }
 
   async remove(userId: string, id: string) {
     const resume = await this.requireResume(userId, id);
+    if (resume.pdfStoragePath) {
+      await this.storage.deleteFile(resume.pdfStoragePath).catch(() => undefined);
+    }
     await this.prisma.resume.delete({ where: { id: resume.id } });
     return { deleted: true };
   }
@@ -324,18 +630,84 @@ export class ResumesService {
 
   async download(userId: string, id: string) {
     const resume = await this.requireResume(userId, id);
-    const candidate = await this.requireCandidate(userId);
-    const content = parseContent(resume.contentJson);
-    const includePhoto = content.includePhoto !== false;
-    const pdf = await renderResumePdf(
-      content,
-      resume.template,
-      includePhoto ? candidate.photoUrl : null,
-    );
+    let storage: {
+      pdfStoragePath: string;
+      pdfStorageUri: string;
+      pdfPublicUrl: string;
+    } | null = null;
+    let storageError: string | null = null;
+    try {
+      storage = await this.syncPdfForResume(resume.id, userId);
+      this.logger.log(`Resume PDF synced to GCS for download: ${resume.id}`);
+    } catch (err) {
+      storageError = err instanceof Error ? err.message : 'Cloud storage upload failed';
+      this.logger.error(`Download GCS sync failed for resume ${resume.id}: ${storageError}`);
+    }
+    const pdf = await this.readStoredPdf(resume, userId);
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: resume.id } });
     return {
       pdf: pdf.toString('base64'),
       fileName: `${resume.title.replace(/\s+/g, '-')}.pdf`,
       mimeType: 'application/pdf',
+      storage,
+      storageError,
+      pdfStoragePath: fresh.pdfStoragePath,
+      pdfStorageUri: fresh.pdfStorageUri,
+      pdfPublicUrl: fresh.pdfPublicUrl,
+      pdfUploadedAt: fresh.pdfUploadedAt?.toISOString() || null,
+    };
+  }
+
+  async aiReview(
+    userId: string,
+    id: string,
+    input: {
+      targetRole?: string;
+      jobDescription?: string;
+      templateId?: string;
+      resume?: Record<string, unknown>;
+    },
+  ) {
+    const resume = await this.requireResume(userId, id);
+    const content = parseContent(resume.contentJson);
+    const targetRole = input.targetRole?.trim() || resume.targetJobTitle || 'General Professional';
+
+    // Try Centralized AI Gateway (Gemini) first
+    if (this.aiGateway.isConfigured()) {
+      try {
+        const aiResult = await this.aiGateway.reviewResume(content, targetRole, {
+          userId,
+        });
+        if (aiResult) {
+          return {
+            score: aiResult.score,
+            strengths: aiResult.strengths || [],
+            improvements: aiResult.improvements || [],
+            missingSkills: aiResult.missingSkills || [],
+            suggestedSections: aiResult.suggestedSections || {},
+            suggestions: aiResult.suggestions || [],
+            provider: 'gemini',
+          };
+        }
+      } catch {}
+    }
+
+    // Deterministic ATS fallback
+    const analysis = analyzeRoleResume({
+      targetRole,
+      jobDescription: input.jobDescription || '',
+      templateId: resolveResumeTemplateId(input.templateId || resume.template),
+      resume: input.resume || toRoleAtsResume(content, targetRole),
+    });
+
+    return {
+      score: analysis.score,
+      strengths: analysis.strengths || [],
+      improvements: (analysis.issues || []).map((i: any) => i.recommendation),
+      missingSkills: analysis.missingSkills || [],
+      suggestedSections: {},
+      suggestions: [],
+      provider: 'ats-engine',
     };
   }
 
@@ -513,6 +885,63 @@ export class ResumesService {
     });
   }
 
+  private async safeSyncPdfForResume(resumeId: string, userId: string, context: string) {
+    try {
+      return await this.syncPdfForResume(resumeId, userId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Resume PDF cloud sync failed (${context}) for ${resumeId}: ${message}`);
+      return null;
+    }
+  }
+
+  private async syncPdfForResume(resumeId: string, userId: string) {
+    const resume = await this.requireResume(userId, resumeId);
+    const candidate = await this.requireCandidate(userId);
+    const content = parseContent(resume.contentJson);
+    const includePhoto = content.includePhoto !== false;
+    const pdf = await renderResumePdf(
+      content,
+      resume.template,
+      includePhoto ? candidate.photoUrl : null,
+    );
+    const path = this.storage.resumeObjectPath(
+      `${content.fullName || 'resume'}.pdf`,
+      resume.id.slice(0, 8),
+    );
+    const uploaded = await this.storage.uploadFile(path, pdf, {
+      contentType: 'application/pdf',
+      metadata: {
+        candidateId: candidate.id,
+        resumeId: resume.id,
+      },
+    });
+    await this.prisma.resume.update({
+      where: { id: resumeId },
+      data: {
+        pdfStoragePath: path,
+        pdfStorageUri: uploaded.gcsUri,
+        pdfPublicUrl: uploaded.publicUrl,
+        pdfUploadedAt: new Date(),
+      },
+    });
+    return {
+      pdfStoragePath: path,
+      pdfStorageUri: uploaded.gcsUri,
+      pdfPublicUrl: uploaded.publicUrl,
+    };
+  }
+
+  private async readStoredPdf(resume: { id: string; contentJson: string; template: string; candidateId: string }, userId?: string) {
+    const candidate =
+      userId != null
+        ? await this.requireCandidate(userId)
+        : await this.prisma.candidate.findUniqueOrThrow({ where: { id: resume.candidateId } });
+    const content = parseContent(resume.contentJson);
+    const includePhoto = content.includePhoto !== false;
+    return renderResumePdf(content, resume.template, includePhoto ? candidate.photoUrl : null);
+  }
+
   private async requireCandidate(userId: string) {
     const candidate = await this.prisma.candidate.findUnique({
       where: { userId },
@@ -578,25 +1007,35 @@ export class ResumesService {
       template: string;
       summary: string | null;
       contentJson: string;
+      rawText?: string | null;
       score: number;
       version: number;
       updatedAt: Date;
       kind?: string;
       parentResumeId?: string | null;
+      pdfStoragePath?: string | null;
+      pdfStorageUri?: string | null;
+      pdfPublicUrl?: string | null;
+      pdfUploadedAt?: Date | null;
     },
     analysis?: ResumeAnalysis,
   ) {
+    const content = hydrateResumeContent(parseContent(row.contentJson), row.rawText);
     return {
       id: row.id,
       title: row.title,
       targetJobTitle: row.targetJobTitle,
       template: row.template,
-      summary: row.summary,
-      content: parseContent(row.contentJson),
+      summary: content.summary || row.summary,
+      content,
       score: row.score,
       version: row.version,
       kind: row.kind || 'ORIGINAL',
       parentResumeId: row.parentResumeId ?? null,
+      pdfStoragePath: row.pdfStoragePath ?? null,
+      pdfStorageUri: row.pdfStorageUri ?? null,
+      pdfPublicUrl: row.pdfPublicUrl ?? null,
+      pdfUploadedAt: row.pdfUploadedAt?.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
       analysis,
     };
@@ -680,6 +1119,19 @@ function sanitizeUploadedContent(
     languages,
     certifications,
     projects,
+  };
+}
+
+function hydrateResumeContent(content: ResumeContent, rawText?: string | null): ResumeContent {
+  if (!rawText?.trim() || !isThinResumeContent(content)) return content;
+  const parsed = parseExtractedResumeText(rawText);
+  return {
+    ...parsed,
+    fullName: parsed.fullName || content.fullName,
+    city: parsed.city || content.city,
+    email: parsed.email || content.email || null,
+    phone: parsed.phone || content.phone,
+    skills: parsed.skills.length ? parsed.skills : content.skills,
   };
 }
 

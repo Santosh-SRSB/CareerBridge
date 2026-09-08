@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/features/resume-manual/manual-resume-api";
 import { getTemplateComponent, resolveTemplateId } from "@/components/resume-templates/index.js";

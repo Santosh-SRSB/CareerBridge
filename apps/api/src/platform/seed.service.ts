@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { hashPassword } from '../auth/password.util';
+import { hashPassword, hashPlatformPassword } from '../auth/password.util';
 
 const SKILLS = [
   ['Customer Service', 'Service Industry'],
@@ -15,6 +15,10 @@ const SKILLS = [
   ['Sales', 'Sales'],
 ];
 
+const SRSB_ADMIN_EMAIL = (process.env.SRSB_ADMIN_EMAIL || 'srsbhr25@gmail.com').trim().toLowerCase();
+const SRSB_ADMIN_PASSWORD = process.env.SRSB_ADMIN_PASSWORD || 'srsb@suresh25';
+const SRSB_ADMIN_PHONE = process.env.SRSB_ADMIN_PHONE || '+919999999025';
+
 @Injectable()
 export class SeedService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
@@ -22,7 +26,11 @@ export class SeedService implements OnModuleInit {
   async onModuleInit() {
     await this.skills();
     await this.admin();
-    await this.demoEmployerAndJobs();
+    await this.srsbPortalAdmin();
+    // Demo ABC Services jobs are disabled — marketplace uses real employer posts only.
+    if (process.env.SEED_DEMO_JOBS === 'true') {
+      await this.demoEmployerAndJobs();
+    }
   }
 
   private async skills() {
@@ -46,6 +54,51 @@ export class SeedService implements OnModuleInit {
         passwordHash: await hashPassword('Admin@12345'),
         externalAuthId: 'seed_admin',
         userType: 'PLATFORM_ADMIN',
+      },
+    });
+  }
+
+  /** Dedicated `admins` row for http://localhost:3000/srsbaadmin */
+  private async srsbPortalAdmin() {
+    const email = SRSB_ADMIN_EMAIL;
+    const passwordHash = await hashPlatformPassword(SRSB_ADMIN_PASSWORD);
+
+    let user = await this.prisma.user.findFirst({
+      where: { email, userType: 'PLATFORM_ADMIN' },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          phone: SRSB_ADMIN_PHONE,
+          passwordHash,
+          externalAuthId: `admin_portal_${email}`,
+          userType: 'PLATFORM_ADMIN',
+          status: 'ACTIVE',
+        },
+      });
+    } else {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash, status: 'ACTIVE' },
+      });
+    }
+
+    await this.prisma.admin.upsert({
+      where: { email },
+      update: {
+        passwordHash,
+        fullName: 'SRSB Admin',
+        status: 'ACTIVE',
+        userId: user.id,
+      },
+      create: {
+        email,
+        passwordHash,
+        fullName: 'SRSB Admin',
+        status: 'ACTIVE',
+        userId: user.id,
       },
     });
   }

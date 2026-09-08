@@ -162,6 +162,9 @@ function KeyTipsPanel({ missing }: { missing: MissingItem[] }) {
               <p className="cb-key-tips__copy cb-key-tips__copy--done">
                 Your profile looks completed.
               </p>
+              <Link href="/profile" className="cb-key-tips__btn is-show">
+                Edit profile
+              </Link>
             </>
           )}
         </div>

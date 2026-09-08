@@ -1,8 +1,8 @@
 export const COUNTRIES = [
-  { code: 'IN', dial: '+91', name: 'India', maxLength: 10 },
-  { code: 'AE', dial: '+971', name: 'UAE', maxLength: 9 },
-  { code: 'SG', dial: '+65', name: 'Singapore', maxLength: 8 },
-  { code: 'US', dial: '+1', name: 'United States', maxLength: 10 },
+  { code: 'IN', dial: '+91', name: 'India', flag: '🇮🇳', maxLength: 10 },
+  { code: 'AE', dial: '+971', name: 'UAE', flag: '🇦🇪', maxLength: 9 },
+  { code: 'SG', dial: '+65', name: 'Singapore', flag: '🇸🇬', maxLength: 8 },
+  { code: 'US', dial: '+1', name: 'United States', flag: '🇺🇸', maxLength: 10 },
 ] as const;
 
 export const DEFAULT_COUNTRY = COUNTRIES[0];
@@ -24,16 +24,26 @@ export function formatPhoneDisplay(e164: string) {
   return e164;
 }
 
+import { POST_REGISTRATION_PATH } from './onboarding-flow';
+
 export function postAuthPath(user: {
   role?: string;
   firstName?: string | null;
   onboardingCompleted: boolean;
+  purpose?: 'LOGIN' | 'REGISTER';
 }) {
   if (user.role === 'EMPLOYER_ADMIN' || user.role === 'EMPLOYER_RECRUITER') {
     return '/employer';
   }
-  if (user.role === 'PLATFORM_ADMIN' || user.role === 'PLATFORM_OPERATOR') {
+  if (
+    user.role === 'SUPER_ADMIN' ||
+    user.role === 'PLATFORM_ADMIN' ||
+    user.role === 'PLATFORM_OPERATOR'
+  ) {
     return '/admin';
+  }
+  if (user.purpose === 'REGISTER' || !user.onboardingCompleted) {
+    return POST_REGISTRATION_PATH;
   }
   return '/dashboard';
 }

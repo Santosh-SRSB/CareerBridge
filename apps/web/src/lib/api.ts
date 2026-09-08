@@ -14,13 +14,18 @@ import type {
   CreateCertificationPayload,
   CreateProjectPayload,
   EmployerApplication,
+  EmployerCandidatePassport,
+  EmployerCandidateSearchResponse,
+  EmployerCandidateSearchResult,
   EmployerDashboard,
+  EmployerInterviewRecord,
   EmployerProfile,
   EmployerJobSummary,
   EmployerKycPayload,
   EmployerAffiliationPayload,
   InterviewSession,
   JobDetail,
+  JobCard,
   PagedJobs,
   ProfileCompletion,
   RequestOtpResult,
@@ -84,7 +89,7 @@ export async function requestOtp(payload: RequestOtpPayload) {
 export async function loginWithPassword(
   identifier: string,
   password: string,
-  accountType: 'CANDIDATE' | 'EMPLOYER' = 'CANDIDATE',
+  accountType: 'CANDIDATE' | 'EMPLOYER' | 'SUPER_ADMIN' | 'ADMIN' = 'CANDIDATE',
 ) {
   const session = await request<AuthSession>('/auth/login', {
     method: 'POST',
@@ -93,6 +98,39 @@ export async function loginWithPassword(
   });
   saveSession(session);
   return session;
+}
+
+export async function loginAdminPortal(email: string, password: string) {
+  const session = await request<AuthSession>('/auth/admin/login', {
+    method: 'POST',
+    auth: false,
+    body: JSON.stringify({ email, password }),
+  });
+  saveSession(session);
+  return session;
+}
+
+export async function resetPassword(payload: {
+  requestId: string;
+  otp: string;
+  accountType: 'CANDIDATE' | 'EMPLOYER';
+  password: string;
+}) {
+  return request<{ success: true; message: string }>('/auth/password/reset', {
+    method: 'POST',
+    auth: false,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function downloadEmployerCandidateResume(candidateId: string, jobId?: string) {
+  const suffix = jobId ? `?jobId=${encodeURIComponent(jobId)}` : '';
+  return request<{
+    html?: string;
+    pdf?: string;
+    fileName: string;
+    mimeType?: string;
+  }>(`/employers/candidates/${candidateId}/resume${suffix}`);
 }
 
 export async function verifyOtp(payload: {
@@ -258,6 +296,56 @@ export async function recommendedJobs() {
   return request<PagedJobs>('/jobs/recommended');
 }
 
+export async function listSavedJobs() {
+  return request<{ items: JobCard[] }>('/jobs/saved');
+}
+
+export async function saveJob(id: string) {
+  return request<{ saved: boolean; jobId: string }>(`/jobs/${id}/save`, { method: 'POST', body: '{}' });
+}
+
+export async function unsaveJob(id: string) {
+  return request<{ saved: boolean; jobId: string }>(`/jobs/${id}/unsave`, { method: 'POST', body: '{}' });
+}
+
+export type InAppNotification = {
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  link: string | null;
+  read: boolean;
+  createdAt: string;
+};
+
+export async function listNotifications() {
+  return request<{ items: InAppNotification[]; unreadCount: number; pushConfigured?: boolean }>(
+    '/notifications',
+  );
+}
+
+export async function registerDeviceToken(token: string, platform = 'WEB') {
+  return request<{ success: boolean }>('/notifications/device-token', {
+    method: 'POST',
+    body: JSON.stringify({ token, platform }),
+  });
+}
+
+export async function unregisterDeviceToken(token: string) {
+  return request<{ success: boolean }>('/notifications/device-token', {
+    method: 'DELETE',
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function markNotificationRead(id: string) {
+  return request<{ success: boolean }>(`/notifications/${id}/read`, { method: 'POST', body: '{}' });
+}
+
+export async function markAllNotificationsRead() {
+  return request<{ success: boolean }>('/notifications/read-all', { method: 'POST', body: '{}' });
+}
+
 export type RecommendedCourse = {
   id: string;
   title: string;
@@ -295,6 +383,13 @@ export async function applyToJob(jobId: string, resumeId?: string) {
   });
 }
 
+export async function withdrawApplication(id: string) {
+  return request<ApplicationRecord>(`/applications/${id}/withdraw`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
 export async function listApplications() {
   return request<ApplicationRecord[]>('/applications');
 }
@@ -303,7 +398,44 @@ export async function getApplication(id: string) {
   return request<ApplicationRecord>(`/applications/${id}`);
 }
 
+export type CandidateScheduledInterview = {
+  id: string;
+  jobTitle: string;
+  companyName: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'RESCHEDULE_REQUESTED';
+  location: string;
+  mode: 'IN_PERSON' | 'VIDEO';
+  applicationId: string;
+  durationMin?: number;
+  scheduledAt?: string;
+};
+
+export async function listCandidateScheduledInterviews() {
+  return request<CandidateScheduledInterview[]>('/applications/scheduled-interviews');
+}
+
+export async function getCandidateScheduledInterview(id: string) {
+  return request<CandidateScheduledInterview>(`/applications/scheduled-interviews/${id}`);
+}
+
+export async function confirmCandidateScheduledInterview(id: string) {
+  return request<CandidateScheduledInterview>(`/applications/scheduled-interviews/${id}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function rescheduleCandidateScheduledInterview(id: string) {
+  return request<CandidateScheduledInterview>(
+    `/applications/scheduled-interviews/${id}/reschedule`,
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+}
+
 export async function listResumes() {
+  if (!getAccessToken() && !getRefreshToken()) return [];
   return request<ResumeRecord[]>('/resumes');
 }
 
@@ -317,6 +449,7 @@ export async function createResume(payload: {
   template?: string;
   includePhoto?: boolean;
   blank?: boolean;
+  summary?: string;
   content?: Record<string, unknown>;
 }) {
   return request<ResumeRecord>('/resumes', {
@@ -334,6 +467,50 @@ export async function uploadResume(payload: {
   includePhoto?: boolean;
 }) {
   return request<ResumeRecord>('/resumes/upload', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadResumeFile(file: File, targetJobTitle?: string) {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  if (targetJobTitle) form.append('targetJobTitle', targetJobTitle);
+  return request<
+    ResumeRecord & {
+      processingStatus?: string | null;
+      processingError?: string | null;
+    }
+  >('/resumes/upload-file', {
+    method: 'POST',
+    body: form,
+  });
+}
+
+export async function getResumeProcessingStatus(id: string) {
+  return request<{
+    id: string;
+    processingStatus: string | null;
+    processingError: string | null;
+    score: number;
+    message?: string;
+  }>(`/resumes/${id}/processing`);
+}
+
+export async function savePrimaryResume(payload: {
+  resumeId?: string;
+  title?: string;
+  targetJobTitle?: string;
+  template?: string;
+  content: ResumeRecord['content'];
+  skipCloudSync?: boolean;
+}) {
+  return request<
+    ResumeRecord & {
+      storage?: { pdfStoragePath: string; pdfStorageUri: string; pdfPublicUrl: string } | null;
+      storageError?: string | null;
+    }
+  >('/resumes/save-primary', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -431,8 +608,49 @@ export async function updateResume(
   });
 }
 
+export async function aiReviewResume(id: string, payload: { targetRole: string }) {
+  const result = await request<{
+    score: number;
+    strengths: string[];
+    improvements: string[];
+    missingSkills: string[];
+    suggestedSections?: Record<string, string>;
+    suggestions?: Array<{
+      section: string;
+      issue: string;
+      currentText: string;
+      improvedText: string;
+    }>;
+    provider?: string;
+  } | null>(`/resumes/${id}/ai-review`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return (
+    result || {
+      score: 0,
+      strengths: [],
+      improvements: [],
+      missingSkills: [],
+      suggestedSections: {},
+      suggestions: [],
+    }
+  );
+}
+
 export async function downloadResume(id: string) {
-  return request<{ html?: string; pdf?: string; fileName: string; mimeType?: string }>(`/resumes/${id}/download`);
+  return request<{
+    html?: string;
+    pdf?: string;
+    fileName: string;
+    mimeType?: string;
+    storage?: { pdfStoragePath: string; pdfStorageUri: string; pdfPublicUrl: string } | null;
+    storageError?: string | null;
+    pdfStoragePath?: string | null;
+    pdfStorageUri?: string | null;
+    pdfPublicUrl?: string | null;
+    pdfUploadedAt?: string | null;
+  }>(`/resumes/${id}/download`);
 }
 
 export function saveBase64File(content: string, fileName: string, mimeType: string) {
@@ -468,6 +686,7 @@ export async function createLiveInterview(payload: {
   jobRole?: string;
   interviewType: string;
   difficulty?: string;
+  questionCount?: number;
   durationLimitMin: number;
   source: 'PASSPORT' | 'UPLOAD';
   content?: ResumeRecord['content'];
@@ -482,10 +701,15 @@ export async function startLiveInterview(id: string) {
   return request<InterviewSession>(`/interviews/${id}/start`, { method: 'POST' });
 }
 
-export async function answerLiveInterview(id: string, answer: string, durationSec?: number) {
+export async function answerLiveInterview(
+  id: string,
+  answer: string,
+  durationSec?: number,
+  answerMode?: 'TEXT' | 'AUDIO',
+) {
   return request<InterviewSession>(`/interviews/${id}/answers`, {
     method: 'POST',
-    body: JSON.stringify({ answer, durationSec }),
+    body: JSON.stringify({ answer, durationSec, answerMode }),
   });
 }
 
@@ -659,6 +883,8 @@ export type GstVerifyResult = {
   status: 'ACTIVE' | 'NOT_ACTIVE' | 'UNKNOWN';
   message?: string;
   requestId?: string;
+  trademark?: string | null;
+  tradeName?: string | null;
 };
 
 /**
@@ -738,12 +964,104 @@ export async function updateEmployerJob(id: string, payload: Record<string, unkn
 
 export async function saveEmployerJobSkillProfile(
   jobId: string,
-  payload: { requiredSkills: string[]; educationMin?: string },
+  payload: {
+    requiredSkills: string[];
+    preferredSkills?: string[];
+    experienceYearsMin?: number;
+    educationMin?: string;
+    interviewReadinessMin?: number;
+  },
 ) {
   return request(`/employers/jobs/${jobId}/skill-profile`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+}
+
+export async function extractEmployerJobSkills(jobId: string) {
+  return request<{
+    requiredSkills: string[];
+    preferredSkills: string[];
+    experienceYearsMin?: number;
+    educationMin?: string | null;
+    interviewReadinessMin?: number;
+  }>(`/employers/jobs/${jobId}/skill-profile/extract`, {
+    method: 'POST',
+  });
+}
+
+export async function recomputeJobMatches(jobId: string) {
+  return request<JobMatchRow[]>(`/employers/jobs/${jobId}/matches/recompute`, {
+    method: 'POST',
+  });
+}
+
+export async function listJobMatches(jobId: string) {
+  return request<JobMatchRow[]>(`/employers/jobs/${jobId}/matches`);
+}
+
+export type JobMatchRow = {
+  id: string;
+  jobId: string;
+  applicationId: string | null;
+  rank: number;
+  totalScore: number;
+  skillsScore: number;
+  experienceScore: number;
+  interviewReadinessScore: number;
+  reasons: string[];
+  gaps: string[];
+  computedAt: string;
+  candidate: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    city: string | null;
+    skills: string[];
+  } | null;
+};
+
+export async function recordHiringOutcome(
+  applicationId: string,
+  outcome: 'HIRED' | 'OFFER_EXTENDED' | 'OFFER_DECLINED' | 'REJECTED' | 'POSITION_FILLED',
+  notes?: string,
+) {
+  return request(`/employers/applications/${applicationId}/outcome`, {
+    method: 'POST',
+    body: JSON.stringify({ outcome, notes }),
+  });
+}
+
+export type EmployerPaymentRow = {
+  id: string;
+  jobId: string;
+  hiringOutcomeId: string;
+  amountPaise: number;
+  currency: string;
+  status: string;
+  provider: string | null;
+  description: string | null;
+  createdAt: string;
+  paidAt: string | null;
+};
+
+export async function listEmployerPayments() {
+  return request<EmployerPaymentRow[]>('/employers/me/payments');
+}
+
+export async function getJobPostingPayment(jobId: string) {
+  return request<EmployerPaymentRow & { unlocked?: boolean }>(
+    `/employers/jobs/${jobId}/posting-payment`,
+  );
+}
+
+export async function markEmployerPaymentPaid(id: string) {
+  return request<{ id: string; status: string; paidAt: string | null; jobId?: string | null; unlocked?: boolean }>(
+    `/employers/me/payments/${id}/mark-paid`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 export async function publishEmployerJob(id: string) {
@@ -762,6 +1080,10 @@ export async function listEmployerApplications(jobId: string) {
   return request<EmployerApplication[]>(`/employers/jobs/${jobId}/applications`);
 }
 
+export async function listAllEmployerApplications() {
+  return request<EmployerApplication[]>('/employers/applications');
+}
+
 export async function changeApplicationStatus(id: string, action: string) {
   return request(`/employers/applications/${id}/status`, {
     method: 'POST',
@@ -769,20 +1091,270 @@ export async function changeApplicationStatus(id: string, action: string) {
   });
 }
 
+export async function searchEmployerCandidates(params: {
+  q?: string;
+  city?: string;
+  skill?: string;
+  experienceMin?: number;
+  jobId: string;
+}) {
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  if (params.city) query.set('city', params.city);
+  if (params.skill) query.set('skill', params.skill);
+  if (params.experienceMin !== undefined) query.set('experienceMin', String(params.experienceMin));
+  query.set('jobId', params.jobId);
+  const data = await request<EmployerCandidateSearchResponse | EmployerCandidateSearchResult[]>(
+    `/employers/candidates/search?${query.toString()}`,
+  );
+  if (Array.isArray(data)) {
+    return {
+      jobId: params.jobId,
+      unlocked: true,
+      unlockLimit: data.length,
+      totalMatched: data.length,
+      candidates: data,
+    };
+  }
+  return {
+    jobId: data.jobId,
+    unlocked: data.unlocked,
+    unlockLimit: data.unlockLimit,
+    totalMatched: data.totalMatched,
+    candidates: data.candidates ?? [],
+  };
+}
+
+export async function getEmployerCandidate(id: string, jobId?: string) {
+  const suffix = jobId ? `?jobId=${encodeURIComponent(jobId)}` : '';
+  return request<EmployerCandidatePassport>(`/employers/candidates/${id}${suffix}`);
+}
+
+export async function listEmployerInterviews() {
+  return request<EmployerInterviewRecord[]>('/employers/interviews');
+}
+
+export async function scheduleEmployerInterview(payload: {
+  applicationId: string;
+  scheduledAt: string;
+  durationMin?: number;
+  mode?: string;
+  location?: string;
+  notes?: string;
+  notifyWhatsApp?: boolean;
+  notifyEmail?: boolean;
+}) {
+  return request<EmployerInterviewRecord>('/employers/interviews', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function employerInterviewAction(
+  id: string,
+  action: 'confirm' | 'reschedule' | 'complete' | 'cancel' | 'notes',
+  payload?: { scheduledAt?: string; notes?: string },
+) {
+  return request<EmployerInterviewRecord>(`/employers/interviews/${id}/action`, {
+    method: 'POST',
+    body: JSON.stringify({ action, ...payload }),
+  });
+}
+
 export async function getAdminDashboard() {
   return request<AdminDashboard>('/admin/dashboard');
+}
+
+export async function getWhatsAppIntegrationStatus() {
+  return request<{
+    connection: {
+      configured: boolean;
+      accessToken: boolean;
+      phoneNumberId: boolean;
+      verifyToken: boolean;
+      appSecret: boolean;
+      businessAccountId: boolean;
+      apiVersion: string;
+      webhookPath: string;
+      webhookAliasPath: string;
+    };
+    events: Array<{
+      id: string;
+      at: string;
+      kind: string;
+      summary: string;
+      detail?: Record<string, unknown>;
+    }>;
+  }>('/admin/integrations/whatsapp/status');
+}
+
+export async function whatsappTestConnection() {
+  return request<{ ok: boolean; message?: string; data?: unknown }>(
+    '/admin/integrations/whatsapp/test/connection',
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+}
+
+export async function whatsappSendTest(payload: { to: string; body?: string }) {
+  return request('/admin/integrations/whatsapp/test/send', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function whatsappSendInvitation(payload: {
+  candidateName: string;
+  to: string;
+  jobTitle: string;
+  interviewDate: string;
+  interviewTime: string;
+  interviewId?: string;
+  durationMin?: number;
+}) {
+  return request<{ ok: boolean; messageId?: string | null; interviewId?: string }>(
+    '/admin/integrations/whatsapp/test/invitation',
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+}
+
+export async function whatsappSimulateWebhook(payload: {
+  action: 'CONFIRM' | 'RESCHEDULE' | 'SLOT' | 'DECLINE';
+  interviewId: string;
+  slotIso?: string;
+  fromPhone?: string;
+}) {
+  return request('/admin/integrations/whatsapp/test/simulate-webhook', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function whatsappSendReminder(payload: {
+  interviewId: string;
+  kind: '24h' | '2h' | '15m';
+}) {
+  return request('/admin/integrations/whatsapp/test/reminder', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function whatsappListEvents(limit = 50) {
+  return request<{ items: Array<{ id: string; at: string; kind: string; summary: string }> }>(
+    `/admin/integrations/whatsapp/events?limit=${limit}`,
+  );
+}
+
+export async function whatsappClearEvents() {
+  return request('/admin/integrations/whatsapp/events/clear', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 }
 
 export async function getAdminList(path: string) {
   return request<unknown[]>(`/admin/${path}`);
 }
 
+export async function listPlatformAdmins() {
+  return request<import('@careerbridge/shared').PlatformAdminRecord[]>('/admin/admins');
+}
+
+export async function createPlatformAdmin(payload: {
+  email: string;
+  fullName: string;
+  password: string;
+}) {
+  return request('/admin/admins', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function suspendPlatformAdmin(id: string) {
+  return request(`/admin/admins/${id}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function listPublicStates() {
+  return request<import('@careerbridge/shared').LocationState[]>('/locations/states', { auth: false });
+}
+
+export async function listPublicCities(stateId: string) {
+  return request<import('@careerbridge/shared').LocationCity[]>(
+    `/locations/cities?stateId=${encodeURIComponent(stateId)}`,
+    { auth: false },
+  );
+}
+
+export async function adminListStates() {
+  return request<
+    Array<{
+      id: string;
+      name: string;
+      code: string | null;
+      active: boolean;
+      _count: { cities: number };
+    }>
+  >('/admin/states');
+}
+
+export async function adminCreateState(payload: { name: string; code?: string }) {
+  return request('/admin/states', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function adminUpdateState(
+  id: string,
+  payload: { name?: string; code?: string; active?: boolean },
+) {
+  return request(`/admin/states/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function adminDeleteState(id: string) {
+  return request(`/admin/states/${id}`, { method: 'DELETE' });
+}
+
+export async function adminListCities(stateId?: string) {
+  const q = stateId ? `?stateId=${encodeURIComponent(stateId)}` : '';
+  return request<
+    Array<{
+      id: string;
+      name: string;
+      active: boolean;
+      stateId: string;
+      state: { id: string; name: string; code: string | null };
+    }>
+  >(`/admin/cities${q}`);
+}
+
+export async function adminCreateCity(payload: { stateId: string; name: string }) {
+  return request('/admin/cities', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function adminUpdateCity(
+  id: string,
+  payload: { name?: string; stateId?: string; active?: boolean },
+) {
+  return request(`/admin/cities/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function adminDeleteCity(id: string) {
+  return request(`/admin/cities/${id}`, { method: 'DELETE' });
+}
+
 export async function logout() {
   try {
-    await request('/auth/logout', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken: getRefreshToken() }),
-    });
+    const refreshToken = getRefreshToken();
+    if (refreshToken || getAccessToken()) {
+      await request('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      });
+    }
+  } catch {
+    // Always clear local session even if the API is down or the token already expired.
   } finally {
     clearSession();
   }

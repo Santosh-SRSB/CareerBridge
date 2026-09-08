@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function EmployerBand() {
   return (
     <section id="employers" className="relative overflow-hidden bg-navy py-16 text-white">
@@ -15,12 +17,12 @@ export function EmployerBand() {
             flow. Candidates stay free. You pay for hiring value.
           </p>
         </div>
-        <a
-          href="#signin"
+        <Link
+          href="/employer/welcome"
           className="inline-flex rounded-full bg-white px-7 py-3.5 text-sm font-bold text-navy shadow-lg transition hover:-translate-y-0.5 hover:bg-fog"
         >
           Post Your First Job
-        </a>
+        </Link>
       </div>
     </section>
   );

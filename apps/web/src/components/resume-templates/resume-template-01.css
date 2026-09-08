@@ -1,0 +1,178 @@
+/* Resume Template 01 — professional Calibri, black & white, ATS-friendly */
+
+.resume-template-01 {
+  font-family: Calibri, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: #000;
+  background: #fff;
+  padding: 44px 52px;
+  font-size: 11pt;
+  line-height: 1.38;
+  box-sizing: border-box;
+}
+
+.resume-template-01 header {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.resume-template-01 h1 {
+  font-family: Calibri, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 22pt;
+  font-weight: 700;
+  color: #000;
+  margin: 0 0 4px;
+  letter-spacing: 0.01em;
+}
+
+.resume-template-01 .rt01-contact {
+  margin: 0;
+  font-size: 9.5pt;
+  color: #000;
+  line-height: 1.4;
+}
+
+.resume-template-01 section {
+  margin-top: 10px;
+}
+
+.resume-template-01 h2 {
+  font-family: Calibri, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 10pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #000;
+  border-bottom: 1px solid #000;
+  padding-bottom: 2px;
+  margin: 0 0 6px;
+}
+
+.resume-template-01 p {
+  margin: 0 0 3px;
+  color: #000;
+}
+
+.resume-template-01 .rt01-summary {
+  text-align: justify;
+}
+
+.resume-template-01 .rt01-entry {
+  margin-bottom: 8px;
+}
+
+.resume-template-01 .rt01-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.resume-template-01 .rt01-row strong {
+  font-weight: 700;
+  color: #000;
+}
+
+.resume-template-01 .rt01-dates {
+  font-style: italic;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: #000;
+}
+
+.resume-template-01 .rt01-sub {
+  font-style: italic;
+  color: #000;
+  margin: 1px 0 2px;
+}
+
+.resume-template-01 ul {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  color: #000;
+  list-style-type: disc;
+}
+
+.resume-template-01 li {
+  margin-bottom: 2px;
+  color: #000;
+  display: list-item;
+}
+
+.resume-template-01 li::marker {
+  color: #000;
+}
+
+.resume-template-01 .rt01-skills-list {
+  list-style-type: disc;
+  padding-left: 18px;
+}
+
+.resume-template-01 .rt01-skills-list li::marker {
+  color: #000;
+}
+
+.resume-template-01 .rt01-project-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.resume-template-01 .rt01-project-tech {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.resume-template-01 .rt01-edu-grade {
+  font-style: normal;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.resume-template-01 .rt01-ach-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.resume-template-01 a {
+  color: #000;
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .resume-template-01 {
+    padding: 20px 16px 28px;
+    font-size: 10pt;
+    line-height: 1.4;
+    width: 100%;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
+
+  .resume-template-01 h1 {
+    font-size: 20pt;
+  }
+
+  .resume-template-01 .rt01-contact {
+    font-size: 9pt;
+    word-break: break-word;
+  }
+
+  .resume-template-01 h2 {
+    font-size: 9.5pt;
+  }
+
+  .resume-template-01 .rt01-row,
+  .resume-template-01 .rt01-ach-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .resume-template-01 .rt01-dates,
+  .resume-template-01 .rt01-edu-grade {
+    white-space: normal;
+  }
+}

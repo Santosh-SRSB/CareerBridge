@@ -332,6 +332,8 @@ export async function logout() {
       method: 'POST',
       body: JSON.stringify({ refreshToken: getRefreshToken() }),
     });
+  } catch {
+    // Ignore any network/auth errors (e.g. expired access token) during logout
   } finally {
     clearSession();
   }

@@ -85,6 +85,11 @@ export class MatchingController {
     return this.matching.listMatches(user.id, id);
   }
 
+  @Get('jobs/:id/posting-payment')
+  getJobPostingPayment(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.matching.getJobPostingPayment(user.id, id);
+  }
+
   @Post('applications/:id/outcome')
   recordOutcome(
     @CurrentUser() user: { id: string },

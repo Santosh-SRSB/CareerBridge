@@ -1,21 +1,17 @@
 ﻿'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { SUGGESTED_SKILLS, type CandidateSkill } from '@careerbridge/shared';
-import { PassportFrame, WizardActions } from '@/components/PassportFrame';
-import { Input } from '@/components/ui/Input';
+import { type CandidateSkill } from '@careerbridge/shared';
 import { Button } from '@/components/ui/Button';
+import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { SkillSearchCombobox } from '@/components/resume/SkillSearchCombobox';
 import { getStoredUser } from '@/lib/session';
 import { addSkill, getCandidateMe, removeSkill } from '@/lib/api';
-import { goToNextPassportStep } from '@/lib/passport-flow';
-
-const MIN_SKILLS = 3;
 
 export default function PassportSkillsPage() {
   const router = useRouter();
   const [skills, setSkills] = useState<CandidateSkill[]>([]);
-  const [custom, setCustom] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -26,130 +22,96 @@ export default function PassportSkillsPage() {
       return;
     }
     getCandidateMe()
-      .then((profile) => setSkills(profile.skills))
+      .then((profile) => {
+        if (profile.skills?.length) setSkills(profile.skills);
+      })
+      .catch(() => {})
       .finally(() => setReady(true));
   }, [router]);
 
-  async function save(name: string) {
-    setError('');
-    setLoading(true);
+  async function handleAddSkill(name: string) {
+    if (!name.trim()) return;
+    const exists = skills.some((s) => s.name.toLowerCase() === name.trim().toLowerCase());
+    if (exists) return;
+
+    const newSkill: CandidateSkill = { id: `temp-${Date.now()}`, name: name.trim() };
+    setSkills((prev) => [...prev, newSkill]);
+
     try {
-      const profile = await addSkill({ name });
-      setSkills(profile.skills);
-      setCustom('');
+      const profile = await addSkill({ name: name.trim() });
+      if (profile.skills) setSkills(profile.skills);
     } catch {
-      setError('We could not save that skill right now. Please try again.');
-    } finally {
-      setLoading(false);
+      // Keep optimistic item
     }
   }
 
-  async function onAddSkill() {
-    if (custom.trim().length < 2) {
-      setError('Enter a skill name.');
+  async function handleRemoveSkill(id: string) {
+    const item = skills.find((s) => s.id === id);
+    setSkills((prev) => prev.filter((s) => s.id !== id));
+    if (item && !id.startsWith('temp-')) {
+      try {
+        await removeSkill(id);
+      } catch {
+        // Ignored
+      }
+    }
+  }
+
+  async function onSave() {
+    if (skills.length < 1) {
+      setError('Add at least one skill to save.');
       return;
     }
-    await save(custom.trim());
-  }
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
     setError('');
     setLoading(true);
     try {
-      let nextSkills = skills;
-      if (custom.trim().length >= 2) {
-        const profile = await addSkill({ name: custom.trim() });
-        nextSkills = profile.skills;
-        setSkills(nextSkills);
-        setCustom('');
-      }
-      if (nextSkills.length < MIN_SKILLS) {
-        setError(`Add at least ${MIN_SKILLS} skills to continue. You have ${nextSkills.length}.`);
-        return;
-      }
-      await goToNextPassportStep(router, 'skills');
-    } catch {
-      setError('We could not save that skill right now. Please try again.');
+      router.push('/profile');
     } finally {
       setLoading(false);
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
-
-  const recommended = SUGGESTED_SKILLS.filter((item) => !skills.some((skill) => skill.name === item));
+  if (!ready) {
+    return (
+      <CandidateAppShell activeTab="profile" showBack title="My Skills" headerVariant="simple" maxWidth="max-w-lg">
+        <div className="py-16 text-center text-sm text-slate-500">Loading...</div>
+      </CandidateAppShell>
+    );
+  }
 
   return (
-    <PassportFrame title="Skills" subtitle="Add the skills you already use at work, college, or home." step="skills">
-      <form onSubmit={onSubmit} className="cb-passport-panel space-y-4 p-6 sm:p-7">
-        <p className="text-sm font-semibold text-primary">
-          {skills.length} of {MIN_SKILLS} skills added
-        </p>
-        <div>
-          <p className="mb-2 text-sm font-semibold text-primary">Your skills</p>
-          <div className="flex flex-wrap gap-2">
-            {skills.length ? (
-              skills.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="rounded-pill bg-[#14b8a6] px-2.5 py-1 text-xs font-bold text-[#0a2e2c]"
-                  onClick={async () => setSkills((await removeSkill(item.id)).skills)}
-                >
-                  {item.name} ×
-                </button>
-              ))
-            ) : (
-              <p className="text-sm text-muted">Add at least 3 skills so employers can find you.</p>
-            )}
-          </div>
-        </div>
-
-        {recommended.length ? (
-          <div>
-            <p className="mb-2 text-sm font-semibold text-primary">Suggested</p>
-            <div className="flex flex-wrap gap-2">
-              {recommended.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className="rounded-pill border border-primary/12 bg-white px-2.5 py-1 text-xs font-bold text-primary hover:border-teal hover:bg-[#e8fbfa]"
-                  onClick={() => void save(item)}
-                >
-                  + {item}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <Input
-          label="Add another skill"
-          name="customSkill"
-          value={custom}
-          onChange={(event) => setCustom(event.target.value)}
-          placeholder="Communication, MS Excel, Sales"
+    <CandidateAppShell
+      activeTab="profile"
+      showBack
+      title="My Skills"
+      headerVariant="simple"
+      maxWidth="max-w-lg"
+      onBack={() => router.push('/profile')}
+    >
+      <div className="space-y-6">
+        <SkillSearchCombobox
+          label="My Skills"
+          placeholder="Search skills or type to add…"
+          selected={skills.map((skill) => skill.name)}
+          onAdd={(name) => void handleAddSkill(name)}
+          onRemove={(name) => {
+            const match = skills.find((skill) => skill.name.toLowerCase() === name.toLowerCase());
+            if (match) void handleRemoveSkill(match.id);
+          }}
         />
-        {error ? <p className="text-sm text-error">{error}</p> : null}
-        <WizardActions>
-          <Button
-            type="button"
-            size="md"
-            block={false}
-            variant="secondary"
-            className="cb-wizard-secondary"
-            loading={loading}
-            loadingLabel="Saving..."
-            onClick={() => void onAddSkill()}
-          >
-            Add skill
-          </Button>
-          <Button type="submit" size="md" block={false} loading={loading} loadingLabel="Saving...">
-            Save and continue
-          </Button>
-        </WizardActions>
-      </form>
-    </PassportFrame>
+
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
+
+        <Button
+          type="button"
+          loading={loading}
+          loadingLabel="Saving..."
+          onClick={() => void onSave()}
+          className="rounded-xl bg-[#0a2e2c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#072422]"
+        >
+          Save
+        </Button>
+      </div>
+    </CandidateAppShell>
   );
 }

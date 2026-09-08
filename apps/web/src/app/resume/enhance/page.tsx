@@ -1,128 +1,16 @@
 'use client';
 
-import { Suspense, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import type { PassportDraft } from '@/types/passport';
-import { getCandidateMe, uploadResume } from '@/lib/api';
-import { draftToResumeContent, getPendingResumeBuild } from '@/lib/resume-build';
-import { CandidateShell } from '@/components/CandidatePortal';
-import { EagleMascot } from '@/features/candidate/passport/EagleMascot';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-async function parseResumeFile(file: File) {
-  const form = new FormData();
-  form.append('file', file);
-  const response = await fetch('/api/v1/candidates/resume/parse', {
-    method: 'POST',
-    body: form,
-  });
-  const json = (await response.json()) as {
-    success?: boolean;
-    data?: PassportDraft;
-    rawText?: string;
-    error?: { message?: string };
-  };
-  if (!response.ok || !json.success || !json.data) {
-    throw new Error(json.error?.message || 'Could not read that resume.');
-  }
-  return { draft: json.data, rawText: json.rawText || '' };
-}
-
-function ResumeEnhanceDropInner() {
+export default function ResumeEnhanceRedirectPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [drag, setDrag] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
-
-  const pending = getPendingResumeBuild();
-  const template = searchParams.get('template') || pending?.template || 'ats-minimal';
-  const withPhoto = (searchParams.get('photo') || pending?.photo || '0') === '1';
-
-  async function onFile(file: File) {
-    setError('');
-    setBusy(true);
-    setStatus('Uploading resume...');
-    try {
-      const [{ draft, rawText }, profile] = await Promise.all([parseResumeFile(file), getCandidateMe()]);
-      setStatus('Reading resume...');
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      setStatus('Extracting content...');
-      const content = draftToResumeContent(draft, { phone: profile.phone, city: profile.city });
-      content.includePhoto = withPhoto;
-      setStatus('Analyzing resume...');
-      const resume = await uploadResume({
-        fileName: file.name,
-        targetJobTitle: draft.careerInterests[0] || profile.careerInterests[0] || undefined,
-        content,
-        rawText,
-        template,
-        includePhoto: withPhoto,
-      });
-      setStatus('Checking ATS compatibility...');
-      router.push(`/resume/enhance/${resume.id}`);
-    } catch (err) {
-      setStatus('');
-      setError(err instanceof Error ? err.message : 'Could not save that resume.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  useEffect(() => {
+    router.replace('/resume');
+  }, [router]);
   return (
-    <CandidateShell>
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal">Resume enhancement</p>
-      <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">Drop your resume</h1>
-      <p className="mt-2 max-w-xl text-muted">
-        Template: <strong>{template}</strong>
-        {withPhoto ? ' · with photo' : ' · without photo'}. We will score ATS readiness and show what to fix.
-      </p>
-
-      <div className="resume-point mt-10">
-        <EagleMascot pose="point" />
-        <input
-          ref={inputRef}
-          type="file"
-          className="sr-only"
-          accept=".pdf,.doc,.docx,.txt"
-          disabled={busy}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void onFile(file);
-          }}
-        />
-        <button
-          type="button"
-          className={`resume-drop${drag ? ' is-drag' : ''}${busy ? ' is-busy' : ''}`}
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
-          onDragEnter={(event) => {
-            event.preventDefault();
-            setDrag(true);
-          }}
-          onDragOver={(event) => event.preventDefault()}
-          onDragLeave={() => setDrag(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDrag(false);
-            const file = event.dataTransfer.files?.[0];
-            if (file) void onFile(file);
-          }}
-        >
-          <strong>{busy ? status || 'Working…' : 'Drop resume here'}</strong>
-          <span>{busy ? 'Please wait' : 'PDF, DOC, DOCX, or TXT'}</span>
-        </button>
-      </div>
-      {error ? <p className="mt-4 text-sm font-semibold text-error">{error}</p> : null}
-    </CandidateShell>
-  );
-}
-
-export default function ResumeEnhanceDropPage() {
-  return (
-    <Suspense fallback={<CandidateShell>Loading…</CandidateShell>}>
-      <ResumeEnhanceDropInner />
-    </Suspense>
+    <main className="flex min-h-screen items-center justify-center text-sm text-slate-500">
+      Opening resume builder…
+    </main>
   );
 }

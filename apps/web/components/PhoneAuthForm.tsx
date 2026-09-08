@@ -16,7 +16,7 @@ import type { AuthPurpose, OtpChannel } from '@careerbridge/shared';
 export function PhoneAuthForm({ purpose }: { purpose: AuthPurpose }) {
   const router = useRouter();
   const [channel, setChannel] = useState<OtpChannel>('MOBILE');
-  const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
+  const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');

@@ -63,4 +63,9 @@ export class AdminController {
   addSkill(@Body() dto: CreateSkillDto) {
     return this.admin.addSkill(dto.name, dto.category);
   }
+
+  @Get('admins')
+  listAdmins() {
+    return this.admin.listAdmins();
+  }
 }

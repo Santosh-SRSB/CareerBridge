@@ -65,6 +65,30 @@ export class JobsController {
     return this.jobs.recommended(user.id);
   }
 
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(UserType.CANDIDATE)
+  @Get('saved')
+  saved(@CurrentUser() user: { id: string }) {
+    return this.jobs.listSaved(user.id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(UserType.CANDIDATE)
+  @Post(':id/save')
+  save(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.jobs.saveJob(user.id, id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(UserType.CANDIDATE)
+  @Post(':id/unsave')
+  unsave(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.jobs.unsaveJob(user.id, id);
+  }
+
   @Public()
   @Get(':id')
   detail(@Param('id') id: string, @CurrentUser() user?: { id: string; role: string }) {

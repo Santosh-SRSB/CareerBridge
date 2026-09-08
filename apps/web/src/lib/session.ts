@@ -5,6 +5,10 @@ const REFRESH = 'cb_refresh_token';
 const USER = 'cb_user';
 export const AUTH_COOKIE = 'cb_auth';
 
+function canUseBrowserStorage() {
+  return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+}
+
 function setAuthCookie(present: boolean) {
   if (typeof document === 'undefined') return;
   if (present) {
@@ -15,6 +19,7 @@ function setAuthCookie(present: boolean) {
 }
 
 export function saveSession(session: AuthSession) {
+  if (!canUseBrowserStorage()) return;
   localStorage.setItem(ACCESS, session.accessToken);
   localStorage.setItem(REFRESH, session.refreshToken);
   localStorage.setItem(USER, JSON.stringify(session.user));
@@ -22,6 +27,7 @@ export function saveSession(session: AuthSession) {
 }
 
 export function clearSession() {
+  if (!canUseBrowserStorage()) return;
   localStorage.removeItem(ACCESS);
   localStorage.removeItem(REFRESH);
   localStorage.removeItem(USER);
@@ -29,14 +35,17 @@ export function clearSession() {
 }
 
 export function getAccessToken() {
+  if (!canUseBrowserStorage()) return null;
   return localStorage.getItem(ACCESS);
 }
 
 export function getRefreshToken() {
+  if (!canUseBrowserStorage()) return null;
   return localStorage.getItem(REFRESH);
 }
 
 export function getStoredUser(): AuthUser | null {
+  if (!canUseBrowserStorage()) return null;
   const raw = localStorage.getItem(USER);
   if (!raw) return null;
   try {
@@ -48,6 +57,18 @@ export function getStoredUser(): AuthUser | null {
 
 export function isEmployerRole(role?: string | null) {
   return role === 'EMPLOYER_ADMIN' || role === 'EMPLOYER_RECRUITER';
+}
+
+export function isPlatformRole(role?: string | null) {
+  return role === 'SUPER_ADMIN' || role === 'PLATFORM_ADMIN' || role === 'PLATFORM_OPERATOR';
+}
+
+/** Role-aware home after login / "My home". */
+export function homePathForUser(user?: AuthUser | null) {
+  if (!user?.id) return '/';
+  if (isPlatformRole(user.role)) return '/srsbaadmin/dashboard';
+  if (isEmployerRole(user.role)) return '/employer';
+  return '/dashboard';
 }
 
 export function patchStoredUser(partial: Partial<AuthUser>) {

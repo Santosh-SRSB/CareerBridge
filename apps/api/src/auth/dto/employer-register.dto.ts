@@ -35,7 +35,7 @@ export class EmployerRegisterDto {
   @IsString()
   @Matches(REGISTRATION_PASSWORD_PATTERN, {
     message:
-      'Password must be at least 8 characters, include an uppercase letter, and use only letters and numbers.',
+      'Password must be at least 8 characters and include an uppercase letter, a number, and a special character.',
   })
   password: string;
 }

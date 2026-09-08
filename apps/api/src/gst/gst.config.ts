@@ -6,7 +6,8 @@ export type GstEnvironment = 'sandbox' | 'production';
 
 export type GstRuntimeConfig = {
   environment: GstEnvironment;
-  provider: 'IRIS_IRP';
+  provider: 'GSTINAPI' | 'IRIS_IRP' | 'MOCK';
+  gstinApiKey: string;
   baseUrl: string;
   authPath: string;
   getGstinPath: string;
@@ -36,12 +37,14 @@ export class GstConfigService implements OnModuleInit {
 
   onModuleInit() {
     this.runtime = this.load();
-    if (this.runtime.environment === 'production' && !this.runtime.configured) {
+    if (this.runtime.environment === 'production' && !this.runtime.configured && this.runtime.provider !== 'GSTINAPI') {
       throw new GstConfigError(
         'GST_ENV=production but production IRIS IRP credentials are missing or still placeholders. Refusing to start.',
       );
     }
-    if (!this.runtime.configured) {
+    if (this.runtime.provider === 'GSTINAPI') {
+      this.logger.log('GST module using gstinapi.in for GSTIN lookup.');
+    } else if (!this.runtime.configured) {
       this.logger.warn(
         `GST module loaded for ${this.runtime.environment} with incomplete/placeholder credentials. ` +
           `Live IRIS calls will fail until real sandbox credentials are set. ` +
@@ -89,6 +92,7 @@ export class GstConfigService implements OnModuleInit {
     const timeoutMs = Number(this.config.get('GST_API_TIMEOUT_MS') || 15000);
     const maxRetries = Number(this.config.get('GST_API_MAX_RETRIES') || 2);
     const mockEnabled = (this.config.get<string>('GST_MOCK_ENABLED') || 'false').toLowerCase() === 'true';
+    const gstinApiKey = (this.config.get<string>('GSTINAPI_KEY') || '').trim();
 
     const secrets = [baseUrl, clientId, clientSecret, username, password, requesterGstin];
     const isPlaceholder = secrets.some((v) => !v || PLACEHOLDER_MARKERS.some((m) => v.includes(m)));
@@ -96,9 +100,16 @@ export class GstConfigService implements OnModuleInit {
       Boolean(baseUrl && clientId && clientSecret && username && password && requesterGstin) &&
       !isPlaceholder;
 
+    const provider: GstRuntimeConfig['provider'] = gstinApiKey
+      ? 'GSTINAPI'
+      : configured
+        ? 'IRIS_IRP'
+        : 'MOCK';
+
     return {
       environment,
-      provider: 'IRIS_IRP',
+      provider,
+      gstinApiKey,
       baseUrl: baseUrl.replace(/\/$/, ''),
       authPath,
       getGstinPath,

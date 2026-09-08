@@ -10,8 +10,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Public employer entry points (registration redirect)
+  // Public employer entry points
   if (pathname === '/employer/register' || pathname.startsWith('/employer/register/')) {
+    return NextResponse.next();
+  }
+  if (pathname === '/employer/welcome' || pathname.startsWith('/employer/welcome/')) {
     return NextResponse.next();
   }
 

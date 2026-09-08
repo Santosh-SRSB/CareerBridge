@@ -3,6 +3,8 @@ export type CandidateProfile = {
   firstName: string | null;
   lastName: string | null;
   city: string | null;
+  state?: string | null;
+  preferredWorkCity?: string | null;
   phone: string | null;
   email: string | null;
   preferredLanguage: string | null;
@@ -24,6 +26,9 @@ export type CandidateProfile = {
   hasExperience: string | null;
   profileCompletion: number;
   onboardingCompleted: boolean;
+  whatsappOptIn?: boolean;
+  whatsappNumber?: string | null;
+  whatsappVerified?: boolean;
   education: CandidateEducation[];
   skills: CandidateSkill[];
   experiences: CandidateExperience[];
@@ -184,6 +189,7 @@ export type UpdateCandidatePayload = {
   firstName?: string;
   lastName?: string;
   city?: string;
+  preferredWorkCity?: string;
   about?: string;
   preferredLanguage?: string;
   dateOfBirth?: string;
@@ -192,8 +198,13 @@ export type UpdateCandidatePayload = {
   highestEducation?: string;
   careerInterests?: string[];
   hasExperience?: string;
+  totalExperienceYears?: string;
+  totalExperienceMonths?: string;
   photoUrl?: string | null;
   links?: CandidateLinks;
+  onboardingCompleted?: boolean;
+  whatsappOptIn?: boolean;
+  whatsappNumber?: string | null;
 };
 
 export type CreateEducationPayload = {
@@ -256,6 +267,17 @@ export const EXPERIENCE_OPTIONS = [
   { value: 'INTERNSHIP', label: 'Internship / Apprenticeship' },
 ] as const;
 
+export const ONBOARDING_DOMAINS = [
+  'IT',
+  'Non-IT',
+  'Finance',
+  'Healthcare',
+  'Retail',
+  'Operations',
+  'Manufacturing',
+  'Other',
+] as const;
+
 export type PassportSectionKey =
   | 'personal'
   | 'photo'
@@ -283,6 +305,57 @@ export type ProfileCompletion = {
   sections: PassportSection[];
   missing: string[];
 };
+
+/** Sections shown on the candidate "My profile" overview (5 × 20% = 100%). */
+export const PROFILE_OVERVIEW_SECTION_KEYS = [
+  'personal',
+  'education',
+  'experience',
+  'skills',
+  'preferences',
+] as const satisfies readonly PassportSectionKey[];
+
+export const PROFILE_OVERVIEW_SECTION_WEIGHT = 20;
+export const PROFILE_SKILLS_TARGET_COUNT = 3;
+
+export function skillsOverviewPoints(skillCount: number, weight = PROFILE_OVERVIEW_SECTION_WEIGHT) {
+  if (skillCount <= 0) return 0;
+  if (skillCount >= PROFILE_SKILLS_TARGET_COUNT) return weight;
+  return Math.round((skillCount / PROFILE_SKILLS_TARGET_COUNT) * weight);
+}
+
+export function computeProfileOverviewCompletion(
+  sections: Pick<PassportSection, 'key' | 'done' | 'label'>[],
+  skillCount: number,
+) {
+  let total = 0;
+  for (const key of PROFILE_OVERVIEW_SECTION_KEYS) {
+    if (key === 'skills') {
+      total += skillsOverviewPoints(skillCount);
+      continue;
+    }
+    const section = sections.find((item) => item.key === key);
+    if (section?.done) total += PROFILE_OVERVIEW_SECTION_WEIGHT;
+  }
+  return Math.min(100, total);
+}
+
+export function profileOverviewMissingLabels(
+  sections: Pick<PassportSection, 'key' | 'done' | 'label'>[],
+  skillCount: number,
+) {
+  const missing: string[] = [];
+  for (const key of PROFILE_OVERVIEW_SECTION_KEYS) {
+    const section = sections.find((item) => item.key === key);
+    if (!section) continue;
+    if (key === 'skills') {
+      if (skillCount < PROFILE_SKILLS_TARGET_COUNT) missing.push(section.label);
+      continue;
+    }
+    if (!section.done) missing.push(section.label);
+  }
+  return missing;
+}
 
 export const PASSPORT_SECTION_COPY: Record<
   PassportSectionKey,
@@ -348,4 +421,16 @@ export const PASSPORT_SECTION_COPY: Record<
     href: '/passport/links',
     weight: 0,
   },
+};
+
+export type LocationState = {
+  id: string;
+  name: string;
+  code?: string | null;
+};
+
+export type LocationCity = {
+  id: string;
+  name: string;
+  stateId: string;
 };

@@ -60,6 +60,9 @@ export function GstinVerifyField({ gstin, onVerifiedChange }: Props) {
     } else if (result.verified) {
       feedback = '✅ GSTIN Verified Successfully';
       feedbackClass = 'text-teal';
+    } else if (result.status === 'NOT_ACTIVE') {
+      feedback = '❌ This GSTIN is not active';
+      feedbackClass = 'text-error';
     } else {
       feedback = '❌ GSTIN Verification Failed';
       feedbackClass = 'text-error';

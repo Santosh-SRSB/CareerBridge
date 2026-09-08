@@ -1,13 +1,23 @@
-export type AiProviderName = 'gemini' | 'openai' | 'fallback';
+export type AiProviderName = 'gemini' | 'fallback';
 
 export type AiTaskType =
   | 'RESUME_REVIEW'
   | 'RESUME_REWRITE'
+  | 'RESUME_STRUCTURE'
   | 'INTERVIEW_EVALUATION'
   | 'INTERVIEW_QUESTION'
   | 'JOB_MATCHING'
   | 'SKILL_EXTRACTION'
+  | 'EMBEDDING'
+  | 'RAG_RETRIEVE'
   | 'GENERAL';
+
+export type EmbeddingEntityType =
+  | 'CANDIDATE'
+  | 'JOB'
+  | 'RESUME'
+  | 'SKILL'
+  | 'KNOWLEDGE';
 
 export interface AiRequestOptions {
   model?: string;
@@ -54,4 +64,32 @@ export interface AiInteractionRecord {
   status: 'SUCCESS' | 'FAILED' | 'FALLBACK';
   estimatedCostUsd: number;
   createdAt: Date;
+}
+
+export interface StructuredResumeDraft {
+  firstName: string;
+  lastName: string;
+  city: string;
+  about: string;
+  education: Array<{
+    qualification: string;
+    institution: string;
+    fieldOfStudy: string;
+    yearCompleted: string;
+  }>;
+  skills: string[];
+  careerInterests: string[];
+  experience: Array<{
+    company: string;
+    jobTitle: string;
+    isInternship: boolean;
+    description: string;
+  }>;
+  projects: Array<{
+    title: string;
+    role: string;
+    year: string;
+    description: string;
+    url: string;
+  }>;
 }

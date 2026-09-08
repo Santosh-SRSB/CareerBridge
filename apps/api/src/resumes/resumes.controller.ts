@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
 import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
@@ -7,6 +8,7 @@ import { ResumesService } from './resumes.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { Public } from '../common/decorators/public.decorator';
 
 class CreateResumeDto {
   @IsOptional()
@@ -36,6 +38,10 @@ class CreateResumeDto {
   @IsOptional()
   @IsObject()
   content?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  summary?: string;
 }
 
 class UploadResumeDto {
@@ -62,6 +68,34 @@ class UploadResumeDto {
 
   @IsObject()
   content!: Record<string, unknown>;
+}
+
+class SavePrimaryResumeDto {
+  @IsOptional()
+  @IsString()
+  resumeId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  targetJobTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...RESUME_TEMPLATES])
+  template?: string;
+
+  @IsObject()
+  content!: Record<string, unknown>;
+
+  /** When true, save DB only — do not sync PDF to Google Cloud Storage. */
+  @IsOptional()
+  @IsBoolean()
+  skipCloudSync?: boolean;
 }
 
 class UpdateResumeDto {
@@ -129,6 +163,12 @@ class RoleAtsDto {
   analysis?: Record<string, unknown>;
 }
 
+class StructureResumeTextDto {
+  @IsString()
+  @MinLength(20)
+  rawText!: string;
+}
+
 @ApiTags('resumes')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
@@ -142,6 +182,14 @@ export class ResumesController {
     return this.resumes.list(user.id);
   }
 
+  /** Public: structure resume text through Nest AI Gateway (Gemini only). */
+  @Public()
+  @Roles()
+  @Post('structure-text')
+  structureText(@Body() dto: StructureResumeTextDto) {
+    return this.resumes.structureText(dto.rawText);
+  }
+
   @Post()
   create(@CurrentUser() user: { id: string }, @Body() dto: CreateResumeDto) {
     return this.resumes.create(user.id, {
@@ -151,12 +199,45 @@ export class ResumesController {
       includePhoto: dto.includePhoto,
       blank: dto.blank,
       content: dto.content,
+      summary: dto.summary,
     });
   }
 
   @Post('upload')
   upload(@CurrentUser() user: { id: string }, @Body() dto: UploadResumeDto) {
     return this.resumes.upload(user.id, dto);
+  }
+
+  @Post('upload-file')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  uploadFile(
+    @CurrentUser() user: { id: string },
+    @UploadedFile() file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
+    @Body() body: { targetJobTitle?: string },
+  ) {
+    if (!file?.buffer) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Please choose a resume file to upload.',
+      });
+    }
+    return this.resumes.uploadFile(user.id, file, body?.targetJobTitle);
+  }
+
+  /** Cloud Tasks / local worker callback */
+  @Public()
+  @Post('worker/process')
+  processWorker(@Body() body: { resumeId: string; userId: string }) {
+    return this.resumes.processWorker(body);
+  }
+
+  @Post('save-primary')
+  savePrimary(@CurrentUser() user: { id: string }, @Body() dto: SavePrimaryResumeDto) {
+    return this.resumes.savePrimary(user.id, dto);
   }
 
   @Post('ats/analyze')
@@ -179,6 +260,16 @@ export class ResumesController {
     return this.resumes.careerGuidance(user.id, { ...dto, resumeId: id });
   }
 
+  @Post(':id/ai-review')
+  aiReview(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: RoleAtsDto) {
+    return this.resumes.aiReview(user.id, id, dto);
+  }
+
+  @Post(':id/generate')
+  generate(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.enhance(user.id, id);
+  }
+
   @Post(':id/enhance')
   enhance(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.resumes.enhance(user.id, id);
@@ -192,6 +283,11 @@ export class ResumesController {
   @Get(':id')
   get(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.resumes.get(user.id, id);
+  }
+
+  @Put([':id', ':id/update'])
+  updatePut(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: UpdateResumeDto) {
+    return this.resumes.update(user.id, id, dto);
   }
 
   @Patch(':id')
@@ -257,5 +353,10 @@ export class ResumesController {
   @Get(':id/download')
   download(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.resumes.download(user.id, id);
+  }
+
+  @Get(':id/processing')
+  processing(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.processingStatus(user.id, id);
   }
 }

@@ -1,9 +1,17 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { EDUCATION_LEVELS, yearError, type CandidateEducation } from '@careerbridge/shared';
-import { Chip, PassportFrame, WizardActions } from '@/components/PassportFrame';
+import { yearError, type CandidateEducation } from '@careerbridge/shared';
+import {
+  PassportFrame,
+  PassportLoading,
+  PassportRecord,
+  WizardActions,
+  passportPrimaryButtonClass,
+  passportSecondaryButtonClass,
+} from '@/components/PassportFrame';
+import { DegreeSelect, FieldOfStudySelect, InstitutionCombobox } from '@/components/resume/EducationSelectors';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
@@ -42,7 +50,7 @@ export default function PassportEducationPage() {
 
   async function saveCurrentRow() {
     if (!qualification) {
-      setError('Select a qualification.');
+      setError('Select your degree (e.g. B.Tech, B.E., B.Com).');
       return null;
     }
     if (institution.trim().length < 2) {
@@ -106,16 +114,16 @@ export default function PassportEducationPage() {
     }
   }
 
-  if (!ready) return <main className="cb-wizard text-muted">Loading your Career Passport...</main>;
+  if (!ready) return <PassportLoading />;
 
   return (
     <PassportFrame
       title="Education"
-      subtitle="Add your highest qualification. Extra records are optional."
+      subtitle="Add your degree and institution — e.g. B.Tech, B.E., MBA."
       step="education"
     >
-      <form onSubmit={onAdd} className="cb-passport-panel space-y-4 p-6 sm:p-7">
-        <p className="text-sm text-muted">
+      <form onSubmit={onAdd} className="space-y-4">
+        <p className="text-sm text-slate-500">
           {items.length
             ? 'Highest education saved. You can add more below if you want.'
             : 'Highest education is required to continue.'}
@@ -124,49 +132,23 @@ export default function PassportEducationPage() {
         {items.length ? (
           <div className="space-y-2">
             {items.map((item) => (
-              <div key={item.id} className="cb-wizard-record">
-                <div>
-                  <p className="text-sm font-semibold text-primary">{item.qualification}</p>
-                  <p className="text-xs text-muted">
-                    {[item.institution, item.fieldOfStudy, item.yearCompleted].filter(Boolean).join(' · ') || 'Saved'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-error"
-                  onClick={async () => setItems((await removeEducation(item.id)).education)}
-                >
-                  Remove
-                </button>
-              </div>
+              <PassportRecord
+                key={item.id}
+                title={
+                  item.fieldOfStudy
+                    ? `${item.qualification} in ${item.fieldOfStudy}`
+                    : item.qualification
+                }
+                subtitle={[item.institution, item.yearCompleted].filter(Boolean).join(' · ') || 'Saved'}
+                onRemove={() => void removeEducation(item.id).then((profile) => setItems(profile.education))}
+              />
             ))}
           </div>
         ) : null}
 
-        <div>
-          <p className="mb-2 text-sm font-semibold text-primary">Highest qualification</p>
-          <div className="flex flex-wrap gap-1.5">
-            {EDUCATION_LEVELS.map((level) => (
-              <Chip key={level} selected={qualification === level} onClick={() => setQualification(level)}>
-                {level}
-              </Chip>
-            ))}
-          </div>
-        </div>
-        <Input
-          label="Institution"
-          name="institution"
-          value={institution}
-          onChange={(event) => setInstitution(event.target.value)}
-          placeholder="School, college, or university"
-        />
-        <Input
-          label="Field of study (optional)"
-          name="fieldOfStudy"
-          value={fieldOfStudy}
-          onChange={(event) => setFieldOfStudy(event.target.value)}
-          placeholder="Commerce, Computer Science, Arts"
-        />
+        <DegreeSelect value={qualification} onChange={setQualification} />
+        <FieldOfStudySelect value={fieldOfStudy} onChange={setFieldOfStudy} />
+        <InstitutionCombobox value={institution} onChange={setInstitution} />
         <Input
           label="Year completed (optional)"
           name="yearCompleted"
@@ -175,7 +157,7 @@ export default function PassportEducationPage() {
           onChange={(event) => setYearCompleted(event.target.value.replace(/\D/g, '').slice(0, 4))}
           placeholder="2024"
         />
-        {error ? <p className="text-sm text-error">{error}</p> : null}
+        {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>
           <Button
             type="submit"
@@ -183,12 +165,20 @@ export default function PassportEducationPage() {
             block={false}
             loading={loading}
             loadingLabel="Saving..."
-            variant="secondary"
-            className="cb-wizard-secondary"
+            variant="outline"
+            className={passportSecondaryButtonClass}
           >
             Add education
           </Button>
-          <Button type="button" size="md" block={false} loading={loading} loadingLabel="Saving..." onClick={() => void onContinue()}>
+          <Button
+            type="button"
+            size="md"
+            block={false}
+            loading={loading}
+            loadingLabel="Saving..."
+            className={passportPrimaryButtonClass}
+            onClick={() => void onContinue()}
+          >
             Save and continue
           </Button>
         </WizardActions>

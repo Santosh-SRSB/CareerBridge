@@ -23,7 +23,7 @@ export function PhoneField({
 
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium" htmlFor="mobile">
+      <label className="mb-1.5 block text-xs font-bold text-primary" htmlFor="mobile">
         Mobile number
       </label>
       <div className="flex gap-2">
@@ -31,32 +31,33 @@ export function PhoneField({
           aria-label="Country code"
           value={dial}
           onChange={(event) => onDialChange(event.target.value)}
-          className="w-28 rounded-sm border border-primary/20 bg-surface px-2 py-3 text-base"
+          className="w-24 rounded-xl border border-primary/15 bg-[#f8faf9] px-2.5 py-2.5 text-xs font-semibold text-primary outline-none transition focus:border-teal focus:bg-white"
         >
           {COUNTRIES.map((item) => (
             <option key={item.code} value={item.dial}>
-              {item.dial}
+              {item.flag} {item.dial}
             </option>
           ))}
         </select>
         <input
           id="mobile"
+          suppressHydrationWarning
           inputMode="numeric"
           autoComplete="tel"
-          placeholder="Enter Mobile Number"
+          placeholder="Enter mobile number"
           maxLength={country.maxLength}
           value={national}
           onChange={(event) => onNationalChange(event.target.value.replace(/\D/g, ''))}
-          className={`flex-1 rounded-sm border bg-surface px-3 py-3 text-base ${
-            error ? 'border-error' : 'border-primary/20'
+          className={`flex-1 rounded-xl border bg-[#f8faf9] px-3.5 py-2.5 text-sm font-medium text-primary outline-none transition focus:border-teal focus:bg-white ${
+            error ? 'border-error' : 'border-primary/15'
           }`}
         />
       </div>
       {error ? (
-        <p className="mt-1 text-sm text-error">{error}</p>
-      ) : (
-        <p className="mt-1 text-sm text-muted">{hint}</p>
-      )}
+        <p className="mt-1 text-xs font-semibold text-error">{error}</p>
+      ) : hint ? (
+        <p className="mt-1 text-[11px] text-muted">{hint}</p>
+      ) : null}
     </div>
   );
 }

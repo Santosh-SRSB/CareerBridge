@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { normalizeGstin, validateGstinFormat, maskGstin } from './gst.validator';
 import { normalizeGstStatus, verifiedFromStatus } from './gst.status';
+import { pickTradeName } from './gst.payload';
 
 describe('GSTIN normalization', () => {
   it('trims and uppercases', () => {
@@ -31,7 +32,11 @@ describe('GSTIN validation', () => {
   });
 
   it('accepts valid GSTIN format', () => {
-    assert.equal(validateGstinFormat('29ABCDE1234F1Z5'), null);
+    assert.equal(validateGstinFormat('29ABCDE1234F1ZW'), null);
+  });
+
+  it('rejects checksum mismatch', () => {
+    assert.match(validateGstinFormat('29ABCDE1234F1Z5') || '', /not valid/i);
   });
 });
 
@@ -66,5 +71,18 @@ describe('status normalization', () => {
     assert.equal(verifiedFromStatus('ACTIVE'), true);
     assert.equal(verifiedFromStatus('NOT_ACTIVE'), false);
     assert.equal(verifiedFromStatus('UNKNOWN'), false);
+  });
+});
+
+describe('trade name extraction', () => {
+  it('uses trade_name, not legal name', () => {
+    assert.equal(
+      pickTradeName({ trade_name: 'BRAND MARK', legal_name: 'LEGAL COMPANY PRIVATE LIMITED' }),
+      'BRAND MARK',
+    );
+  });
+
+  it('does not fall back to legal name', () => {
+    assert.equal(pickTradeName({ legal_name: 'LEGAL COMPANY PRIVATE LIMITED' }), null);
   });
 });

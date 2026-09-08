@@ -1,141 +1,304 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { EmployerJobSummary } from '@careerbridge/shared';
-import { listEmployerJobs } from '@/lib/api';
+import { useSearchParams } from 'next/navigation';
+import type { EmployerApplication } from '@careerbridge/shared';
+import {
+  downloadEmployerCandidateResume,
+  listAllEmployerApplications,
+  listEmployerJobs,
+  saveBase64File,
+} from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { BrandMascot } from '@/components/BrandMascot';
 
-function applicantLabel(count: number) {
-  if (count <= 0) return 'No application yet';
-  if (count === 1) return '1 applicant';
-  return `${count} applicants`;
+function applicationStatusLabel(status: string) {
+  if (status === 'SHORTLISTED') return 'Shortlisted';
+  if (status === 'INTERVIEW') return 'Interview';
+  if (status === 'APPLIED') return 'Applied';
+  if (status === 'UNDER_REVIEW' || status === 'REVIEW') return 'In review';
+  if (status === 'SELECTED') return 'Selected';
+  if (status === 'HIRED') return 'Hired';
+  if (status === 'REJECTED') return 'Not selected';
+  return status.replaceAll('_', ' ');
+}
+
+function candidateName(app: EmployerApplication) {
+  return [app.candidate.firstName, app.candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
+}
+
+function experienceYears(app: EmployerApplication) {
+  return app.candidate.experienceYears ?? 0;
+}
+
+function experienceLabel(years: number) {
+  if (years <= 0) return 'Fresher';
+  if (years === 1) return '1 Year';
+  return `${years} Years`;
+}
+
+function matchTone(score: number) {
+  if (score >= 85) return 'high';
+  if (score >= 70) return 'mid';
+  return 'low';
 }
 
 export default function EmployerApplicationsIndex() {
-  const [jobs, setJobs] = useState<EmployerJobSummary[]>([]);
+  return (
+    <Suspense>
+      <EmployerApplicationsBody />
+    </Suspense>
+  );
+}
+
+function EmployerApplicationsBody() {
+  const searchParams = useSearchParams();
+  const jobFromQuery = searchParams.get('jobId') || '';
+  const [items, setItems] = useState<EmployerApplication[]>([]);
+  const [jobFilter, setJobFilter] = useState(jobFromQuery || 'all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [experienceFilter, setExperienceFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const [skillFilter, setSkillFilter] = useState('all');
+  const [jobs, setJobs] = useState<Array<{ id: string; title: string }>>([]);
+  const [selectedId, setSelectedId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [resumeBusy, setResumeBusy] = useState(false);
 
   useEffect(() => {
-    listEmployerJobs()
-      .then(setJobs)
+    void Promise.all([listAllEmployerApplications(), listEmployerJobs().catch(() => [])])
+      .then(([apps, jobRows]) => {
+        setItems(apps);
+        setJobs(jobRows.map((job) => ({ id: job.id, title: job.title })));
+        if (jobFromQuery) {
+          setJobFilter(jobFromQuery);
+        } else if (jobRows.length === 1) {
+          setJobFilter(jobRows[0].id);
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load applications.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [jobFromQuery]);
 
-  const totals = useMemo(() => {
-    const applicants = jobs.reduce((sum, job) => sum + (job.applicantCount || 0), 0);
-    const waiting = jobs.filter((job) => (job.applicantCount || 0) === 0).length;
-    const withApps = jobs.filter((job) => (job.applicantCount || 0) > 0).length;
-    return { applicants, waiting, withApps, roles: jobs.length };
-  }, [jobs]);
+  const jobScoped = useMemo(() => {
+    if (jobFilter === 'all') return items;
+    return items.filter((item) => item.job.id === jobFilter);
+  }, [items, jobFilter]);
+
+  const locations = useMemo(() => {
+    return [...new Set(jobScoped.map((item) => item.candidate.city).filter(Boolean) as string[])].sort();
+  }, [jobScoped]);
+
+  const skills = useMemo(() => {
+    return [...new Set(jobScoped.flatMap((item) => item.candidate.skills))].sort();
+  }, [jobScoped]);
+
+  const filtered = useMemo(() => {
+    return jobScoped.filter((item) => {
+      if (statusFilter !== 'all' && item.status !== statusFilter) return false;
+      const years = experienceYears(item);
+      if (experienceFilter === 'fresher' && years > 0) return false;
+      if (experienceFilter === '1' && years !== 1) return false;
+      if (experienceFilter === '2plus' && years < 2) return false;
+      if (locationFilter !== 'all' && item.candidate.city !== locationFilter) return false;
+      if (skillFilter !== 'all' && !item.candidate.skills.includes(skillFilter)) return false;
+      return true;
+    });
+  }, [jobScoped, statusFilter, experienceFilter, locationFilter, skillFilter]);
+
+  const selectedJobTitle =
+    jobFilter === 'all' ? null : jobs.find((job) => job.id === jobFilter)?.title || filtered[0]?.job.title || null;
+  const selected = filtered.find((item) => item.id === selectedId) || filtered[0] || null;
+
+  async function viewSelectedResume() {
+    if (!selected) return;
+    setResumeBusy(true);
+    setError('');
+    try {
+      const file = await downloadEmployerCandidateResume(selected.candidate.id, selected.job.id);
+      if (file.pdf) {
+        saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
+      } else if (file.html) {
+        saveBase64File(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
+      } else {
+        setError('Resume file was empty.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open resume.');
+    } finally {
+      setResumeBusy(false);
+    }
+  }
 
   return (
-    <EmployerShellFallback>
-      <section className="cb-employer-page cb-list-studio space-y-4">
-        <header className="cb-list-studio__hero cb-list-studio__hero--apps">
-          <div className="relative z-10 min-w-0">
-            <p className="text-sm font-semibold text-[#eab308]">Candidate inbox</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+    <EmployerShellFallback title="Applications">
+      <div className="ep-apps">
+        <p className="ep-dash__eyebrow">Home · Applications</p>
+        <header className="ep-dash__hello">
+          <div>
+            <h1 className="ep-dash__title">
               Applications
+              {selectedJobTitle ? (
+                <>
+                  {' '}
+                  — <span>{selectedJobTitle}</span>
+                </>
+              ) : null}
             </h1>
-            <p className="mt-2 max-w-lg text-sm text-white/75 sm:text-base">
-              See how many people applied to each opening — and jump in to review.
-            </p>
+            <p className="ep-dash__sub">Review inbound candidates, match scores, and status.</p>
           </div>
-          <BrandMascot pose="tablet" motion="float" size="md" priority className="relative z-10 shrink-0" />
         </header>
 
-        {!loading && jobs.length ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[
-              { label: 'Openings', value: totals.roles },
-              { label: 'With applicants', value: totals.withApps },
-              { label: 'Waiting', value: totals.waiting },
-              { label: 'Total applicants', value: totals.applicants },
-            ].map((item) => (
-              <div key={item.label} className="cb-lift-card rounded-2xl bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{item.label}</p>
-                <p className="cb-metric-value mt-1 text-2xl font-extrabold text-primary">{item.value}</p>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="cb-list-studio__panel">
-          {loading ? (
-            <div className="space-y-3">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="cb-shimmer h-24 rounded-2xl bg-fog/80" />
+        <div className="ep-apps__filters" role="group" aria-label="Filters">
+          <span className="ep-apps__filters-label">Filters:</span>
+          <label>
+            <span className="sr-only">Job</span>
+            <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)}>
+              <option value="all">All jobs</option>
+              {jobs.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.title}
+                </option>
               ))}
-            </div>
-          ) : null}
-          {error ? <p className="text-sm text-error">{error}</p> : null}
-
-          {!loading && !error && !jobs.length ? (
-            <div className="cb-mascot-empty rounded-2xl border border-dashed border-primary/15 bg-gradient-to-b from-fog/80 to-white px-4 py-10">
-              <BrandMascot pose="book" motion="pop" size="md" />
-              <p className="font-semibold text-primary">No application yet</p>
-              <p className="max-w-sm text-sm text-muted">Post a job to start receiving applicants.</p>
-              <Link
-                href="/employer/jobs/new"
-                className="mt-1 inline-block text-sm font-semibold text-teal hover:underline"
-              >
-                Post a job →
-              </Link>
-            </div>
-          ) : null}
-
-          <div className="space-y-3">
-            {jobs.map((job, index) => {
-              const count = job.applicantCount || 0;
-              const heat = Math.min(100, count * 18);
-              return (
-                <Link
-                  key={job.id}
-                  href={`/employer/jobs/${job.id}`}
-                  className="cb-job-row group block"
-                  style={{ animationDelay: `${index * 40}ms` }}
-                >
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <span className="cb-job-row__mark" aria-hidden>
-                      {count > 0 ? count : '–'}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <p className="truncate text-base font-bold text-primary group-hover:text-teal">
-                          {job.title}
-                        </p>
-                        {count > 0 ? (
-                          <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-bold text-accent">
-                            Review
-                          </span>
-                        ) : (
-                          <span className="shrink-0 rounded-full bg-fog px-3 py-1 text-xs font-bold text-muted">
-                            Waiting
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 text-sm text-muted">
-                        {applicantLabel(count)}
-                        {job.city ? ` · ${job.city}` : ''}
-                      </p>
-                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-primary-soft">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-teal to-[#0f766e] transition-all duration-500 ease-out"
-                          style={{ width: `${heat}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Status</span>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="all">All</option>
+              <option value="APPLIED">Applied</option>
+              <option value="SHORTLISTED">Shortlisted</option>
+              <option value="INTERVIEW">Interview</option>
+              <option value="SELECTED">Selected</option>
+              <option value="HIRED">Hired</option>
+              <option value="REJECTED">Not selected</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Experience</span>
+            <select value={experienceFilter} onChange={(e) => setExperienceFilter(e.target.value)}>
+              <option value="all">Experience</option>
+              <option value="fresher">Fresher</option>
+              <option value="1">1 Year</option>
+              <option value="2plus">2+ Years</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Location</span>
+            <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+              <option value="all">Location</option>
+              {locations.map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Skills</span>
+            <select value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)}>
+              <option value="all">Skills</option>
+              {skills.map((skill) => (
+                <option key={skill} value={skill}>
+                  {skill}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      </section>
+
+        {error ? <p className="ep-apps__error">{error}</p> : null}
+
+        <article className="ep-apps__card">
+          {loading ? <p className="ep-apps__empty">Loading applications…</p> : null}
+
+          {!loading && filtered.length === 0 ? (
+            <div className="ep-dash__empty-card">
+              <div className="ep-dash__empty-ico" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 2h9l5 5v15H6z" />
+                  <path d="M14 2v5h5" />
+                </svg>
+              </div>
+              <p className="ep-dash__empty-title">No applications yet</p>
+              <p className="ep-dash__empty">Publish a job to start receiving candidates.</p>
+            </div>
+          ) : null}
+
+          {!loading && filtered.length > 0 ? (
+            <>
+              <div className="ep-apps__table-wrap">
+                <table className="ep-apps__table">
+                  <thead>
+                    <tr>
+                      <th>Candidate</th>
+                      <th>Experience</th>
+                      <th>Match</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item) => {
+                      const active = (selected?.id || '') === item.id;
+                      const score = item.match?.score;
+                      return (
+                        <tr
+                          key={item.id}
+                          className={active ? 'is-active' : ''}
+                          onClick={() => setSelectedId(item.id)}
+                        >
+                          <td>
+                            <strong>{candidateName(item)}</strong>
+                            {jobFilter === 'all' ? <em>{item.job.title}</em> : null}
+                          </td>
+                          <td>{experienceLabel(experienceYears(item))}</td>
+                          <td>
+                            {score != null ? (
+                              <span className={`ep-apps__match ep-apps__match--${matchTone(score)}`}>
+                                {score}%
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td>
+                            <span className={`ep-apps__status ep-apps__status--${item.status.toLowerCase()}`}>
+                              {applicationStatusLabel(item.status)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="ep-apps__foot">
+                {selected ? (
+                  <>
+                    <Link
+                      href={`/employer/candidates/${selected.candidate.id}?jobId=${encodeURIComponent(selected.job.id)}`}
+                      className="ep-apps__view"
+                    >
+                      View Candidate
+                    </Link>
+                    <button
+                      type="button"
+                      className="ep-apps__view"
+                      disabled={resumeBusy}
+                      onClick={() => void viewSelectedResume()}
+                    >
+                      {resumeBusy ? 'Opening resume…' : 'View resume'}
+                    </button>
+                  </>
+                ) : (
+                  <span className="ep-apps__view is-disabled">View Candidate</span>
+                )}
+              </div>
+            </>
+          ) : null}
+        </article>
+      </div>
     </EmployerShellFallback>
   );
 }

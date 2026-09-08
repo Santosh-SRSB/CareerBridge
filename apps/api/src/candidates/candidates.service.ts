@@ -1,14 +1,19 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
   ErrorCode,
   PASSPORT_SECTION_COPY,
+  computeProfileOverviewCompletion,
+  profileOverviewMissingLabels,
   type PassportSection,
   normalizeHttpUrl,
   optionalUrlError,
   yearNumberError,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { MatchingService } from '../matching/matching.service';
+import { AiGatewayService } from '../ai/ai-gateway.service';
+import { StorageService } from '../common/storage/storage.service';
 import {
   EducationDto,
   ExperienceDto,
@@ -25,7 +30,14 @@ type CandidateRecord = Awaited<ReturnType<CandidatesService['loadCandidate']>>;
 
 @Injectable()
 export class CandidatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CandidatesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly matching: MatchingService,
+    private readonly aiGateway: AiGatewayService,
+    private readonly storage: StorageService,
+  ) {}
 
   async me(userId: string) {
     return this.toProfile(await this.loadCandidate(userId));
@@ -34,11 +46,12 @@ export class CandidatesService {
   async completion(userId: string) {
     const candidate = await this.loadCandidate(userId);
     const sections = buildSections(candidate);
+    const percentage = computeProfileOverviewCompletion(sections, candidate.skills.length);
     return {
-      percentage: candidate.profileCompletion,
+      percentage,
       onboardingCompleted: candidate.onboardingCompleted,
       sections,
-      missing: sections.filter((item) => !item.done && item.weight > 0).map((item) => item.label),
+      missing: profileOverviewMissingLabels(sections, candidate.skills.length),
     };
   }
 
@@ -55,11 +68,16 @@ export class CandidatesService {
   }
 
   async updateMe(userId: string, dto: UpdateCandidateDto) {
-    await this.loadCandidate(userId);
+    const candidate = await this.loadCandidate(userId);
     const names = dto.fullName?.trim().split(/\s+/).filter(Boolean);
     const careerInterests = dto.careerInterests
       ? JSON.stringify(dto.careerInterests.slice(0, 3))
       : undefined;
+
+    let photoUrl = dto.photoUrl;
+    if (dto.photoUrl !== undefined && dto.photoUrl) {
+      photoUrl = await this.persistProfilePhoto(candidate.id, dto.photoUrl);
+    }
 
     await this.prisma.candidate.update({
       where: { userId },
@@ -70,6 +88,13 @@ export class CandidatesService {
         ...(dto.firstName !== undefined ? { firstName: dto.firstName.trim() } : {}),
         ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() || null } : {}),
         ...(dto.city !== undefined ? { city: dto.city.trim() } : {}),
+        ...(dto.state !== undefined ? { state: dto.state.trim() || null } : {}),
+        ...(dto.preferredWorkCity !== undefined
+          ? {
+              preferredWorkCity: dto.preferredWorkCity.trim(),
+              ...(dto.city === undefined ? { city: dto.preferredWorkCity.trim() } : {}),
+            }
+          : {}),
         ...(dto.about !== undefined ? { about: dto.about.trim() || null } : {}),
         ...(dto.preferredLanguage !== undefined ? { preferredLanguage: dto.preferredLanguage } : {}),
         ...(dto.dateOfBirth !== undefined
@@ -80,12 +105,33 @@ export class CandidatesService {
         ...(dto.highestEducation !== undefined ? { highestEducation: dto.highestEducation } : {}),
         ...(careerInterests !== undefined ? { careerInterests } : {}),
         ...(dto.hasExperience !== undefined ? { hasExperience: dto.hasExperience } : {}),
-        ...(dto.photoUrl !== undefined ? { photoUrl: dto.photoUrl || null } : {}),
+        ...(dto.totalExperienceYears !== undefined
+          ? { totalExperienceYears: Number.parseInt(dto.totalExperienceYears, 10) || 0 }
+          : {}),
+        ...(dto.totalExperienceMonths !== undefined
+          ? { totalExperienceMonths: Number.parseInt(dto.totalExperienceMonths, 10) || 0 }
+          : {}),
+        ...(dto.photoUrl !== undefined ? { photoUrl: photoUrl || null } : {}),
         ...(dto.links !== undefined ? { profileLinks: JSON.stringify(cleanLinks(dto.links)) } : {}),
+        ...(dto.onboardingCompleted !== undefined ? { onboardingCompleted: dto.onboardingCompleted } : {}),
+        ...(dto.whatsappOptIn !== undefined
+          ? {
+              whatsappOptIn: dto.whatsappOptIn,
+              whatsappOptInAt: dto.whatsappOptIn ? new Date() : null,
+              whatsappOptInSource: dto.whatsappOptIn ? 'candidate_profile' : null,
+            }
+          : {}),
+        ...(dto.whatsappNumber !== undefined
+          ? { whatsappNumber: dto.whatsappNumber?.trim() || null }
+          : {}),
       },
     });
 
-    return this.recompute(userId);
+    const profile = await this.recompute(userId);
+    if (dto.onboardingCompleted === true) {
+      await this.matching.recomputeMatchesForPublishedJobs().catch(() => undefined);
+    }
+    return profile;
   }
 
   async savePassport(userId: string, dto: SavePassportDto) {
@@ -199,7 +245,41 @@ export class CandidatesService {
       }
     });
 
-    return this.recompute(userId);
+    const profile = await this.recompute(userId);
+
+    // Keep candidate embedding fresh for hybrid matching (Gateway → Gemini).
+    try {
+      const fresh = await this.prisma.candidate.findUnique({
+        where: { id: candidate.id },
+        include: { skills: true },
+      });
+      if (fresh) {
+        await this.aiGateway.upsertEmbedding({
+          entityType: 'CANDIDATE',
+          entityId: fresh.id,
+          text: this.aiGateway.buildCandidateEmbedText({
+            city: fresh.city,
+            skills: fresh.skills.map((s) => s.name),
+            careerInterests: (() => {
+              try {
+                return JSON.parse(fresh.careerInterests || '[]') as string[];
+              } catch {
+                return [];
+              }
+            })(),
+            about: fresh.about,
+          }),
+          userId,
+        });
+      }
+    } catch {
+      /* non-blocking */
+    }
+
+    if (candidate.onboardingCompleted) {
+      await this.matching.recomputeMatchesForPublishedJobs().catch(() => undefined);
+    }
+    return profile;
   }
 
   async addEducation(userId: string, dto: EducationDto) {
@@ -385,6 +465,35 @@ export class CandidatesService {
     return this.recompute(userId);
   }
 
+  /** Store profile photos flat under Images/ in GCS (e.g. Images/photo-abc123.jpg). */
+  private async persistProfilePhoto(candidateId: string, photoUrl: string): Promise<string> {
+    const dataUrl = photoUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+)(?:;[^,]*)?;base64,([\s\S]+)$/i);
+    if (!dataUrl) {
+      return photoUrl;
+    }
+    if (!this.storage.isConfigured()) {
+      return photoUrl;
+    }
+
+    try {
+      const mime = dataUrl[1].toLowerCase();
+      const ext =
+        mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : mime.includes('gif') ? '.gif' : '.jpg';
+      const buffer = Buffer.from(dataUrl[2], 'base64');
+      const path = this.storage.imageObjectPath(`photo${ext}`, candidateId.slice(0, 8));
+      const uploaded = await this.storage.uploadFile(path, buffer, {
+        contentType: mime,
+        metadata: { candidateId, source: 'profile-photo' },
+      });
+      return uploaded.publicUrl;
+    } catch (err) {
+      this.logger.error(
+        `Profile photo GCS upload failed for ${candidateId}: ${(err as Error).message}`,
+      );
+      return photoUrl;
+    }
+  }
+
   private async loadCandidate(userId: string) {
     const candidate = await this.prisma.candidate.findUnique({
       where: { userId },
@@ -402,13 +511,9 @@ export class CandidatesService {
   private async recompute(userId: string) {
     const candidate = await this.loadCandidate(userId);
     const profileCompletion = computeCompletion(candidate);
-    const onboardingCompleted = Boolean(
-      candidate.firstName &&
-        (candidate.highestEducation || candidate.education.length > 0),
-    );
     const updated = await this.prisma.candidate.update({
       where: { userId },
-      data: { profileCompletion, onboardingCompleted },
+      data: { profileCompletion },
       include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
     return this.toProfile(updated);
@@ -420,6 +525,8 @@ export class CandidatesService {
       firstName: candidate.firstName,
       lastName: candidate.lastName,
       city: candidate.city,
+      state: candidate.state,
+      preferredWorkCity: candidate.preferredWorkCity || candidate.city,
       phone: candidate.user?.phone || null,
       email: candidate.user?.email || null,
       preferredLanguage: candidate.preferredLanguage,
@@ -441,6 +548,9 @@ export class CandidatesService {
       hasExperience: candidate.hasExperience,
       profileCompletion: candidate.profileCompletion,
       onboardingCompleted: candidate.onboardingCompleted,
+      whatsappOptIn: candidate.whatsappOptIn,
+      whatsappNumber: candidate.whatsappNumber,
+      whatsappVerified: candidate.whatsappVerified,
       education: candidate.education.map((item) => ({
         id: item.id,
         qualification: item.qualification,
@@ -506,16 +616,19 @@ function parseInterests(raw: string) {
 }
 
 function sectionDone(candidate: NonNullable<CandidateRecord>, key: PassportSection['key']) {
-  if (key === 'personal') return Boolean(candidate.firstName);
-  if (key === 'education') return Boolean(candidate.highestEducation || candidate.education.length);
-  if (key === 'skills') return candidate.skills.length > 0;
-  if (key === 'experience') {
-    return (
-      candidate.hasExperience === 'NONE' ||
-      candidate.hasExperience === 'YES' ||
-      candidate.hasExperience === 'INTERNSHIP' ||
-      candidate.experiences.length > 0
+  if (key === 'personal') {
+    return Boolean(candidate.firstName?.trim() && candidate.city?.trim() && candidate.dateOfBirth);
+  }
+  if (key === 'education') {
+    return candidate.education.some(
+      (row) => row.qualification?.trim() && row.institution?.trim(),
     );
+  }
+  if (key === 'skills') return candidate.skills.length >= 3;
+  if (key === 'experience') {
+    if (!candidate.hasExperience) return false;
+    if (candidate.hasExperience === 'NONE') return true;
+    return candidate.experiences.length > 0;
   }
   if (key === 'preferences') return parseInterests(candidate.careerInterests).length > 0;
   if (key === 'languages') return Boolean(candidate.preferredLanguage);
@@ -581,7 +694,6 @@ function buildSections(candidate: NonNullable<CandidateRecord>): PassportSection
 }
 
 function computeCompletion(candidate: NonNullable<CandidateRecord>) {
-  return buildSections(candidate)
-    .filter((item) => item.done)
-    .reduce((sum, item) => sum + item.weight, 0);
+  const sections = buildSections(candidate);
+  return computeProfileOverviewCompletion(sections, candidate.skills.length);
 }

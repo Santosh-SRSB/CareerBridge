@@ -20,6 +20,26 @@ function fallbackSummary(profile: CandidateProfile, fullName: string, title: str
   return `${bits.join(' ')}.`;
 }
 
+export function resolvePassportSummary(
+  profile: CandidateProfile,
+  resumeSummary?: string | null,
+) {
+  const fromProfile = profile.about?.trim();
+  if (fromProfile) return fromProfile;
+
+  const fromResume = resumeSummary?.trim();
+  if (fromResume) return fromResume;
+
+  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
+  const title =
+    profile.careerInterests?.[0] ||
+    profile.experiences?.[0]?.jobTitle ||
+    profile.experienceLevel ||
+    '';
+
+  return fallbackSummary(profile, fullName, title);
+}
+
 /** Maps Career Passport profile into the friend editor `resume.data` shape. */
 export function passportToFriendResumeData(
   profile: CandidateProfile,

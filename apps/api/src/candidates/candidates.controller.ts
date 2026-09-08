@@ -22,11 +22,11 @@ import { RolesGuard } from '../common/guards/roles.guard';
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
 @Roles(UserType.CANDIDATE)
-@Controller('candidates')
+@Controller(['candidates', 'candidate'])
 export class CandidatesController {
   constructor(private readonly candidates: CandidatesService) {}
 
-  @Get('me')
+  @Get(['me', 'profile'])
   me(@CurrentUser() user: { id: string }) {
     return this.candidates.me(user.id);
   }
@@ -36,7 +36,7 @@ export class CandidatesController {
     return this.candidates.completion(user.id);
   }
 
-  @Put('me')
+  @Put(['me', 'profile'])
   updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateCandidateDto) {
     return this.candidates.updateMe(user.id, dto);
   }
@@ -56,17 +56,17 @@ export class CandidatesController {
     return this.candidates.updateMe(user.id, dto);
   }
 
-  @Get('me/education')
+  @Get(['me/education', 'education'])
   listEducation(@CurrentUser() user: { id: string }) {
     return this.candidates.listEducation(user.id);
   }
 
-  @Post('me/education')
+  @Post(['me/education', 'education'])
   addEducation(@CurrentUser() user: { id: string }, @Body() dto: EducationDto) {
     return this.candidates.addEducation(user.id, dto);
   }
 
-  @Put('me/education/:id')
+  @Put(['me/education/:id', 'education/:id'])
   updateEducation(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
@@ -75,37 +75,37 @@ export class CandidatesController {
     return this.candidates.updateEducation(user.id, id, dto);
   }
 
-  @Delete('me/education/:id')
+  @Delete(['me/education/:id', 'education/:id'])
   removeEducation(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.candidates.removeEducation(user.id, id);
   }
 
-  @Get('me/skills')
+  @Get(['me/skills', 'skills'])
   listSkills(@CurrentUser() user: { id: string }) {
     return this.candidates.listSkills(user.id);
   }
 
-  @Post('me/skills')
+  @Post(['me/skills', 'skills'])
   addSkill(@CurrentUser() user: { id: string }, @Body() dto: SkillDto) {
     return this.candidates.addSkill(user.id, dto);
   }
 
-  @Delete('me/skills/:id')
+  @Delete(['me/skills/:id', 'skills/:id'])
   removeSkill(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.candidates.removeSkill(user.id, id);
   }
 
-  @Get('me/experience')
+  @Get(['me/experience', 'experience'])
   listExperience(@CurrentUser() user: { id: string }) {
     return this.candidates.listExperience(user.id);
   }
 
-  @Post('me/experience')
+  @Post(['me/experience', 'experience'])
   addExperience(@CurrentUser() user: { id: string }, @Body() dto: ExperienceDto) {
     return this.candidates.addExperience(user.id, dto);
   }
 
-  @Put('me/experience/:id')
+  @Put(['me/experience/:id', 'experience/:id'])
   updateExperience(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
@@ -114,7 +114,7 @@ export class CandidatesController {
     return this.candidates.updateExperience(user.id, id, dto);
   }
 
-  @Delete('me/experience/:id')
+  @Delete(['me/experience/:id', 'experience/:id'])
   removeExperience(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.candidates.removeExperience(user.id, id);
   }

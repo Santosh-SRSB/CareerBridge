@@ -18,7 +18,7 @@ import type { OtpChannel } from '@careerbridge/shared';
 export function RegistrationForm() {
   const router = useRouter();
   const [channel, setChannel] = useState<OtpChannel>('MOBILE');
-  const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
+  const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');

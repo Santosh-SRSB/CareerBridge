@@ -41,10 +41,37 @@ export class AuthService {
     const channel = dto.channel;
     let phone = dto.phone?.trim() || '';
     const email = dto.email?.trim().toLowerCase();
-    const accountType = dto.accountType || 'CANDIDATE';
+    if (!dto.accountType || (dto.accountType !== 'CANDIDATE' && dto.accountType !== 'EMPLOYER')) {
+      throw new HttpException(
+        {
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Choose Candidate or Employer before continuing.',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const accountType = dto.accountType;
     const userTypes = userTypesForAccount(accountType);
 
-    if (dto.purpose === 'LOGIN') {
+    if (email) {
+      const platformHit = await this.prisma.user.findFirst({
+        where: {
+          email,
+          userType: { in: ['PLATFORM_ADMIN', 'PLATFORM_OPERATOR'] },
+        },
+      });
+      if (platformHit) {
+        throw new HttpException(
+          {
+            code: ErrorCode.UNAUTHORIZED,
+            message: 'Platform staff must use email and password on the Admin sign-in form.',
+          },
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+    }
+
+    if (dto.purpose === 'LOGIN' || dto.purpose === 'RESET_PASSWORD') {
       const existing =
         channel === 'EMAIL'
           ? await this.prisma.user.findFirst({
@@ -137,7 +164,9 @@ export class AuthService {
     }
 
     const passwordError =
-      dto.purpose === 'REGISTER' && dto.password ? registrationPasswordError(dto.password) : null;
+      dto.purpose === 'REGISTER' && dto.accountType === 'EMPLOYER' && dto.password
+        ? registrationPasswordError(dto.password)
+        : null;
     if (passwordError) {
       throw new HttpException(
         { code: ErrorCode.VALIDATION_ERROR, message: passwordError },
@@ -146,11 +175,15 @@ export class AuthService {
     }
 
     const passwordHash =
-      dto.purpose === 'REGISTER' ? await this.resolvePasswordHash(phone, dto.password) : null;
+      dto.purpose === 'REGISTER' && (dto.accountType === 'EMPLOYER' || Boolean(dto.password))
+        ? await this.resolvePasswordHash(phone, dto.password, dto.accountType === 'EMPLOYER')
+        : null;
 
     const otpCode =
       channel === 'EMAIL'
-        ? String(Math.floor(100000 + Math.random() * 900000))
+        ? this.isDevOtp()
+          ? DEV_OTP
+          : String(Math.floor(100000 + Math.random() * 900000))
         : this.isDevOtp()
           ? DEV_OTP
           : null;
@@ -169,11 +202,14 @@ export class AuthService {
                 email,
                 fullName: dto.fullName?.trim(),
                 location: dto.location?.trim(),
+                city: dto.city?.trim() || dto.location?.trim(),
+                state: dto.state?.trim(),
                 preferredLanguage: dto.preferredLanguage,
                 passwordHash,
                 accountType,
                 companyName: dto.companyName?.trim(),
                 industry: dto.industry?.trim(),
+                whatsappOptIn: accountType === 'CANDIDATE' ? Boolean(dto.whatsappOptIn) : false,
               }
             : { accountType },
         ),
@@ -181,14 +217,14 @@ export class AuthService {
       },
     });
 
-    if (channel === 'EMAIL' && otpCode) {
+    if (channel === 'EMAIL' && otpCode && !this.isDevOtp()) {
       await this.email.sendOtp(email || '', otpCode);
     }
 
     return {
       requestId: request.id,
       expiresIn: OTP_TTL_SECONDS,
-      ...(this.isDevOtp() && channel !== 'EMAIL' ? { devOtp: DEV_OTP } : {}),
+      ...(this.isDevOtp() ? { devOtp: DEV_OTP } : {}),
     };
   }
 
@@ -200,6 +236,16 @@ export class AuthService {
     if (!request) {
       throw new HttpException(
         { code: ErrorCode.INVALID_OTP, message: 'Incorrect OTP. Please check the code and try again.' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (request.purpose === 'RESET_PASSWORD') {
+      throw new HttpException(
+        {
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Use the forgot-password form to enter OTP and set a new password.',
+        },
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -310,16 +356,28 @@ export class AuthService {
     const isEmployer = registration?.accountType === 'EMPLOYER';
     const userTypes = userTypesForAccount(isEmployer ? 'EMPLOYER' : 'CANDIDATE');
     const names = splitName(registration?.fullName);
+    const cityName = registration?.city?.trim() || registration?.location?.trim() || null;
+    const email = registration?.email?.trim().toLowerCase() || null;
     const profileCompletion =
       (names.firstName ? 20 : 0) +
-      (registration?.location ? 20 : 0) +
+      (cityName ? 20 : 0) +
       (registration?.preferredLanguage ? 10 : 0) +
-      (registration?.email ? 10 : 0);
+      (email ? 10 : 0);
 
-    let user = await this.prisma.user.findFirst({
-      where: { phone, userType: { in: userTypes } },
-      include: { candidate: true, employer: true },
-    });
+    // Unique is per account type — same phone may exist on candidate and employer.
+    const phoneMatch = phone
+      ? await this.prisma.user.findFirst({
+          where: { phone, userType: { in: userTypes } },
+          include: { candidate: true, employer: true },
+        })
+      : null;
+    const emailMatch = email
+      ? await this.prisma.user.findFirst({
+          where: { email, userType: { in: userTypes } },
+          include: { candidate: true, employer: true },
+        })
+      : null;
+    let user = emailMatch || phoneMatch;
 
     if (purpose === 'LOGIN' && !user) {
       throw new HttpException(
@@ -334,51 +392,85 @@ export class AuthService {
     }
 
     if (purpose === 'REGISTER' && user) {
+      const hitEmail = Boolean(emailMatch);
       throw new HttpException(
         {
           code: ErrorCode.ACCOUNT_EXISTS,
           message: isEmployer
-            ? 'An employer account already exists. Please sign in.'
-            : 'A candidate account already exists. Please sign in.',
+            ? hitEmail
+              ? 'An employer account already exists with this email. Please sign in.'
+              : 'An employer account already exists with this mobile. Please sign in.'
+            : hitEmail
+              ? 'A candidate account already exists with this email. Please sign in.'
+              : 'A candidate account already exists with this mobile. Please sign in.',
         },
         HttpStatus.CONFLICT,
       );
     }
 
     if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          phone,
-          email: registration?.email || null,
-          passwordHash: registration?.passwordHash || null,
-          externalAuthId,
-          userType: isEmployer ? 'EMPLOYER_ADMIN' : 'CANDIDATE',
-          lastLoginAt: isEmployer ? null : new Date(),
-          ...(isEmployer
-            ? {
-                employer: {
-                  create: {
-                    companyName: registration?.companyName || registration?.fullName || 'Company',
-                    contactName: registration?.fullName || null,
-                    industry: registration?.industry || null,
-                    city: registration?.location || null,
+      try {
+        user = await this.prisma.user.create({
+          data: {
+            phone,
+            email,
+            passwordHash: registration?.passwordHash || null,
+            externalAuthId,
+            userType: isEmployer ? 'EMPLOYER_ADMIN' : 'CANDIDATE',
+            lastLoginAt: isEmployer ? null : new Date(),
+            ...(isEmployer
+              ? {
+                  employer: {
+                    create: {
+                      companyName: registration?.companyName || registration?.fullName || 'Company',
+                      contactName: registration?.fullName || null,
+                      industry: registration?.industry || null,
+                      city: registration?.city || registration?.location || null,
+                    },
                   },
-                },
-              }
-            : {
-                candidate: {
-                  create: {
-                    firstName: names.firstName,
-                    lastName: names.lastName,
-                    city: registration?.location || null,
-                    preferredLanguage: registration?.preferredLanguage || null,
-                    profileCompletion,
+                }
+              : {
+                  candidate: {
+                    create: {
+                      firstName: names.firstName,
+                      lastName: names.lastName,
+                      city: cityName,
+                      preferredLanguage: registration?.preferredLanguage || null,
+                      profileCompletion,
+                      onboardingCompleted: false,
+                      whatsappOptIn: Boolean(registration?.whatsappOptIn),
+                      whatsappOptInAt: registration?.whatsappOptIn ? new Date() : null,
+                      whatsappOptInSource: registration?.whatsappOptIn ? 'registration' : null,
+                      whatsappNumber: registration?.whatsappOptIn ? phone : null,
+                    },
                   },
-                },
-              }),
-        },
-        include: { candidate: true, employer: true },
-      });
+                }),
+          },
+          include: { candidate: true, employer: true },
+        });
+      } catch (err) {
+        if (isPrismaUniqueViolation(err)) {
+          const targets =
+            err && typeof err === 'object' && 'meta' in err
+              ? (err as { meta?: { target?: string[] } }).meta?.target || []
+              : [];
+          const hitEmail = targets.some((t) => String(t).toLowerCase().includes('email'));
+          throw new HttpException(
+            {
+              code: ErrorCode.ACCOUNT_EXISTS,
+              message: isEmployer
+                ? hitEmail
+                  ? 'An employer account already exists with this email. Please sign in.'
+                  : 'An employer account already exists with this mobile. Please sign in.'
+                : hitEmail
+                  ? 'A candidate account already exists with this email. Please sign in.'
+                  : 'A candidate account already exists with this mobile. Please sign in.',
+            },
+            HttpStatus.CONFLICT,
+          );
+        }
+        throw err;
+      }
       if (isEmployer) {
         return { registered: true, signInRequired: true as const };
       }
@@ -399,49 +491,84 @@ export class AuthService {
   async loginWithPassword(
     identifier: string,
     password: string,
-    accountType?: 'CANDIDATE' | 'EMPLOYER',
+    accountType: 'CANDIDATE' | 'EMPLOYER' | 'SUPER_ADMIN' | 'ADMIN',
   ) {
+    if (!['CANDIDATE', 'EMPLOYER', 'SUPER_ADMIN', 'ADMIN'].includes(accountType)) {
+      throw new UnauthorizedException({
+        code: ErrorCode.UNAUTHORIZED,
+        message: 'Choose Candidate, Employer, Super Admin, or Admin before signing in.',
+      });
+    }
+
     const value = identifier.trim();
     const email = value.includes('@') ? value.toLowerCase() : null;
     const phone = email ? null : normalizeLoginPhone(value);
-    const userTypes = accountType ? userTypesForAccount(accountType) : undefined;
+    const invalid = {
+      code: ErrorCode.UNAUTHORIZED,
+      message: 'Incorrect email, mobile number, or password.',
+    };
 
+    if (accountType === 'SUPER_ADMIN' || accountType === 'ADMIN') {
+      if (!email) {
+        throw new UnauthorizedException({
+          code: ErrorCode.UNAUTHORIZED,
+          message: 'Use email and password for this sign-in.',
+        });
+      }
+      const staffTypes =
+        accountType === 'SUPER_ADMIN'
+          ? (['PLATFORM_ADMIN'] as const)
+          : (['PLATFORM_ADMIN', 'PLATFORM_OPERATOR'] as const);
+
+      const user = await this.prisma.user.findFirst({
+        where: { email, userType: { in: [...staffTypes] } },
+        include: { candidate: true, employer: true },
+      });
+
+      if (!user || user.status !== 'ACTIVE' || !user.passwordHash) {
+        throw new UnauthorizedException(invalid);
+      }
+      const ok = await verifyPassword(password, user.passwordHash);
+      if (!ok) {
+        throw new UnauthorizedException(invalid);
+      }
+      const updated = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+        include: { candidate: true, employer: true },
+      });
+      return this.issueSession(updated);
+    }
+
+    const userTypes = userTypesForAccount(accountType);
     const user = await this.prisma.user.findFirst({
       where: {
         ...(email ? { email } : { phone: phone || value }),
-        ...(userTypes ? { userType: { in: userTypes } } : {}),
+        userType: { in: userTypes },
       },
       include: { candidate: true, employer: true },
     });
 
     if (!user || user.status !== 'ACTIVE' || !user.passwordHash) {
-      throw new UnauthorizedException({
-        code: ErrorCode.UNAUTHORIZED,
-        message: 'Incorrect mobile number, email, or password.',
-      });
+      throw new UnauthorizedException(invalid);
     }
 
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
-      throw new UnauthorizedException({
-        code: ErrorCode.UNAUTHORIZED,
-        message: 'Incorrect mobile number, email, or password.',
-      });
+      throw new UnauthorizedException(invalid);
     }
 
-    if (accountType === 'EMPLOYER' && user.userType !== 'EMPLOYER_ADMIN' && user.userType !== 'EMPLOYER_RECRUITER') {
+    if (accountType === 'EMPLOYER') {
+      if (user.userType !== 'EMPLOYER_ADMIN' && user.userType !== 'EMPLOYER_RECRUITER') {
+        throw new UnauthorizedException({
+          code: ErrorCode.UNAUTHORIZED,
+          message: 'This is not an employer account. Use Candidate sign-in.',
+        });
+      }
+    } else if (user.userType !== 'CANDIDATE') {
       throw new UnauthorizedException({
         code: ErrorCode.UNAUTHORIZED,
-        message: 'This is not an employer account. Sign in as a candidate.',
-      });
-    }
-    if (
-      accountType === 'CANDIDATE' &&
-      (user.userType === 'EMPLOYER_ADMIN' || user.userType === 'EMPLOYER_RECRUITER')
-    ) {
-      throw new UnauthorizedException({
-        code: ErrorCode.UNAUTHORIZED,
-        message: 'This is an employer account. Sign in as an employer.',
+        message: 'This is not a candidate account. Use Employer sign-in.',
       });
     }
 
@@ -451,6 +578,160 @@ export class AuthService {
       include: { candidate: true, employer: true },
     });
     return this.issueSession(updated);
+  }
+
+  /** Portal login for /srsbaadmin — credentials live in the `admins` table. */
+  async loginAdmin(emailRaw: string, password: string) {
+    const email = emailRaw.trim().toLowerCase();
+    const invalid = {
+      code: ErrorCode.UNAUTHORIZED,
+      message: 'Incorrect email or password.',
+    };
+
+    const admin = await this.prisma.admin.findUnique({
+      where: { email },
+      include: { user: { include: { candidate: true, employer: true } } },
+    });
+
+    if (!admin || admin.status !== 'ACTIVE' || admin.user.status !== 'ACTIVE') {
+      throw new UnauthorizedException(invalid);
+    }
+
+    const ok = await verifyPassword(password, admin.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException(invalid);
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.admin.update({
+        where: { id: admin.id },
+        data: { lastLoginAt: now },
+      }),
+      this.prisma.user.update({
+        where: { id: admin.userId },
+        data: { lastLoginAt: now },
+      }),
+    ]);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: admin.userId },
+      include: { candidate: true, employer: true },
+    });
+    if (!user) {
+      throw new UnauthorizedException(invalid);
+    }
+    return this.issueSession(user);
+  }
+
+  async resetPassword(dto: {
+    requestId: string;
+    otp: string;
+    accountType: 'CANDIDATE' | 'EMPLOYER';
+    password: string;
+  }) {
+    const passwordError = registrationPasswordError(dto.password);
+    if (passwordError) {
+      throw new HttpException(
+        { code: ErrorCode.VALIDATION_ERROR, message: passwordError },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const request = await this.prisma.otpRequest.findUnique({
+      where: { id: dto.requestId },
+    });
+
+    if (!request || request.purpose !== 'RESET_PASSWORD') {
+      throw new HttpException(
+        {
+          code: ErrorCode.INVALID_OTP,
+          message: 'Request a new password-reset code and try again.',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (request.verifiedAt) {
+      throw new HttpException(
+        {
+          code: ErrorCode.INVALID_OTP,
+          message: 'This code has already been used. Please request a new OTP.',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (request.expiresAt.getTime() < Date.now()) {
+      throw new HttpException(
+        { code: ErrorCode.OTP_EXPIRED, message: 'This OTP has expired.' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (request.attemptCount >= MAX_VERIFY_ATTEMPTS) {
+      throw new HttpException(
+        {
+          code: ErrorCode.TOO_MANY_ATTEMPTS,
+          message: "You've reached the maximum number of attempts. Please request a new OTP.",
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    await this.prisma.otpRequest.update({
+      where: { id: request.id },
+      data: { attemptCount: { increment: 1 } },
+    });
+
+    const otpOk =
+      Boolean(dto.otp) &&
+      Boolean(request.otpHash) &&
+      hashToken(dto.otp) === request.otpHash;
+    if (!otpOk) {
+      throw new HttpException(
+        {
+          code: ErrorCode.INVALID_OTP,
+          message: 'Incorrect OTP. Please check the code and try again.',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const userTypes = userTypesForAccount(dto.accountType);
+    const user = await this.prisma.user.findFirst({
+      where: {
+        userType: { in: userTypes },
+        ...(request.email
+          ? { email: request.email }
+          : { phone: request.phone }),
+      },
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      throw new HttpException(
+        {
+          code: ErrorCode.ACCOUNT_NOT_FOUND,
+          message:
+            dto.accountType === 'EMPLOYER'
+              ? 'No employer account found for this email or number.'
+              : 'No account found for this email or number.',
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await hashPassword(dto.password) },
+    });
+
+    await this.prisma.otpRequest.update({
+      where: { id: request.id },
+      data: { verifiedAt: new Date() },
+    });
+
+    return { success: true as const, message: 'Password updated. You can sign in now.' };
   }
 
   async registerEmployer(dto: {
@@ -509,7 +790,7 @@ export class AuthService {
     return this.issueSession(user);
   }
 
-  private async resolvePasswordHash(phone: string, password?: string) {
+  private async resolvePasswordHash(phone: string, password?: string, required = false) {
     if (password) {
       return hashPassword(password);
     }
@@ -518,13 +799,13 @@ export class AuthService {
       orderBy: { createdAt: 'desc' },
     });
     const previousHash = parseRegistration(previous?.payloadJson)?.passwordHash;
-    if (!previousHash) {
+    if (!previousHash && required) {
       throw new HttpException(
         { code: ErrorCode.VALIDATION_ERROR, message: 'Password must be at least 8 characters.' },
         HttpStatus.BAD_REQUEST,
       );
     }
-    return previousHash;
+    return previousHash || null;
   }
 
   async me(userId: string) {
@@ -698,15 +979,27 @@ function parseRegistration(payloadJson?: string | null) {
       email?: string;
       fullName?: string;
       location?: string;
+      city?: string;
+      state?: string;
       preferredLanguage?: string;
       passwordHash?: string;
       accountType?: 'CANDIDATE' | 'EMPLOYER';
       companyName?: string;
       industry?: string;
+      whatsappOptIn?: boolean;
     };
   } catch {
     return null;
   }
+}
+
+function isPrismaUniqueViolation(err: unknown) {
+  return (
+    !!err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code?: string }).code === 'P2002'
+  );
 }
 
 function normalizeLoginPhone(value: string) {

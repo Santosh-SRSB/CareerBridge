@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/Input';
@@ -72,7 +72,15 @@ export function GroupedSelect({
         className="flex w-full items-center justify-between gap-2 rounded-md border border-primary/15 bg-[#faf8f3] px-3 py-2.5 text-left text-sm text-primary outline-none"
       >
         <span className={`truncate ${value || otherMode || allowAll ? '' : 'text-muted'}`}>{display}</span>
-        <span className="shrink-0 text-muted">Γû╛</span>
+        <span className="shrink-0 text-muted" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+            <path
+              fillRule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </span>
       </button>
       {open ? (
         <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-primary/15 bg-white shadow-[0_16px_40px_rgba(10,46,44,0.16)]">

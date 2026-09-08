@@ -3,15 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CreatePassportButton } from "@/features/candidate/passport/CreatePassportButton";
-import { getStoredUser } from "@/lib/session";
+import { getStoredUser, homePathForUser } from "@/lib/session";
+import type { AuthUser } from "@careerbridge/shared";
 
 export function Footer() {
-  const [signedIn, setSignedIn] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    setSignedIn(Boolean(getStoredUser()?.id));
+    setUser(getStoredUser());
   }, []);
+
+  const signedIn = Boolean(user?.id);
+  const homeHref = homePathForUser(user);
 
   return (
     <footer id="signin" className="bg-navy text-white">
@@ -37,19 +40,25 @@ export function Footer() {
           <ul className="mt-4 space-y-2 text-sm text-white/70">
             <li>
               {signedIn ? (
-                <Link href="/dashboard" className="hover:text-white">
+                <Link href={homeHref} className="hover:text-white">
                   My home
                 </Link>
               ) : (
-                <CreatePassportButton className="hover:text-white">
-                  Create Career Passport
-                </CreatePassportButton>
+                <Link href="/login" className="hover:text-white">
+                  Login
+                </Link>
               )}
             </li>
             <li>
-              <a href={signedIn ? "/jobs" : "#jobs"} className="hover:text-white">
-                Explore Jobs
-              </a>
+              {signedIn ? (
+                <a href="/jobs" className="hover:text-white">
+                  Explore Jobs
+                </a>
+              ) : (
+                <Link href="/register?role=candidate" className="hover:text-white">
+                  Signup
+                </Link>
+              )}
             </li>
             <li>
               <a href={signedIn ? "/interviews" : "#passport"} className="hover:text-white">
@@ -65,31 +74,28 @@ export function Footer() {
           <p className="mt-4 text-sm text-white/70">
             {signedIn
               ? "Go back to your dashboard to keep building your Career Passport."
-              : "Create your free Career Passport, then explore jobs and interviews."}
+              : "Log in or sign up to start your free Career Passport."}
           </p>
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
             {signedIn ? (
               <Link
-                href="/dashboard"
+                href={homeHref}
                 className="rounded-full bg-white px-5 py-2.5 text-center text-sm font-bold text-navy"
               >
                 My home
               </Link>
             ) : (
-              <>
-                <a
-                  href="#get-started"
-                  className="rounded-full bg-white px-5 py-2.5 text-center text-sm font-bold text-navy"
-                >
-                  Get started free
-                </a>
-                <a
-                  href="#employers"
-                  className="rounded-full border border-white/20 px-5 py-2.5 text-center text-sm font-semibold text-white"
-                >
-                  I&apos;m hiring
-                </a>
-              </>
+              <p className="text-sm font-bold text-white">
+                <Link href="/login" className="hover:text-accent">
+                  Login
+                </Link>
+                <span className="mx-2 text-white/40" aria-hidden="true">
+                  |
+                </span>
+                <Link href="/register?role=candidate" className="hover:text-accent">
+                  Signup
+                </Link>
+              </p>
             )}
           </div>
         </div>

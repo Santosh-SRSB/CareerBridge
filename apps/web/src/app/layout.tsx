@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import { AppLoader } from "@/components/landing/AppLoader";
 import { AuthCookieSync } from "@/components/AuthCookieSync";
+import { PushNotificationBootstrap } from "@/components/PushNotificationBootstrap";
 import "./globals.css";
 
 const inter = Inter({
@@ -35,6 +36,7 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-fog font-sans text-ink">
         <AuthCookieSync />
+        <PushNotificationBootstrap />
         <AppLoader />
         {children}
       </body>

@@ -1,43 +1,80 @@
 'use client';
 
-import type { AccountKind } from '@careerbridge/shared';
+import type { AccountKind, LoginAccountType } from '@careerbridge/shared';
+
+function SegmentToggle({
+  options,
+  value,
+  onChange,
+  labels,
+}: {
+  options: LoginAccountType[];
+  value: LoginAccountType;
+  onChange: (role: LoginAccountType) => void;
+  labels: Record<string, string>;
+}) {
+  const index = Math.max(0, options.indexOf(value));
+  const cols = options.length;
+  const activeInRow = options.includes(value);
+
+  return (
+    <div
+      className="relative rounded-xl bg-[#eef4f1] p-1 border border-primary/10 shadow-inner"
+      style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+    >
+      {activeInRow ? (
+        <span
+          className="absolute inset-y-1 left-1 rounded-lg bg-primary shadow-sm transition-transform duration-300 ease-out"
+          style={{
+            width: `calc(${100 / cols}% - 2px)`,
+            transform: `translateX(${index * 100}%)`,
+          }}
+        />
+      ) : null}
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(option)}
+          suppressHydrationWarning
+          className={`relative z-10 rounded-lg py-2 text-xs font-bold transition-colors duration-200 ${
+            value === option ? 'text-white' : 'text-primary/70 hover:text-primary'
+          }`}
+        >
+          {labels[option]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function RoleToggle({
   value,
   onChange,
+  includeStaff = false,
 }: {
-  value: AccountKind;
-  onChange: (role: AccountKind) => void;
+  value: LoginAccountType;
+  onChange: (role: LoginAccountType) => void;
+  includeStaff?: boolean;
 }) {
   return (
-    <div className="relative grid grid-cols-2 rounded-md bg-primary/5 p-0.5 ring-1 ring-primary/10">
-      <span
-        className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-sm bg-primary shadow-sm transition-transform duration-300 ease-out ${
-          value === 'EMPLOYER' ? 'translate-x-full' : 'translate-x-0'
-        }`}
-      />
-      <button
-        type="button"
-        onClick={() => onChange('CANDIDATE')}
-        className={`relative z-10 rounded-sm px-2 py-2 text-xs font-bold transition-colors duration-300 ${
-          value === 'CANDIDATE' ? 'text-white' : 'text-primary/60 hover:text-primary'
-        }`}
-      >
-        Candidate
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange('EMPLOYER')}
-        className={`relative z-10 rounded-sm px-2 py-2 text-xs font-bold transition-colors duration-300 ${
-          value === 'EMPLOYER' ? 'text-white' : 'text-primary/60 hover:text-primary'
-        }`}
-      >
-        Employer
-      </button>
-    </div>
+    <SegmentToggle
+      options={['CANDIDATE', 'EMPLOYER']}
+      value={value === 'SUPER_ADMIN' || value === 'ADMIN' ? 'CANDIDATE' : value}
+      onChange={onChange}
+      labels={{ CANDIDATE: 'Candidate', EMPLOYER: 'Employer' }}
+    />
   );
 }
 
 export function parseAccountKind(value: string | null | undefined): AccountKind {
   return value?.toUpperCase() === 'EMPLOYER' ? 'EMPLOYER' : 'CANDIDATE';
+}
+
+export function parseLoginAccountType(value: string | null | undefined): LoginAccountType {
+  const raw = value?.toUpperCase();
+  if (raw === 'EMPLOYER') return 'EMPLOYER';
+  if (raw === 'SUPER_ADMIN' || raw === 'SUPERADMIN') return 'SUPER_ADMIN';
+  if (raw === 'ADMIN' || raw === 'PLATFORM') return 'ADMIN';
+  return 'CANDIDATE';
 }

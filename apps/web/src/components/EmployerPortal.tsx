@@ -5,133 +5,299 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { EmployerProfile, EmployerVerificationStatus } from '@careerbridge/shared';
-import { BackButton } from '@/components/ui/BackButton';
 import { getEmployerMe, logout } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
+import { NotificationBell } from '@/components/NotificationBell';
 
-const NAV = [
-  { href: '/employer', label: 'Home', icon: '⌂' },
-  { href: '/employer/jobs', label: 'Jobs', icon: '▣' },
-  { href: '/employer/applications', label: 'Applications', icon: '▤' },
-  { href: '/employer/profile', label: 'Company', icon: '◈' },
+export type EmployerShellProfile = Pick<
+  EmployerProfile,
+  'companyName' | 'verificationStatus' | 'contactName' | 'industry' | 'city' | 'workEmail' | 'designation'
+>;
+
+const PRIMARY_NAV = [
+  { href: '/employer', label: 'Dashboard', key: 'home' },
+  { href: '/employer/jobs', label: 'Jobs', key: 'jobs' },
+  { href: '/employer/candidates', label: 'Candidates', key: 'candidates' },
+  { href: '/employer/interviews', label: 'Interviews', key: 'interviews' },
+  { href: '/employer/applications', label: 'Applications', key: 'applications' },
+  { href: '/employer/reports', label: 'Reports', key: 'reports' },
 ] as const;
 
-function isActive(pathname: string, href: string) {
-  if (href === '/employer') return pathname === '/employer';
-  return pathname === href || pathname.startsWith(`${href}/`);
+const ACCOUNT_NAV = [
+  { href: '/employer/profile', label: 'Company profile', key: 'profile' },
+] as const;
+
+function NavIcon({ name }: { name: string }) {
+  if (name === 'home') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4.5 10.5 12 4.5l7.5 6v9a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19.5v-9Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+        <path d="M9.5 20.5v-6.5h5v6.5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (name === 'jobs') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="7" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" stroke="currentColor" strokeWidth="1.7" />
+      </svg>
+    );
+  }
+  if (name === 'candidates') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="9.5" cy="9" r="3" stroke="currentColor" strokeWidth="1.7" />
+        <circle cx="16.5" cy="10" r="2.2" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M5 18.5c.8-2.8 2.6-4 4.5-4s3.7 1.2 4.5 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === 'interviews') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M8 3.5v3M16 3.5v3M4 10h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === 'applications') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M7 4.5h10a1.5 1.5 0 0 1 1.5 1.5v14l-3-1.5-3 1.5-3-1.5-3 1.5V6A1.5 1.5 0 0 1 7 4.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+        <path d="M9 9h6M9 12.5h6M9 16h4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === 'reports') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6 19.5V10M12 19.5V4.5M18 19.5V13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === 'profile') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="8.5" r="3.5" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M6 19.5c1.2-3 3.4-4.5 6-4.5s4.8 1.5 6 4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return null;
 }
 
-function verificationLabel(status: EmployerVerificationStatus | string) {
-  if (status === 'VERIFIED') return 'Verified';
-  if (status === 'PENDING') return 'Pending review';
-  if (status === 'KYC_COMPLETE') return 'Complete affiliation';
-  if (status === 'REJECTED') return 'Needs attention';
-  return 'Setup required';
+function isActive(pathname: string, key: string) {
+  if (key === 'home') return pathname === '/employer';
+  if (key === 'jobs') {
+    return (
+      pathname === '/employer/jobs' ||
+      (pathname.startsWith('/employer/jobs/') && !pathname.startsWith('/employer/jobs/new'))
+    );
+  }
+  if (key === 'candidates') return pathname.startsWith('/employer/candidates');
+  if (key === 'interviews') return pathname.startsWith('/employer/interviews');
+  if (key === 'applications') return pathname.startsWith('/employer/applications');
+  if (key === 'reports') return pathname.startsWith('/employer/reports');
+  if (key === 'profile') return pathname.startsWith('/employer/profile');
+  return false;
 }
 
-function verificationClass(status: EmployerVerificationStatus | string) {
-  if (status === 'VERIFIED') return 'border-teal/40 bg-teal/15 text-primary';
-  if (status === 'PENDING') return 'border-accent/50 bg-accent-soft text-primary';
-  if (status === 'REJECTED') return 'border-error/40 bg-error/10 text-error';
-  return 'border-white/35 bg-white/10 text-white';
+function statusLabel(status?: EmployerVerificationStatus | string | null) {
+  if (status === 'VERIFIED') return 'Active';
+  if (status === 'PENDING') return 'Pending';
+  if (status === 'REJECTED') return 'Needs fix';
+  if (status === 'KYC_COMPLETE') return 'In review';
+  return 'Setup';
 }
 
-export function EmployerTopBar({
-  companyName,
-  verificationStatus,
+function EmployerAside({
+  profile,
   onSignOut,
 }: {
-  companyName: string;
-  verificationStatus?: EmployerVerificationStatus | string | null;
+  profile: EmployerShellProfile;
   onSignOut: () => void;
 }) {
-  return (
-    <header className="site-navbar sticky top-0 z-50">
-      <div className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 py-3 sm:h-[84px] sm:gap-4 sm:px-10">
-        <BackButton fallback="/employer" light />
+  const pathname = usePathname();
+  const company = profile.companyName?.trim() || 'Company';
 
-        <Link href="/employer" className="logo-mark shrink-0" aria-label="SRSB home">
+  return (
+    <aside className="ep-aside" aria-label="Employer navigation">
+      <Link href="/employer" className="ep-aside__brand">
+        <Image
+          src="/srsb-wordmark.png"
+          alt="SRSB CareerBridge"
+          width={408}
+          height={170}
+          className="ep-aside__wordmark"
+          unoptimized
+          priority
+        />
+      </Link>
+
+      <nav className="ep-aside__nav" aria-label="Primary">
+        {PRIMARY_NAV.map((item) => (
+          <Link
+            key={item.key}
+            href={item.href}
+            className={`ep-aside__link ${isActive(pathname, item.key) ? 'is-active' : ''}`}
+          >
+            <span className="ep-aside__ico">
+              <NavIcon name={item.key} />
+            </span>
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      <p className="ep-aside__group">Account</p>
+      <nav className="ep-aside__nav ep-aside__nav--account" aria-label="Account">
+        {ACCOUNT_NAV.map((item) => (
+          <Link
+            key={item.key}
+            href={item.href}
+            className={`ep-aside__link ${isActive(pathname, item.key) ? 'is-active' : ''}`}
+          >
+            <span className="ep-aside__ico">
+              <NavIcon name={item.key} />
+            </span>
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="ep-aside__foot">
+        <div className="ep-aside__progress">
+          Status · {statusLabel(profile.verificationStatus)}
+          <div className="ep-aside__bar">
+            <span
+              style={{
+                width:
+                  profile.verificationStatus === 'VERIFIED'
+                    ? '100%'
+                    : profile.verificationStatus === 'PENDING' || profile.verificationStatus === 'KYC_COMPLETE'
+                      ? '72%'
+                      : '35%',
+              }}
+            />
+          </div>
+        </div>
+        <div className="ep-aside__org">
+          <span className="ep-aside__org-avatar">{company.slice(0, 1).toUpperCase()}</span>
+          <span className="ep-aside__org-name">{company}</span>
+          <button type="button" className="ep-aside__logout" onClick={onSignOut}>
+            Logout
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function EmployerDeskBar({
+  profile,
+  onSignOut,
+  menuOpen,
+  setMenuOpen,
+}: {
+  profile: EmployerShellProfile;
+  onSignOut: () => void;
+  menuOpen: boolean;
+  setMenuOpen: (open: boolean) => void;
+}) {
+  const pathname = usePathname();
+  const company = profile.companyName?.trim() || 'Company';
+  const displayName = profile.contactName?.trim() || company;
+
+  return (
+    <header className="ep-deskbar">
+      <div className="ep-deskbar__left">
+        <button
+          type="button"
+          className="ep-deskbar__menu lg:hidden"
+          aria-label="Open menu"
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
+          ☰
+        </button>
+        <Link href="/employer" className="ep-deskbar__logo lg:hidden" aria-label="Dashboard">
           <Image
             src="/srsb-wordmark.png"
             alt="SRSB"
             width={408}
             height={170}
-            className="h-9 w-auto bg-transparent sm:h-10"
+            className="ep-deskbar__wordmark"
             unoptimized
-            priority
           />
         </Link>
-
-        <div className="cb-employer-identity hidden min-w-0 sm:flex">
-          <span className="cb-employer-identity__divider" aria-hidden />
-          <div className="min-w-0">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">
-              Employer
-            </p>
-            <p className="truncate text-sm font-semibold text-white sm:text-base">{companyName}</p>
-            {verificationStatus ? (
-              <span
-                className={`mt-1 inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${verificationClass(
-                  verificationStatus,
-                )}`}
-              >
-                {verificationLabel(verificationStatus)}
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="min-w-0 flex-1 sm:hidden">
-          <p className="truncate text-sm font-semibold text-white/90">{companyName}</p>
-        </div>
-
-        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-          <Link
-            href="/employer/jobs/new"
-            className="hidden rounded-full bg-gradient-to-r from-[#ca8a04] to-[#eab308] px-4 py-2.5 text-sm font-bold text-navy transition hover:brightness-110 sm:inline-flex"
-          >
-            Create job
-          </Link>
+        <label className="ep-deskbar__search hidden md:flex">
+          <span className="sr-only">Search</span>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+            <circle cx="10.5" cy="10.5" r="5.5" stroke="currentColor" strokeWidth="1.7" />
+            <path d="M15 15.5 19.5 20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
+          <input type="search" placeholder="Search jobs, candidates..." />
+        </label>
+      </div>
+      <div className="ep-deskbar__right">
+        <NotificationBell variant="employer" />
+        <div className="ep-deskbar__user">
+          <span className="ep-deskbar__user-meta hidden sm:block">
+            <strong>{displayName}</strong>
+            <em>{company}</em>
+          </span>
           <button
             type="button"
+            className="ep-deskbar__logout-btn"
             onClick={onSignOut}
-            className="inline-flex h-10 items-center rounded-full border-[1.5px] border-white/55 px-4 text-sm font-semibold text-white transition hover:bg-white/10 sm:px-5"
           >
-            Sign out
+            Logout
+          </button>
+          <button type="button" className="ep-deskbar__avatar" onClick={onSignOut} title="Logout">
+            {displayName.slice(0, 1).toUpperCase()}
           </button>
         </div>
       </div>
+      {menuOpen ? (
+        <nav className="ep-deskbar__drawer lg:hidden" aria-label="Mobile menu">
+          {[...PRIMARY_NAV, ...ACCOUNT_NAV].map((item) => (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={isActive(pathname, item.key) ? 'is-active' : ''}
+              onClick={() => setMenuOpen(false)}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <button type="button" className="ep-deskbar__drawer-logout" onClick={onSignOut}>
+            Logout
+          </button>
+        </nav>
+      ) : null}
     </header>
   );
 }
 
-function EmployerSideNav() {
+export function EmployerMobileNav() {
   const pathname = usePathname();
+  const mobile = [
+    { href: '/employer', label: 'Home', key: 'home' },
+    { href: '/employer/jobs', label: 'Jobs', key: 'jobs' },
+    { href: '/employer/candidates', label: 'Candidates', key: 'candidates' },
+    { href: '/employer/interviews', label: 'Interviews', key: 'interviews' },
+    { href: '/employer/profile', label: 'Profile', key: 'profile' },
+  ];
   return (
-    <nav className="cb-side-nav hidden p-2.5 lg:block" aria-label="Recruiter">
-      <p className="mb-2 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted">
-        Workspace
-      </p>
-      {NAV.map((item) => {
-        const active = isActive(pathname, item.href);
+    <nav className="ep-mobile-nav" aria-label="Employer mobile">
+      {mobile.map((item) => {
+        const active =
+          item.href === '/employer'
+            ? pathname === '/employer'
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`cb-nav-link mb-1 flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-sm font-semibold ${
-              active
-                ? 'bg-gradient-to-r from-[#0a2e2c] to-[#134e4a] text-white shadow-[0_10px_24px_rgba(10,46,44,0.22)]'
-                : 'text-muted hover:bg-fog hover:text-navy'
-            }`}
-          >
-            <span
-              aria-hidden
-              className={`flex h-8 w-8 items-center justify-center rounded-xl text-base ${
-                active ? 'bg-white/12' : 'bg-fog'
-              }`}
-            >
-              {item.icon}
-            </span>
+          <Link key={item.href} href={item.href} className={active ? 'is-active' : ''}>
+            <NavIcon name={item.key} />
             {item.label}
           </Link>
         );
@@ -140,35 +306,62 @@ function EmployerSideNav() {
   );
 }
 
-export function EmployerMobileNav() {
-  const pathname = usePathname();
+export function EmployerPageHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title?: string;
+  subtitle?: string;
+  action?: ReactNode;
+}) {
+  if (!title && !subtitle && !action) return null;
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-primary/10 bg-surface/95 backdrop-blur lg:hidden">
-      <div className="mx-auto grid max-w-lg grid-cols-4 px-2 py-2">
-        {NAV.map((item) => {
-          const active = isActive(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-pill px-2 py-2.5 text-center text-[12px] font-bold ${
-                active ? 'bg-accent text-primary' : 'text-muted hover:text-primary'
-              }`}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
+    <div className="ep-pagehead">
+      <div>
+        {title ? <h1 className="ep-pagehead__title">{title}</h1> : null}
+        {subtitle ? <p className="ep-pagehead__sub">{subtitle}</p> : null}
       </div>
-    </nav>
+      {action ? <div className="ep-pagehead__action">{action}</div> : null}
+    </div>
+  );
+}
+
+function EmployerLayout({
+  profile,
+  children,
+  onSignOut,
+}: {
+  profile: EmployerShellProfile;
+  children: ReactNode;
+  onSignOut: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  return (
+    <div className="ep-app ep-app--desk">
+      <EmployerAside profile={profile} onSignOut={onSignOut} />
+      <div className="ep-main">
+        <EmployerDeskBar
+          profile={profile}
+          onSignOut={onSignOut}
+          menuOpen={menuOpen}
+          setMenuOpen={setMenuOpen}
+        />
+        <div className="ep-content">{children}</div>
+      </div>
+      <EmployerMobileNav />
+    </div>
   );
 }
 
 export function EmployerShell({
   profile,
+  title: _title,
   children,
 }: {
-  profile: Pick<EmployerProfile, 'companyName' | 'verificationStatus'>;
+  profile: EmployerShellProfile;
+  title?: string;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -179,40 +372,50 @@ export function EmployerShell({
   }
 
   return (
-    <div className="cb-portal-page pb-24 lg:pb-0">
-      <EmployerTopBar
-        companyName={profile.companyName}
-        verificationStatus={profile.verificationStatus}
-        onSignOut={signOut}
-      />
-      <div className="cb-portal-wrap grid items-start gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <EmployerSideNav />
-        <div className="min-w-0 space-y-4">{children}</div>
-      </div>
-      <EmployerMobileNav />
-    </div>
+    <EmployerLayout profile={profile} onSignOut={signOut}>
+      {children}
+    </EmployerLayout>
   );
 }
 
-export function EmployerShellFallback({ children }: { children: ReactNode }) {
+export function EmployerShellFallback({
+  title: _title,
+  children,
+}: {
+  title?: string;
+  children: ReactNode;
+}) {
   const router = useRouter();
-  const [companyName, setCompanyName] = useState('Hiring workspace');
-  const [verificationStatus, setVerificationStatus] = useState<EmployerVerificationStatus | string | null>(
-    null,
-  );
+  const [profile, setProfile] = useState<EmployerShellProfile>({
+    companyName: 'Hiring workspace',
+    verificationStatus: 'UNVERIFIED',
+    contactName: null,
+    industry: null,
+    city: null,
+    workEmail: null,
+    designation: null,
+  });
 
   useEffect(() => {
     const stored = getStoredUser();
     if (stored?.firstName) {
-      setCompanyName(stored.firstName);
+      setProfile((prev) => ({
+        ...prev,
+        companyName: stored.firstName || prev.companyName,
+        contactName: stored.firstName,
+      }));
     }
-
     getEmployerMe()
-      .then((profile) => {
-        if (profile.companyName?.trim()) {
-          setCompanyName(profile.companyName.trim());
-        }
-        setVerificationStatus(profile.verificationStatus);
+      .then((next) => {
+        setProfile({
+          companyName: next.companyName,
+          verificationStatus: next.verificationStatus,
+          contactName: next.contactName,
+          industry: next.industry,
+          city: next.city,
+          workEmail: next.workEmail,
+          designation: next.designation,
+        });
       })
       .catch(() => undefined);
   }, []);
@@ -223,17 +426,10 @@ export function EmployerShellFallback({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="cb-portal-page pb-24 lg:pb-0">
-      <EmployerTopBar
-        companyName={companyName}
-        verificationStatus={verificationStatus}
-        onSignOut={signOut}
-      />
-      <div className="cb-portal-wrap grid items-start gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <EmployerSideNav />
-        <div className="min-w-0 space-y-4">{children}</div>
-      </div>
-      <EmployerMobileNav />
-    </div>
+    <EmployerLayout profile={profile} onSignOut={signOut}>
+      {children}
+    </EmployerLayout>
   );
 }
+
+export { statusLabel };

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
 import { Type } from 'class-transformer';
@@ -45,24 +45,40 @@ class UpdateEmployerDto {
   @IsOptional()
   @IsString()
   contactName?: string;
+
+  @IsOptional()
+  @IsString()
+  website?: string;
+
+  @IsOptional()
+  @IsString()
+  workEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  designation?: string;
 }
 
 class SaveEmployerKycDto {
   @IsString()
-  @MinLength(2)
+  @MinLength(1)
   gstNumber: string;
 
   @IsString()
-  @MinLength(2)
+  @MinLength(1)
   cin: string;
 
   @IsString()
-  @MinLength(2)
+  @MinLength(1)
   website: string;
 
   @IsString()
-  @MinLength(2)
+  @MinLength(1)
   panNumber: string;
+
+  @IsOptional()
+  @IsString()
+  trademark?: string;
 }
 
 class SubmitEmployerVerificationDto {
@@ -198,6 +214,82 @@ class ApplicationActionDto {
   action: string;
 }
 
+class CandidateSearchQueryDto {
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  skill?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  experienceMin?: number;
+
+  @IsString()
+  jobId: string;
+}
+
+class ScheduleInterviewDto {
+  @IsString()
+  applicationId: string;
+
+  @IsString()
+  scheduledAt: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(15)
+  @Max(180)
+  durationMin?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['VIDEO', 'IN_PERSON', 'PHONE'])
+  mode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  notifyWhatsApp?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  notifyEmail?: boolean;
+}
+
+class InterviewActionDto {
+  @IsString()
+  @IsIn(['confirm', 'reschedule', 'complete', 'cancel', 'notes'])
+  action: string;
+
+  @IsOptional()
+  @IsString()
+  scheduledAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+}
+
 @ApiTags('employers')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
@@ -274,9 +366,56 @@ export class EmployersController {
     return this.employers.applications(user.id, id);
   }
 
+  @Get('applications')
+  allApplications(@CurrentUser() user: { id: string }) {
+    return this.employers.allApplications(user.id);
+  }
+
+  @Get('candidates/search')
+  searchCandidates(@CurrentUser() user: { id: string }, @Query() query: CandidateSearchQueryDto) {
+    return this.employers.searchCandidates(user.id, query);
+  }
+
   @Get('candidates/:id')
-  candidate(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.employers.candidateView(user.id, id);
+  candidate(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query('jobId') jobId?: string,
+  ) {
+    return this.employers.candidateView(user.id, id, jobId);
+  }
+
+  @Get('candidates/:id/resume')
+  candidateResume(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query('jobId') jobId?: string,
+  ) {
+    return this.employers.downloadCandidateResume(user.id, id, jobId);
+  }
+
+  @Get('interviews')
+  interviews(@CurrentUser() user: { id: string }) {
+    return this.employers.listInterviews(user.id);
+  }
+
+  @Post('interviews')
+  scheduleInterview(@CurrentUser() user: { id: string }, @Body() dto: ScheduleInterviewDto) {
+    return this.employers.scheduleInterview(user.id, dto);
+  }
+
+  @Post('interviews/:id/action')
+  interviewAction(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: InterviewActionDto,
+  ) {
+    return this.employers.updateInterviewStatus(
+      user.id,
+      id,
+      dto.action as 'confirm' | 'reschedule' | 'complete' | 'cancel' | 'notes',
+      dto,
+    );
   }
 
   @Post('applications/:id/status')

@@ -5,6 +5,12 @@ export interface PromptTemplate {
 }
 
 export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
+  'resume-structure.v1': {
+    version: 'resume-structure.v1',
+    description: 'Extracts resume facts into a passport/draft JSON shape without inventing data',
+    system:
+      'Extract resume facts only. Do not invent companies, titles, dates, skills, metrics, degrees or projects. Include every real project listed under Projects. Return JSON only with keys: firstName, lastName, city, about, education[{qualification,institution,fieldOfStudy,yearCompleted}], skills[string], careerInterests[string], experience[{company,jobTitle,isInternship,description}], projects[{title,role,year,description,url}]. Use empty strings or empty arrays when missing.',
+  },
   'resume-rewrite.v1': {
     version: 'resume-rewrite.v1',
     description: 'Improves resume wording without inventing facts or metrics',
@@ -15,7 +21,7 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
     version: 'resume-review.v1',
     description: 'Evaluates resume strengths, improvements, and missing skill gaps for a target role',
     system:
-      'You are a senior hiring reviewer. Analyze the resume content against the target job role. Return structured JSON with: score (0-100), strengths (string array), improvements (string array), and missingSkills (string array). Do not hallucinate or make unreasonable demands.',
+      'You are a senior hiring reviewer. Analyze the resume content against the target job role and any retrievedContext tips. Return structured JSON with: score (0-100), strengths (string[]), improvements (string[]), missingSkills (string[]), suggestedSections (object of section name to improved text, optional), and suggestions (array of { section, issue, currentText, improvedText }). Section must be one of: summary, experience, skills, education, projects, achievements, contact. Each suggestions[].improvedText must be ready-to-apply resume wording (not vague advice). Never invent employers, dates, metrics, certifications, or skills the candidate did not claim. Prefer 3-6 high-value suggestions. Do not hallucinate or make unreasonable demands.',
   },
   'interview-evaluation.v1': {
     version: 'interview-evaluation.v1',

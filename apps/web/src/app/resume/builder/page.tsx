@@ -1,7 +1,17 @@
 'use client';
 
-import FriendResumeDashboard from '@/features/resume-manual/FriendResumeDashboard';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function ResumeBuilderHomePage() {
-  return <FriendResumeDashboard />;
+/** Consolidate FriendResumeDashboard entry into the primary wizard. */
+export default function ResumeBuilderHomeRedirect() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/resume');
+  }, [router]);
+  return (
+    <main className="flex min-h-screen items-center justify-center text-sm text-slate-500">
+      Opening resume builder…
+    </main>
+  );
 }

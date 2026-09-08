@@ -60,7 +60,14 @@ export async function renderResumePdf(content: ResumeContent, template = 'CLASSI
   const left = 48;
   const right = width - 48;
   let y = height - 52;
-  const accent = template === 'MODERN' ? rgb(20 / 255, 184 / 255, 166 / 255) : GOLD;
+  const accent =
+    template === 'MODERN'
+      ? rgb(20 / 255, 184 / 255, 166 / 255)
+      : template === 'TECHNICAL'
+      ? rgb(59 / 255, 130 / 255, 246 / 255)
+      : template === 'MINIMAL'
+      ? rgb(71 / 255, 85 / 255, 105 / 255)
+      : GOLD;
   const textRight = photo ? right - PHOTO_W - 16 : right;
 
   const wrap = (text: string, font: typeof regular, size: number, maxWidth: number) => {

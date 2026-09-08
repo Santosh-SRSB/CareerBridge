@@ -11,6 +11,8 @@ import { clearPendingPassword, getPendingPassword } from '@/lib/pending-password
 import { requestOtp, verifyOtp } from '@/lib/api';
 import { authErrorMessage } from '@/lib/auth-errors';
 import { formatPhoneDisplay, postAuthPath } from '@/lib/phone';
+import { POST_REGISTRATION_PATH } from '@/lib/onboarding-flow';
+import { patchStoredUser } from '@/lib/session';
 import {
   clearFirebaseOtp,
   confirmFirebaseOtp,
@@ -60,9 +62,13 @@ export default function VerifyOtpPage() {
     return () => clearInterval(timer);
   }, [secondsLeft]);
 
-  const destination =
-    channel === 'EMAIL' ? email : formatPhoneDisplay(phone);
-  const changeLabel = channel === 'EMAIL' ? 'Change email' : 'Change mobile number';
+  const isEmailChannel = channel === 'EMAIL';
+  const verifyTitle = isEmailChannel ? 'Verify your email' : 'Verify your mobile number';
+  const panelCopy = isEmailChannel
+    ? 'Enter the 6-digit OTP sent to your email to confirm your account.'
+    : 'Enter the 6-digit OTP sent to your phone to confirm your account.';
+  const destination = isEmailChannel ? email : formatPhoneDisplay(phone);
+  const changeLabel = isEmailChannel ? 'Change email' : 'Change mobile number';
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -97,6 +103,12 @@ export default function VerifyOtpPage() {
         return;
       }
       if (!('accessToken' in result)) {
+        return;
+      }
+      const flowPurpose = flow.purpose;
+      if (flowPurpose === 'REGISTER') {
+        patchStoredUser({ onboardingCompleted: false });
+        router.replace(POST_REGISTRATION_PATH);
         return;
       }
       router.replace(postAuthPath(result.user));
@@ -153,55 +165,63 @@ export default function VerifyOtpPage() {
 
   return (
     <AuthShell
-      title={channel === 'EMAIL' ? 'Verify your email' : 'Verify your number'}
+      title={verifyTitle}
       subtitle={`OTP sent to ${destination}`}
       backHref={backHref}
       scene="verify"
-      panelTitle="Check your code"
-      panelCopy="Enter the 6-digit OTP to confirm your account."
+      panelTitle={verifyTitle}
+      panelCopy={panelCopy}
     >
-      <form onSubmit={onSubmit} className="space-y-6">
+      <form onSubmit={onSubmit} className="space-y-5">
         <OtpInput value={otp} onChange={setOtp} />
-        {error ? <p className="text-sm text-error">{error}</p> : null}
-        {expired ? (
-          <Button type="button" onClick={resend} loading={resending} loadingLabel="Sending...">
-            Send New OTP
-          </Button>
-        ) : (
-          <Button type="submit" loading={loading} loadingLabel="Verifying...">
-            Verify
-          </Button>
-        )}
-      </form>
-      <div className="mt-6 space-y-3 text-center text-sm">
-        <p className="text-muted">Didn&apos;t receive OTP?</p>
-        <button
-          type="button"
-          onClick={resend}
-          disabled={resending || (!expired && secondsLeft > 270)}
-          className="font-semibold text-primary disabled:text-muted"
+
+        <div className="text-center">
+          <span className="font-mono text-base font-bold text-slate-700">
+            {Math.floor(secondsLeft / 60).toString().padStart(2, '0')}:{(secondsLeft % 60).toString().padStart(2, '0')}
+          </span>
+        </div>
+
+        {error ? <p className="text-center text-xs font-semibold text-error">{error}</p> : null}
+
+        <Button
+          type="submit"
+          loading={loading}
+          loadingLabel="Verifying..."
+          disabled={expired}
+          className="w-full py-3.5 text-sm font-bold bg-[#0a2e2c] hover:bg-[#072422] text-white shadow-md hover:shadow-lg transition rounded-xl disabled:opacity-50"
         >
-          {resending ? 'Sending...' : 'Resend OTP'}
-        </button>
-        <p>
-          <Link href={backHref} className="text-muted">
+          Verify
+        </Button>
+      </form>
+
+      <div className="mt-5 space-y-2 text-center text-xs">
+        <p className="text-slate-500 font-medium">Didn&apos;t receive OTP?</p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={resend}
+          loading={resending}
+          loadingLabel="Sending..."
+          disabled={!expired && secondsLeft > 0}
+          className="w-full rounded-xl border-slate-200 py-2.5 text-xs font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Resend OTP
+        </Button>
+        <div>
+          <Link href={backHref} className="text-slate-500 hover:text-slate-800 text-xs transition">
             {changeLabel}
           </Link>
-        </p>
+        </div>
       </div>
-      {isDevOtpEnabled() ? (
+      {isDevOtpEnabled() && !isEmailChannel ? (
         <p className="mt-8 rounded-md bg-primary-soft p-3 text-sm text-primary">
           Local OTP mode is on. Use code <strong>123456</strong>.
         </p>
-      ) : channel === 'EMAIL' ? (
+      ) : isEmailChannel ? (
         <p className="mt-8 rounded-md bg-accent-soft p-3 text-sm text-primary">
           Check your email inbox (and spam) for the 6-digit CareerBridge code.
         </p>
-      ) : (
-        <p className="mt-8 rounded-md bg-primary-soft p-3 text-sm text-primary">
-          Firebase Phone OTP is on. Enter the SMS code, or the test-number code from the Firebase console.
-        </p>
-      )}
+      ) : null}
     </AuthShell>
   );
 }

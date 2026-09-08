@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { INDIAN_CITIES } from '@careerbridge/shared';
-import { GroupedSelect } from '@/components/ui/GroupedSelect';
+import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
 
 export function CitySelect({
   label = 'Location',
@@ -18,19 +18,18 @@ export function CitySelect({
   required?: boolean;
   id?: string;
 }) {
+  const options = allowAll ? ['All cities', ...INDIAN_CITIES] : INDIAN_CITIES;
+
   return (
-    <GroupedSelect
+    <SearchableCreatableSelect
       id={id}
       label={label}
-      value={value}
-      onChange={onChange}
-      groups={[{ options: INDIAN_CITIES }]}
-      allowAll={allowAll}
-      allLabel="All cities"
-      placeholder="Select city"
-      required={required}
-      otherInputLabel="Enter city"
-      otherPlaceholder="Type your city"
+      value={value === '' && allowAll ? 'All cities' : value}
+      onChange={(next) => onChange(next === 'All cities' ? '' : next)}
+      options={options}
+      placeholder="Search city or type your own…"
+      allowCustom={!allowAll}
+      required={required && !allowAll}
     />
   );
 }

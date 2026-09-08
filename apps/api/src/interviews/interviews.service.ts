@@ -19,6 +19,7 @@ import {
   detectConduct,
 } from './interview-conduct';
 import { renderInterviewPdf } from './interview-pdf';
+import { countAnsweredQuestions, isAnsweredQuestion, isAudioPlaceholderAnswer } from './interview-answer.util';
 
 @Injectable()
 export class InterviewsService {
@@ -58,6 +59,7 @@ export class InterviewsService {
       jobRole?: string;
       interviewType: string;
       difficulty?: string;
+      questionCount?: number;
       durationLimitMin: number;
       source: 'PASSPORT' | 'UPLOAD';
       content?: Partial<ResumeContent>;
@@ -83,18 +85,20 @@ export class InterviewsService {
       'Career role';
     const years = (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
     const band = years < 1 ? 'FRESHER' : years < 2 ? 'YEAR_1' : years < 4 ? 'YEAR_2_3' : 'YEAR_4_PLUS';
+    const questionLimit = dto.questionCount != null ? clampQuestionLimit(dto.questionCount) : 15;
+    const interviewType = normalizeInterviewType(dto.interviewType);
     const created = await this.prisma.interview.create({
       data: {
         candidateId: candidate.id,
         jobRole: role,
-        interviewType: dto.interviewType,
+        interviewType,
         questionsJson: '[]',
         answersJson: '[]',
         mode: 'LIVE_AI',
         source: dto.source,
         difficulty: dto.difficulty || band,
         durationLimitMin: dto.durationLimitMin,
-        profileJson: JSON.stringify({ ...content, experienceYears: years }),
+        profileJson: JSON.stringify({ ...content, experienceYears: years, questionLimit }),
         transcriptJson: '[]',
         warningsJson: '[]',
       },
@@ -137,14 +141,22 @@ export class InterviewsService {
     return this.toSession(updated);
   }
 
-  async answerLive(userId: string, id: string, answer: string, durationSec = 0) {
+  async answerLive(
+    userId: string,
+    id: string,
+    answer: string,
+    durationSec = 0,
+    answerMode: 'TEXT' | 'AUDIO' = 'TEXT',
+  ) {
     const interview = await this.requireInterview(userId, id);
     if (interview.status === 'COMPLETED') {
       throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'This interview has already ended.' });
     }
     const trimmed = answer.trim();
+    const isAudioOnlyEarly =
+      answerMode === 'AUDIO' || (!trimmed && durationSec > 0) || isAudioPlaceholderAnswer(trimmed);
     const warnings = parseWarnings(interview.warningsJson);
-    const conduct = detectConduct(trimmed);
+    const conduct = isAudioOnlyEarly ? null : detectConduct(trimmed);
     if (conduct) {
       // Count same-kind strikes so 3 abusive answers end the interview.
       const prior = countConductWarnings(warnings, conduct);
@@ -203,38 +215,46 @@ export class InterviewsService {
 
     const questions = parseQuestions(interview.questionsJson);
     const current = questions[interview.questionIndex];
-    if (!current || current.answer) {
+    if (!current || isAnsweredQuestion(current)) {
       throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'There is no open question to answer.' });
     }
     const profile = this.profileOf(interview);
-    const analysis = await this.ai.analyzeAnswer(profile, current.text, answer.trim());
-    current.answer = answer.trim();
+    const isAudioOnly = isAudioOnlyEarly;
+    const textAnswer = isAudioOnly ? '' : trimmed;
+    const analysis = await this.ai.analyzeAnswer(profile, current.text, textAnswer, {
+      answerMode: isAudioOnly ? 'AUDIO' : 'TEXT',
+      durationSec,
+    });
+    current.answer = textAnswer;
+    current.answerMode = isAudioOnly ? 'AUDIO' : 'TEXT';
     current.answeredAt = new Date().toISOString();
     current.answerDurationSec = durationSec;
     current.analysis = analysis.analysis;
-    current.improvedAnswer = analysis.improvedAnswer;
+    current.improvedAnswer = analysis.improvedAnswer || undefined;
     current.score = analysis.score;
     current.strengths = analysis.strengths;
     current.weaknesses = analysis.weaknesses;
     const transcript = parseTurns(interview.transcriptJson);
     transcript.push({
       role: 'candidate',
-      text: answer.trim(),
+      text: isAudioOnly ? '[Audio answer]' : textAnswer,
       at: new Date().toISOString(),
       questionNumber: current.number,
     });
 
     const limitMin = interview.durationLimitMin || 30;
     const elapsed = interview.startAt ? (Date.now() - interview.startAt.getTime()) / 60000 : 0;
+    const questionLimit = readQuestionLimit(interview.profileJson);
+    const answeredAfter = countAnsweredQuestions(questions);
     const asked = questions.map((item) => item.text);
     let nextQuestion: LiveInterviewQuestion | null = null;
-    if (elapsed < limitMin && questions.length < 15) {
+    if (elapsed < limitMin && answeredAfter < questionLimit) {
       const follow = await this.ai.nextQuestion(
         profile,
         interview.interviewType,
         interview.difficulty || 'Beginner',
         asked,
-        { question: current.text, answer: answer.trim() },
+        { question: current.text, answer: isAudioOnly ? 'Audio answer submitted.' : textAnswer },
       );
       nextQuestion = {
         id: crypto.randomUUID(),
@@ -304,7 +324,13 @@ export class InterviewsService {
       abuseWarnings: warnings.filter((item) => item.type === 'ABUSE').length,
       nonsenseWarnings: warnings.filter((item) => item.type === 'NONSENSE').length,
     };
-    const report = await this.ai.report(profile, questions, durationSec, integrity);
+    const report = await this.ai.report(
+      profile,
+      questions,
+      durationSec,
+      integrity,
+      readQuestionLimit(interview.profileJson),
+    );
     const updated = await this.prisma.interview.update({
       where: { id: interview.id },
       data: {
@@ -368,8 +394,11 @@ export class InterviewsService {
   }
 
   private profileOf(interview: { profileJson: string | null; jobRole: string }): InterviewProfile {
-    const content = parseJson<Partial<ResumeContent> & { experienceYears?: number }>(interview.profileJson, {});
-    return profileFromResume(
+    const content = parseJson<Partial<ResumeContent> & { experienceYears?: number; questionLimit?: number }>(
+      interview.profileJson,
+      {},
+    );
+    const profile = profileFromResume(
       {
         fullName: content.fullName || 'Candidate',
         city: content.city || null,
@@ -385,6 +414,7 @@ export class InterviewsService {
       } as ResumeContent & { experienceYears?: number },
       interview.jobRole,
     );
+    return { ...profile, questionLimit: content.questionLimit };
   }
 
   private async requireCandidate(userId: string) {
@@ -454,7 +484,10 @@ export class InterviewsService {
       interviewType: row.interviewType,
       status: completed ? 'COMPLETED' : 'IN_PROGRESS',
       questionIndex: row.questionIndex,
-      totalQuestions: row.mode === 'LIVE_AI' ? 15 : liveQuestions.length || classic.length || 8,
+      totalQuestions:
+        row.mode === 'LIVE_AI'
+          ? readQuestionLimit(row.profileJson || null)
+          : liveQuestions.length || classic.length || 8,
       currentQuestion: completed
         ? null
         : currentLive && !currentLive.answer
@@ -601,4 +634,21 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function clampQuestionLimit(value: number) {
+  return Math.min(15, Math.max(3, Math.round(value)));
+}
+
+function readQuestionLimit(profileJson: string | null) {
+  const parsed = parseJson<{ questionLimit?: number }>(profileJson, {});
+  if (!parsed.questionLimit) return 15;
+  return clampQuestionLimit(parsed.questionLimit);
+}
+
+function normalizeInterviewType(value: string) {
+  const kind = (value || 'MIXED').toUpperCase();
+  if (kind === 'GENERIC') return 'BEHAVIOURAL';
+  if (kind === 'ROLE_BASED') return 'ROLE';
+  return kind;
 }

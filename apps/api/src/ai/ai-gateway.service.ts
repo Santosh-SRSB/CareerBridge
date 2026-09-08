@@ -1,25 +1,24 @@
+import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeminiProvider } from './providers/gemini.provider';
-import { OpenAIProvider } from './providers/openai.provider';
-import { AiProvider } from './providers/ai-provider.interface';
-
 import {
   AiGenerateRequest,
   AiGenerateResponse,
   AiProviderName,
   AiRequestOptions,
-  AiTaskType,
+  EmbeddingEntityType,
+  StructuredResumeDraft,
 } from './ai.types';
-import { getPrompt, PROMPT_REGISTRY } from './prompts/prompt-registry';
+import { getPrompt } from './prompts/prompt-registry';
 import {
   InterviewEvaluationResult,
-  InterviewQuestionResult,
   JobMatchResult,
   ResumeReviewResult,
   ResumeRewriteResult,
 } from './schemas/ai-response.schemas';
+import { cosineSimilarity, parseEmbeddingJson } from './utils/vector.util';
 
 @Injectable()
 export class AiGatewayService {
@@ -29,63 +28,43 @@ export class AiGatewayService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly gemini: GeminiProvider,
-    private readonly openai: OpenAIProvider,
   ) {}
 
   /**
-   * Determine available AI provider.
-   * Priority: explicit option -> Gemini (GCP primary per HLD) -> OpenAI (fallback) -> null.
+   * Gemini-only resolution (Volume 2 ADR-005). No OpenAI fallback.
    */
-  private resolveProvider(requested?: AiProviderName): AiProvider | null {
-    if (requested === 'gemini') return this.gemini.isConfigured() ? this.gemini : null;
-    if (requested === 'openai') return this.openai.isConfigured() ? this.openai : null;
-
-    if (this.gemini.isConfigured()) return this.gemini;
-    if (this.openai.isConfigured()) return this.openai;
-    return null;
+  private resolveProvider(requested?: AiProviderName) {
+    if (requested && requested !== 'gemini') return null;
+    return this.gemini.isConfigured() ? this.gemini : null;
   }
 
-  /**
-   * Check if any AI provider is configured and available.
-   */
   isConfigured(): boolean {
-    return this.gemini.isConfigured() || this.openai.isConfigured();
+    return this.gemini.isConfigured();
   }
 
-  /**
-   * Get active provider name for telemetry/diagnostics.
-   */
   getActiveProviderName(): AiProviderName {
-    if (this.gemini.isConfigured()) return 'gemini';
-    if (this.openai.isConfigured()) return 'openai';
-    return 'fallback';
+    return this.gemini.isConfigured() ? 'gemini' : 'fallback';
   }
 
-  /**
-   * Calculate rough USD cost for telemetry.
-   */
-  private estimateCost(provider: AiProviderName, model: string, inputTokens: number, outputTokens: number): number {
+  private estimateCost(
+    provider: AiProviderName,
+    _model: string,
+    inputTokens: number,
+    outputTokens: number,
+  ): number {
     if (provider === 'gemini') {
-      // e.g. Gemini 2.5 Flash: ~$0.075 / 1M input, $0.30 / 1M output
       return (inputTokens * 0.075 + outputTokens * 0.3) / 1_000_000;
-    }
-    if (provider === 'openai') {
-      // e.g. GPT-4o-mini: ~$0.15 / 1M input, $0.60 / 1M output
-      return (inputTokens * 0.15 + outputTokens * 0.6) / 1_000_000;
     }
     return 0;
   }
 
-  /**
-   * Central generate method for structured JSON tasks.
-   */
   async generate<T>(request: AiGenerateRequest): Promise<AiGenerateResponse<T>> {
     const startTime = Date.now();
     const promptVersion = request.options?.promptVersion || `${request.task.toLowerCase()}.v1`;
     const provider = this.resolveProvider(request.options?.provider);
 
     if (!provider) {
-      this.logger.warn(`No AI provider configured for task "${request.task}". Returning fallback.`);
+      this.logger.warn(`No Gemini provider configured for task "${request.task}".`);
       return {
         success: false,
         data: null,
@@ -93,7 +72,7 @@ export class AiGatewayService {
         model: 'none',
         promptVersion,
         latencyMs: Date.now() - startTime,
-        error: 'No AI provider configured (set GEMINI_API_KEY or OPENAI_API_KEY)',
+        error: 'No AI provider configured (set GEMINI_API_KEY)',
       };
     }
 
@@ -116,26 +95,25 @@ export class AiGatewayService {
         result.outputTokens,
       );
 
-      // Telemetry log according to Volume 2 Section 2C.27 (ai_interactions)
-      const telemetryPayload = {
-        event: 'AI_INTERACTION',
-        task: request.task,
-        provider: provider.name,
-        model: result.model,
-        promptVersion,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        latencyMs,
-        estimatedCostUsd,
-        success: Boolean(result.data),
-        userId: request.options?.userId,
-        requestId: request.options?.requestId,
-      };
-      this.logger.log(JSON.stringify(telemetryPayload));
+      this.logger.log(
+        JSON.stringify({
+          event: 'AI_INTERACTION',
+          task: request.task,
+          provider: provider.name,
+          model: result.model,
+          promptVersion,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          latencyMs,
+          estimatedCostUsd,
+          success: Boolean(result.data),
+          userId: request.options?.userId,
+          requestId: request.options?.requestId,
+        }),
+      );
 
-      // Persist telemetry record to database if Prisma is available
       try {
-        (this.prisma as any).aiInteraction?.create({
+        await this.prisma.aiInteraction.create({
           data: {
             userId: request.options?.userId || null,
             operation: request.task,
@@ -149,10 +127,10 @@ export class AiGatewayService {
             estimatedCostUsd,
             requestId: request.options?.requestId || null,
           },
-        }).catch((err: any) => {
-          this.logger.warn(`Failed to persist AI interaction to DB: ${err.message}`);
         });
-      } catch {}
+      } catch (err) {
+        this.logger.warn(`Failed to persist AI interaction: ${(err as Error).message}`);
+      }
 
       return {
         success: Boolean(result.data),
@@ -169,40 +147,33 @@ export class AiGatewayService {
     } catch (err) {
       const latencyMs = Date.now() - startTime;
       const errorMsg = (err as Error).message;
+      this.logger.error(`AI Gateway execution failed for ${request.task}: ${errorMsg}`);
 
-      // Failover logic: if Gemini failed and OpenAI is available, try fallback
-      if (provider.name === 'gemini' && this.openai.isConfigured() && !request.options?.provider) {
-        this.logger.warn(`Gemini failed (${errorMsg}), attempting failover to OpenAI...`);
-        try {
-          const fallbackResult = await this.openai.generateStructured<T>(
-            request.systemPrompt,
-            request.userPrompt,
-            {
-              temperature: request.options?.temperature,
-              maxOutputTokens: request.options?.maxOutputTokens,
-            },
-          );
-          return {
-            success: Boolean(fallbackResult.data),
-            data: fallbackResult.data,
-            rawText: fallbackResult.rawText,
-            provider: 'openai',
-            model: fallbackResult.model,
+      try {
+        await this.prisma.aiInteraction.create({
+          data: {
+            userId: request.options?.userId || null,
+            operation: request.task,
+            provider: 'gemini',
+            model: 'unknown',
             promptVersion,
-            inputTokens: fallbackResult.inputTokens,
-            outputTokens: fallbackResult.outputTokens,
-            latencyMs: Date.now() - startTime,
-          };
-        } catch (failoverErr) {
-          this.logger.error(`Failover to OpenAI also failed: ${(failoverErr as Error).message}`);
-        }
+            inputTokens: 0,
+            outputTokens: 0,
+            latencyMs,
+            status: 'FAILED',
+            estimatedCostUsd: 0,
+            requestId: request.options?.requestId || null,
+            error: errorMsg.slice(0, 2000),
+          },
+        });
+      } catch {
+        /* ignore telemetry errors */
       }
 
-      this.logger.error(`AI Gateway execution failed for ${request.task}: ${errorMsg}`);
       return {
         success: false,
         data: null,
-        provider: provider.name,
+        provider: 'gemini',
         model: 'unknown',
         promptVersion,
         latencyMs,
@@ -212,8 +183,167 @@ export class AiGatewayService {
   }
 
   /**
-   * Higher-level domain methods
+   * Create or refresh an embedding via Gemini only. Stored as JSON vector in Postgres.
    */
+  async upsertEmbedding(input: {
+    entityType: EmbeddingEntityType;
+    entityId: string;
+    text: string;
+    userId?: string;
+  }): Promise<{ ok: boolean; dimensions: number; reused: boolean }> {
+    const text = input.text.trim().slice(0, 8000);
+    if (!text || !this.gemini.isConfigured()) {
+      return { ok: false, dimensions: 0, reused: false };
+    }
+
+    const contentHash = createHash('sha256').update(text).digest('hex').slice(0, 40);
+    const existing = await this.prisma.embedding.findUnique({
+      where: {
+        entityType_entityId: {
+          entityType: input.entityType,
+          entityId: input.entityId,
+        },
+      },
+    });
+    if (existing && existing.contentHash === contentHash) {
+      return { ok: true, dimensions: existing.dimensions, reused: true };
+    }
+
+    const start = Date.now();
+    try {
+      const embedded = await this.gemini.embed(text);
+      if (!embedded.values.length) {
+        return { ok: false, dimensions: 0, reused: false };
+      }
+
+      await this.prisma.embedding.upsert({
+        where: {
+          entityType_entityId: {
+            entityType: input.entityType,
+            entityId: input.entityId,
+          },
+        },
+        create: {
+          entityType: input.entityType,
+          entityId: input.entityId,
+          contentHash,
+          embeddingJson: JSON.stringify(embedded.values),
+          model: embedded.model,
+          dimensions: embedded.values.length,
+        },
+        update: {
+          contentHash,
+          embeddingJson: JSON.stringify(embedded.values),
+          model: embedded.model,
+          dimensions: embedded.values.length,
+        },
+      });
+
+      try {
+        await this.prisma.aiInteraction.create({
+          data: {
+            userId: input.userId || null,
+            operation: 'EMBEDDING',
+            provider: 'gemini',
+            model: embedded.model,
+            promptVersion: 'embed.v1',
+            inputTokens: Math.ceil(text.length / 4),
+            outputTokens: 0,
+            latencyMs: Date.now() - start,
+            status: 'SUCCESS',
+            estimatedCostUsd: 0,
+          },
+        });
+      } catch {
+        /* ignore */
+      }
+
+      return { ok: true, dimensions: embedded.values.length, reused: false };
+    } catch (err) {
+      this.logger.warn(`Embedding failed for ${input.entityType}/${input.entityId}: ${(err as Error).message}`);
+      return { ok: false, dimensions: 0, reused: false };
+    }
+  }
+
+  async getEmbeddingVector(entityType: EmbeddingEntityType, entityId: string): Promise<number[] | null> {
+    const row = await this.prisma.embedding.findUnique({
+      where: { entityType_entityId: { entityType, entityId } },
+    });
+    if (!row) return null;
+    const values = parseEmbeddingJson(row.embeddingJson);
+    return values.length ? values : null;
+  }
+
+  /**
+   * RAG-style retrieval: embed the query, rank stored embeddings by cosine similarity.
+   */
+  async retrieveSimilar(input: {
+    query: string;
+    entityTypes?: EmbeddingEntityType[];
+    limit?: number;
+    minScore?: number;
+  }): Promise<Array<{ entityType: string; entityId: string; score: number }>> {
+    if (!this.gemini.isConfigured()) return [];
+    const query = input.query.trim().slice(0, 4000);
+    if (!query) return [];
+
+    try {
+      const embedded = await this.gemini.embed(query);
+      if (!embedded.values.length) return [];
+
+      const rows = await this.prisma.embedding.findMany({
+        where: input.entityTypes?.length
+          ? { entityType: { in: input.entityTypes } }
+          : undefined,
+        take: 500,
+      });
+
+      const minScore = input.minScore ?? 0.35;
+      const limit = input.limit ?? 5;
+      return rows
+        .map((row) => ({
+          entityType: row.entityType,
+          entityId: row.entityId,
+          score: cosineSimilarity(embedded.values, parseEmbeddingJson(row.embeddingJson)),
+        }))
+        .filter((row) => row.score >= minScore)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    } catch (err) {
+      this.logger.warn(`RAG retrieve failed: ${(err as Error).message}`);
+      return [];
+    }
+  }
+
+  async similarityScore(
+    left: { entityType: EmbeddingEntityType; entityId: string },
+    right: { entityType: EmbeddingEntityType; entityId: string },
+  ): Promise<number> {
+    const [a, b] = await Promise.all([
+      this.getEmbeddingVector(left.entityType, left.entityId),
+      this.getEmbeddingVector(right.entityType, right.entityId),
+    ]);
+    if (!a || !b) return 0;
+    return cosineSimilarity(a, b);
+  }
+
+  async structureResumeText(
+    rawText: string,
+    options?: AiRequestOptions,
+  ): Promise<StructuredResumeDraft | null> {
+    const prompt = getPrompt('resume-structure.v1');
+    const res = await this.generate<StructuredResumeDraft>({
+      task: 'RESUME_STRUCTURE',
+      systemPrompt: prompt.system,
+      userPrompt: `Resume text:\n${rawText.slice(0, 14000)}`,
+      options: {
+        ...options,
+        promptVersion: prompt.version,
+        temperature: 0,
+      },
+    });
+    return res.data;
+  }
 
   async rewriteResume(
     content: unknown,
@@ -242,7 +372,19 @@ export class AiGatewayService {
     options?: AiRequestOptions,
   ): Promise<ResumeReviewResult | null> {
     const prompt = getPrompt('resume-review.v1');
-    const userPayload = JSON.stringify({ content, targetRole });
+    await this.ensureBaselineKnowledge().catch(() => undefined);
+    const query = `${targetRole || ''} ${JSON.stringify(content)}`.slice(0, 2000);
+    const ragHits = await this.retrieveSimilar({
+      query,
+      entityTypes: ['KNOWLEDGE', 'JOB'],
+      limit: 4,
+      minScore: 0.4,
+    });
+    const userPayload = JSON.stringify({
+      content,
+      targetRole,
+      retrievedContext: ragHits,
+    });
     const res = await this.generate<ResumeReviewResult>({
       task: 'RESUME_REVIEW',
       systemPrompt: prompt.system,
@@ -253,6 +395,38 @@ export class AiGatewayService {
       },
     });
     return res.data;
+  }
+
+  /**
+   * Seed a small RAG knowledge base once (roles / skills guidance). Idempotent via content hash.
+   */
+  async ensureBaselineKnowledge(): Promise<void> {
+    if (!this.gemini.isConfigured()) return;
+    const docs: Array<{ id: string; text: string }> = [
+      {
+        id: 'knowledge-customer-service',
+        text: 'Customer Service roles value communication, empathy, CRM tools, complaint handling, telephone etiquette, and measurable service outcomes.',
+      },
+      {
+        id: 'knowledge-resume-ats',
+        text: 'ATS-friendly resumes use clear section headings, plain text skills, quantified achievements, and avoid tables or graphics for core content.',
+      },
+      {
+        id: 'knowledge-fresher-guidance',
+        text: 'Fresher candidates should emphasize education, projects, internships, transferable skills, and readiness to learn rather than inventing work experience.',
+      },
+      {
+        id: 'knowledge-interview-basics',
+        text: 'Strong interview answers are structured, relevant, specific, and honest. Prefer STAR-style examples from real experience.',
+      },
+    ];
+    for (const doc of docs) {
+      await this.upsertEmbedding({
+        entityType: 'KNOWLEDGE',
+        entityId: doc.id,
+        text: doc.text,
+      });
+    }
   }
 
   async evaluateInterviewAnswer(
@@ -293,5 +467,48 @@ export class AiGatewayService {
       },
     });
     return res.data;
+  }
+
+  /**
+   * Build a short text document used for candidate / job / resume embeddings.
+   */
+  buildCandidateEmbedText(input: {
+    city?: string | null;
+    skills?: string[];
+    careerInterests?: string[];
+    about?: string | null;
+    experienceSummary?: string | null;
+  }): string {
+    return [
+      input.about || '',
+      `City: ${input.city || ''}`,
+      `Skills: ${(input.skills || []).join(', ')}`,
+      `Interests: ${(input.careerInterests || []).join(', ')}`,
+      input.experienceSummary || '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 6000);
+  }
+
+  buildJobEmbedText(input: {
+    title: string;
+    description: string;
+    city?: string;
+    category?: string;
+    requiredSkills?: string[];
+    experience?: string | null;
+  }): string {
+    return [
+      input.title,
+      input.category || '',
+      input.city || '',
+      input.experience || '',
+      `Required skills: ${(input.requiredSkills || []).join(', ')}`,
+      input.description,
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 6000);
   }
 }
