@@ -160,6 +160,20 @@ export function DashboardCareerPassport({ profile }: { profile: CandidateProfile
             >
               Preview Resume
             </button>
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href="/resumes"
+                className="rounded-xl border border-slate-200 bg-white py-2.5 text-center text-xs font-bold text-slate-800 hover:bg-slate-50"
+              >
+                View Resume
+              </Link>
+              <Link
+                href="/ats"
+                className="rounded-xl border border-slate-200 bg-white py-2.5 text-center text-xs font-bold text-slate-800 hover:bg-slate-50"
+              >
+                ATS Score
+              </Link>
+            </div>
             <Link
               href="/profile"
               className="rounded-xl bg-[#0a2e2c] py-3 text-center text-sm font-bold text-white transition hover:bg-[#072422]"

@@ -42,6 +42,11 @@ class CreateResumeDto {
   @IsOptional()
   @IsString()
   summary?: string;
+
+  /** Create a new version linked to an existing resume (does not overwrite). */
+  @IsOptional()
+  @IsString()
+  parentResumeId?: string;
 }
 
 class UploadResumeDto {
@@ -200,6 +205,7 @@ export class ResumesController {
       blank: dto.blank,
       content: dto.content,
       summary: dto.summary,
+      parentResumeId: dto.parentResumeId,
     });
   }
 

@@ -114,6 +114,7 @@ export class CandidatesService {
         ...(dto.photoUrl !== undefined ? { photoUrl: photoUrl || null } : {}),
         ...(dto.links !== undefined ? { profileLinks: JSON.stringify(cleanLinks(dto.links)) } : {}),
         ...(dto.onboardingCompleted !== undefined ? { onboardingCompleted: dto.onboardingCompleted } : {}),
+        ...(dto.dashboardReached !== undefined ? { dashboardReached: dto.dashboardReached } : {}),
         ...(dto.whatsappOptIn !== undefined
           ? {
               whatsappOptIn: dto.whatsappOptIn,
@@ -548,6 +549,7 @@ export class CandidatesService {
       hasExperience: candidate.hasExperience,
       profileCompletion: candidate.profileCompletion,
       onboardingCompleted: candidate.onboardingCompleted,
+      dashboardReached: candidate.dashboardReached,
       whatsappOptIn: candidate.whatsappOptIn,
       whatsappNumber: candidate.whatsappNumber,
       whatsappVerified: candidate.whatsappVerified,

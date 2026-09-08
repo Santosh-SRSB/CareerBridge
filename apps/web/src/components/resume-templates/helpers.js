@@ -36,7 +36,7 @@ export const LEGACY_TEMPLATE_IDS = {
 };
 
 export function resolveTemplateId(id) {
-  if (!id) return "ats-minimal";
+  if (!id || id === "master" || id === "CAREERBRIDGE") return "resume-template-01";
   return LEGACY_TEMPLATE_IDS[id] || id;
 }
 

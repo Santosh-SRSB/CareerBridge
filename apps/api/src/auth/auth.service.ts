@@ -356,11 +356,12 @@ export class AuthService {
     const isEmployer = registration?.accountType === 'EMPLOYER';
     const userTypes = userTypesForAccount(isEmployer ? 'EMPLOYER' : 'CANDIDATE');
     const names = splitName(registration?.fullName);
-    const cityName = registration?.city?.trim() || registration?.location?.trim() || null;
+    const stateName = registration?.state?.trim() || null;
+    const cityName = registration?.city?.trim() || null;
     const email = registration?.email?.trim().toLowerCase() || null;
     const profileCompletion =
       (names.firstName ? 20 : 0) +
-      (cityName ? 20 : 0) +
+      (stateName || cityName || registration?.location?.trim() ? 20 : 0) +
       (registration?.preferredLanguage ? 10 : 0) +
       (email ? 10 : 0);
 
@@ -434,10 +435,12 @@ export class AuthService {
                     create: {
                       firstName: names.firstName,
                       lastName: names.lastName,
+                      state: stateName || registration?.location?.trim() || null,
                       city: cityName,
                       preferredLanguage: registration?.preferredLanguage || null,
                       profileCompletion,
                       onboardingCompleted: false,
+                      dashboardReached: false,
                       whatsappOptIn: Boolean(registration?.whatsappOptIn),
                       whatsappOptInAt: registration?.whatsappOptIn ? new Date() : null,
                       whatsappOptInSource: registration?.whatsappOptIn ? 'registration' : null,
@@ -827,6 +830,8 @@ export class AuthService {
         profileCompleted: user.candidate?.profileCompletion ?? 0,
         onboardingCompleted:
           user.userType === 'CANDIDATE' ? user.candidate?.onboardingCompleted ?? false : true,
+        dashboardReached:
+          user.userType === 'CANDIDATE' ? user.candidate?.dashboardReached ?? false : true,
     };
   }
 
@@ -886,7 +891,11 @@ export class AuthService {
     id: string;
     userType: string;
     phone: string;
-    candidate?: { onboardingCompleted: boolean; firstName: string | null } | null;
+    candidate?: {
+      onboardingCompleted: boolean;
+      dashboardReached?: boolean;
+      firstName: string | null;
+    } | null;
     employer?: { contactName: string | null } | null;
   }) {
     const payload: JwtPayload = {
@@ -928,6 +937,7 @@ export class AuthService {
         phone: user.phone,
         firstName: user.candidate?.firstName ?? user.employer?.contactName ?? null,
         onboardingCompleted: isCandidate ? user.candidate?.onboardingCompleted ?? false : true,
+        dashboardReached: isCandidate ? user.candidate?.dashboardReached ?? false : true,
       },
     };
   }

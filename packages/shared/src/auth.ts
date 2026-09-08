@@ -60,6 +60,8 @@ export type AuthUser = {
   phone: string;
   firstName: string | null;
   onboardingCompleted: boolean;
+  /** Candidate only — true after they have opened the dashboard at least once. */
+  dashboardReached?: boolean;
 };
 
 export type AuthSession = {

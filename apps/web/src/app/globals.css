@@ -11616,6 +11616,19 @@ button.cb-ticket-go {
 }
 
 /* ---- Candidate resume preview + course stack ---- */
+.cb-field-missing input,
+.cb-field-missing textarea,
+.cb-field-missing select,
+.cb-field-missing .cb-form-select,
+.cb-field-missing .cb-searchable-input,
+.cb-field-missing .cb-combo-input,
+.cb-field-missing input[type='text'],
+.cb-field-missing input[type='email'],
+.cb-field-missing input[type='tel'] {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+}
+
 .cb-resume-flow-wrap {
   width: min(820px, 100%);
   margin: 0 auto;
@@ -19028,4 +19041,26 @@ a.ep-stat:hover {
 .ep-app--neu .ep-btn-gold--lg {
   border-radius: 12px !important;
   box-shadow: 5px 5px 10px var(--ep-shadow-d), -5px -5px 10px var(--ep-shadow-l) !important;
+}
+
+/* Mobile bottom-nav: Resume ⇄ ATS auto-swipe */
+@keyframes cb-nav-swipe-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cb-nav-swipe {
+  animation: cb-nav-swipe-in 0.45s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-nav-swipe {
+    animation: none;
+  }
 }

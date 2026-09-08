@@ -50,7 +50,7 @@ export function WhatsAppInterviewNotice({
         </div>
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
-        Final WhatsApp template wording must comply with WhatsApp Business messaging requirements when implemented.
+        WhatsApp notifications help you stay updated on interviews.
       </p>
     </div>
   );

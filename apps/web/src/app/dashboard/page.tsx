@@ -10,6 +10,7 @@ import {
   listJobs,
   recommendedJobs,
   fetchMe,
+  updateCandidateMe,
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import type { CandidateProfile, JobCard } from '@careerbridge/shared';
@@ -217,19 +218,28 @@ export default function DashboardPage() {
     fetchMe()
       .then((me) => {
         const onboardingDone = me.onboardingCompleted ?? stored.onboardingCompleted;
+        const dashboardReached = me.dashboardReached ?? stored.dashboardReached ?? false;
         patchStoredUser({
           firstName: me.firstName ?? stored.firstName,
           onboardingCompleted: onboardingDone,
+          dashboardReached,
         });
         if (!onboardingDone) {
-          router.replace('/onboarding');
+          router.replace('/onboarding/continue');
           return;
         }
 
         setName(formatPersonName(me.firstName || stored.firstName || 'there'));
         setReady(true);
 
+        const markDashboard = dashboardReached
+          ? Promise.resolve()
+          : updateCandidateMe({ dashboardReached: true })
+              .then(() => patchStoredUser({ dashboardReached: true }))
+              .catch(() => undefined);
+
         return Promise.all([
+          markDashboard,
           getCandidateMe(),
           getProfileCompletion(),
           recommendedJobs()
@@ -239,7 +249,7 @@ export default function DashboardPage() {
           listApplications()
             .then((rows) => rows.length)
             .catch(() => 0),
-        ]).then(([candidateProfile, completion, jobItems, interviews, appsCount]) => {
+        ]).then(([, candidateProfile, completion, jobItems, interviews, appsCount]) => {
           setProfile(candidateProfile);
           setName(
             formatPersonName(candidateProfile.firstName || me.firstName || stored.firstName || 'there'),
@@ -259,7 +269,7 @@ export default function DashboardPage() {
       })
       .catch(() => {
         if (!stored.onboardingCompleted) {
-          router.replace('/onboarding');
+          router.replace('/onboarding/continue');
           return;
         }
         setName(formatPersonName(stored.firstName || 'there'));

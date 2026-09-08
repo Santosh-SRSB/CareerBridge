@@ -19,7 +19,7 @@ import { renderResumePdf } from './resume-pdf';
 import { ResumeOptimizeAi } from './resume-optimize-ai';
 import { ResumeProcessorService } from './resume-processor.service';
 import { analyzeRoleResume, rewriteRoleResume, recommendCareerRoles } from './ats-engine';
-import { resolveResumeTemplateId } from '@careerbridge/shared';
+import { resolveResumeTemplateId, CAREERBRIDGE_RESUME_TEMPLATE } from '@careerbridge/shared';
 import { isThinResumeContent, parseExtractedResumeText } from './parse-extracted-resume';
 
 @Injectable()
@@ -39,10 +39,11 @@ export class ResumesService {
   async list(userId: string) {
     const candidate = await this.requireCandidate(userId);
     const rows = await this.prisma.resume.findMany({
-      where: { candidateId: candidate.id },
+      where: { candidateId: candidate.id, archivedAt: null },
       orderBy: { updatedAt: 'desc' },
+      include: { _count: { select: { applications: true } } },
     });
-    return rows.map((row) => this.toRecord(row));
+    return rows.map((row) => this.toRecord(row, undefined, row._count.applications));
   }
 
   /**
@@ -126,6 +127,8 @@ export class ResumesService {
       blank?: boolean;
       content?: Record<string, unknown>;
       summary?: string;
+      parentResumeId?: string;
+      kind?: 'ORIGINAL' | 'OPTIMIZED';
     },
   ) {
     const candidate = await this.prisma.candidate.findUnique({
@@ -148,6 +151,31 @@ export class ResumesService {
     }
     if (dto.includePhoto === false) content.includePhoto = false;
     if (dto.includePhoto === true) content.includePhoto = true;
+
+    let parentResumeId: string | null = null;
+    let version = 1;
+    let kind: 'ORIGINAL' | 'OPTIMIZED' = dto.kind === 'OPTIMIZED' ? 'OPTIMIZED' : 'ORIGINAL';
+    if (dto.parentResumeId) {
+      const parent = await this.prisma.resume.findFirst({
+        where: { id: dto.parentResumeId, candidateId: candidate.id, archivedAt: null },
+      });
+      if (!parent) {
+        throw new NotFoundException({
+          code: ErrorCode.RESOURCE_NOT_FOUND,
+          message: 'Parent resume was not found',
+        });
+      }
+      parentResumeId = parent.parentResumeId || parent.id;
+      const siblings = await this.prisma.resume.count({
+        where: {
+          candidateId: candidate.id,
+          OR: [{ id: parentResumeId }, { parentResumeId }],
+        },
+      });
+      version = siblings + 1;
+      kind = 'OPTIMIZED';
+    }
+
     const title =
       (dto.title && dto.title.trim()) ||
       (dto.blank || dto.content ? 'Untitled resume' : dto.targetJobTitle ? `${dto.targetJobTitle} Resume` : 'General Resume');
@@ -156,11 +184,13 @@ export class ResumesService {
         candidateId: candidate.id,
         title,
         targetJobTitle: dto.targetJobTitle || null,
-        template: resolveResumeTemplateId(dto.template || 'ats-minimal'),
+        template: resolveResumeTemplateId(dto.template || CAREERBRIDGE_RESUME_TEMPLATE),
         summary: content.summary,
         contentJson: JSON.stringify(content),
         score: 0,
-        kind: 'ORIGINAL',
+        kind,
+        parentResumeId,
+        version,
       },
     });
     const analysis = await this.persistAnalysis(created.id, content, '');
@@ -201,7 +231,7 @@ export class ResumesService {
         candidateId: candidate.id,
         title: baseName,
         targetJobTitle: dto.targetJobTitle || content.experiences[0]?.jobTitle || null,
-        template: resolveResumeTemplateId(dto.template || 'ats-minimal'),
+        template: resolveResumeTemplateId(dto.template || CAREERBRIDGE_RESUME_TEMPLATE),
         summary: content.summary,
         contentJson: JSON.stringify(content),
         rawText,
@@ -251,7 +281,7 @@ export class ResumesService {
         candidateId: candidate.id,
         title: baseName,
         targetJobTitle: targetJobTitle || null,
-        template: resolveResumeTemplateId('ats-minimal'),
+        template: resolveResumeTemplateId(CAREERBRIDGE_RESUME_TEMPLATE),
         summary: null,
         contentJson: JSON.stringify({
           fullName: [candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || 'Candidate',
@@ -363,7 +393,7 @@ export class ResumesService {
     const title =
       (dto.title && dto.title.trim()) ||
       (dto.targetJobTitle ? `${dto.targetJobTitle} Resume` : `${content.fullName || 'My'} Resume`);
-    const template = resolveResumeTemplateId(dto.template || 'ats-minimal');
+    const template = resolveResumeTemplateId(dto.template || CAREERBRIDGE_RESUME_TEMPLATE);
 
     let resumeId = dto.resumeId;
     if (resumeId) {
@@ -475,11 +505,24 @@ export class ResumesService {
 
   async remove(userId: string, id: string) {
     const resume = await this.requireResume(userId, id);
+    const applicationCount = await this.prisma.application.count({
+      where: { resumeId: resume.id },
+    });
+
+    // Linked to applications → archive (keep history). Unused → hard delete + cloud cleanup.
+    if (applicationCount > 0) {
+      await this.prisma.resume.update({
+        where: { id: resume.id },
+        data: { archivedAt: new Date() },
+      });
+      return { deleted: false, archived: true, reason: 'linked_to_applications' };
+    }
+
     if (resume.pdfStoragePath) {
       await this.storage.deleteFile(resume.pdfStoragePath).catch(() => undefined);
     }
     await this.prisma.resume.delete({ where: { id: resume.id } });
-    return { deleted: true };
+    return { deleted: true, archived: false };
   }
 
   async analyze(userId: string, id: string) {
@@ -672,12 +715,13 @@ export class ResumesService {
     const content = parseContent(resume.contentJson);
     const targetRole = input.targetRole?.trim() || resume.targetJobTitle || 'General Professional';
 
-    // Try Centralized AI Gateway (Gemini) first
+    // Try Centralized AI Gateway (Gemini) first — time-box so a hang falls back to ATS.
     if (this.aiGateway.isConfigured()) {
       try {
-        const aiResult = await this.aiGateway.reviewResume(content, targetRole, {
-          userId,
-        });
+        const aiResult = await Promise.race([
+          this.aiGateway.reviewResume(content, targetRole, { userId }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 25_000)),
+        ]);
         if (aiResult) {
           return {
             score: aiResult.score,
@@ -741,7 +785,7 @@ export class ResumesService {
     if (!targetRole) {
       throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Enter a target job role.' });
     }
-    let templateId = input.templateId || 'ats-minimal';
+    let templateId = input.templateId || CAREERBRIDGE_RESUME_TEMPLATE;
     let payload = input.resume;
     if (input.resumeId) {
       const resume = await this.requireResume(userId, input.resumeId);
@@ -775,7 +819,7 @@ export class ResumesService {
     if (!targetRole) {
       throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Enter a target job role.' });
     }
-    let templateId = input.templateId || 'ats-minimal';
+    let templateId = input.templateId || CAREERBRIDGE_RESUME_TEMPLATE;
     let payload = input.resume;
     let ownedId: string | null = input.resumeId || null;
     if (input.resumeId) {
@@ -902,7 +946,7 @@ export class ResumesService {
     const includePhoto = content.includePhoto !== false;
     const pdf = await renderResumePdf(
       content,
-      resume.template,
+      CAREERBRIDGE_RESUME_TEMPLATE,
       includePhoto ? candidate.photoUrl : null,
     );
     const path = this.storage.resumeObjectPath(
@@ -939,7 +983,7 @@ export class ResumesService {
         : await this.prisma.candidate.findUniqueOrThrow({ where: { id: resume.candidateId } });
     const content = parseContent(resume.contentJson);
     const includePhoto = content.includePhoto !== false;
-    return renderResumePdf(content, resume.template, includePhoto ? candidate.photoUrl : null);
+    return renderResumePdf(content, CAREERBRIDGE_RESUME_TEMPLATE, includePhoto ? candidate.photoUrl : null);
   }
 
   private async requireCandidate(userId: string) {
@@ -954,7 +998,9 @@ export class ResumesService {
 
   private async requireResume(userId: string, id: string) {
     const candidate = await this.requireCandidate(userId);
-    const resume = await this.prisma.resume.findFirst({ where: { id, candidateId: candidate.id } });
+    const resume = await this.prisma.resume.findFirst({
+      where: { id, candidateId: candidate.id, archivedAt: null },
+    });
     if (!resume) {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Resume was not found' });
     }
@@ -1017,8 +1063,10 @@ export class ResumesService {
       pdfStorageUri?: string | null;
       pdfPublicUrl?: string | null;
       pdfUploadedAt?: Date | null;
+      archivedAt?: Date | null;
     },
     analysis?: ResumeAnalysis,
+    applicationCount = 0,
   ) {
     const content = hydrateResumeContent(parseContent(row.contentJson), row.rawText);
     return {
@@ -1036,8 +1084,11 @@ export class ResumesService {
       pdfStorageUri: row.pdfStorageUri ?? null,
       pdfPublicUrl: row.pdfPublicUrl ?? null,
       pdfUploadedAt: row.pdfUploadedAt?.toISOString() ?? null,
+      archivedAt: row.archivedAt?.toISOString() ?? null,
+      applicationCount,
       updatedAt: row.updatedAt.toISOString(),
       analysis,
+      plans: ATS_ENHANCE_PLANS.map((plan) => ({ ...plan })),
     };
   }
 }

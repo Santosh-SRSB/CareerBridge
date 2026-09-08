@@ -22,16 +22,25 @@ export function useOnboardingGate(step: OnboardingStep) {
         patchStoredUser({
           firstName: me.firstName ?? stored.firstName,
           onboardingCompleted: me.onboardingCompleted ?? stored.onboardingCompleted,
+          dashboardReached: me.dashboardReached ?? stored.dashboardReached,
         });
-        if (me.onboardingCompleted) {
+        if (me.dashboardReached) {
           router.replace('/dashboard');
+          return;
+        }
+        if (me.onboardingCompleted) {
+          router.replace('/onboarding/complete');
           return;
         }
         setReady(true);
       })
       .catch(() => {
-        if (stored.onboardingCompleted) {
+        if (stored.dashboardReached) {
           router.replace('/dashboard');
+          return;
+        }
+        if (stored.onboardingCompleted) {
+          router.replace('/onboarding/complete');
           return;
         }
         setReady(true);

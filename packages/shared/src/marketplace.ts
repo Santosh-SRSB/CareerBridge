@@ -198,6 +198,8 @@ export function isListedJobCategory(category: string) {
   return (JOB_CATEGORIES as readonly string[]).includes(category);
 }
 
+export const CAREERBRIDGE_RESUME_TEMPLATE = 'resume-template-01' as const;
+
 export const RESUME_TEMPLATES = [
   'CLASSIC',
   'MODERN',
@@ -233,11 +235,13 @@ export const ATS_PLAIN_TEMPLATES = [
 
 export function resolveResumeTemplateId(id?: string | null) {
   const value = (id || '').trim();
-  if (!value) return 'ats-minimal';
+  // CareerBridge master template — extract user data, always render in our design.
+  if (!value || value === 'resume-template-01' || value === 'CAREERBRIDGE' || value === 'master') {
+    return CAREERBRIDGE_RESUME_TEMPLATE;
+  }
   if (value === 'CLASSIC') return 'ats-classic';
   if (value === 'MODERN') return 'ats-modern';
   if (value === 'SIMPLE') return 'ats-minimal';
-  if (value === 'resume-template-01') return 'ats-minimal';
   return value;
 }
 
@@ -340,6 +344,8 @@ export type ResumeRecord = {
   kind?: 'ORIGINAL' | 'OPTIMIZED';
   parentResumeId?: string | null;
   updatedAt: string;
+  archivedAt?: string | null;
+  applicationCount?: number;
   pdfStoragePath?: string | null;
   pdfStorageUri?: string | null;
   pdfPublicUrl?: string | null;

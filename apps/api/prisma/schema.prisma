@@ -105,6 +105,8 @@ model Candidate {
   profileLinks          String   @default("{}") @map("profile_links")
   hasExperience         String?  @map("has_experience")
   onboardingCompleted   Boolean  @default(false) @map("onboarding_completed")
+  /** True once the candidate has opened the dashboard at least once. */
+  dashboardReached      Boolean  @default(false) @map("dashboard_reached")
   profileCompletion     Int      @default(0) @map("profile_completion")
   assessmentCredits     Int      @default(1) @map("assessment_credits")
   whatsappOptIn         Boolean  @default(false) @map("whatsapp_opt_in")
@@ -396,6 +398,8 @@ model Resume {
   processingStatus   String?   @default("READY") @map("processing_status")
   processingError    String?   @map("processing_error") @db.Text
   extractionMetaJson String?   @map("extraction_meta_json") @db.Text
+  /** Soft-delete when resume is linked to applications; hidden from active lists. */
+  archivedAt     DateTime?  @map("archived_at")
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
@@ -411,6 +415,7 @@ model Resume {
 
   @@index([candidateId])
   @@index([parentResumeId])
+  @@index([archivedAt])
   @@map("resumes")
 }
 

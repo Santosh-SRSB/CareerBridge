@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ResumePreviewScreen } from '@/components/resume/ResumePreviewScreen';
 import {
   AchievementInlineForm,
@@ -20,6 +20,12 @@ import {
   clearResumeWizardDraft,
   peekResumeSeedFromProfile,
   peekResumeStartWizard,
+  peekResumeAutofillSeed,
+  peekResumeFromAutofill,
+  peekResumeFromBuild,
+  clearResumeAutofillSeed,
+  clearResumeFromAutofill,
+  clearResumeFromBuild,
   type ResumeWizardDraft,
 } from '@/features/resume/resume-wizard-draft';
 import {
@@ -34,12 +40,21 @@ import {
 } from '@/features/resume/resume-update-mode';
 import { validateWizardStep } from '@/features/resume/resume-wizard-validation';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
-import { getStoredUser } from '@/lib/session';
-import { getCandidateMe, getResume, listResumes, createResume, updateResume } from '@/lib/api';
+import { getStoredUser, patchStoredUser } from '@/lib/session';
+import {
+  getCandidateMe,
+  getResume,
+  listResumes,
+  createResume,
+  updateResume,
+  savePassport,
+  updateCandidateMe,
+} from '@/lib/api';
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
+import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
 import type { CandidateProfile } from '@careerbridge/shared';
 
-type FlowPhase = 'choose' | 'wizard' | 'preview';
+type FlowPhase = 'choose' | 'wizard' | 'preview' | 'finish';
 
 function formatSalaryDisplay(value: string) {
   const digits = value.replace(/\D/g, '');
@@ -151,7 +166,10 @@ function normalizeLanguagePool(selected: string[], available: string[] | undefin
 function applyWizardDraft(draft: Omit<ResumeWizardDraft, 'savedAt'>) {
   const langs = normalizeLanguagePool(draft.languages, draft.availableLanguages);
   const phase =
-    draft.flowPhase === 'preview' || draft.flowPhase === 'choose' || draft.flowPhase === 'wizard'
+    draft.flowPhase === 'preview' ||
+    draft.flowPhase === 'choose' ||
+    draft.flowPhase === 'wizard' ||
+    draft.flowPhase === 'finish'
       ? draft.flowPhase
       : 'wizard';
   return {
@@ -216,7 +234,24 @@ function applyProfileSeed(
 }
 
 export default function ResumePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
+          Loading…
+        </main>
+      }
+    >
+      <ResumePageInner />
+    </Suspense>
+  );
+}
+
+function ResumePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromAutofillQuery = searchParams.get('from') === 'autofill';
+  const fromBuildQuery = searchParams.get('from') === 'build';
   const [flowPhase, setFlowPhase] = useState<FlowPhase>('wizard');
   const [wizardIndex, setWizardIndex] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -244,6 +279,10 @@ export default function ResumePage() {
   const [preferredLocation, setPreferredLocation] = useState('');
   const [expectedSalary, setExpectedSalary] = useState('');
   const [savedResumeId, setSavedResumeId] = useState<string | undefined>();
+  const [highlightMissingPersonal, setHighlightMissingPersonal] = useState(false);
+  const isBuildPath = fromBuildQuery || peekResumeFromBuild();
+  const isAutofillPath =
+    Boolean(fromAutofillQuery || peekResumeFromAutofill()) || highlightMissingPersonal;
 
   useEffect(() => {
     let active = true;
@@ -295,6 +334,56 @@ export default function ResumePage() {
         });
       }
 
+      // Path A: seed from uploaded resume → open Personal step (skip choose screen)
+      const autofillSeed = peekResumeAutofillSeed();
+      const fromAutofill = Boolean(autofillSeed || peekResumeFromAutofill() || fromAutofillQuery);
+      if (fromAutofill) {
+        if (autofillSeed) {
+          const { resumeId, highlightMissing, ...seedFields } = autofillSeed;
+          applySeed(seedFields);
+          if (resumeId) setSavedResumeId(resumeId);
+          setHighlightMissingPersonal(Boolean(highlightMissing ?? true));
+          saveResumeWizardDraft({
+            flowPhase: 'wizard',
+            wizardIndex: 0,
+            fullName: seedFields.fullName || '',
+            location: seedFields.location || '',
+            email: seedFields.email || '',
+            phone: seedFields.phone || '',
+            summary: seedFields.summary || '',
+            skills: seedFields.skills || [],
+            educationList: seedFields.educationList || [],
+            experienceList: seedFields.experienceList || [],
+            projectList: seedFields.projectList || [],
+            certificationList: seedFields.certificationList || [],
+            achievementList: seedFields.achievementList || [],
+            languages: seedFields.languages || [],
+            availableLanguages: seedFields.availableLanguages || [],
+            preferredRole: seedFields.preferredRole || '',
+            preferredLocation: seedFields.preferredLocation || '',
+            expectedSalary: seedFields.expectedSalary || '',
+          });
+          // Clear seed only — keep from-autofill flag for Strict Mode remount.
+          clearResumeAutofillSeed();
+          setFlowPhase('wizard');
+          setWizardIndex(0);
+        } else {
+          const draft = loadResumeWizardDraft();
+          if (draft) {
+            restoreFromDraft({
+              ...draft,
+              flowPhase: draft.flowPhase === 'choose' ? 'wizard' : draft.flowPhase,
+            });
+          } else {
+            setFlowPhase('wizard');
+            setWizardIndex(0);
+          }
+          setHighlightMissingPersonal(true);
+        }
+        if (active) setDraftReady(true);
+        return;
+      }
+
       if (updateMode) {
         try {
           const [profile, rows] = await Promise.all([getCandidateMe(), listResumes()]);
@@ -335,7 +424,7 @@ export default function ResumePage() {
       }
 
       const seedFromProfile = peekResumeSeedFromProfile();
-      const startWizard = peekResumeStartWizard();
+      const startWizard = peekResumeStartWizard() || fromBuildQuery || peekResumeFromBuild();
       if (seedFromProfile) clearResumeWizardDraft();
       const draft = seedFromProfile ? null : loadResumeWizardDraft();
 
@@ -352,8 +441,15 @@ export default function ResumePage() {
           applySeed(mapCandidateProfileToResumeWizard(profile));
           setFlowPhase(startWizard ? 'wizard' : 'choose');
           setWizardIndex(0);
-          // Clear flags only after a successful seed so Strict Mode remounts still prefill.
-          if (typeof window !== 'undefined') {
+          setHighlightMissingPersonal(false);
+          // Keep build/from-profile flags for Strict Mode remount; clear only ephemeral start flag after draft saves.
+          if (typeof window !== 'undefined' && startWizard) {
+            sessionStorage.removeItem('cb.resumeStartWizard');
+            // Persist build flag until ATS / dashboard
+            if (fromBuildQuery || peekResumeFromBuild()) {
+              sessionStorage.setItem('cb.resumeFromBuild', '1');
+            }
+          } else if (typeof window !== 'undefined') {
             sessionStorage.removeItem('cb.resumeFromProfile');
             sessionStorage.removeItem('cb.resumeStartWizard');
           }
@@ -394,7 +490,7 @@ export default function ResumePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [fromAutofillQuery, fromBuildQuery]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -495,6 +591,37 @@ export default function ResumePage() {
     setLanguages((prev) => prev.filter((x) => x !== l));
     if (!availableLanguages.includes(l)) {
       setAvailableLanguages((prev) => [...prev, l]);
+    }
+  }
+
+  async function handleFinishWizard() {
+    const errors = validateMasterResume(masterResume);
+    if (errors.length) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors([]);
+    setSaving(true);
+    try {
+      await ensureResumeSaved();
+      try {
+        const content = masterResumeToResumeContent(masterResume);
+        const profile = await savePassport(mapResumeContentToPassportPayload(content));
+        const preferredLanguage = languages[0]?.trim();
+        if (preferredLanguage) {
+          await updateCandidateMe({ preferredLanguage }).catch(() => undefined);
+        }
+        patchStoredUser({ firstName: profile.firstName, onboardingCompleted: true });
+      } catch {
+        // Resume is saved; passport sync can be completed later from dashboard.
+      }
+      setFlowPhase('finish');
+      clearResumeFromAutofill();
+      // Keep build path flag so the next-step screen can show Path B guidance.
+    } catch {
+      setValidationErrors(['Could not save your resume. Please try again.']);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -667,8 +794,51 @@ export default function ResumePage() {
     }
   }
 
+  async function goToDashboard() {
+    clearResumeFromAutofill();
+    clearResumeFromBuild();
+    clearResumeWizardDraft();
+    try {
+      const content = masterResumeToResumeContent(masterResume);
+      await savePassport(mapResumeContentToPassportPayload(content));
+    } catch {
+      /* still mark dashboard reached */
+    }
+    try {
+      await updateCandidateMe({ dashboardReached: true, onboardingCompleted: true });
+      patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
+    } catch {
+      patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
+    }
+    router.push('/dashboard');
+  }
+
+  async function syncProfileFromResume() {
+    const content = masterResumeToResumeContent(masterResume);
+    const profile = await savePassport(mapResumeContentToPassportPayload(content));
+    const preferredLanguage = languages[0]?.trim();
+    if (preferredLanguage) {
+      await updateCandidateMe({ preferredLanguage }).catch(() => undefined);
+    }
+    try {
+      await updateCandidateMe({ dashboardReached: true, onboardingCompleted: true });
+    } catch {
+      /* optional */
+    }
+    patchStoredUser({
+      firstName: profile.firstName,
+      onboardingCompleted: true,
+      dashboardReached: true,
+    });
+  }
+
   function handleBack() {
     setValidationErrors([]);
+    if (flowPhase === 'finish') {
+      setFlowPhase('wizard');
+      setWizardIndex(REVIEW_INDEX);
+      return;
+    }
     if (flowPhase === 'preview') {
       setFlowPhase('wizard');
       setWizardIndex(REVIEW_INDEX);
@@ -680,6 +850,11 @@ export default function ResumePage() {
     }
     if (wizardIndex > 0) {
       setWizardIndex((prev) => prev - 1);
+      return;
+    }
+    if (highlightMissingPersonal) {
+      clearResumeFromAutofill();
+      router.push('/onboarding/complete');
       return;
     }
     setFlowPhase('choose');
@@ -1058,19 +1233,113 @@ export default function ResumePage() {
         }}
       />
 
-      {flowPhase === 'preview' ? (
+      {flowPhase === 'finish' ? (
+        <div className="cb-wizard-shell">
+          <div className="mx-auto max-w-xl px-4 py-10">
+            <div className="rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-sm sm:px-8">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#0a2e2c]/10 text-[#0a2e2c]">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M9 12.5l2 2 4.5-4.5"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </div>
+              <h1 className="mt-4 text-center text-2xl font-extrabold text-slate-900">
+                {isBuildPath ? 'Resume built' : 'Resume ready'}
+              </h1>
+              <p className="mt-2 text-center text-sm text-slate-600">
+                {isBuildPath
+                  ? 'Next: check ATS score, improve with AI, then download and save. Your profile updates when you save.'
+                  : 'Your resume is saved and your profile is updated. What would you like to do next?'}
+              </p>
+
+              {isBuildPath ? (
+                <ol className="mt-5 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                  <li className="font-semibold text-emerald-800">1. Build resume — done</li>
+                  <li className="font-semibold text-slate-900">2. Check ATS score — next</li>
+                  <li>3. Improve with AI (accept or reject each suggestion)</li>
+                  <li>4. Download &amp; save (cloud + profile)</li>
+                  <li>5. Candidate Dashboard</li>
+                </ol>
+              ) : null}
+
+              <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearResumeFromAutofill();
+                    setFlowPhase('preview');
+                  }}
+                  className="rounded-2xl border-2 border-[#0a2e2c] bg-[#0a2e2c] p-5 text-left text-white transition hover:bg-[#072422] sm:col-span-2"
+                >
+                  <p className="text-base font-extrabold">Check ATS score</p>
+                  <p className="mt-1.5 text-sm text-white/75">
+                    See how ATS-ready your resume is, then Improve with AI, download, and save.
+                  </p>
+                  <span className="mt-4 inline-block text-sm font-bold text-[#e68a39]">
+                    Continue →
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearResumeFromBuild();
+                    clearResumeFromAutofill();
+                    void goToDashboard();
+                  }}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left transition hover:border-[#0a2e2c]/40 hover:bg-white sm:col-span-2"
+                >
+                  <p className="text-base font-extrabold text-slate-900">Candidate Dashboard</p>
+                  <p className="mt-1.5 text-sm text-slate-600">
+                    Skip ATS for now and go to your dashboard.
+                  </p>
+                  <span className="mt-4 inline-block text-sm font-bold text-[#0a2e2c]">
+                    Open dashboard →
+                  </span>
+                </button>
+              </div>
+              <button
+                type="button"
+                className="cb-flow-back-btn mt-6 w-full"
+                onClick={handleBack}
+              >
+                ← Back to review
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : flowPhase === 'preview' ? (
           <ResumePreviewScreen
             resume={masterResume}
             targetJobTitle={preferredRole}
             resumeId={savedResumeId}
+            resumeFileName={`${fullName.trim() || 'My'} Resume`}
             onEnsureSaved={ensureResumeSaved}
             onResumeSaved={(id) => {
               setSavedResumeId(id);
             }}
+            onSyncProfile={syncProfileFromResume}
             onBack={handleBack}
             onEdit={() => {
               setFlowPhase('wizard');
               setWizardIndex(REVIEW_INDEX);
+            }}
+            onAddSection={(sectionLabel) => {
+              const key = sectionLabel.toLowerCase();
+              let step = 'Personal';
+              if (key.includes('educat')) step = 'Education';
+              else if (key.includes('experience') || key.includes('work')) step = 'Experience';
+              else if (key.includes('skill')) step = 'Skills';
+              else if (key.includes('project')) step = 'Projects';
+              else if (key.includes('cert') || key.includes('achiev')) step = 'Certifications';
+              else if (key.includes('summary') || key.includes('contact')) step = 'Personal';
+              setFlowPhase('wizard');
+              setWizardIndex(Math.max(0, WIZARD_STEPS.indexOf(step)));
             }}
             onApplySuggestion={handleApplyAiSuggestion}
           />
@@ -1141,6 +1410,9 @@ export default function ResumePage() {
                 <button
                   type="button"
                   onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      sessionStorage.setItem('cb.resumeFromBuild', '1');
+                    }
                     setFlowPhase('wizard');
                     setWizardIndex(0);
                   }}
@@ -1165,7 +1437,7 @@ export default function ResumePage() {
                   </span>
                   <p className="mt-4 text-base font-extrabold">Build from Scratch</p>
                   <p className="mt-1.5 text-sm leading-snug text-white/75">
-                    Use your Career Passport and walk through a short guided wizard.
+                    Guided wizard → ATS score → Improve with AI → download &amp; save.
                   </p>
                   <span className="mt-4 text-sm font-bold text-[#e68a39]">Start building →</span>
                 </button>
@@ -1185,12 +1457,20 @@ export default function ResumePage() {
       <div className="cb-wizard-shell">
         <div className="cb-main-head">
           <div className="cb-main-head-row">
-            <h1>Build your resume</h1>
+            <h1>
+              {isAutofillPath ? 'Complete your Profile' : 'Build your resume'}
+            </h1>
             <button type="button" className="cb-flow-back-btn" onClick={handleBack}>
               Back ←
             </button>
           </div>
-          <div className="desc">One strong profile — ready for every application.</div>
+          <div className="desc">
+            {isAutofillPath
+              ? 'Fill in the gaps so your profile is ready.'
+              : isBuildPath
+                ? 'Fill each section, then check ATS score and improve with AI before you save.'
+                : 'One strong profile — ready for every application.'}
+          </div>
         </div>
 
         {!isReviewStep && (
@@ -1231,7 +1511,12 @@ export default function ResumePage() {
             <div className="cb-card">
               {currentStep === 'Personal' && (
                 <div className="cb-field-grid">
-                  <div className="cb-field">
+                  {highlightMissingPersonal ? (
+                    <p className="cb-field full" style={{ margin: 0, fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>
+                      Empty fields are highlighted in red — fill them to complete your profile.
+                    </p>
+                  ) : null}
+                  <div className={`cb-field${highlightMissingPersonal && !fullName.trim() ? ' cb-field-missing' : ''}`}>
                     <label>Full name</label>
                     <input value={fullName} onChange={(e) => setFullName(e.target.value)} />
                   </div>
@@ -1241,9 +1526,10 @@ export default function ResumePage() {
                       onChange={setLocation}
                       stateLabel="State"
                       cityLabel="City"
+                      highlightMissing={highlightMissingPersonal}
                     />
                   </div>
-                  <div className="cb-field">
+                  <div className={`cb-field${highlightMissingPersonal && !email.trim() ? ' cb-field-missing' : ''}`}>
                     <label>Email</label>
                     <input
                       type="email"
@@ -1252,7 +1538,7 @@ export default function ResumePage() {
                       placeholder="you@example.com"
                     />
                   </div>
-                  <div className="cb-field">
+                  <div className={`cb-field${highlightMissingPersonal && !phone.trim() ? ' cb-field-missing' : ''}`}>
                     <label>Phone</label>
                     <input
                       type="tel"
@@ -1261,7 +1547,7 @@ export default function ResumePage() {
                       placeholder="+91 98765 43210"
                     />
                   </div>
-                  <div className="cb-field full">
+                  <div className={`cb-field full${highlightMissingPersonal && !summary.trim() ? ' cb-field-missing' : ''}`}>
                     <label>Professional summary</label>
                     <textarea
                       value={summary}
@@ -1950,10 +2236,10 @@ export default function ResumePage() {
               <button
                 type="button"
                 className="cb-save-btn"
-                onClick={() => void handleSaveAndContinue()}
+                onClick={() => void handleFinishWizard()}
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Save & Continue'}
+                {saving ? 'Saving...' : 'Finish'}
               </button>
             </div>
           </div>

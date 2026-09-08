@@ -146,6 +146,11 @@ export class UpdateCandidateDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
+  dashboardReached?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
   whatsappOptIn?: boolean;
 
   @ApiPropertyOptional()

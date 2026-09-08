@@ -70,6 +70,9 @@ async function request<T>(
         return request<T>(path, options);
       }
     }
+    if (response.status === 401 && path !== '/auth/refresh' && path !== '/auth/logout') {
+      clearSession();
+    }
     const error = new Error(body.error.message) as Error & { code: string };
     error.code = body.error.code;
     throw error;
@@ -440,7 +443,9 @@ export async function listResumes() {
 }
 
 export async function deleteResume(id: string) {
-  return request<{ deleted: boolean }>(`/resumes/${id}`, { method: 'DELETE' });
+  return request<{ deleted: boolean; archived?: boolean; reason?: string }>(`/resumes/${id}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function createResume(payload: {
@@ -451,6 +456,7 @@ export async function createResume(payload: {
   blank?: boolean;
   summary?: string;
   content?: Record<string, unknown>;
+  parentResumeId?: string;
 }) {
   return request<ResumeRecord>('/resumes', {
     method: 'POST',

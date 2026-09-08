@@ -9,8 +9,7 @@ import { COUNTRIES, DEFAULT_COUNTRY, isValidNational, toE164 } from '@/lib/phone
 import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
 import { authErrorMessage } from '@/lib/auth-errors';
-import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
-import { REGISTRATION_CITIES } from '@/data/india-locations';
+import { INDIA_STATES } from '@/data/india-locations';
 
 const fieldClass =
   'w-full rounded-xl border border-primary/15 bg-[#f8faf9] px-3.5 py-2.5 text-sm font-medium text-primary outline-none transition focus:border-teal focus:bg-white';
@@ -21,7 +20,7 @@ export function RegistrationForm() {
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [location, setLocation] = useState('');
+  const [state, setState] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [error, setError] = useState('');
@@ -49,8 +48,8 @@ export function RegistrationForm() {
       setError('Enter your full name.');
       return;
     }
-    if (!location.trim()) {
-      setError('Select or enter your location.');
+    if (!state.trim()) {
+      setError('Select your state.');
       return;
     }
 
@@ -64,7 +63,8 @@ export function RegistrationForm() {
         phone,
         email: email.trim(),
         fullName: fullName.trim(),
-        location: location.trim(),
+        state: state.trim(),
+        location: state.trim(),
         preferredLanguage: 'English',
         whatsappOptIn,
       });
@@ -79,7 +79,8 @@ export function RegistrationForm() {
         registration: {
           email: email.trim(),
           fullName: fullName.trim(),
-          location: location.trim(),
+          state: state.trim(),
+          location: state.trim(),
           preferredLanguage: 'English',
           accountType: 'CANDIDATE',
           whatsappOptIn,
@@ -110,7 +111,7 @@ export function RegistrationForm() {
         national={national}
         onDialChange={setDial}
         onNationalChange={setNational}
-        hint=""
+        hint="Use your WhatsApp number — it helps us reach you faster."
         error={error.includes('mobile') ? error : undefined}
       />
 
@@ -125,16 +126,25 @@ export function RegistrationForm() {
         onChange={(event) => setEmail(event.target.value)}
       />
 
-      <SearchableCreatableSelect
-        label="Location"
-        id="location"
-        required
-        value={location}
-        onChange={setLocation}
-        options={REGISTRATION_CITIES}
-        placeholder="Search city or type your own…"
-        allowCustom
-      />
+      <label className="block" htmlFor="reg-state">
+        <span className="mb-1.5 block text-sm font-bold text-slate-800">
+          State <span className="text-red-500">*</span>
+        </span>
+        <select
+          id="reg-state"
+          required
+          value={state}
+          onChange={(event) => setState(event.target.value)}
+          className={fieldClass}
+        >
+          <option value="">Select state</option>
+          {INDIA_STATES.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label className="flex items-start gap-2.5 cursor-pointer rounded-xl border border-primary/10 bg-[#f8faf9] p-3">
         <input
@@ -144,10 +154,8 @@ export function RegistrationForm() {
           className="mt-0.5 h-4 w-4 shrink-0 rounded border-primary/20 text-teal focus:ring-teal/30"
         />
         <span className="text-xs leading-relaxed text-[#4e6864]">
-          <span className="font-semibold text-primary">WhatsApp interview notifications (optional).</span>{' '}
-          I agree to receive interview invitations, confirmations, and reminders on WhatsApp at the mobile
-          number I provided. I can change this later in my profile. SMS/email/portal notifications may still
-          be used if WhatsApp is unavailable.
+          <span className="font-semibold text-primary">WhatsApp notifications (optional).</span>{' '}
+          Get quick interview updates on WhatsApp.
         </span>
       </label>
 

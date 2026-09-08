@@ -39,6 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.userType,
       phone: user.phone,
       onboardingCompleted: user.candidate?.onboardingCompleted ?? false,
+      dashboardReached: user.candidate?.dashboardReached ?? false,
     };
   }
 }

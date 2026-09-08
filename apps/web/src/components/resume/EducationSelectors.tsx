@@ -331,6 +331,7 @@ interface StateCitySelectProps {
   onChange: (location: string) => void;
   stateLabel?: string;
   cityLabel?: string;
+  highlightMissing?: boolean;
 }
 
 export function StateCitySelect({
@@ -338,6 +339,7 @@ export function StateCitySelect({
   onChange,
   stateLabel = 'State',
   cityLabel = 'City',
+  highlightMissing = false,
 }: StateCitySelectProps) {
   const parsed = parseCityState(location);
   const [state, setState] = useState(parsed.state);
@@ -350,6 +352,8 @@ export function StateCitySelect({
   }, [location]);
 
   const cities = useMemo(() => getCitiesForState(state), [state]);
+  const stateMissing = highlightMissing && !state.trim();
+  const cityMissing = highlightMissing && !city.trim();
 
   function update(nextState: string, nextCity: string) {
     setState(nextState);
@@ -360,7 +364,7 @@ export function StateCitySelect({
   return (
     <div className="cb-state-city-wrap" style={{ display: 'contents' }}>
       <style dangerouslySetInnerHTML={{ __html: styles }} />
-      <div className="cb-field">
+      <div className={`cb-field${stateMissing ? ' cb-field-missing' : ''}`}>
         <label>{stateLabel}</label>
         <select
           className="cb-form-select"
@@ -375,15 +379,17 @@ export function StateCitySelect({
           ))}
         </select>
       </div>
-      <SearchableCombobox
-        label={cityLabel}
-        value={city}
-        onChange={(nextCity) => update(state, nextCity)}
-        options={cities}
-        placeholder={state ? 'Search or type city' : 'Search or type city'}
-        allowCustom
-        disabled={!state && !city.trim()}
-      />
+      <div className={cityMissing ? 'cb-field-missing' : undefined} style={{ display: 'contents' }}>
+        <SearchableCombobox
+          label={cityLabel}
+          value={city}
+          onChange={(nextCity) => update(state, nextCity)}
+          options={cities}
+          placeholder={state ? 'Search or type city' : 'Search or type city'}
+          allowCustom
+          disabled={!state && !city.trim()}
+        />
+      </div>
     </div>
   );
 }

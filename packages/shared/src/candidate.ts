@@ -26,6 +26,7 @@ export type CandidateProfile = {
   hasExperience: string | null;
   profileCompletion: number;
   onboardingCompleted: boolean;
+  dashboardReached?: boolean;
   whatsappOptIn?: boolean;
   whatsappNumber?: string | null;
   whatsappVerified?: boolean;
@@ -188,6 +189,7 @@ export type UpdateCandidatePayload = {
   fullName?: string;
   firstName?: string;
   lastName?: string;
+  state?: string;
   city?: string;
   preferredWorkCity?: string;
   about?: string;
@@ -203,6 +205,7 @@ export type UpdateCandidatePayload = {
   photoUrl?: string | null;
   links?: CandidateLinks;
   onboardingCompleted?: boolean;
+  dashboardReached?: boolean;
   whatsappOptIn?: boolean;
   whatsappNumber?: string | null;
 };

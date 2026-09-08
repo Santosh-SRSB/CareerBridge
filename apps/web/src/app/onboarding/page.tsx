@@ -14,10 +14,14 @@ import { patchStoredUser } from '@/lib/session';
 import { getCandidateMe, updateCandidateMe } from '@/lib/api';
 import { nextOnboardingStepPath } from '@/lib/onboarding-flow';
 import { useOnboardingGate } from '@/hooks/useOnboardingGate';
+import { INDIA_STATES } from '@/data/india-locations';
+
+const selectClass =
+  'w-full rounded-xl border border-primary/15 bg-[#f8faf9] px-3.5 py-2.5 text-sm font-medium text-primary outline-none transition focus:border-teal focus:bg-white focus:ring-2 focus:ring-teal/20';
 
 export default function OnboardingLocationPage() {
   const router = useRouter();
-  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
   const [preferredWorkCity, setPreferredWorkCity] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,16 +33,15 @@ export default function OnboardingLocationPage() {
     if (!gateReady) return;
     getCandidateMe()
       .then((profile) => {
-        const currentCity = profile.city?.trim() || '';
-        setCity(currentCity);
-        setPreferredWorkCity(profile.preferredWorkCity?.trim() || currentCity);
+        setState(profile.state?.trim() || '');
+        setPreferredWorkCity(profile.preferredWorkCity?.trim() || profile.city?.trim() || '');
       })
       .finally(() => setProfileReady(true));
   }, [gateReady]);
 
   async function saveAndContinue() {
-    if (city.trim().length < 2) {
-      setError('Select where you are currently located.');
+    if (!state.trim()) {
+      setError('Select your state.');
       return false;
     }
     if (preferredWorkCity.trim().length < 2) {
@@ -49,9 +52,9 @@ export default function OnboardingLocationPage() {
     setLoading(true);
     try {
       const profile = await updateCandidateMe({
-        city: city.trim(),
+        state: state.trim(),
         preferredWorkCity: preferredWorkCity.trim(),
-        openToRelocating: city.trim().toLowerCase() !== preferredWorkCity.trim().toLowerCase(),
+        openToRelocating: true,
       });
       patchStoredUser({ firstName: profile.firstName });
       router.push(nextOnboardingStepPath(1));
@@ -84,8 +87,21 @@ export default function OnboardingLocationPage() {
   return (
     <OnboardingFrame step={1}>
       <form onSubmit={onSubmit} className="space-y-6">
-        <OnboardingQuestion title="Where are you currently located?">
-          <CitySelect id="current-city" label="" required value={city} onChange={setCity} />
+        <OnboardingQuestion title="Which state are you in?">
+          <select
+            id="current-state"
+            required
+            value={state}
+            onChange={(event) => setState(event.target.value)}
+            className={selectClass}
+          >
+            <option value="">Select state</option>
+            {INDIA_STATES.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
         </OnboardingQuestion>
 
         <OnboardingQuestion title="Where would you like to work?">

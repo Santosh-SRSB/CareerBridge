@@ -68,7 +68,9 @@ export function homePathForUser(user?: AuthUser | null) {
   if (!user?.id) return '/';
   if (isPlatformRole(user.role)) return '/srsbaadmin/dashboard';
   if (isEmployerRole(user.role)) return '/employer';
-  return '/dashboard';
+  if (user.dashboardReached) return '/dashboard';
+  if (user.onboardingCompleted) return '/onboarding/complete';
+  return '/onboarding/continue';
 }
 
 export function patchStoredUser(partial: Partial<AuthUser>) {

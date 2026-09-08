@@ -2,9 +2,9 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { RESUME_TEMPLATES, type ResumeContent, type ResumeRecord } from '@careerbridge/shared';
-import { aiReviewResume, createResume, downloadResume, getCandidateMe, getResume, saveBase64File, updateResume } from '@/lib/api';
+import { aiReviewResume, createResume, downloadResume, getCandidateMe, getResume, saveBase64File, savePassport, updateCandidateMe, updateResume } from '@/lib/api';
 import { downloadResumePdfFile } from '@/lib/resume-pdf';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { Input } from '@/components/ui/Input';
@@ -12,6 +12,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { ScoreRing } from '@/components/ScoreRing';
 import { ResumePaper } from '@/components/ResumePaper';
+import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
+import { patchStoredUser } from '@/lib/session';
 
 type StepId = 'personal' | 'education' | 'experience' | 'skills' | 'summary' | 'ai-polish' | 'finalize';
 
@@ -28,8 +30,8 @@ const STEPS: StepMeta[] = [
   { id: 'experience', label: '3. Experience', stepNumber: 3, description: 'Work, internships, and key duties' },
   { id: 'skills', label: '4. Skills', stepNumber: 4, description: 'Technical, domain, and soft competencies' },
   { id: 'summary', label: '5. Objective & Summary', stepNumber: 5, description: 'Career statement and strengths' },
-  { id: 'ai-polish', label: '6. AI Review & Polish', stepNumber: 6, description: 'Gemini ATS analysis & approval' },
-  { id: 'finalize', label: '7. Template & PDF', stepNumber: 7, description: 'Design styles and export' },
+  { id: 'ai-polish', label: '6. ATS & Improve with AI', stepNumber: 6, description: 'Score, suggestions, accept or reject' },
+  { id: 'finalize', label: '7. Save Resume', stepNumber: 7, description: 'Save version to cloud — download optional' },
 ];
 
 interface AiReviewData {
@@ -44,6 +46,8 @@ interface AiReviewData {
 export default function ResumeEditorPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isAutofillPath = searchParams.get('path') === 'autofill';
 
   const [resume, setResume] = useState<ResumeRecord | null>(null);
   const [content, setContent] = useState<ResumeContent | null>(null);
@@ -225,11 +229,29 @@ export default function ResumeEditorPage() {
       setResume(updated);
       setSaveMessage('Resume version updated and saved successfully!');
       setTimeout(() => setSaveMessage(''), 3500);
+      return true;
     } catch {
       setSaveMessage('Failed to save changes. Please try again.');
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  /** Path A step 12: create / refresh Career Passport from finalized resume data. */
+  async function applyResumeToProfile() {
+    if (!content) return false;
+    const payload = mapResumeContentToPassportPayload(content);
+    const profile = await savePassport(payload);
+    const preferredLanguage = content.languages?.[0]?.trim();
+    if (preferredLanguage) {
+      await updateCandidateMe({ preferredLanguage }).catch(() => undefined);
+    }
+    patchStoredUser({
+      firstName: profile.firstName,
+      onboardingCompleted: true,
+    });
+    return true;
   }
 
   async function onRunAiReview() {
@@ -353,6 +375,16 @@ export default function ResumeEditorPage() {
           {saveMessage}
         </div>
       )}
+
+      {isAutofillPath ? (
+        <div className="rounded-xl border border-teal/20 bg-teal/5 px-4 py-3 text-sm text-primary">
+          <p className="font-bold text-teal">Path A · Autofill with Resume</p>
+          <p className="mt-1 text-xs text-muted">
+            Fill remaining sections → Check ATS score → Improve with AI (accept/reject) → Save resume
+            → Profile &amp; passport created → Dashboard (download optional)
+          </p>
+        </div>
+      ) : null}
 
       {/* Hero Header with ATS Score */}
       <div className="grid items-center gap-6 lg:grid-cols-[1fr_auto]">
@@ -871,12 +903,15 @@ export default function ResumeEditorPage() {
               </div>
             )}
 
-            {/* STEP 7: TEMPLATE & PDF EXPORT */}
+            {/* STEP 7: SAVE (download optional) */}
             {currentStep === 'finalize' && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-base font-bold text-primary">Choose Template & Export PDF</h3>
-                  <p className="text-xs text-muted">Pick a style and download your formatted PDF document.</p>
+                  <h3 className="text-base font-bold text-primary">Save Resume</h3>
+                  <p className="text-xs text-muted">
+                    Save creates a resume version and stores the file in cloud storage with metadata in
+                    PostgreSQL. Download to your device is optional after save.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -901,19 +936,37 @@ export default function ResumeEditorPage() {
                 </div>
 
                 <div className="rounded-xl border border-primary/10 bg-[#faf8f3] p-5 space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h4 className="text-sm font-bold text-primary">Export High-Fidelity PDF</h4>
-                      <p className="text-xs text-muted">Formatted using standard ATS margins and headers.</p>
+                      <h4 className="text-sm font-bold text-primary">Save to platform</h4>
+                      <p className="text-xs text-muted">
+                        User edits → Save → Create version → Cloud Storage + PostgreSQL
+                      </p>
                     </div>
                     <Button
                       type="button"
+                      onClick={() => onSave()}
+                      loading={saving}
+                      loadingLabel="Saving..."
+                      className="text-xs font-bold"
+                    >
+                      Save Resume
+                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-3 border-t border-primary/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-primary">Optional download</h4>
+                      <p className="text-xs text-muted">Download is not part of save — use after you save.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
                       onClick={onDownload}
                       loading={downloading}
                       loadingLabel="Generating PDF..."
                       className="text-xs font-bold"
                     >
-                      📥 Download PDF
+                      Download PDF
                     </Button>
                   </div>
                 </div>
@@ -949,8 +1002,31 @@ export default function ResumeEditorPage() {
                     Next: {STEPS[currentStepIndex + 1].label} →
                   </Button>
                 ) : (
-                  <Button type="button" onClick={onDownload} loading={downloading} className="text-xs font-bold">
-                    Download PDF
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await onSave();
+                      if (!ok) return;
+                      if (isAutofillPath) {
+                        setSaving(true);
+                        try {
+                          await applyResumeToProfile();
+                          setSaveMessage('Profile & passport updated from your resume.');
+                          router.push('/dashboard');
+                        } catch {
+                          setSaveMessage(
+                            'Resume saved, but profile could not be updated. You can finish details in Career Passport.',
+                          );
+                        } finally {
+                          setSaving(false);
+                        }
+                      }
+                    }}
+                    loading={saving}
+                    loadingLabel="Saving..."
+                    className="text-xs font-bold"
+                  >
+                    {isAutofillPath ? 'Save & finish' : 'Save Resume'}
                   </Button>
                 )}
               </div>

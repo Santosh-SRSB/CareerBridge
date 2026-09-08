@@ -28,9 +28,9 @@ function educationDegreeLine(degree: string, field: string) {
 
 export async function renderMasterResumePdf(doc: MasterResumeDocument) {
   const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
+  const regular = await pdf.embedFont(StandardFonts.TimesRoman);
+  const bold = await pdf.embedFont(StandardFonts.TimesRomanBold);
+  const italic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
   const pageWidth = 595;
   const pageHeight = 842;
   let page = pdf.addPage([pageWidth, pageHeight]);

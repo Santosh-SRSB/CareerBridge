@@ -24,12 +24,13 @@ export function formatPhoneDisplay(e164: string) {
   return e164;
 }
 
-import { POST_REGISTRATION_PATH } from './onboarding-flow';
+import { ONBOARDING_CONTINUE_PATH, POST_REGISTRATION_PATH } from './onboarding-flow';
 
 export function postAuthPath(user: {
   role?: string;
   firstName?: string | null;
   onboardingCompleted: boolean;
+  dashboardReached?: boolean;
   purpose?: 'LOGIN' | 'REGISTER';
 }) {
   if (user.role === 'EMPLOYER_ADMIN' || user.role === 'EMPLOYER_RECRUITER') {
@@ -42,8 +43,14 @@ export function postAuthPath(user: {
   ) {
     return '/admin';
   }
-  if (user.purpose === 'REGISTER' || !user.onboardingCompleted) {
+  if (user.purpose === 'REGISTER') {
     return POST_REGISTRATION_PATH;
   }
-  return '/dashboard';
+  if (user.dashboardReached) {
+    return '/dashboard';
+  }
+  if (user.onboardingCompleted) {
+    return '/onboarding/complete';
+  }
+  return ONBOARDING_CONTINUE_PATH;
 }
