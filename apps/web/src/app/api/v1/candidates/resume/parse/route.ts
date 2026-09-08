@@ -45,14 +45,14 @@ export async function POST(request: Request) {
     let parseId: string | undefined;
     try {
       const { prisma } = await import("@/lib/prisma");
-      const saved = await prisma.resumeParse.create({
+      const saved = await (prisma as any).resumeParse?.create({
         data: {
           fileName: file.name,
           rawText,
           structured: draft,
         },
       });
-      parseId = saved.id;
+      parseId = saved?.id;
     } catch (error) {
       console.error(error);
     }

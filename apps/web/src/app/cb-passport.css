@@ -1955,11 +1955,11 @@
 .cb-auth-portal input,
 .cb-auth-portal select,
 .cb-auth-portal textarea {
-  background: #f6fbf7 !important;
-  border-color: rgba(10, 46, 44, 0.12) !important;
-  padding: 8px 12px !important;
-  font-size: 14px !important;
-  border-radius: 8px !important;
+  background: #f6fbf7;
+  border-color: rgba(10, 46, 44, 0.12);
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 8px;
 }
 
 .cb-auth-portal label > span,

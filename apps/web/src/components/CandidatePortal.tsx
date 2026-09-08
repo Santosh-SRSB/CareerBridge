@@ -10,6 +10,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { ActiveInterviewTimerBanner } from '@/components/ActiveInterviewTimerBanner';
 import { logout } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
+import { CandidateBottomNav } from '@/components/CandidateBottomNav';
 
 const NAV = [
   { href: '/dashboard', label: 'My home' },
@@ -193,8 +194,9 @@ export function CandidateShell({
             <PortalNav />
           </nav>
         )}
-        <div className="min-w-0 space-y-3">{children}</div>
+        <div className="min-w-0 space-y-3 pb-20 lg:pb-0">{children}</div>
       </div>
+      <CandidateBottomNav />
     </div>
   );
 }

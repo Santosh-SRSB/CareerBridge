@@ -46,7 +46,7 @@ export function PassportPreview({
   skills = ['SQL', 'Excel'],
   photoUrl,
   resumeScore = 70,
-  interviewScore = 58,
+  interviewScore = null,
   passportId,
 }: {
   name?: string;
@@ -134,7 +134,7 @@ export function PassportPreview({
 
         <div className="relative mt-3 flex flex-col items-center">
           <Link
-            href={ready < 100 ? '/passport/personal?flow=1' : '/dashboard'}
+            href={ready < 100 ? '/passport/personal' : '/passport'}
             className="inline-flex h-8 items-center rounded-full bg-[#eab308] px-3.5 text-xs font-extrabold text-[#0a2e2c] shadow-[0_8px_18px_rgba(0,0,0,0.28)] transition hover:brightness-110"
           >
             {ready < 100 ? 'Improve Passport' : 'Open dashboard'}
