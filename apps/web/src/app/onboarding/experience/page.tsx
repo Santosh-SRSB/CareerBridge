@@ -98,7 +98,8 @@ export default function OnboardingExperiencePage() {
         firstName: profile.firstName,
         onboardingCompleted: true,
       });
-      router.replace('/dashboard');
+      // Next: choose Autofill with resume vs Build Resume
+      router.replace('/onboarding/complete');
     } catch {
       setError('We could not save your experience right now. Please try again.');
     } finally {
@@ -115,7 +116,7 @@ export default function OnboardingExperiencePage() {
       // ignored
     } finally {
       setLoading(false);
-      router.replace('/dashboard');
+      router.replace('/onboarding/complete');
     }
   }
 

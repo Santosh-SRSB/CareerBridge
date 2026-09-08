@@ -58,7 +58,7 @@ export default function OnboardingCompletePage() {
           Create your resume
         </h1>
         <p className="mt-2 text-center text-sm leading-relaxed text-slate-600">
-          Your Career Passport is {completion}% complete. Choose how you want to add a resume.
+          Your profile is {completion}% complete. Choose how you want to create your resume.
         </p>
 
         <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -72,9 +72,9 @@ export default function OnboardingCompletePage() {
           <button
             type="button"
             onClick={() => router.push('/resume/upload')}
-            className="group flex cursor-pointer flex-col items-start rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-left transition hover:border-[#0a2e2c]/40 hover:bg-white hover:shadow-md"
+            className="group flex cursor-pointer flex-col items-start rounded-2xl border-2 border-[#0a2e2c] bg-[#0a2e2c] p-5 text-left text-white shadow-sm transition hover:bg-[#072422]"
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#0a2e2c] shadow-sm ring-1 ring-slate-200 transition group-hover:ring-[#0a2e2c]/30">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M12 16V7m0 0l-3.5 3.5M12 7l3.5 3.5"
@@ -91,11 +91,11 @@ export default function OnboardingCompletePage() {
                 />
               </svg>
             </span>
-            <p className="mt-4 text-base font-extrabold text-slate-900">Upload resume</p>
-            <p className="mt-1.5 text-sm leading-snug text-slate-600">
-              Already have a PDF or Word file? Upload it and we&apos;ll extract your details.
+            <p className="mt-4 text-base font-extrabold">Autofill with resume</p>
+            <p className="mt-1.5 text-sm leading-snug text-white/75">
+              Upload a PDF or Word file and we&apos;ll fill your resume from it.
             </p>
-            <span className="mt-4 text-sm font-bold text-[#0a2e2c]">Upload file →</span>
+            <span className="mt-4 text-sm font-bold text-[#e68a39]">Upload &amp; autofill →</span>
           </button>
 
           <button
@@ -104,9 +104,9 @@ export default function OnboardingCompletePage() {
               markResumeStartWizardFromProfile();
               router.push('/resume');
             }}
-            className="group flex cursor-pointer flex-col items-start rounded-2xl border-2 border-[#0a2e2c] bg-[#0a2e2c] p-5 text-left text-white shadow-sm transition hover:bg-[#072422]"
+            className="group flex cursor-pointer flex-col items-start rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-left transition hover:border-[#0a2e2c]/40 hover:bg-white hover:shadow-md"
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#0a2e2c] shadow-sm ring-1 ring-slate-200 transition group-hover:ring-[#0a2e2c]/30">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M7 4h7l4 4v12a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1z"
@@ -123,11 +123,11 @@ export default function OnboardingCompletePage() {
                 />
               </svg>
             </span>
-            <p className="mt-4 text-base font-extrabold">Build from Scratch</p>
-            <p className="mt-1.5 text-sm leading-snug text-white/75">
-              Use your Career Passport and walk through a short guided wizard.
+            <p className="mt-4 text-base font-extrabold text-slate-900">Build Resume</p>
+            <p className="mt-1.5 text-sm leading-snug text-slate-600">
+              Create a resume step by step using your profile details.
             </p>
-            <span className="mt-4 text-sm font-bold text-[#e68a39]">Start building →</span>
+            <span className="mt-4 text-sm font-bold text-[#0a2e2c]">Start building →</span>
           </button>
         </div>
 
