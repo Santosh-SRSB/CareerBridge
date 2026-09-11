@@ -5,15 +5,15 @@ export const ATS_SCORE_TYPE = 'ATS_READINESS' as const;
 export const ATS_SECTION_WEIGHTS = {
   contact: 10,
   structure: 10,
-  formatting: 12,
-  summary: 10,
-  experience: 18,
-  skills: 12,
+  formatting: 8,
+  summary: 12,
+  experience: 16,
+  skills: 18,
   education: 8,
   certifications: 5,
   projects: 5,
-  readability: 5,
-  consistency: 5,
+  readability: 4,
+  consistency: 4,
 } as const;
 
 export type AtsSectionKey = keyof typeof ATS_SECTION_WEIGHTS;
@@ -146,7 +146,13 @@ export function extractFacts(content: ResumeContent, rawText = ''): AtsFact[] {
   if (content.email) push('email', content.email, content.email, 'contact');
   content.skills.forEach((skill) => push('skill', skill, skill, 'skills'));
   content.languages.forEach((lang) => push('language', lang, lang, 'languages'));
-  (content.certifications || []).forEach((item) => push('certification', item, item, 'certifications'));
+  (content.certifications || []).forEach((item) => {
+    const label =
+      typeof item === 'string'
+        ? item
+        : [item.name, item.issuer, item.date].filter(Boolean).join(' — ');
+    if (label) push('certification', label, label, 'certifications');
+  });
   content.education.forEach((item) => {
     push('degree', item.qualification, item.qualification, 'education');
     if (item.institution) push('institution', item.institution, item.institution, 'education');
@@ -256,10 +262,15 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
   }
 
   const hasSummary = Boolean(content.summary && content.summary.trim().length >= 40);
+  const summaryLen = (content.summary || '').trim().length;
   const genericSummary = /hardworking|team player|looking for a challenging|to utilize my skills/i.test(
     content.summary || '',
   );
-  let summary = hasSummary ? 82 : 48;
+  // Continuous summary score — length and specificity both matter.
+  let summary = !summaryLen
+    ? 40
+    : Math.min(92, 48 + Math.round(Math.min(summaryLen, 280) / 5));
+  if (genericSummary) summary = Math.min(summary, 65);
   if (!hasSummary) {
     add({
       section: ATS_SECTION_LABELS.summary,
@@ -283,7 +294,29 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
     });
   }
 
-  let experience = content.experiences.length ? 78 : 42;
+  let experience = 42;
+  if (content.experiences.length) {
+    const bulletCount = content.experiences.reduce((sum, item) => {
+      const bullets = (item.description || '')
+        .split(/\n|•/)
+        .map((row) => row.trim())
+        .filter(Boolean);
+      return sum + bullets.length;
+    }, 0);
+    const descChars = content.experiences.reduce(
+      (sum, item) => sum + String(item.description || '').trim().length,
+      0,
+    );
+    const titled = content.experiences.filter((item) => item.company && item.jobTitle).length;
+    experience = Math.min(
+      92,
+      48 +
+        content.experiences.length * 6 +
+        Math.min(bulletCount, 16) * 2 +
+        Math.min(Math.round(descChars / 50), 14) +
+        titled * 3,
+    );
+  }
   if (!content.experiences.length) {
     add({
       section: ATS_SECTION_LABELS.experience,
@@ -302,7 +335,7 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
       .filter(Boolean);
     const generic = bullets.filter((row) => GENERIC_VERBS.test(row) || row.split(/\s+/).length < 6);
     if (generic.length) {
-      experience = Math.min(experience, 58);
+      experience = Math.min(experience, Math.max(52, experience - 12));
       const sample = generic[0];
       add({
         section: ATS_SECTION_LABELS.experience,
@@ -317,7 +350,7 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
       });
     }
     if (!item.company || !item.jobTitle) {
-      experience = Math.min(experience, 62);
+      experience = Math.min(experience, Math.max(55, experience - 8));
       add({
         section: ATS_SECTION_LABELS.experience,
         sectionKey: 'experience',
@@ -334,9 +367,11 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
   const missingSkills = mentionedSkills(experienceText).filter(
     (skill) => !content.skills.some((item) => item.toLowerCase().includes(skill.toLowerCase())),
   );
-  let skills = content.skills.length >= 6 ? 86 : content.skills.length >= 3 ? 72 : 50;
+  const skillCount = content.skills.filter((s) => String(s || '').trim()).length;
+  // Steeper skills curve — each added/removed skill should move the overall ATS score.
+  let skills = skillCount === 0 ? 28 : Math.min(98, 26 + skillCount * 6);
   if (missingSkills.length) {
-    skills = Math.min(skills, 72);
+    skills = Math.min(skills, Math.max(50, skills - 10));
     add({
       section: ATS_SECTION_LABELS.skills,
       sectionKey: 'skills',
@@ -347,8 +382,8 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
       recommendation: `Consider adding ${missingSkills[0]} to your Skills section because it is already mentioned in your experience.`,
     });
   }
-  if (!content.skills.length) {
-    skills = 40;
+  if (!skillCount) {
+    skills = 28;
     add({
       section: ATS_SECTION_LABELS.skills,
       sectionKey: 'skills',
@@ -360,7 +395,15 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
     });
   }
 
-  const education = content.education.length ? 90 : 45;
+  let education = 45;
+  if (content.education.length) {
+    const withInstitution = content.education.filter((item) => Boolean(item.institution)).length;
+    const withYear = content.education.filter((item) => Boolean(item.yearCompleted)).length;
+    education = Math.min(
+      94,
+      58 + content.education.length * 8 + withInstitution * 5 + withYear * 4,
+    );
+  }
   if (!content.education.length) {
     add({
       section: ATS_SECTION_LABELS.education,
@@ -373,34 +416,70 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
     });
   }
 
-  const certifications = (content.certifications || []).length ? 80 : 70;
-  const projects = (content.projects || []).length || /project/i.test(experienceText) ? 78 : 68;
+  const certCount = (content.certifications || []).filter((entry) => {
+    if (typeof entry === 'string') return Boolean(entry.trim());
+    return Boolean(entry?.name?.trim());
+  }).length;
+  const certDetail = (content.certifications || []).filter((entry) => {
+    if (typeof entry === 'string') return false;
+    return Boolean(entry?.name?.trim() && (entry.issuer?.trim() || entry.date?.trim()));
+  }).length;
+  const certifications = certCount
+    ? Math.min(94, 62 + certCount * 6 + certDetail * 4)
+    : 58;
+
+  const projectList = content.projects || [];
+  const projectCount = projectList.length;
+  const projectChars = projectList.reduce(
+    (sum, item) => sum + String(item.description || '').trim().length + String(item.name || '').trim().length,
+    0,
+  );
+  let projects = 55;
+  if (projectCount) {
+    projects = Math.min(94, 58 + projectCount * 8 + Math.min(Math.round(projectChars / 40), 16));
+  } else if (/project/i.test(experienceText)) {
+    projects = 70;
+  }
 
   const raw = rawText || '';
-  let formatting = 84;
-  if (/\|.+\|/.test(raw) || /\t\t/.test(raw)) {
-    formatting = 62;
-    add({
-      section: ATS_SECTION_LABELS.formatting,
-      sectionKey: 'formatting',
-      severity: 'HIGH',
-      problem: 'Important information appears inside a complex layout (columns or tables).',
-      location: 'Formatting',
-      why: 'Multi-column tables and text boxes often parse out of order or drop text.',
-      recommendation: 'Use a simple ATS-readable single-column structure.',
-    });
-  }
-  if (raw && !content.phone && /contact/i.test(raw)) {
-    formatting = Math.min(formatting, 64);
-    add({
-      section: ATS_SECTION_LABELS.formatting,
-      sectionKey: 'formatting',
-      severity: 'MEDIUM',
-      problem: 'Contact details may sit in a header graphic or icon instead of text.',
-      location: 'Header / footer',
-      why: 'ATS often ignores headers, footers, and icon-only contact rows.',
-      recommendation: 'Repeat email and phone in the main body as selectable text.',
-    });
+  let formatting = 78;
+  if (raw) {
+    formatting = 84;
+    if (/\|.+\|/.test(raw) || /\t\t/.test(raw)) {
+      formatting = 62;
+      add({
+        section: ATS_SECTION_LABELS.formatting,
+        sectionKey: 'formatting',
+        severity: 'HIGH',
+        problem: 'Important information appears inside a complex layout (columns or tables).',
+        location: 'Formatting',
+        why: 'Multi-column tables and text boxes often parse out of order or drop text.',
+        recommendation: 'Use a simple ATS-readable single-column structure.',
+      });
+    }
+    if (!content.phone && /contact/i.test(raw)) {
+      formatting = Math.min(formatting, 64);
+      add({
+        section: ATS_SECTION_LABELS.formatting,
+        sectionKey: 'formatting',
+        severity: 'MEDIUM',
+        problem: 'Contact details may sit in a header graphic or icon instead of text.',
+        location: 'Header / footer',
+        why: 'ATS often ignores headers, footers, and icon-only contact rows.',
+        recommendation: 'Repeat email and phone in the main body as selectable text.',
+      });
+    }
+  } else {
+    // Created resumes often have empty rawText — score formatting from structured completeness.
+    formatting = Math.min(
+      90,
+      70 +
+        (contactBits >= 3 ? 6 : contactBits * 2) +
+        (hasSummary ? 4 : 0) +
+        (content.experiences.length ? 4 : 0) +
+        (skillCount ? 3 : 0) +
+        (content.education.length ? 3 : 0),
+    );
   }
 
   const structure = [hasSummary, content.experiences.length, content.skills.length, content.education.length].filter(
@@ -409,9 +488,13 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
   const structureScore = [42, 58, 70, 82, 90][structure];
 
   const allText = `${content.summary} ${experienceText} ${content.skills.join(' ')}`;
-  const readability = allText.length > 280 && allText.split(/\s+/).length < 900 ? 82 : 68;
-  const headingSet = [hasSummary, content.experiences.length > 0, content.skills.length > 0, content.education.length > 0];
-  const consistency = headingSet.every(Boolean) ? 86 : 70;
+  const wordCount = allText.split(/\s+/).filter(Boolean).length;
+  const readability =
+    wordCount > 80
+      ? Math.min(92, 62 + Math.round(Math.min(wordCount, 500) / 16))
+      : Math.max(48, 40 + Math.round(wordCount / 4));
+  const headingBits = [hasSummary, content.experiences.length > 0, content.skills.length > 0, content.education.length > 0];
+  const consistency = 58 + headingBits.filter(Boolean).length * 7;
 
   const sectionValues: Record<AtsSectionKey, number> = {
     contact,

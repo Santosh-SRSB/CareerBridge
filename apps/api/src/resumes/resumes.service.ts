@@ -43,7 +43,21 @@ export class ResumesService {
       orderBy: { updatedAt: 'desc' },
       include: { _count: { select: { applications: true } } },
     });
-    return rows.map((row) => this.toRecord(row, undefined, row._count.applications));
+    // Recompute ATS readiness from current content so list scores stay in sync
+    // (avoids stale values like every resume stuck at 77 after an old scoring bug).
+    return Promise.all(
+      rows.map(async (row) => {
+        const content = hydrateResumeContent(parseContent(row.contentJson), row.rawText);
+        const analysis = analyzeResumeContent(content, row.rawText || '');
+        if (row.score !== analysis.score) {
+          await this.prisma.resume.update({
+            where: { id: row.id },
+            data: { score: analysis.score },
+          });
+        }
+        return this.toRecord({ ...row, score: analysis.score }, analysis, row._count.applications);
+      }),
+    );
   }
 
   /**
@@ -1148,7 +1162,22 @@ function sanitizeUploadedContent(
     ? data.languages.map((item) => asString(item)).filter(Boolean)
     : [];
   const certifications = Array.isArray(data.certifications)
-    ? data.certifications.map((item) => asString(item)).filter(Boolean)
+    ? data.certifications
+        .map((row) => {
+          if (typeof row === 'string') {
+            const name = asString(row);
+            return name ? { name, issuer: null as string | null, date: null as string | null } : null;
+          }
+          const item = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+          const name = asString(item.name);
+          if (!name) return null;
+          return {
+            name,
+            issuer: asString(item.issuer) || null,
+            date: asString(item.date) || null,
+          };
+        })
+        .filter((row): row is { name: string; issuer: string | null; date: string | null } => Boolean(row))
     : [];
   const projects = Array.isArray(data.projects)
     ? data.projects
@@ -1288,11 +1317,20 @@ function friendDataToContent(data: Record<string, unknown>, includePhoto?: boole
     languages: [],
     certifications: certifications
       .map((item) => {
-        if (typeof item === 'string') return item.trim();
+        if (typeof item === 'string') {
+          const name = item.trim();
+          return name ? { name, issuer: null as string | null, date: null as string | null } : null;
+        }
         const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
-        return String(row.name || '').trim();
+        const name = String(row.name || '').trim();
+        if (!name) return null;
+        return {
+          name,
+          issuer: String(row.issuer || '').trim() || null,
+          date: String(row.date || '').trim() || null,
+        };
       })
-      .filter(Boolean),
+      .filter((row): row is { name: string; issuer: string | null; date: string | null } => Boolean(row)),
     projects: projects.map((item) => {
       const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
       return {
@@ -1361,14 +1399,36 @@ function toRoleAtsResume(content: ResumeContent & { _manual?: boolean; data?: Re
       title: item.name,
       description: item.description || '',
       technologies: [],
-      bullets: [],
-      url: '',
+      bullets: Array.isArray(item.bullets)
+        ? item.bullets.map((b) => String(b || '').trim()).filter(Boolean)
+        : item.description
+          ? item.description
+              .split(/\n|•/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .slice(1)
+          : [],
+      url: item.url || '',
     })),
-    certifications: (content.certifications || []).map((name) => ({
-      name,
-      issuer: '',
-      date: '',
-      url: '',
+    certifications: (content.certifications || []).map((entry) => {
+      if (typeof entry === 'string') return { name: entry, issuer: '', date: '', url: '' };
+      return {
+        name: entry.name || '',
+        issuer: entry.issuer || '',
+        date: entry.date || '',
+        url: entry.url || '',
+      };
+    }),
+    achievements: (content.achievements || []).map((item) => ({
+      title: item.title || '',
+      organization: item.organization || '',
+      description: item.description || '',
+      date: item.date || '',
     })),
+    languages: (content.languages || []).map((entry) => {
+      const match = String(entry).match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+      if (match) return { name: match[1].trim(), level: match[2].trim() };
+      return { name: String(entry), level: '' };
+    }),
   };
 }

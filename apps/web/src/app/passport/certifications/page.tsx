@@ -24,6 +24,7 @@ export default function PassportCertificationsPage() {
   const [issuer, setIssuer] = useState('');
   const [year, setYear] = useState('');
   const [credentialId, setCredentialId] = useState('');
+  const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -43,6 +44,7 @@ export default function PassportCertificationsPage() {
     setIssuer('');
     setYear('');
     setCredentialId('');
+    setUrl('');
   }
 
   async function saveCurrent() {
@@ -55,11 +57,23 @@ export default function PassportCertificationsPage() {
       setError(invalidYear);
       return null;
     }
+    const trimmedUrl = url.trim();
+    if (trimmedUrl) {
+      try {
+        const withProto = /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`;
+        // eslint-disable-next-line no-new
+        new URL(withProto);
+      } catch {
+        setError('Enter a valid certificate URL, or leave it blank.');
+        return null;
+      }
+    }
     const profile = await addCertification({
       name: name.trim(),
       issuer: issuer.trim() || undefined,
       year: year ? Number(year) : undefined,
       credentialId: credentialId.trim() || undefined,
+      url: trimmedUrl || undefined,
     });
     setItems(profile.certifications);
     resetForm();
@@ -148,6 +162,13 @@ export default function PassportCertificationsPage() {
           value={credentialId}
           onChange={(event) => setCredentialId(event.target.value)}
           placeholder="Optional ID or license number"
+        />
+        <Input
+          label="Certificate URL"
+          name="certificateUrl"
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          placeholder="Optional — https://…"
         />
         {error ? <p className="text-sm font-semibold text-error">{error}</p> : null}
         <WizardActions>

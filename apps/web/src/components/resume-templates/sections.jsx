@@ -141,10 +141,33 @@ export function TechnicalSkillsSection({ data, title = "Technical Skills" }) {
   );
 }
 
+export function AchievementsSection({ data, title = "Achievements" }) {
+  const achievements = (data.achievements || []).filter(
+    (a) => a.title || a.description || a.organization || a.date,
+  );
+  if (!achievements.length) return null;
+  return (
+    <section>
+      <h2>{title}</h2>
+      <ul>
+        {achievements.map((a, i) => (
+          <li key={a.id || `ach-${i}`}>
+            <strong>{a.title}</strong>
+            {a.organization ? ` — ${a.organization}` : ""}
+            {a.date ? ` (${a.date})` : ""}
+            {a.description ? `: ${a.description}` : ""}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function AchievementsCertificationsSection({
   data,
   title = "Achievements & Certifications",
 }) {
+  // Prefer separate sections; fall back to combined heading only when both exist and caller insisted.
   const achievements = (data.achievements || []).filter(
     (a) => a.title || a.description || a.organization || a.date,
   );
@@ -152,6 +175,14 @@ export function AchievementsCertificationsSection({
     (c) => c.name || c.issuer || c.date || c.url || c.link,
   );
   if (!achievements.length && !certs.length) return null;
+  if (title === "Achievements & Certifications" || title === "Achievements and Certifications") {
+    return (
+      <>
+        <AchievementsSection data={data} />
+        <CertificationsSection data={data} />
+      </>
+    );
+  }
   return (
     <section>
       <h2>{title}</h2>

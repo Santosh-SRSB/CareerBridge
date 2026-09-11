@@ -5,20 +5,55 @@ const SECTION_ALIASES: Record<string, SectionKey> = {
   'PROFESSIONAL SUMMARY': 'summary',
   'CAREER OBJECTIVE': 'summary',
   OBJECTIVE: 'summary',
+  PROFILE: 'summary',
+  'ABOUT ME': 'summary',
+  ABOUT: 'summary',
   EXPERIENCE: 'experience',
   'WORK EXPERIENCE': 'experience',
   'PROFESSIONAL EXPERIENCE': 'experience',
+  'EMPLOYMENT HISTORY': 'experience',
+  EMPLOYMENT: 'experience',
+  INTERNSHIP: 'experience',
+  INTERNSHIPS: 'experience',
   'TECHNICAL SKILLS': 'skills',
+  'TECHNICAL PROFICIENCIES': 'skills',
   SKILLS: 'skills',
+  'CORE COMPETENCIES': 'skills',
+  COMPETENCIES: 'skills',
   EDUCATION: 'education',
+  'ACADEMIC QUALIFICATIONS': 'education',
+  QUALIFICATIONS: 'education',
+  ACADEMICS: 'education',
   PROJECTS: 'projects',
-  'ACHIEVEMENTS AND CERTIFICATIONS': 'certs',
-  ACHIEVEMENTS: 'certs',
+  'KEY PROJECTS': 'projects',
+  'PERSONAL PROJECTS': 'projects',
+  'ACADEMIC PROJECTS': 'projects',
+  ACHIEVEMENTS: 'achievements',
+  'KEY ACHIEVEMENTS': 'achievements',
+  ACCOMPLISHMENTS: 'achievements',
   CERTIFICATIONS: 'certs',
+  CERTIFICATE: 'certs',
+  CERTIFICATES: 'certs',
+  LICENSES: 'certs',
+  'LICENSES & CERTIFICATIONS': 'certs',
+  'CERTIFICATIONS AND LICENSES': 'certs',
+  'ACHIEVEMENTS AND CERTIFICATIONS': 'achievements',
+  'ACHIEVEMENTS & CERTIFICATIONS': 'achievements',
+  'CERTIFICATIONS AND ACHIEVEMENTS': 'certs',
+  'CERTIFICATIONS & ACHIEVEMENTS': 'certs',
   LANGUAGES: 'languages',
+  'LANGUAGE PROFICIENCY': 'languages',
 };
 
-type SectionKey = 'summary' | 'experience' | 'skills' | 'education' | 'projects' | 'certs' | 'languages';
+type SectionKey =
+  | 'summary'
+  | 'experience'
+  | 'skills'
+  | 'education'
+  | 'projects'
+  | 'certs'
+  | 'achievements'
+  | 'languages';
 
 const PLACEHOLDER_LINES = new Set([
   'your college or university',
@@ -27,8 +62,23 @@ const PLACEHOLDER_LINES = new Set([
 ]);
 
 function headingKey(line: string): SectionKey | null {
-  const key = line.replace(/[:\s]+$/g, '').trim().toUpperCase();
-  return SECTION_ALIASES[key] || null;
+  const key = line
+    .replace(/[:\s]+$/g, '')
+    .replace(/[•·|_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+  if (SECTION_ALIASES[key]) return SECTION_ALIASES[key];
+  // Soft match common variants like "TECHNICAL SKILL SET"
+  if (/^TECHNICAL SKILL/.test(key)) return 'skills';
+  if (/^WORK EXPER/.test(key) || /^PROFESSIONAL EXPER/.test(key)) return 'experience';
+  if (/^CERTIFIC/.test(key)) return 'certs';
+  if (/^ACHIEV/.test(key) || /^ACCOMPLISH/.test(key)) return 'achievements';
+  if (/^PROJECT/.test(key)) return 'projects';
+  if (/^EDUCAT|^ACADEMIC/.test(key)) return 'education';
+  if (/^LANGUAGE/.test(key)) return 'languages';
+  if (/^SUMMARY|^OBJECTIVE|^PROFILE|^ABOUT/.test(key)) return 'summary';
+  return null;
 }
 
 function looksLikePageMarker(line: string) {
@@ -121,33 +171,103 @@ function stripBullet(line: string) {
 function parseEducation(lines: string[]): ResumeContent['education'] {
   const useful = lines.filter((line) => !PLACEHOLDER_LINES.has(line.toLowerCase()));
   if (!useful.length) return [];
-  const institution =
-    [...useful].reverse().find((line) => /university|college|institute|school/i.test(line)) ||
-    useful[useful.length - 1] ||
-    null;
-  const qualification =
-    useful.find((line) => /graduate|bachelor|master|b\.?tech|m\.?tech|diploma|phd|information/i.test(line)) ||
-    useful[0];
-  return [
-    {
-      qualification,
-      institution: institution === qualification ? null : institution,
-      yearCompleted: null,
-    },
-  ];
+
+  const entries: ResumeContent['education'] = [];
+  let block: string[] = [];
+
+  const flush = () => {
+    if (!block.length) return;
+    const yearLine = block.find((line) => /\b(19|20)\d{2}\b/.test(line));
+    const yearMatch = yearLine?.match(/\b((?:19|20)\d{2})\b/);
+    const institution =
+      [...block].reverse().find((line) => /university|college|institute|school|academy/i.test(line)) ||
+      (block.length > 1 ? block[block.length - 1] : null);
+    const qualification =
+      block.find((line) =>
+        /graduate|bachelor|master|b\.?tech|m\.?tech|b\.?e\.?\b|m\.?e\.?\b|diploma|phd|b\.?sc|m\.?sc|information|engineering|degree/i.test(
+          line,
+        ),
+      ) || block[0];
+    if (qualification || institution) {
+      entries.push({
+        qualification: qualification || String(institution || ''),
+        institution:
+          institution && institution !== qualification ? institution : null,
+        yearCompleted: yearMatch ? Number.parseInt(yearMatch[1], 10) : null,
+      });
+    }
+    block = [];
+  };
+
+  for (const line of useful) {
+    const startsNew =
+      block.length > 0 &&
+      isShortLabel(line) &&
+      (/university|college|institute|school|academy|bachelor|master|b\.?tech|m\.?tech|diploma|phd/i.test(line) ||
+        /^\d{4}/.test(line));
+    if (startsNew && block.length >= 2) flush();
+    block.push(line);
+  }
+  flush();
+
+  return entries.length ? entries : [{ qualification: useful[0], institution: null, yearCompleted: null }];
+}
+
+function looksLikeProjectTitle(line: string) {
+  if (!isShortLabel(line) || isBullet(line)) return false;
+  if (/^(technologies|tech stack|tools|stack)\b/i.test(line)) return false;
+  return true;
 }
 
 function parseProjects(lines: string[]): NonNullable<ResumeContent['projects']> {
   if (!lines.length) return [];
-  const name = isShortLabel(lines[0]) ? lines[0] : 'Project';
-  const rest = (isShortLabel(lines[0]) ? lines.slice(1) : lines).map(stripBullet);
-  const unique: string[] = [];
-  for (const line of rest) {
-    if (!unique.some((item) => item.startsWith(line.slice(0, 40)) || line.startsWith(item.slice(0, 40)))) {
-      unique.push(line);
+  const projects: NonNullable<ResumeContent['projects']> = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!looksLikeProjectTitle(line)) {
+      // Orphan bullets before a title — attach to a generic project once.
+      const orphan: string[] = [];
+      while (i < lines.length && !looksLikeProjectTitle(lines[i])) {
+        orphan.push(stripBullet(lines[i]));
+        i += 1;
+      }
+      if (orphan.length) {
+        projects.push({ name: 'Project', description: orphan.join('\n') || null });
+      }
+      continue;
     }
+
+    const name = line;
+    i += 1;
+    const body: string[] = [];
+    while (i < lines.length) {
+      const next = lines[i];
+      if (looksLikeProjectTitle(next) && body.length > 0) break;
+      // Title immediately followed by another title (rare) — treat as separate projects.
+      if (looksLikeProjectTitle(next) && body.length === 0 && i + 1 < lines.length && isBullet(lines[i + 1])) {
+        break;
+      }
+      if (looksLikeProjectTitle(next) && body.length === 0) {
+        // Consecutive titles with no body yet — still start next project.
+        break;
+      }
+      body.push(stripBullet(next));
+      i += 1;
+    }
+
+    const unique: string[] = [];
+    for (const row of body) {
+      if (!row) continue;
+      if (!unique.some((item) => item.startsWith(row.slice(0, 40)) || row.startsWith(item.slice(0, 40)))) {
+        unique.push(row);
+      }
+    }
+    projects.push({ name, description: unique.join('\n') || null });
   }
-  return [{ name, description: unique.join('\n') || null }];
+
+  return projects;
 }
 
 function parseSkills(lines: string[]) {
@@ -161,7 +281,37 @@ function parseSkills(lines: string[]) {
 }
 
 function parseCerts(lines: string[]) {
-  return lines.map(stripBullet).filter((item) => !PLACEHOLDER_LINES.has(item.toLowerCase()));
+  return lines
+    .map(stripBullet)
+    .filter((item) => !PLACEHOLDER_LINES.has(item.toLowerCase()))
+    .map((line) => {
+      // "SQL — HackerRank (January 2026)" or "SQL - HackerRank"
+      const match = line.match(/^(.+?)\s*[—–-]\s*(.+?)(?:\s*\(([^)]+)\))?$/);
+      if (match) {
+        return {
+          name: match[1].trim(),
+          issuer: match[2].trim() || null,
+          date: match[3]?.trim() || null,
+        };
+      }
+      const withDate = line.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+      if (withDate) {
+        return { name: withDate[1].trim(), issuer: null, date: withDate[2].trim() };
+      }
+      return { name: line, issuer: null, date: null };
+    });
+}
+
+function parseAchievements(lines: string[]) {
+  return lines
+    .map(stripBullet)
+    .filter((item) => !PLACEHOLDER_LINES.has(item.toLowerCase()))
+    .map((line) => ({
+      title: line,
+      organization: null as string | null,
+      description: null as string | null,
+      date: null as string | null,
+    }));
 }
 
 export function parseExtractedResumeText(rawText: string): ResumeContent {
@@ -206,6 +356,7 @@ export function parseExtractedResumeText(rawText: string): ResumeContent {
     experiences: parseExperience(sections.get('experience') || []),
     languages: parseSkills(sections.get('languages') || []),
     certifications: parseCerts(sections.get('certs') || []),
+    achievements: parseAchievements(sections.get('achievements') || []),
     projects: parseProjects(sections.get('projects') || []),
     includePhoto: false,
   };

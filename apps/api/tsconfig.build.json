@@ -3,7 +3,8 @@
   "compilerOptions": {
     "module": "commonjs",
     "declaration": false,
-    "noEmit": false
+    "noEmit": false,
+    "incremental": false
   },
   "exclude": ["node_modules", "dist"]
 }

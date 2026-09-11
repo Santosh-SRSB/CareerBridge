@@ -327,9 +327,35 @@ export type ResumeContent = {
     isInternship: boolean;
   }>;
   languages: string[];
-  certifications?: string[];
-  projects?: Array<{ name: string; description: string | null }>;
+  /**
+   * Certifications — prefer structured objects; legacy string[] (name only) still accepted.
+   */
+  certifications?: Array<
+    | string
+    | {
+        name: string;
+        issuer?: string | null;
+        date?: string | null;
+        url?: string | null;
+      }
+  >;
+  /** Structured achievements — kept separate from certifications. */
+  achievements?: Array<{
+    title: string;
+    organization?: string | null;
+    description?: string | null;
+    date?: string | null;
+  }>;
+  projects?: Array<{
+    name: string;
+    description: string | null;
+    url?: string | null;
+    /** Optional bullet points — kept separate from description to avoid duplication. */
+    bullets?: string[];
+  }>;
   includePhoto?: boolean;
+  /** ADDITIVE optional normalized blob — existing fields above remain source of truth for legacy readers. */
+  resumeData?: import('./resume-data').NormalizedResumeData;
 };
 
 export type ResumeRecord = {

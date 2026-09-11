@@ -26,6 +26,10 @@ import {
 import AtsAnalysisPanel from "@/components/AtsAnalysisPanel.jsx";
 import ResumeSuggestionBlockModal from "@/components/ResumeSuggestionBlockModal.jsx";
 import { useResumePageFit, usePreviewScale, RESUME_PAGE } from "@/components/resume-templates/pageFit.js";
+import {
+  detectExperienceCareerGaps,
+  gapRequiresReason,
+} from "@/lib/experience-career-gaps";
 
 function analysisFingerprint(resume) {
   const data = { ...(resume.data || {}) };
@@ -49,11 +53,25 @@ const FORM_STEPS = [
   { id: "skills", label: "Skills" },
   { id: "projects", label: "Projects" },
   { id: "certifications", label: "Certifications" },
+  // ADDITIVE optional Links step — fields never required
+  { id: "links", label: "Links" },
   { id: "review", label: "Review & ATS" },
 ];
 
 function filled(value) {
   return Boolean(String(value || "").trim());
+}
+
+function optionalUrlOk(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return true;
+  try {
+    const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const url = new URL(withProto);
+    return Boolean(url.hostname && url.hostname.includes("."));
+  } catch {
+    return false;
+  }
 }
 
 function sectionComplete(stepId, data) {
@@ -74,7 +92,54 @@ function sectionComplete(stepId, data) {
   if (stepId === "certifications") {
     return (source.certifications || []).some((c) => filled(c.name));
   }
+  if (stepId === "links") return true;
   return true;
+}
+
+function mergeDetectedCareerGaps(existing, detected) {
+  const prior = Array.isArray(existing) ? existing : [];
+  const byKey = new Map(
+    prior.map((gap) => [`${gap.startDate || ""}|${gap.endDate || ""}`, gap]),
+  );
+  const merged = detected.map((gap) => {
+    const key = `${gap.startDate}|${gap.endDate}`;
+    const prev = byKey.get(key);
+    if (prev) {
+      return applyCareerGapPatch(prev, {
+        startDate: gap.startDate,
+        endDate: gap.endDate,
+        gapDays: gap.gapDays,
+        reason: prev.reason || "",
+        type: prev.type || "",
+        detected: true,
+      });
+    }
+    const blank = blankCareerGap();
+    const startParts = String(gap.startDate || "").split("-");
+    const endParts = String(gap.endDate || "").split("-");
+    return applyCareerGapPatch(blank, {
+      startDate: gap.startDate,
+      endDate: gap.endDate,
+      gapDays: gap.gapDays,
+      startYear: startParts[0] || "",
+      startMonth: "",
+      endYear: endParts[0] || "",
+      endMonth: "",
+      reason: "",
+      type: "",
+      detected: true,
+      description: `Gap between ${gap.afterRole} and ${gap.beforeRole}`,
+    });
+  });
+  // Keep manually added gaps that weren't auto-detected
+  for (const gap of prior) {
+    if (gap.detected) continue;
+    const key = `${gap.startDate || ""}|${gap.endDate || ""}`;
+    if (!merged.some((row) => `${row.startDate}|${row.endDate}` === key)) {
+      merged.push(gap);
+    }
+  }
+  return merged;
 }
 
 function resumeReadyForGuidance(data) {
@@ -833,31 +898,44 @@ export default function ManualResumeEditor({ resumeId }) {
       setNavError("Please enter a valid certificate URL, or leave the field empty.");
       return;
     }
-    if (editorStep === "career-gap") {
-      const incomplete = (resume.data.careerGaps || []).some((gap) => {
-        const hasList = (list) => (list || []).some((item) => String(item || "").trim());
-        const typeText = String(gap.type || "").trim();
-        const hasContent = Boolean(
-          (typeText && typeText !== "Other")
-          || String(gap.reason || "").trim()
-          || String(gap.description || "").trim()
-          || String(gap.startMonth || "").trim()
-          || String(gap.startYear || "").trim()
-          || String(gap.endMonth || "").trim()
-          || String(gap.endYear || "").trim()
-          || hasList(gap.activities)
-          || hasList(gap.skills)
-          || hasList(gap.certifications)
-          || hasList(gap.projects)
-        );
-        if (!hasContent) return false;
-        const hasStart = String(gap.startMonth || "").trim() && String(gap.startYear || "").trim();
-        const hasEnd = gap.current || (String(gap.endMonth || "").trim() && String(gap.endYear || "").trim());
-        return !(hasStart && hasEnd);
-      });
-      if (incomplete) {
-        setNavError("Add start and end month/year for each Career Break, or mark it as ongoing.");
+    if (editorStep === "links") {
+      const linkFields = [resume.data.github, resume.data.linkedin, resume.data.portfolio, resume.data.website];
+      if (linkFields.some((value) => !optionalUrlOk(value))) {
+        setNavError("Please enter a valid URL, or leave the field empty.");
         return;
+      }
+    }
+    if (editorStep === "experience") {
+      // ADDITIVE: auto-detect gaps between dated roles before Career Gap step
+      const detected = detectExperienceCareerGaps(resume.data.experience || []);
+      if (detected.length) {
+        setResume((prev) => ({
+          ...prev,
+          data: {
+            ...prev.data,
+            careerGaps: mergeDetectedCareerGaps(prev.data.careerGaps, detected),
+          },
+        }));
+      }
+    }
+    if (editorStep === "career-gap") {
+      const gaps = resume.data.careerGaps || [];
+      for (const gap of gaps) {
+        const hasStart = filled(gap.startDate) || (filled(gap.startMonth) && filled(gap.startYear));
+        const hasEnd = gap.current || filled(gap.endDate) || (filled(gap.endMonth) && filled(gap.endYear));
+        // Only enforce confirmation for detected / non-empty gaps
+        const isRelevant = gap.detected || filled(gap.reason) || filled(gap.type) || hasStart || hasEnd;
+        if (!isRelevant) continue;
+        if (!hasStart || !hasEnd) {
+          setNavError("Confirm start and end dates for each career gap before continuing.");
+          return;
+        }
+        const days = Number(gap.gapDays);
+        const needsReason = Number.isFinite(days) ? gapRequiresReason(days) : true;
+        if (needsReason && !filled(gap.reason) && !filled(gap.type)) {
+          setNavError("A reason is required for career gaps longer than 30 days.");
+          return;
+        }
       }
     }
     if (currentIndex >= 0 && currentIndex < FORM_STEPS.length - 1) {
@@ -1148,10 +1226,38 @@ export default function ManualResumeEditor({ resumeId }) {
               <h2>Career Gap / Career Break</h2>
               <button className="btn btn-small" type="button" onClick={addCareerGap}>+ Add</button>
             </div>
-            <p className="muted small">Optional. A career break does not reduce your ATS score. Add a start month and year if you include an entry.</p>
+            <p className="muted small">
+              Gaps between dated roles are detected automatically when you leave Experience.
+              Confirm start/end dates; a reason is required when a gap is longer than 30 days.
+              Manually added breaks remain optional if empty.
+            </p>
+            {(resume.data.careerGaps || []).length === 0 ? (
+              <p className="muted small">No gaps detected between your experience entries. You can add one optionally.</p>
+            ) : null}
             {(resume.data.careerGaps || []).map((gap) => (
               <div className="list-item" key={gap.id}>
+                {gap.detected ? (
+                  <p className="muted small">
+                    Detected gap{gap.gapDays != null ? ` (${gap.gapDays} days)` : ""}
+                    {gapRequiresReason(Number(gap.gapDays || 0)) ? " — reason required" : ""}
+                  </p>
+                ) : null}
                 <div className="grid-2">
+                  <label>Gap start date (ISO)
+                    <input
+                      type="date"
+                      value={gap.startDate && /^\d{4}-\d{2}-\d{2}$/.test(gap.startDate) ? gap.startDate : ""}
+                      onChange={(e) => updateCareerGap(gap.id, { startDate: e.target.value })}
+                    />
+                  </label>
+                  <label>Gap end date (ISO)
+                    <input
+                      type="date"
+                      value={gap.endDate && /^\d{4}-\d{2}-\d{2}$/.test(gap.endDate) ? gap.endDate : ""}
+                      disabled={gap.current}
+                      onChange={(e) => updateCareerGap(gap.id, { endDate: e.target.value })}
+                    />
+                  </label>
                   <label>Gap type / reason
                     <select
                       value={
@@ -1169,7 +1275,7 @@ export default function ManualResumeEditor({ resumeId }) {
                         }
                       }}
                     >
-                      <option value="">Select (optional)</option>
+                      <option value="">Select{gapRequiresReason(Number(gap.gapDays || 0)) ? " (required)" : " (optional)"}</option>
                       {CAREER_GAP_TYPES.map((type) => (
                         <option key={type} value={type}>{type}</option>
                       ))}
@@ -1540,6 +1646,37 @@ export default function ManualResumeEditor({ resumeId }) {
                 <button className="btn btn-ghost btn-small danger" type="button" onClick={() => removeCertification(c.id)}>Remove</button>
               </div>
             ))}
+            <FormNav onPrevious={goPrevious} onNext={goNext} />
+          </section>
+          )}
+
+          {editorStep === "links" && (
+          <section className="form-section">
+            <h2>Links</h2>
+            <p className="muted small">Optional. Leave blank if you do not have a link. Invalid URLs are blocked only when a value is entered.</p>
+            <div className="grid-2">
+              <label>GitHub URL
+                <input
+                  value={resume.data.github || ""}
+                  onChange={(e) => updateData({ github: e.target.value })}
+                  placeholder="https://github.com/username"
+                />
+              </label>
+              <label>LinkedIn URL
+                <input
+                  value={resume.data.linkedin || ""}
+                  onChange={(e) => updateData({ linkedin: e.target.value })}
+                  placeholder="https://linkedin.com/in/username"
+                />
+              </label>
+              <label>Portfolio / personal website
+                <input
+                  value={resume.data.portfolio || resume.data.website || ""}
+                  onChange={(e) => updateData({ portfolio: e.target.value, website: e.target.value })}
+                  placeholder="https://yourname.dev"
+                />
+              </label>
+            </div>
             <FormNav onPrevious={goPrevious} onNext={goNext} />
           </section>
           )}

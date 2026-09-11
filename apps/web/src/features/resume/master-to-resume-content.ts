@@ -1,5 +1,6 @@
 import type { ResumeContent } from '@careerbridge/shared';
 import type { MasterResumeDocument } from './master-resume.types';
+import { dedupeBulletList, splitProjectFields } from './project-fields';
 
 function parseYear(value: string) {
   const match = value.match(/(\d{4})/);
@@ -28,12 +29,42 @@ export function masterResumeToResumeContent(doc: MasterResumeDocument): ResumeCo
       description: item.responsibilities.length ? item.responsibilities.join('\n') : null,
       isInternship: false,
     })),
-    languages: [],
-    certifications: doc.certifications.map((item) => item.name).filter(Boolean),
-    projects: doc.projects.map((item) => ({
-      name: item.name,
-      description: [item.description, ...(item.bullets || [])].filter(Boolean).join('\n') || null,
-    })),
+    languages: (doc.languages || [])
+      .map((item) => {
+        const name = item.name.trim();
+        if (!name) return '';
+        return item.level?.trim() ? `${name} (${item.level.trim()})` : name;
+      })
+      .filter(Boolean),
+    certifications: doc.certifications
+      .filter((item) => item.name.trim())
+      .map((item) => ({
+        name: item.name.trim(),
+        issuer: item.issuer?.trim() || null,
+        date: item.date?.trim() || null,
+        url: item.credentialUrl?.trim() || null,
+      })),
+    achievements: doc.achievements
+      .filter((item) => item.title.trim() || item.description.trim())
+      .map((item) => ({
+        title: item.title,
+        organization: item.organization || null,
+        description: item.description || null,
+        date: item.date || null,
+      })),
+    projects: doc.projects.map((item) => {
+      // Persist overview and bullets separately — never concatenate (was causing 2x/3x dupes).
+      const { description, bullets } = splitProjectFields({
+        description: item.description,
+        bullets: item.bullets,
+      });
+      return {
+        name: item.name,
+        description: description || null,
+        bullets: dedupeBulletList(bullets),
+        url: item.url || null,
+      };
+    }),
     includePhoto: false,
   };
 }

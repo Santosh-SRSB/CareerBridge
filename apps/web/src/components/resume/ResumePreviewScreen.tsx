@@ -13,17 +13,20 @@ import {
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
 import { masterResumeToAtsData } from '@/features/resume/master-to-ats-data';
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
+import { computeMasterResumeAtsScore } from '@/features/resume/ats-score';
 import type { MasterResumeDocument } from '@/features/resume/master-resume.types';
-import { clearResumeUpdateMode } from '@/features/resume/resume-update-mode';
+import { atsEditActionLabel, clearResumeUpdateMode } from '@/features/resume/resume-update-mode';
 import { clearResumeFromBuild, clearResumeFromAutofill } from '@/features/resume/resume-wizard-draft';
 import {
   aiReviewResume,
   analyzeResumeRole,
   createResume,
   downloadResume,
+  enhanceResume,
   getResume,
 } from '@/lib/api';
 import { downloadMasterResumePdf } from '@/lib/master-resume-pdf';
+import { useResumePageFit } from '@/components/resume-templates/pageFit.js';
 import '@/components/resume-templates/ats-template.css';
 import '@/components/resume-templates/resume-template-01.css';
 
@@ -35,6 +38,9 @@ type SectionRow = {
   status: 'good' | 'needs_work' | 'missing' | 'fix_needed';
   note: string;
   present: boolean;
+  missingFields?: string[];
+  scoreNeutral?: boolean;
+  source?: 'from_uploaded_resume' | 'added_manually' | 'ai_suggested';
 };
 
 type AtsReport = {
@@ -77,10 +83,10 @@ function reportDetail(score: number, sections: SectionRow[]): string {
     (s) => s.status === 'needs_work' || s.status === 'fix_needed',
   );
   if (missing.length === 1) {
-    return `Your resume parses, but ${missing[0]} is missing. Add it to raise your score.`;
+    return `Your resume parses, but ${missing[0]} is missing. Edit it to raise your score.`;
   }
   if (missing.length > 1) {
-    return `Your resume parses, but ${missing.slice(0, 3).join(', ')} are missing. Complete those sections to raise your score.`;
+    return `Your resume parses, but ${missing.slice(0, 3).join(', ')} are missing. Edit those sections to raise your score.`;
   }
   if (weak.length === 0) {
     return 'Your resume parses cleanly and core sections look ATS-ready.';
@@ -101,6 +107,13 @@ function statusLabel(status: SectionRow['status']) {
   return 'Fix needed';
 }
 
+function sourceLabel(source?: SectionRow['source']) {
+  if (source === 'ai_suggested') return 'AI-suggested';
+  if (source === 'added_manually') return 'added manually';
+  if (source === 'from_uploaded_resume') return 'from uploaded resume';
+  return null;
+}
+
 function mapAtsReport(raw: Record<string, unknown>, doc: MasterResumeDocument): AtsReport {
   const formattingIssues = asStringArray(raw.formattingIssues);
   const templateAnalysis =
@@ -113,9 +126,15 @@ function mapAtsReport(raw: Record<string, unknown>, doc: MasterResumeDocument): 
   );
   const formatting = asNumber(raw.atsFormatting, 90);
 
+  const defaultSource: SectionRow['source'] =
+    typeof window !== 'undefined' && sessionStorage.getItem('cb.resumeFromAutofill') === '1'
+      ? 'from_uploaded_resume'
+      : 'added_manually';
+
   const evaluated = evaluateAtsSections(doc, {
     formattingScore: formatting,
     layoutIssues,
+    defaultSource,
   });
 
   const sections: SectionRow[] = evaluated.map((s) => ({
@@ -124,10 +143,15 @@ function mapAtsReport(raw: Record<string, unknown>, doc: MasterResumeDocument): 
     status: s.status,
     note: s.note,
     present: s.present,
+    missingFields: s.missingFields || [],
+    scoreNeutral: s.scoreNeutral,
+    source: s.source,
   }));
 
-  const presentCount = sections.filter((s) => s.key !== 'formatting' && s.present).length;
-  const tracked = sections.filter((s) => s.key !== 'formatting').length || 1;
+  // Keep completeness math aligned with pre-existing scored sections (exclude scoreNeutral).
+  const scored = sections.filter((s) => s.key !== 'formatting' && !s.scoreNeutral);
+  const presentCount = scored.filter((s) => s.present).length;
+  const tracked = scored.length || 1;
   const sectionCompleteness = Math.round((presentCount / tracked) * 100);
   const readability = Math.min(
     100,
@@ -140,24 +164,13 @@ function mapAtsReport(raw: Record<string, unknown>, doc: MasterResumeDocument): 
     ),
   );
 
-  const sectionQuality = Math.round(
-    sections
-      .filter((s) => s.key !== 'formatting')
-      .reduce((sum, s) => {
-        if (s.status === 'missing') return sum + 0;
-        if (s.status === 'fix_needed') return sum + 40;
-        if (s.status === 'needs_work') return sum + 65;
-        return sum + 92;
-      }, 0) / tracked,
-  );
-  const structureScore = Math.round(
-    formatting * 0.3 + sectionCompleteness * 0.25 + readability * 0.2 + sectionQuality * 0.25,
-  );
+  // Overall score must match Your Resumes list (shared analyzeResumeContent).
+  const overallScore = computeMasterResumeAtsScore(doc);
 
   return {
-    overallScore: structureScore,
-    headline: reportHeadline(structureScore),
-    detail: reportDetail(structureScore, sections),
+    overallScore,
+    headline: reportHeadline(overallScore),
+    detail: reportDetail(overallScore, sections),
     formatting,
     sectionCompleteness,
     readability,
@@ -173,11 +186,16 @@ interface ResumePreviewScreenProps {
   resumeFileName?: string;
   onEnsureSaved?: () => Promise<string>;
   onResumeSaved?: (resumeId: string) => void;
+  /** Called whenever a fresh ATS readiness score is computed/persisted. */
+  onScoreUpdated?: (resumeId: string, score: number) => void;
   /** Persist master resume fields into Career Passport so dashboard completion updates. */
   onSyncProfile?: () => Promise<void>;
   onBack: () => void;
   onEdit: () => void;
-  onAddSection?: (sectionLabel: string) => void;
+  /** ATS edit: open one section. Passes label + stable section key. */
+  onAddSection?: (sectionLabel: string, sectionKey: string) => void;
+  /** Increment to re-run ATS after returning from section edit. */
+  recheckNonce?: number;
   onApplySuggestion: (suggestion: ResumeAiSuggestion, improvedText: string) => void;
 }
 
@@ -188,14 +206,18 @@ export function ResumePreviewScreen({
   resumeFileName,
   onEnsureSaved,
   onResumeSaved,
+  onScoreUpdated,
   onSyncProfile,
   onBack,
   onEdit,
   onAddSection,
+  recheckNonce = 0,
   onApplySuggestion,
 }: ResumePreviewScreenProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<AtsPhase>('ready');
+  const lastRecheckNonce = useRef(0);
+  const pendingAtsPersist = useRef(false);
   const [analyzeStep, setAnalyzeStep] = useState(0);
   const [report, setReport] = useState<AtsReport | null>(null);
   const [error, setError] = useState('');
@@ -221,9 +243,23 @@ export function ResumePreviewScreen({
   const [downloadError, setDownloadError] = useState('');
   const resumeRef = useRef(resume);
   resumeRef.current = resume;
+  const previewSheetRef = useRef<HTMLDivElement | null>(null);
+  useResumePageFit(previewSheetRef, [resume, phase]);
 
   const templateData = useMemo(() => masterResumeToAtsData(resume), [resume]);
   const Template = getTemplateComponent('resume-template-01');
+  const fittedPreview = (
+    <div className="overflow-auto rounded-2xl border border-slate-200 bg-slate-100 p-3 shadow-sm">
+      <div
+        ref={previewSheetRef}
+        className="preview-sheet mx-auto bg-white"
+        style={{ width: 794, maxWidth: '100%' }}
+        data-density="normal"
+      >
+        <Template data={templateData} />
+      </div>
+    </div>
+  );
   const activeSuggestions = gatewaySuggestions.filter(
     (s) => !dismissedIds.has(s.id) && !appliedIds.has(s.id),
   );
@@ -273,13 +309,26 @@ export function ResumePreviewScreen({
         targetRole: 'General Professional',
         resume: masterResumeToAtsData(resumeRef.current) as unknown as Record<string, unknown>,
       })) as Record<string, unknown>;
-      setReport(mapAtsReport(raw, resumeRef.current));
+      const nextReport = mapAtsReport(raw, resumeRef.current);
+      setReport(nextReport);
+      // Persist the same shared score so Your Resumes / ATS list match View Resume.
+      if (id) {
+        await enhanceResume(id).catch(() => undefined);
+        onScoreUpdated?.(id, nextReport.overallScore);
+      }
       setPhase('report');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not check ATS score.');
       setPhase('ready');
     }
   }
+
+  useEffect(() => {
+    if (!recheckNonce || recheckNonce === lastRecheckNonce.current) return;
+    lastRecheckNonce.current = recheckNonce;
+    void runAtsAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recheckNonce]);
 
   async function startImproveWithAi() {
     setPhase('improve');
@@ -329,9 +378,52 @@ export function ResumePreviewScreen({
       setDismissedIds((prev) => new Set(prev).add(suggestion.id));
       return;
     }
+    pendingAtsPersist.current = true;
     onApplySuggestion(suggestion, improvedText);
     setAppliedIds((prev) => new Set(prev).add(suggestion.id));
   }
+
+  function refreshAtsScoreFromDoc(doc: MasterResumeDocument) {
+    setReport((prev) => {
+      if (!prev) return prev;
+      return mapAtsReport(
+        {
+          atsFormatting: prev.formatting,
+          formattingIssues: prev.formattingIssues,
+          templateAnalysis: {
+            machineReadability: prev.readability,
+          },
+        },
+        doc,
+      );
+    });
+  }
+
+  async function persistUpdatedAtsScore() {
+    try {
+      const id = onEnsureSaved ? await onEnsureSaved() : resumeId;
+      if (id) {
+        onResumeSaved?.(id);
+        const enhanced = await enhanceResume(id).catch(() => null);
+        const live = computeMasterResumeAtsScore(resumeRef.current);
+        onScoreUpdated?.(id, live || enhanced?.score || 0);
+      }
+    } catch {
+      /* score UI already refreshed locally */
+    }
+  }
+
+  // Recalculate ATS overall when resume content changes after Check ATS / Improve with AI.
+  useEffect(() => {
+    if (!report) return;
+    if (phase !== 'report' && phase !== 'improve' && phase !== 'done') return;
+    refreshAtsScoreFromDoc(resume);
+    if (pendingAtsPersist.current) {
+      pendingAtsPersist.current = false;
+      void persistUpdatedAtsScore();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resume, phase]);
 
   function handleReject(id: string) {
     setDismissedIds((prev) => new Set(prev).add(id));
@@ -578,6 +670,11 @@ export function ResumePreviewScreen({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-extrabold text-slate-900">{section.label}</p>
+                    {sourceLabel(section.source) ? (
+                      <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        {sourceLabel(section.source)}
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-sm text-slate-600">{section.note}</p>
                   </div>
                   <span
@@ -592,13 +689,25 @@ export function ResumePreviewScreen({
                     {statusLabel(section.status)}
                   </span>
                 </div>
-                {section.status === 'missing' ? (
+                {section.status !== 'good' && (section.missingFields?.length || 0) > 0 ? (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-amber-800">
+                      Missing info
+                    </p>
+                    <ul className="mt-1 list-disc pl-4 text-sm text-amber-900">
+                      {section.missingFields!.map((field) => (
+                        <li key={field}>{field}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {section.status !== 'good' ? (
                   <button
                     type="button"
-                    onClick={() => onAddSection?.(section.label)}
+                    onClick={() => onAddSection?.(section.label, section.key)}
                     className="mt-3 rounded-lg bg-[#0a2e2c] px-3 py-2 text-xs font-bold text-white hover:bg-[#072422]"
                   >
-                    Add {section.label}
+                    {atsEditActionLabel(section.key, section.label)}
                   </button>
                 ) : null}
               </div>
@@ -648,7 +757,7 @@ export function ResumePreviewScreen({
                 {gatewaySuggestions.length
                   ? 'All suggestions reviewed. Save this improved version.'
                   : report?.sections.some((s) => s.status !== 'good')
-                    ? 'No auto-fix available for the remaining gaps — use Add section / edit in the wizard, then re-check ATS.'
+                    ? 'No auto-fix available for the remaining gaps — use Edit section on the report, then re-check ATS.'
                     : 'No edits needed — your sections look accurate for ATS. You can save or go back.'}
               </p>
             ) : null}
@@ -692,14 +801,17 @@ export function ResumePreviewScreen({
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-            <Template data={templateData} />
-          </div>
+          {fittedPreview}
 
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setPhase('report')}
+              onClick={() => {
+                setPhase('report');
+                pendingAtsPersist.current = true;
+                refreshAtsScoreFromDoc(resumeRef.current);
+                void persistUpdatedAtsScore();
+              }}
               className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700"
             >
               Back to report
@@ -729,9 +841,7 @@ export function ResumePreviewScreen({
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
             Saved as “{savedVersionTitle}” (new version). Download is optional.
           </div>
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-            <Template data={templateData} />
-          </div>
+          {fittedPreview}
           <div className="flex flex-wrap gap-2">
             <button
               type="button"

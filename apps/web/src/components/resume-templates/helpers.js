@@ -383,6 +383,9 @@ export function blankCareerGap() {
     projects: [""],
     startDate: "",
     endDate: "",
+    // ADDITIVE metadata for auto-detected gaps
+    gapDays: null,
+    detected: false,
   };
 }
 
@@ -407,8 +410,11 @@ export function normalizeCareerGapEntry(gap, index = 0) {
     skills: Array.isArray(source.skills) ? source.skills.map((item) => String(item ?? "")) : stringList(source.skills),
     certifications: Array.isArray(source.certifications) ? source.certifications.map((item) => String(item ?? "")) : stringList(source.certifications),
     projects: Array.isArray(source.projects) ? source.projects.map((item) => String(item ?? "")) : stringList(source.projects),
-    startDate,
-    endDate,
+    // Prefer explicit ISO dates when present (auto-detected gaps)
+    startDate: /^\d{4}-\d{2}-\d{2}$/.test(String(source.startDate || "")) ? source.startDate : startDate,
+    endDate: /^\d{4}-\d{2}-\d{2}$/.test(String(source.endDate || "")) ? source.endDate : endDate,
+    gapDays: source.gapDays == null ? null : Number(source.gapDays),
+    detected: Boolean(source.detected),
   };
 }
 
@@ -428,10 +434,21 @@ export function applyCareerGapPatch(entry, patch) {
   const next = { ...entry, ...patch };
   if (Object.prototype.hasOwnProperty.call(patch, "type") && !patch.reason) next.reason = patch.type;
   if (Object.prototype.hasOwnProperty.call(patch, "reason") && !patch.type) next.type = patch.reason;
-  next.startDate = formatGapMonthYear(next.startMonth, next.startYear, next.startDate, false);
-  next.endDate = next.current
-    ? "Present"
-    : formatGapMonthYear(next.endMonth, next.endYear, next.endDate, false);
+  // Keep ISO dates when explicitly set (auto-detect / date inputs)
+  if (!Object.prototype.hasOwnProperty.call(patch, "startDate") || !/^\d{4}-\d{2}-\d{2}$/.test(String(patch.startDate || ""))) {
+    next.startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(next.startDate || ""))
+      ? next.startDate
+      : formatGapMonthYear(next.startMonth, next.startYear, next.startDate, false);
+  }
+  if (!Object.prototype.hasOwnProperty.call(patch, "endDate") || !/^\d{4}-\d{2}-\d{2}$/.test(String(patch.endDate || ""))) {
+    next.endDate = next.current
+      ? "Present"
+      : (/^\d{4}-\d{2}-\d{2}$/.test(String(next.endDate || ""))
+        ? next.endDate
+        : formatGapMonthYear(next.endMonth, next.endYear, next.endDate, false));
+  } else if (next.current) {
+    next.endDate = "Present";
+  }
   return next;
 }
 

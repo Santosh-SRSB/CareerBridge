@@ -3,12 +3,14 @@ import {
   ErrorCode,
   analyzeResumeContent,
   extractFacts,
+  withNormalizedResumeData,
   type ResumeContent,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { ResumeExtractorService } from './resume-extractor.service';
 import { parseExtractedResumeText } from './parse-extracted-resume';
+import { parseResumeTextWithOptionalAi } from './structure-resume-content';
 
 @Injectable()
 export class ResumeProcessorService {
@@ -63,7 +65,13 @@ export class ResumeProcessorService {
         throw new Error(`Text extraction failed (${extraction.extractor}): ${extraction.notes.join('; ')}`);
       }
 
-      const content = parseExtractedResumeText(extraction.text);
+      const parsed = await parseResumeTextWithOptionalAi(extraction.text, (text) =>
+        this.aiGateway.isConfigured()
+          ? this.aiGateway.structureResumeText(text, { userId })
+          : Promise.resolve(null),
+      );
+      // ADDITIVE: keep legacy ResumeContent fields; also attach normalized resumeData JSON.
+      const content = withNormalizedResumeData(parsed);
       const rawText = extraction.text.slice(0, 80000);
       const analysis = analyzeResumeContent(content, rawText);
 
@@ -78,10 +86,10 @@ export class ResumeProcessorService {
         }
       }
 
-      const overall =
-        typeof (aiReview as { score?: number } | null)?.score === 'number'
-          ? Math.round(Number((aiReview as { score: number }).score))
-          : analysis.score;
+      // Persist ATS Readiness from content analysis only.
+      // AI review score stays in extractionMeta — it is a quality opinion, not ATS readiness,
+      // and often clusters around the same value for different resumes.
+      const atsScore = analysis.score;
 
       const extractionMeta = {
         extractor: extraction.extractor,
@@ -101,14 +109,14 @@ export class ResumeProcessorService {
           rawText,
           summary: content.summary || resume.summary,
           contentJson: JSON.stringify(content),
-          score: overall,
+          score: atsScore,
           extractionMetaJson: JSON.stringify(extractionMeta),
           processingStatus: 'COMPLETED',
           processingError: null,
         },
       });
 
-      await this.persistAnalysis(resumeId, content, rawText, overall, aiReview);
+      await this.persistAnalysis(resumeId, content, rawText, atsScore, aiReview);
 
       // Embeddings for hybrid matching + RAG (Gateway → Gemini only).
       try {

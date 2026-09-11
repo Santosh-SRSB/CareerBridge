@@ -71,6 +71,8 @@ export type CandidateCertification = {
   issuer: string | null;
   year: number | null;
   credentialId: string | null;
+  /** ADDITIVE optional certificate URL — never required for save. */
+  url?: string | null;
 };
 
 export type CandidateProject = {
@@ -235,6 +237,8 @@ export type CreateCertificationPayload = {
   issuer?: string;
   year?: number;
   credentialId?: string;
+  /** ADDITIVE optional certificate URL */
+  url?: string;
 };
 
 export type CreateProjectPayload = {

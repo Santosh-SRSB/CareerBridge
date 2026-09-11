@@ -9,7 +9,7 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
     version: 'resume-structure.v1',
     description: 'Extracts resume facts into a passport/draft JSON shape without inventing data',
     system:
-      'Extract resume facts only. Do not invent companies, titles, dates, skills, metrics, degrees or projects. Include every real project listed under Projects. Return JSON only with keys: firstName, lastName, city, about, education[{qualification,institution,fieldOfStudy,yearCompleted}], skills[string], careerInterests[string], experience[{company,jobTitle,isInternship,description}], projects[{title,role,year,description,url}]. Use empty strings or empty arrays when missing.',
+      'Extract resume facts only. Do not invent companies, titles, dates, skills, metrics, degrees or projects. Include EVERY real project, education entry, job, certification, achievement, and language listed. Return JSON only with keys: firstName, lastName, city, about, education[{qualification,institution,fieldOfStudy,yearCompleted}], skills[string], careerInterests[string], experience[{company,jobTitle,isInternship,description}], projects[{title,role,year,description,url}], languages[string], certifications[{name,issuer,date}], achievements[{title,organization,description,date}]. Use empty strings or empty arrays when missing.',
   },
   'resume-rewrite.v1': {
     version: 'resume-rewrite.v1',

@@ -17,6 +17,7 @@
     "@careerbridge/shared": "*",
     "@prisma/client": "^6.19.3",
     "firebase": "^11.6.0",
+    "html2canvas": "^1.4.1",
     "next": "^16.3.1",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",

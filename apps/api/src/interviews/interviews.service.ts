@@ -546,7 +546,9 @@ function passportContent(candidate: {
     education: base.education.length ? base.education : fromResume.education || [],
     experiences: base.experiences.length ? base.experiences : fromResume.experiences || [],
     certifications: unique([
-      ...(fromResume.certifications || []),
+      ...(fromResume.certifications || []).map((item) =>
+        typeof item === 'string' ? item : [item.name, item.issuer, item.date].filter(Boolean).join(' — '),
+      ),
       ...certs.map((item) => (typeof item === 'string' ? item : item.name || '')),
     ]),
     projects: [
