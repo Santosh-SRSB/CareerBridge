@@ -189,10 +189,18 @@ async function renderCareerBridgeTemplatePdf(content: ResumeContent) {
   }
 
   if (content.certifications?.length) {
-    section('Achievements and Certifications');
+    section('Certifications');
     for (const cert of content.certifications) {
-      if (!cert?.trim()) continue;
-      drawLines(`• ${cert}`);
+      const text =
+        typeof cert === 'string'
+          ? cert.trim()
+          : [cert.name, cert.issuer ? `— ${cert.issuer}` : '', cert.date ? `(${cert.date})` : '']
+              .filter(Boolean)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+      if (!text) continue;
+      drawLines(`• ${text}`);
     }
   }
 

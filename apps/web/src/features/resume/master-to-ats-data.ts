@@ -66,5 +66,12 @@ export function masterResumeToAtsData(doc: MasterResumeDocument) {
       date: item.date,
       description: item.description,
     })),
+    languages: (doc.languages || []).map((item, index) => ({
+      id: `lang-${index}`,
+      name: item.name,
+      level: item.level,
+      proficiency: item.level,
+      description: item.level,
+    })),
   };
 }

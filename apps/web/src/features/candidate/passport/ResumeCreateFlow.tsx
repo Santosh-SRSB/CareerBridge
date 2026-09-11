@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
 import { useEffect, useRef, useState } from "react";
 import { DRAFT_KEY, EMPTY_DRAFT, type PassportDraft } from "@/types/passport";
 import { PassportForm } from "@/features/candidate/passport/PassportForm";
 import { EagleMascot } from "@/features/candidate/passport/EagleMascot";
+import { SkillsConfirmStep } from "@/features/candidate/passport/SkillsConfirmStep";
 
 const SLIDES = [
   { key: "drop", label: "Drop resume" },
@@ -12,10 +13,13 @@ const SLIDES = [
   { key: "experience", label: "Fetching experience" },
   { key: "projects", label: "Fetching projects" },
   { key: "interests", label: "Fetching career interest" },
+  { key: "skills-confirm", label: "Confirm skills" },
   { key: "form", label: "Complete missing details" },
 ] as const;
 
 const FETCH_MS = 1250;
+const FORM_SLIDE = 7;
+const SKILLS_CONFIRM_SLIDE = 6;
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -85,13 +89,21 @@ export function ResumeCreateFlow() {
       ]);
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
       setDraft(data);
-      setSlide(6);
+      // ADDITIVE: skills confirmation before the existing form slide
+      setSlide(SKILLS_CONFIRM_SLIDE);
     } catch (err) {
       setSlide(0);
       setError(err instanceof Error ? err.message : "Could not read resume");
     } finally {
       setBusy(false);
     }
+  };
+
+  const confirmSkills = (skills: string[]) => {
+    const next = { ...draft, skills };
+    setDraft(next);
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+    setSlide(FORM_SLIDE);
   };
 
   return (
@@ -188,7 +200,17 @@ export function ResumeCreateFlow() {
           );
         })}
 
-        <section className="resume-slide" aria-hidden={slide !== 6}>
+        <section className="resume-slide" aria-hidden={slide !== SKILLS_CONFIRM_SLIDE}>
+          {slide === SKILLS_CONFIRM_SLIDE ? (
+            <SkillsConfirmStep
+              skills={draft.skills || []}
+              onConfirm={confirmSkills}
+              onBack={() => setSlide(0)}
+            />
+          ) : null}
+        </section>
+
+        <section className="resume-slide" aria-hidden={slide !== FORM_SLIDE}>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-deep">Career Passport</p>
           <h1 className="font-display mt-3 text-3xl font-extrabold text-navy">Complete what is missing</h1>
           <p className="mt-3 max-w-xl text-sm text-muted">
@@ -197,7 +219,7 @@ export function ResumeCreateFlow() {
           <div className="resume-stage mt-8">
             <EagleMascot pose="stand" />
             <div className="resume-stage-copy">
-              {slide === 6 ? <PassportForm initial={draft} /> : null}
+              {slide === FORM_SLIDE ? <PassportForm initial={draft} /> : null}
             </div>
           </div>
         </section>
@@ -214,7 +236,10 @@ export function ResumeCreateFlow() {
             aria-current={index === slide ? "step" : undefined}
             disabled={busy && index !== slide}
             onClick={() => {
-              if (!busy && (index === 0 || slide === 6)) setSlide(index === 0 ? 0 : 6);
+              if (busy) return;
+              if (index === 0) setSlide(0);
+              else if (index === SKILLS_CONFIRM_SLIDE && draft.skills) setSlide(SKILLS_CONFIRM_SLIDE);
+              else if (index === FORM_SLIDE && slide >= SKILLS_CONFIRM_SLIDE) setSlide(FORM_SLIDE);
             }}
           />
         ))}

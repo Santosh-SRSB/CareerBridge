@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Poppins } from "next/font/google";
+import { Fraunces, Inter, Manrope, Poppins, Space_Mono } from "next/font/google";
 import { AppLoader } from "@/components/landing/AppLoader";
 import { AuthCookieSync } from "@/components/AuthCookieSync";
 import { PushNotificationBootstrap } from "@/components/PushNotificationBootstrap";
@@ -18,6 +18,27 @@ const poppins = Poppins({
   display: "swap",
 });
 
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  display: "swap",
+});
+
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  display: "swap",
+});
+
+const spaceMono = Space_Mono({
+  variable: "--font-space-mono",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "SRSB CareerBridge | Build your career. Build your future.",
   description:
@@ -32,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${poppins.variable} h-full antialiased`}
+      className={`${inter.variable} ${poppins.variable} ${fraunces.variable} ${manrope.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-fog font-sans text-ink">
         <AuthCookieSync />

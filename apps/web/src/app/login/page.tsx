@@ -47,23 +47,26 @@ function LoginBody() {
       </ClientOnly>
       <div className="mt-5">
         {!isStaff ? <RegisteredNotice /> : null}
-        {mode === 'EMPLOYER' ? (
+        {mode === 'EMPLOYER' || mode === 'CANDIDATE' ? (
           <PasswordLoginForm key={mode} accountType={mode} />
         ) : (
           <PhoneAuthForm key={mode} purpose="LOGIN" accountType="CANDIDATE" />
         )}
       </div>
       <div className="mt-5 space-y-2 text-center text-sm text-[#4e6864]">
-        {mode === 'EMPLOYER' ? (
+        {mode === 'EMPLOYER' || mode === 'CANDIDATE' ? (
           <p>
             Prefer passwordless?{' '}
-            <Link href="/login/otp?role=employer" className="font-bold text-[#0d9488] transition hover:underline">
+            <Link
+              href={`/login/otp?role=${mode === 'EMPLOYER' ? 'employer' : 'candidate'}`}
+              className="font-bold text-[#0d9488] transition hover:underline"
+            >
               Sign in with OTP
             </Link>
           </p>
         ) : null}
         <p>
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link href={registerHref} className="font-bold text-[#0d9488] transition hover:underline">
             Sign Up
           </Link>

@@ -442,6 +442,12 @@ export class CertificationDto {
   @IsString()
   @MaxLength(80)
   credentialId?: string;
+
+  /** ADDITIVE optional certificate URL — validated only when provided. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  url?: string;
 }
 
 export class ProjectDto {

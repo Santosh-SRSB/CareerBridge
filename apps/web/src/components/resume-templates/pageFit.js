@@ -6,7 +6,8 @@ export const RESUME_PAGE = {
   height: 1123,
 };
 
-export const DENSITY_LEVELS = ["normal", "compact", "tight", "min"];
+/** Prefer looser spacing when content is short; tighten only when needed. */
+export const DENSITY_LEVELS = ["relaxed", "normal", "compact", "tight", "min"];
 
 export function pickDensityLevel(heights, pageHeight = RESUME_PAGE.height) {
   for (const level of DENSITY_LEVELS) {

@@ -92,4 +92,16 @@ export interface StructuredResumeDraft {
     description: string;
     url: string;
   }>;
+  languages?: string[];
+  certifications?: Array<{
+    name: string;
+    issuer?: string;
+    date?: string;
+  }>;
+  achievements?: Array<{
+    title: string;
+    organization?: string;
+    description?: string;
+    date?: string;
+  }>;
 }

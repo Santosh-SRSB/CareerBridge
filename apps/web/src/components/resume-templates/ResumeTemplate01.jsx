@@ -1,9 +1,11 @@
 import React from "react";
 import {
-  Template01AchievementsCertifications,
+  Template01Achievements,
+  Template01Certifications,
   Template01Education,
   Template01Experience,
   Template01Header,
+  Template01Languages,
   Template01Projects,
   Template01Summary,
   Template01TechnicalSkills,
@@ -20,7 +22,9 @@ export default function ResumeTemplate01({ data }) {
       <Template01TechnicalSkills data={data} />
       <Template01Education data={data} />
       <Template01Projects data={data} />
-      <Template01AchievementsCertifications data={data} />
+      <Template01Achievements data={data} />
+      <Template01Certifications data={data} />
+      <Template01Languages data={data} />
     </div>
   );
 }

@@ -73,7 +73,11 @@ export class RequestOtpDto {
   industry?: string;
 
   @ApiPropertyOptional()
-  @ValidateIf((dto: RequestOtpDto) => dto.purpose === 'REGISTER' && dto.accountType === 'EMPLOYER' && Boolean(dto.password))
+  @ValidateIf(
+    (dto: RequestOtpDto) =>
+      dto.purpose === 'REGISTER' &&
+      (dto.accountType === 'EMPLOYER' || dto.accountType === 'CANDIDATE'),
+  )
   @IsString()
   @Matches(REGISTRATION_PASSWORD_PATTERN, { message: PASSWORD_MESSAGE })
   password?: string;

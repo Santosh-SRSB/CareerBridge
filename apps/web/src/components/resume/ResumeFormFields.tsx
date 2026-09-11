@@ -4,15 +4,21 @@ import { formatMonthRange, formatEducationYearRange } from '@/lib/resume-dates';
 
 const fieldStyles = `
   .cb-date-field input[type="month"] {
-    border: 1.5px solid var(--line, #dde0d3);
-    border-radius: 8px;
-    padding: 9px 11px;
-    font-size: 13px;
-    font-family: 'Inter', sans-serif;
+    border: 2px solid #7A8270;
+    border-radius: 0.5rem;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: var(--font-inter), Inter, sans-serif;
     width: 100%;
     box-sizing: border-box;
-    color: #142a4f;
+    color: #241C15;
     background: #fff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .cb-date-field input[type="month"]:focus {
+    outline: none;
+    border-color: #0A2E2C;
+    box-shadow: 0 0 0 3px rgba(10, 46, 44, 0.25);
   }
   .cb-date-range {
     display: grid;
@@ -25,7 +31,8 @@ const fieldStyles = `
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    color: #43526b;
+    color: #6B6355;
+    font-family: var(--font-inter), Inter, sans-serif;
   }
   .cb-date-range .cb-present-row input { width: auto; }
   @media (max-width: 600px) {

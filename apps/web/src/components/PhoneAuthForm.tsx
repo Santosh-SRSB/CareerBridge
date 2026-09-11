@@ -9,6 +9,11 @@ import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
 import { authErrorMessage } from '@/lib/auth-errors';
 import { validateEmailAddress } from '@/lib/validation';
+import {
+  isDevOtpEnabled,
+  isFirebaseConfigured,
+  sendFirebaseOtp,
+} from '@/lib/firebase';
 import type { AccountKind, AuthPurpose } from '@careerbridge/shared';
 
 export function PhoneAuthForm({
@@ -83,6 +88,12 @@ export function PhoneAuthForm({
         email: channel === 'EMAIL' ? email.trim() : undefined,
         accountType,
       });
+      if (channel === 'MOBILE' && !isDevOtpEnabled()) {
+        if (!isFirebaseConfigured()) {
+          throw new Error('Firebase OTP is not configured yet.');
+        }
+        await sendFirebaseOtp(phone);
+      }
       saveOtpFlow({
         requestId: result.requestId,
         phone: channel === 'MOBILE' ? phone : '',

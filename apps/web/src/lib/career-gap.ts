@@ -86,22 +86,54 @@ export function careerGapMonths({
   experience: PassportExperience[];
   now?: Date;
 }) {
+  const { totalDays } = careerGapDuration({ stillInCollege, educationEnd, experience, now });
+  return Math.floor(totalDays / 30);
+}
+
+function daysBetween(from: Date, to: Date) {
+  const ms = startOfDay(to).getTime() - startOfDay(from).getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
+/** Calendar-ish gap: uncovered days between education end / first job and today (or between jobs). */
+export function careerGapDuration({
+  stillInCollege,
+  educationEnd,
+  experience,
+  now = new Date(),
+}: {
+  stillInCollege: boolean;
+  educationEnd: string;
+  experience: PassportExperience[];
+  now?: Date;
+}): { totalDays: number; months: number; days: number } {
   const today = startOfDay(now);
   const employed = mergeRanges(jobRanges(experience, now));
 
   const collegeEnd = stillInCollege ? null : parseDay(educationEnd);
   const firstJob = employed[0]?.start;
   const from = collegeEnd ? startOfDay(collegeEnd) : firstJob;
-  if (!from || from >= today) return 0;
+  if (!from || from >= today) return { totalDays: 0, months: 0, days: 0 };
 
   let cursor = from;
-  let total = 0;
+  let totalDays = 0;
   for (const range of employed) {
     if (range.end <= cursor) continue;
     const coveredStart = range.start < cursor ? cursor : range.start;
-    if (coveredStart > cursor) total += monthsBetween(cursor, coveredStart);
+    if (coveredStart > cursor) totalDays += daysBetween(cursor, coveredStart);
     if (range.end > cursor) cursor = range.end;
   }
-  if (cursor < today) total += monthsBetween(cursor, today);
-  return total;
+  if (cursor < today) totalDays += daysBetween(cursor, today);
+
+  const months = Math.floor(totalDays / 30);
+  const days = totalDays % 30;
+  return { totalDays, months, days };
+}
+
+export function formatGapMonthsDays(months: number, days: number) {
+  const parts: string[] = [];
+  if (months > 0) parts.push(months === 1 ? '1 month' : `${months} months`);
+  if (days > 0) parts.push(days === 1 ? '1 day' : `${days} days`);
+  if (!parts.length) return '0 days';
+  return parts.join(' and ');
 }

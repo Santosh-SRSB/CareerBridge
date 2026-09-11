@@ -58,12 +58,13 @@ function FilterPanel({
 }
 
 export function JobSearchFilters({
-  activeFilters,
+  activeFilter,
   onToggleFilter,
   filters,
   onChange,
 }: {
-  activeFilters: JobFilterChip[];
+  /** Only one filter panel open at a time — clicking another replaces this. */
+  activeFilter: JobFilterChip | null;
   onToggleFilter: (chip: JobFilterChip) => void;
   filters: JobSearchFilterValues;
   onChange: (patch: Partial<JobSearchFilterValues>) => void;
@@ -92,7 +93,7 @@ export function JobSearchFilters({
               type="button"
               onClick={() => onToggleFilter(chip)}
               className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                activeFilters.includes(chip)
+                activeFilter === chip
                   ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white'
                   : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
               }`}
@@ -103,160 +104,156 @@ export function JobSearchFilters({
         </div>
       </div>
 
-      {activeFilters.length > 0 ? (
-        <div className="space-y-3">
-          {activeFilters.includes('Salary') ? (
-            <FilterPanel title="Salary">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                <div className="grid flex-1 gap-3 sm:grid-cols-2">
-                  <Input
-                    label="From"
-                    name="salaryMin"
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    placeholder="e.g. 15000"
-                    value={filters.salaryMin}
-                    onChange={(event) => onChange({ salaryMin: event.target.value })}
-                  />
-                  <Input
-                    label="To"
-                    name="salaryMax"
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    placeholder="e.g. 30000"
-                    value={filters.salaryMax}
-                    onChange={(event) => onChange({ salaryMax: event.target.value })}
-                  />
-                </div>
-                <div className="shrink-0 space-y-1.5">
-                  <p className="text-xs font-bold text-slate-700">Period</p>
-                  <SegmentedToggle<SalaryPeriod>
-                    value={filters.salaryPeriod}
-                    options={[
-                      { value: 'monthly', label: 'Monthly' },
-                      { value: 'ctc', label: 'CTC' },
-                    ]}
-                    onChange={(salaryPeriod) => onChange({ salaryPeriod })}
-                  />
-                </div>
-              </div>
-            </FilterPanel>
-          ) : null}
+      {activeFilter === 'Salary' ? (
+        <FilterPanel title="Salary">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="grid flex-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="From"
+                name="salaryMin"
+                type="number"
+                min={0}
+                inputMode="numeric"
+                placeholder="e.g. 15000"
+                value={filters.salaryMin}
+                onChange={(event) => onChange({ salaryMin: event.target.value })}
+              />
+              <Input
+                label="To"
+                name="salaryMax"
+                type="number"
+                min={0}
+                inputMode="numeric"
+                placeholder="e.g. 30000"
+                value={filters.salaryMax}
+                onChange={(event) => onChange({ salaryMax: event.target.value })}
+              />
+            </div>
+            <div className="shrink-0 space-y-1.5">
+              <p className="text-xs font-bold text-slate-700">Period</p>
+              <SegmentedToggle<SalaryPeriod>
+                value={filters.salaryPeriod}
+                options={[
+                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'ctc', label: 'CTC' },
+                ]}
+                onChange={(salaryPeriod) => onChange({ salaryPeriod })}
+              />
+            </div>
+          </div>
+        </FilterPanel>
+      ) : null}
 
-          {activeFilters.includes('Experience') ? (
-            <FilterPanel title="Experience">
-              <div className="flex flex-wrap gap-2">
-                {EXPERIENCE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() =>
-                      onChange({
-                        experience: filters.experience === option.value ? '' : option.value,
-                      })
-                    }
-                    className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                      filters.experience === option.value
-                        ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white'
-                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </FilterPanel>
-          ) : null}
+      {activeFilter === 'Experience' ? (
+        <FilterPanel title="Experience">
+          <div className="flex flex-wrap gap-2">
+            {EXPERIENCE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() =>
+                  onChange({
+                    experience: filters.experience === option.value ? '' : option.value,
+                  })
+                }
+                className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                  filters.experience === option.value
+                    ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </FilterPanel>
+      ) : null}
 
-          {activeFilters.includes('Job Type') ? (
-            <FilterPanel title="Job Type">
-              <div className="flex flex-wrap gap-2">
-                {JOB_TYPE_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() =>
-                        onChange({
-                          jobType: filters.jobType === option.value ? '' : option.value,
-                        })
-                      }
-                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                        filters.jobType === option.value
-                          ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                ))}
-              </div>
-            </FilterPanel>
-          ) : null}
+      {activeFilter === 'Job Type' ? (
+        <FilterPanel title="Job Type">
+          <div className="flex flex-wrap gap-2">
+            {JOB_TYPE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() =>
+                  onChange({
+                    jobType: filters.jobType === option.value ? '' : option.value,
+                  })
+                }
+                className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                  filters.jobType === option.value
+                    ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </FilterPanel>
+      ) : null}
 
-          {activeFilters.includes('Skills') ? (
-            <FilterPanel title="Skills">
-              <div className="space-y-3">
-                <GroupedSelect
-                  id="job-skill"
-                  label="Select skill"
-                  value=""
-                  onChange={(skill) => {
-                    if (skill && listedSkills.includes(skill as (typeof TECHNOLOGY_SKILLS)[number])) {
-                      addSkill(skill);
-                    }
-                  }}
-                  groups={[{ options: listedSkills }]}
-                  placeholder="Choose from list"
+      {activeFilter === 'Skills' ? (
+        <FilterPanel title="Skills">
+          <div className="space-y-3">
+            <GroupedSelect
+              id="job-skill"
+              label="Select skill"
+              value=""
+              onChange={(skill) => {
+                if (skill && listedSkills.includes(skill as (typeof TECHNOLOGY_SKILLS)[number])) {
+                  addSkill(skill);
+                }
+              }}
+              groups={[{ options: listedSkills }]}
+              placeholder="Choose from list"
+            />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <Input
+                  label="Or enter skill manually"
+                  name="manualSkill"
+                  value={manualSkill}
+                  onChange={(event) => setManualSkill(event.target.value)}
+                  placeholder="Type a skill"
                 />
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                  <div className="flex-1">
-                    <Input
-                      label="Or enter skill manually"
-                      name="manualSkill"
-                      value={manualSkill}
-                      onChange={(event) => setManualSkill(event.target.value)}
-                      placeholder="Type a skill"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addSkill(manualSkill);
-                      setManualSkill('');
-                    }}
-                    className="rounded-xl border border-[#0a2e2c]/20 bg-white px-4 py-2.5 text-xs font-bold text-[#0a2e2c] hover:bg-slate-50 sm:mb-0.5"
-                  >
-                    Add skill
-                  </button>
-                </div>
-                {filters.skills.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {filters.skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-[#ecfdf5] px-3 py-1 text-xs font-bold text-[#047857] ring-1 ring-[#a7f3d0]/80"
-                      >
-                        {skill}
-                        <button
-                          type="button"
-                          onClick={() => removeSkill(skill)}
-                          className="text-[#047857]/70 hover:text-[#047857]"
-                          aria-label={`Remove ${skill}`}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">Pick one or more skills to narrow results.</p>
-                )}
               </div>
-            </FilterPanel>
-          ) : null}
-        </div>
+              <button
+                type="button"
+                onClick={() => {
+                  addSkill(manualSkill);
+                  setManualSkill('');
+                }}
+                className="rounded-xl border border-[#0a2e2c]/20 bg-white px-4 py-2.5 text-xs font-bold text-[#0a2e2c] hover:bg-slate-50 sm:mb-0.5"
+              >
+                Add skill
+              </button>
+            </div>
+            {filters.skills.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {filters.skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[#ecfdf5] px-3 py-1 text-xs font-bold text-[#047857] ring-1 ring-[#a7f3d0]/80"
+                  >
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => removeSkill(skill)}
+                      className="text-[#047857]/70 hover:text-[#047857]"
+                      aria-label={`Remove ${skill}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Pick one or more skills to narrow results.</p>
+            )}
+          </div>
+        </FilterPanel>
       ) : null}
     </div>
   );

@@ -1,4 +1,7 @@
 import type { ResumeRecord } from '@careerbridge/shared';
+import { parseLanguageSkills } from '@careerbridge/shared';
+import { splitProjectFields } from './project-fields';
+import { normalizeCertificationList } from './certification-fields';
 
 const LANGUAGE_POOL = [
   'English',
@@ -30,6 +33,9 @@ function splitDegreeAndField(qualification: string) {
 export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
   const content = record.content;
   const languages = content.languages || [];
+  const languageNames = new Set(
+    languages.map((entry) => parseLanguageSkills(entry)[0]?.name || entry),
+  );
 
   return {
     fullName: content.fullName || '',
@@ -63,22 +69,34 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
       isCurrent: false,
       responsibilities: splitLines(exp.description),
     })),
-    projectList: (content.projects || []).map((project, index) => ({
-      id: `proj-${index}`,
-      name: project.name || '',
-      description: project.description || '',
-      technologies: [],
-      bullets: splitLines(project.description),
-    })),
-    certificationList: (content.certifications || []).map((name, index) => ({
+    projectList: (content.projects || []).map((project, index) => {
+      const { description, bullets } = splitProjectFields({
+        description: project.description,
+        bullets: project.bullets,
+      });
+      return {
+        id: `proj-${index}`,
+        name: project.name || '',
+        description,
+        technologies: [],
+        bullets: [...bullets],
+      };
+    }),
+    certificationList: normalizeCertificationList(content.certifications).map((cert, index) => ({
       id: `cert-${index}`,
-      name,
-      issuer: '',
-      date: '',
+      name: cert.name,
+      issuer: cert.issuer || '',
+      date: cert.date || '',
     })),
-    achievementList: [],
+    achievementList: (content.achievements || []).map((ach, index) => ({
+      id: `ach-${index}`,
+      title: ach.title || '',
+      organization: ach.organization || '',
+      description: ach.description || '',
+      date: ach.date || '',
+    })),
     languages,
-    availableLanguages: LANGUAGE_POOL.filter((name) => !languages.includes(name)),
+    availableLanguages: LANGUAGE_POOL.filter((name) => !languageNames.has(name)),
     preferredRole: record.targetJobTitle || '',
     preferredLocation: content.city || '',
     expectedSalary: '',

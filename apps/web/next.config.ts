@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  // Allow Firebase phone OTP testing via http://127.0.0.1:3000
+  allowedDevOrigins: ["127.0.0.1"],
 };
 
 export default nextConfig;

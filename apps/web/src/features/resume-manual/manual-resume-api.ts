@@ -54,6 +54,8 @@ function emptyFriendData(): FriendResumeData {
     phone: '',
     location: '',
     linkedin: '',
+    github: '',
+    portfolio: '',
     website: '',
     photo: '',
     summary: '',

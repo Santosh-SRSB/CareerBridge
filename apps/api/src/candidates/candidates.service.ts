@@ -410,6 +410,7 @@ export class CandidatesService {
 
   async addCertification(userId: string, dto: CertificationDto) {
     rejectIf(yearNumberError(dto.year));
+    rejectIf(optionalUrlError(dto.url || ''));
     const candidate = await this.loadCandidate(userId);
     const items = parseRecords(candidate.certifications);
     items.push({
@@ -418,6 +419,8 @@ export class CandidatesService {
       issuer: dto.issuer?.trim() || null,
       year: dto.year ?? null,
       credentialId: dto.credentialId?.trim() || null,
+      // ADDITIVE optional certificate URL
+      url: normalizeHttpUrl(dto.url),
     });
     await this.prisma.candidate.update({
       where: { userId },
@@ -579,6 +582,7 @@ export class CandidatesService {
         issuer: string | null;
         year: number | null;
         credentialId: string | null;
+        url?: string | null;
       }>,
       projects: parseRecords(candidate.projects) as Array<{
         id: string;

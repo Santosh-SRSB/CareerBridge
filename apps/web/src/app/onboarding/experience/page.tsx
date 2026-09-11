@@ -4,13 +4,14 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { EXPERIENCE_OPTIONS } from '@careerbridge/shared';
 import {
+  OB,
   OnboardingActions,
   OnboardingFrame,
   OnboardingQuestion,
+  onboardingInputClass,
   onboardingOptionButtonClass,
   onboardingPrimaryButtonClass,
 } from '@/components/OnboardingFrame';
-import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { patchStoredUser } from '@/lib/session';
 import { addExperience, getCandidateMe, updateCandidateMe } from '@/lib/api';
@@ -98,7 +99,6 @@ export default function OnboardingExperiencePage() {
         firstName: profile.firstName,
         onboardingCompleted: true,
       });
-      // Next: choose Autofill with resume vs Build Resume
       router.replace('/onboarding/complete');
     } catch {
       setError('We could not save your experience right now. Please try again.');
@@ -122,7 +122,7 @@ export default function OnboardingExperiencePage() {
 
   if (!ready) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
+      <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
         Loading...
       </main>
     );
@@ -130,15 +130,16 @@ export default function OnboardingExperiencePage() {
 
   return (
     <OnboardingFrame step={4}>
-      <form onSubmit={onSubmit} className="space-y-6">
-        <OnboardingQuestion title="Do you have previous work experience?">
-          <div className="space-y-2">
+      <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-4 overflow-x-hidden">
+        <OnboardingQuestion title="Work experience">
+          <div className="flex flex-wrap gap-2">
             {EXPERIENCE_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => setHasExperience(option.value)}
-                className={`w-full ${onboardingOptionButtonClass(hasExperience === option.value)}`}
+                className={onboardingOptionButtonClass(hasExperience === option.value)}
               >
                 {option.label}
               </button>
@@ -147,77 +148,101 @@ export default function OnboardingExperiencePage() {
         </OnboardingQuestion>
 
         {showJobForm ? (
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-            <Input
-              label="Company"
-              name="company"
-              required
-              value={company}
-              onChange={(event) => setCompany(event.target.value)}
-            />
-            <Input
-              label="Job title"
-              name="jobTitle"
-              required
-              value={jobTitle}
-              onChange={(event) => setJobTitle(event.target.value)}
-            />
-            <Input
-              label="Years of experience"
-              name="experienceYears"
-              type="number"
-              min={0}
-              max={50}
-              required
-              value={experienceYears}
-              onChange={(event) => setExperienceYears(event.target.value)}
-              placeholder="e.g. 2"
-            />
+          <div className="space-y-4">
+            <OnboardingQuestion title="Current or most recent role">
+              <input
+                name="jobTitle"
+                required
+                value={jobTitle}
+                onChange={(event) => setJobTitle(event.target.value)}
+                placeholder="e.g. Sales executive"
+                className={onboardingInputClass}
+              />
+            </OnboardingQuestion>
+            <OnboardingQuestion title="Company">
+              <input
+                name="company"
+                required
+                value={company}
+                onChange={(event) => setCompany(event.target.value)}
+                placeholder="Company name"
+                className={onboardingInputClass}
+              />
+            </OnboardingQuestion>
+            <OnboardingQuestion title="Years of experience">
+              <input
+                name="experienceYears"
+                type="number"
+                min={0}
+                max={50}
+                required
+                value={experienceYears}
+                onChange={(event) => setExperienceYears(event.target.value)}
+                placeholder="e.g. 2"
+                className={onboardingInputClass}
+              />
+            </OnboardingQuestion>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="mb-1 block text-xs font-bold text-primary">From</span>
+                <span className="mb-2 block text-sm font-semibold" style={{ color: OB.ink }}>
+                  From
+                </span>
                 <input
                   type="month"
                   required
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
-                  className="w-full rounded-xl border border-primary/15 bg-[#f8faf9] px-3 py-2 text-xs font-semibold text-primary outline-none focus:border-teal focus:bg-white"
+                  className={onboardingInputClass}
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-bold text-primary">To</span>
+                <span className="mb-2 block text-sm font-semibold" style={{ color: OB.ink }}>
+                  To
+                </span>
                 <input
                   type="month"
                   required
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
-                  className="w-full rounded-xl border border-primary/15 bg-[#f8faf9] px-3 py-2 text-xs font-semibold text-primary outline-none focus:border-teal focus:bg-white"
+                  className={onboardingInputClass}
                 />
               </label>
             </div>
           </div>
         ) : hasExperience === 'NONE' ? (
-          <p className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
-            That&apos;s okay. You can add experience later in your Career Passport.
+          <p
+            className="rounded-lg border px-4 py-3 text-sm"
+            style={{
+              borderColor: 'rgba(217, 164, 65, 0.35)',
+              color: OB.ink,
+              background: 'linear-gradient(135deg, #FBF7EC 0%, #F3F8F2 100%)',
+            }}
+          >
+            ✨ That&apos;s okay. You can add experience later in your Career Passport.
           </p>
         ) : hasExperience === 'INTERNSHIP' ? (
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-            <Input
-              label="Company / Organisation"
-              name="company"
-              value={company}
-              onChange={(event) => setCompany(event.target.value)}
-            />
-            <Input
-              label="Role"
-              name="jobTitle"
-              value={jobTitle}
-              onChange={(event) => setJobTitle(event.target.value)}
-            />
+          <div className="space-y-4">
+            <OnboardingQuestion title="Company / Organisation">
+              <input
+                name="company"
+                value={company}
+                onChange={(event) => setCompany(event.target.value)}
+                className={onboardingInputClass}
+              />
+            </OnboardingQuestion>
+            <OnboardingQuestion title="Role">
+              <input
+                name="jobTitle"
+                value={jobTitle}
+                onChange={(event) => setJobTitle(event.target.value)}
+                className={onboardingInputClass}
+              />
+            </OnboardingQuestion>
           </div>
         ) : null}
 
-        {error ? <p className="text-xs font-semibold text-error">{error}</p> : null}
+        {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
+        </div>
 
         <OnboardingActions onSkip={() => void onSkip()} skipLabel="Skip for now">
           <Button
@@ -227,8 +252,9 @@ export default function OnboardingExperiencePage() {
             loading={loading}
             loadingLabel="Saving..."
             className={onboardingPrimaryButtonClass}
+            style={{ background: OB.moss }}
           >
-            Finish setup
+            Finish
           </Button>
         </OnboardingActions>
       </form>

@@ -9,7 +9,7 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
     version: 'resume-structure.v1',
     description: 'Extracts resume facts into a passport/draft JSON shape without inventing data',
     system:
-      'Extract resume facts only. Do not invent companies, titles, dates, skills, metrics, degrees or projects. Include every real project listed under Projects. Return JSON only with keys: firstName, lastName, city, about, education[{qualification,institution,fieldOfStudy,yearCompleted}], skills[string], careerInterests[string], experience[{company,jobTitle,isInternship,description}], projects[{title,role,year,description,url}]. Use empty strings or empty arrays when missing.',
+      'Extract resume facts only. Do not invent companies, titles, dates, skills, metrics, degrees or projects. Include EVERY real project, education entry, job, certification, achievement, and language listed. Return JSON only with keys: firstName, lastName, city, about, education[{qualification,institution,fieldOfStudy,yearCompleted}], skills[string], careerInterests[string], experience[{company,jobTitle,isInternship,description}], projects[{title,role,year,description,url}], languages[string], certifications[{name,issuer,date}], achievements[{title,organization,description,date}]. Use empty strings or empty arrays when missing.',
   },
   'resume-rewrite.v1': {
     version: 'resume-rewrite.v1',
@@ -23,17 +23,17 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
     system:
       'You are an ATS resume editor focused on accuracy. Review ONLY the candidate\'s written content. Return JSON: score (0-100), strengths (string[] of sections that are already good), improvements (string[]), missingSkills (string[] — ONLY skills clearly used in projects/experience but absent from skills), suggestedSections (optional), suggestions (array of { section, issue, currentText, improvedText }). Rules: (1) For summary: detect grammar, spelling, punctuation, awkward phrasing; improvedText must be a corrected full summary using the same facts — never vague advice. (2) For skills: only suggest skills evidenced in projects/experience and missing from the skills list; if skills already cover projects, omit skills suggestions. (3) For experience/projects: only rewrite when bullets are unclear or poorly phrased; keep facts. (4) If a section is already clear and ATS-friendly, list it in strengths and do NOT invent a suggestion for it. (5) improvedText must be ready-to-paste resume wording, never coaching like "make it more specific" or "use clear titles". (6) Never invent employers, dates, metrics, certifications, or skills. Prefer 0-5 high-value suggestions.',
   },
+  'interview-question.v1': {
+    version: 'interview-question.v1',
+    description: 'Generates progressive adaptive mock interview questions from the full candidate profile',
+    system:
+      'Generate one clear, realistic interview question using the FULL candidate profile (education, skills, projects, experience, summary, job role) — do not over-focus on a single skill or project. Follow coverageFocus for topic rotation. Match difficulty by experienceLevel: FRESHER → simple basics; YEAR_1 → fundamentals; YEAR_2_3 → applied depth; YEAR_4_PLUS → harder scenarios. Never invent facts. Never ask tell-me-about-yourself as a later question. Return JSON { "question": string, "category": string, "hint": string, "thinkSeconds": number }.',
+  },
   'interview-evaluation.v1': {
     version: 'interview-evaluation.v1',
     description: 'Evaluates live candidate answers in mock interviews with constructive feedback',
     system:
-      'Analyze the candidate answer. Improve wording only using facts from the profile and the answer. Correct grammar and structure. Suggest what could be added only if it is already implied by their answer or profile. Never invent companies, years, tools, or achievements. If the answer contains abuse or vulgar language, score near 0 and call it out. Return JSON { "analysis": string, "improvedAnswer": string, "strengths": string[], "weaknesses": string[], "score": number } where score is 0-100.',
-  },
-  'interview-question.v1': {
-    version: 'interview-question.v1',
-    description: 'Generates progressive adaptive mock interview questions',
-    system:
-      'Generate a clear, realistic interview question tailored to the candidate profile and job role. Return JSON { "question": string, "category": string, "hint": string, "thinkSeconds": number }.',
+      'Analyze the candidate answer supportively and score generously for sincere attempts. Improve wording using facts from the profile and answer. If the answer is rubbish or empty, provide a proper first-person sample answer using only profile facts — never invent companies, years, tools, or achievements. Return JSON { "analysis": string, "improvedAnswer": string, "strengths": string[], "weaknesses": string[], "score": number } where score is 0-100.',
   },
   'job-matching.v1': {
     version: 'job-matching.v1',

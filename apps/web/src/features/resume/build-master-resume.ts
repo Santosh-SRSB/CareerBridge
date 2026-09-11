@@ -44,6 +44,11 @@ interface AchievementItem {
   date?: string;
 }
 
+interface LanguageItem {
+  name: string;
+  level?: string;
+}
+
 export interface BuildMasterResumeInput {
   fullName: string;
   location: string;
@@ -59,6 +64,7 @@ export interface BuildMasterResumeInput {
   projectList: ProjectItem[];
   certificationList: CertificationItem[];
   achievementList: AchievementItem[];
+  languages?: LanguageItem[];
 }
 
 export function buildMasterResume(input: BuildMasterResumeInput): MasterResumeDocument {
@@ -100,13 +106,22 @@ export function buildMasterResume(input: BuildMasterResumeInput): MasterResumeDo
         gradeType: (edu.gradeType || '').trim(),
       };
     }),
-    projects: input.projectList.map((proj) => ({
-      name: proj.name.trim(),
-      technologies: (proj.technologies || []).map((t) => t.trim()).filter(Boolean),
-      description: proj.description.trim(),
-      url: '',
-      bullets: (proj.bullets || []).map((b) => b.trim()).filter(Boolean),
-    })),
+    projects: input.projectList.map((proj) => {
+      // Deep-copy bullets per resume — never reuse shared array references.
+      const bullets = [...(proj.bullets || [])].map((b) => b.trim()).filter(Boolean);
+      const description = proj.description.trim();
+      const uniqueBullets = [...new Set(bullets.map((b) => b))];
+      const filteredBullets = uniqueBullets.filter(
+        (b) => b.toLowerCase() !== description.toLowerCase(),
+      );
+      return {
+        name: proj.name.trim(),
+        technologies: [...(proj.technologies || [])].map((t) => t.trim()).filter(Boolean),
+        description,
+        url: '',
+        bullets: filteredBullets,
+      };
+    }),
     achievements: input.achievementList.map((ach) => ({
       title: ach.title.trim(),
       organization: (ach.organization || '').trim(),
@@ -119,6 +134,12 @@ export function buildMasterResume(input: BuildMasterResumeInput): MasterResumeDo
       date: formatDateForResume(cert.date),
       credentialUrl: '',
     })),
+    languages: (input.languages || [])
+      .map((lang) => ({
+        name: lang.name.trim(),
+        level: (lang.level || '').trim(),
+      }))
+      .filter((lang) => lang.name),
   };
 }
 

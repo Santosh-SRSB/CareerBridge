@@ -1,20 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   getCandidateMe,
   getProfileCompletion,
   listApplications,
   listJobs,
+  listResumes,
   recommendedJobs,
   fetchMe,
   updateCandidateMe,
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import type { CandidateProfile, JobCard } from '@careerbridge/shared';
-import { CandidateDashboardShell } from '@/components/CandidateDashboardShell';
-import { DashboardCareerPassport } from '@/components/dashboard/DashboardCareerPassport';
+import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { formatCandidateExperienceLine } from '@/lib/format-candidate-experience';
+import { resolvePassportSummary } from '@/lib/passport-to-friend-resume';
 import {
   fetchScheduledInterviews,
   type ScheduledJobInterview,
@@ -35,9 +37,51 @@ function formatSalaryShort(min?: number | null, max?: number | null) {
     if (value >= 1000) return `₹${Math.round(value / 1000)}K`;
     return `₹${value.toLocaleString('en-IN')}`;
   };
-  if (min && max) return `${fmt(min)} - ${fmt(max)}`;
+  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
   if (min) return `From ${fmt(min)}`;
   return `Up to ${fmt(max!)}`;
+}
+
+function formatExperienceField(profile: CandidateProfile | null) {
+  if (!profile) return '—';
+  const years = profile.totalExperienceYears ?? 0;
+  const months = profile.totalExperienceMonths ?? 0;
+  const total = years + months / 12;
+  if (!profile.hasExperience || profile.hasExperience === 'no' || total < 1) {
+    if (profile.experienceLevel === 'fresher' || !profile.experiences?.length) return 'Fresher';
+  }
+  if (total >= 1) {
+    const rounded = Math.floor(total);
+    return rounded <= 1 ? '1+ Year' : `${rounded}+ Years`;
+  }
+  return formatCandidateExperienceLine(profile) || 'Fresher';
+}
+
+function statusLabel(profile: CandidateProfile | null) {
+  if (!profile) return 'CANDIDATE';
+  const years = profile.totalExperienceYears ?? 0;
+  const months = profile.totalExperienceMonths ?? 0;
+  if ((years + months / 12) < 1 || profile.experienceLevel === 'fresher') return 'FRESHER';
+  return 'EXPERIENCED';
+}
+
+function targetRole(profile: CandidateProfile | null) {
+  if (!profile) return 'YOUR ROLE';
+  const interest = profile.careerInterests?.[0]?.trim();
+  if (interest) return interest.toUpperCase();
+  const latest =
+    profile.experiences?.find((item) => item.stillInCompany) || profile.experiences?.[0];
+  if (latest?.jobTitle) return latest.jobTitle.toUpperCase();
+  return 'YOUR ROLE';
+}
+
+function currentCompany(profile: CandidateProfile | null) {
+  if (!profile?.experiences?.length) return '—';
+  const current =
+    profile.experiences.find((item) => item.stillInCompany) ||
+    profile.experiences.find((item) => !item.endDate) ||
+    profile.experiences[0];
+  return current?.company || '—';
 }
 
 function formatInterviewDate(value: string) {
@@ -46,275 +90,104 @@ function formatInterviewDate(value: string) {
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function statusLabel(status: ScheduledJobInterview['status']) {
+function interviewStatusLabel(status: ScheduledJobInterview['status']) {
   if (status === 'CONFIRMED') return 'Confirmed';
   if (status === 'RESCHEDULE_REQUESTED') return 'Reschedule requested';
   return 'Pending confirmation';
 }
 
-function strengthLabel(value: number) {
-  if (value >= 80) return 'High';
-  if (value >= 50) return 'Medium';
-  return 'Getting started';
+function TypingHello({ name }: { name: string }) {
+  const fullText = `Hello, ${name}`;
+  const [displayed, setDisplayed] = useState('');
+  const [phase, setPhase] = useState<'typing' | 'pause' | 'deleting'>('typing');
+
+  useEffect(() => {
+    setDisplayed('');
+    setPhase('typing');
+  }, [fullText]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    if (phase === 'typing') {
+      if (displayed.length < fullText.length) {
+        timer = setTimeout(() => {
+          setDisplayed(fullText.slice(0, displayed.length + 1));
+        }, 95);
+      } else {
+        timer = setTimeout(() => setPhase('pause'), 1400);
+      }
+    } else if (phase === 'pause') {
+      timer = setTimeout(() => setPhase('deleting'), 400);
+    } else if (displayed.length > 0) {
+      timer = setTimeout(() => {
+        setDisplayed(fullText.slice(0, displayed.length - 1));
+      }, 45);
+    } else {
+      timer = setTimeout(() => setPhase('typing'), 350);
+    }
+
+    return () => clearTimeout(timer);
+  }, [displayed, phase, fullText]);
+
+  return (
+    <h1 className="cb-boarding__hello" aria-label={fullText}>
+      <span className="cb-boarding__hello-ghost" aria-hidden>
+        {fullText}
+      </span>
+      <span className="cb-boarding__hello-live">
+        <span className="cb-boarding__hello-typed">{displayed}</span>
+        <span className="cb-boarding__hello-caret" aria-hidden />
+      </span>
+    </h1>
+  );
 }
 
-function ProfileStrengthRing({ value }: { value: number }) {
-  const safe = Math.min(100, Math.max(0, value));
-  const radius = 42;
+function ProfileCompletedRing({ value }: { value: number }) {
+  const safe = Math.min(100, Math.max(0, Math.round(value)));
+  const radius = 24;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (safe / 100) * circumference;
 
   return (
-    <div className="relative flex h-[108px] w-[108px] shrink-0 items-center justify-center">
-      <svg className="absolute inset-0 -rotate-90" viewBox="0 0 108 108" aria-hidden>
-        <circle cx="54" cy="54" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="9" />
-        <circle
-          cx="54"
-          cy="54"
-          r={radius}
-          fill="none"
-          stroke="#f59e0b"
-          strokeWidth="9"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className="transition-[stroke-dashoffset] duration-1000 ease-out"
-        />
-      </svg>
-      <p className="relative text-2xl font-black text-[#111827]">{safe}%</p>
+    <div className="cb-boarding__ring" title={`${safe}% profile completed`}>
+      <div className="cb-boarding__ring-visual">
+        <svg className="cb-boarding__ring-svg" viewBox="0 0 64 64" aria-hidden>
+          <circle cx="32" cy="32" r={radius} className="cb-boarding__ring-track" />
+          <circle
+            cx="32"
+            cy="32"
+            r={radius}
+            className="cb-boarding__ring-fill"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <span className="cb-boarding__ring-num">{safe}%</span>
+      </div>
+      <span className="cb-boarding__ring-lbl">Profile Completed</span>
     </div>
   );
 }
 
-function CareerPathMilestone() {
-  return (
-    <div className="relative flex h-full min-h-[180px] flex-col overflow-hidden rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] p-4 sm:p-5">
-      <div className="relative z-[1] flex items-start justify-between gap-2">
-        <p className="text-sm font-bold text-[#1e3a8a]">Career Pathing Milestone</p>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/dashboard/passport-sparkle.gif"
-          alt=""
-          className="h-6 w-6 object-contain opacity-90"
-        />
-      </div>
+const EXPERIENCE_LEVEL_CHIPS = [
+  { key: 'fresher', label: 'Fresher' },
+  { key: '0-1', label: '0–1 Yr' },
+  { key: '1-3', label: '1–3 Yrs' },
+  { key: '3-5', label: '3–5 Yrs' },
+  { key: '5+', label: '5+ Yrs' },
+] as const;
 
-      <div className="relative z-[1] mt-2 flex flex-1 items-center justify-center overflow-hidden rounded-xl">
-        {/* Realistic scene */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/dashboard/career-milestone-hero.png"
-          alt="Career path toward your next role"
-          className="cb-mile-hero h-[120px] w-auto max-w-[78%] object-contain drop-shadow-sm sm:h-[132px]"
-        />
-
-        {/* Floating pin */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/dashboard/career-milestone-pin.png"
-          alt=""
-          className="cb-mile-pin pointer-events-none absolute right-1 top-1 h-12 w-12 object-contain sm:right-2 sm:h-14 sm:w-14"
-        />
-
-        {/* Choose career character (bg removed) */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/dashboard/career-choose.png"
-          alt=""
-          className="cb-mile-choose pointer-events-none absolute bottom-0 left-0 h-14 w-auto object-contain sm:h-16"
-        />
-      </div>
-
-      <p className="relative z-[1] mt-3 text-xs font-medium text-[#3b82f6]">
-        Keep building — your next role is ahead.
-      </p>
-
-      <style jsx>{`
-        .cb-mile-hero {
-          animation: cb-mile-float 4.2s ease-in-out infinite;
-        }
-        .cb-mile-pin {
-          animation: cb-mile-bob 2.4s ease-in-out infinite;
-        }
-        .cb-mile-choose {
-          animation: cb-mile-slide 5s ease-in-out infinite;
-        }
-        @keyframes cb-mile-float {
-          0%,
-          100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-5px);
-          }
-        }
-        @keyframes cb-mile-bob {
-          0%,
-          100% {
-            transform: translateY(0) scale(1);
-          }
-          50% {
-            transform: translateY(-7px) scale(1.05);
-          }
-        }
-        @keyframes cb-mile-slide {
-          0%,
-          100% {
-            transform: translateX(0);
-            opacity: 0.95;
-          }
-          50% {
-            transform: translateX(6px);
-            opacity: 1;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .cb-mile-hero,
-          .cb-mile-pin,
-          .cb-mile-choose {
-            animation: none !important;
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function AccentStat({
-  value,
-  label,
-  accent,
-}: {
-  value: string;
-  label: string;
-  accent: string;
-}) {
-  return (
-    <div
-      className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
-      style={{ borderTopWidth: 3, borderTopColor: accent }}
-    >
-      <p className="text-xl font-black tracking-tight text-[#111827] sm:text-2xl">{value}</p>
-      <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">{label}</p>
-    </div>
-  );
-}
-
-function RecommendedJobCard({
-  job,
-  cityFallback,
-  onView,
-  onApply,
-}: {
-  job: JobCard;
-  cityFallback: string;
-  onView: () => void;
-  onApply: () => void;
-}) {
-  const matchScore = job.match?.score;
-
-  return (
-    <article className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="line-clamp-2 text-[15px] font-extrabold leading-snug text-[#111827]">{job.title}</h3>
-      <p className="mt-1.5 truncate text-xs font-medium text-slate-500">
-        {job.companyName} | {job.city || cityFallback}
-      </p>
-      <p className="mt-3 text-sm font-extrabold text-[#111827]">
-        {formatSalaryShort(job.salaryMin, job.salaryMax)}
-      </p>
-      {typeof matchScore === 'number' ? (
-        <p className="mt-1 text-xs font-bold text-emerald-600">{matchScore}% match</p>
-      ) : (
-        <p className="mt-1 text-xs font-medium text-slate-400">Recommended</p>
-      )}
-      <div className="mt-auto flex items-center gap-2 pt-4">
-        <button
-          type="button"
-          onClick={onView}
-          className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-        >
-          View
-        </button>
-        <button
-          type="button"
-          onClick={onApply}
-          className="flex-1 rounded-lg bg-[#f59e0b] py-2 text-xs font-bold text-[#111827] hover:brightness-105"
-        >
-          Apply
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function ScheduledInterviewCard({
-  interview,
-  onOpen,
-  onPrepare,
-}: {
-  interview: ScheduledJobInterview;
-  onOpen: () => void;
-  onPrepare: () => void;
-}) {
-  return (
-    <article className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-[#111827]">
-          {interview.mode === 'VIDEO' ? 'Video' : 'In person'}
-        </p>
-        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-          {statusLabel(interview.status)}
-        </span>
-      </div>
-      <h3 className="mt-2 line-clamp-2 text-[15px] font-extrabold leading-snug text-[#111827]">
-        {interview.jobTitle}
-      </h3>
-      <p className="mt-1.5 truncate text-xs font-medium text-slate-500">{interview.companyName}</p>
-      <p className="mt-3 text-sm font-extrabold text-[#111827]">{formatInterviewDate(interview.scheduledDate)}</p>
-      <p className="mt-1 text-xs font-semibold text-slate-600">{interview.scheduledTime}</p>
-      {interview.location ? (
-        <p className="mt-1 line-clamp-1 text-xs text-slate-500">{interview.location}</p>
-      ) : null}
-      <div className="mt-auto flex items-center gap-2 pt-4">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-        >
-          View
-        </button>
-        <button
-          type="button"
-          onClick={onPrepare}
-          className="flex-1 rounded-lg bg-[#f59e0b] py-2 text-xs font-bold text-[#111827] hover:brightness-105"
-        >
-          Prepare
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="mx-auto w-full space-y-6">
-      <div className="grid gap-5 lg:grid-cols-[minmax(220px,248px)_minmax(0,1fr)]">
-        <div className="h-[360px] max-w-[248px] animate-pulse rounded-2xl bg-slate-200" />
-        <div className="space-y-4">
-          <div className="h-8 w-48 animate-pulse rounded bg-slate-200" />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="h-[180px] animate-pulse rounded-2xl bg-slate-200" />
-            <div className="h-[180px] animate-pulse rounded-2xl bg-slate-200" />
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-[88px] animate-pulse rounded-xl bg-slate-200" />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+function activeExperienceChip(profile: CandidateProfile | null) {
+  if (!profile) return 'fresher';
+  const years = profile.totalExperienceYears ?? 0;
+  const months = profile.totalExperienceMonths ?? 0;
+  const total = years + months / 12;
+  if (profile.experienceLevel === 'fresher' || total < 1) return 'fresher';
+  if (total < 1.5) return '0-1';
+  if (total < 3.5) return '1-3';
+  if (total < 5.5) return '3-5';
+  return '5+';
 }
 
 export default function DashboardPage() {
@@ -323,6 +196,7 @@ export default function DashboardPage() {
   const [city, setCity] = useState('');
   const [completionPercent, setCompletionPercent] = useState(0);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
+  const [bio, setBio] = useState('');
   const [jobs, setJobs] = useState<JobCard[]>([]);
   const [scheduledInterviews, setScheduledInterviews] = useState<ScheduledJobInterview[]>([]);
   const [applicationCount, setApplicationCount] = useState(0);
@@ -373,15 +247,22 @@ export default function DashboardPage() {
           listApplications()
             .then((rows) => rows.length)
             .catch(() => 0),
-        ]).then(([, candidateProfile, completion, jobItems, interviews, appsCount]) => {
+          listResumes()
+            .then((items) => {
+              const latest = [...items].sort(
+                (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+              )[0];
+              return latest?.summary || latest?.content?.summary || '';
+            })
+            .catch(() => ''),
+        ]).then(([, candidateProfile, completion, jobItems, interviews, appsCount, resumeSummary]) => {
           setProfile(candidateProfile);
-          setName(
-            formatPersonName(candidateProfile.firstName || me.firstName || stored.firstName || 'there'),
-          );
-          if (candidateProfile.city) setCity(candidateProfile.city);
+          setName(formatPersonName(candidateProfile.firstName || me.firstName || stored.firstName || 'there'));
+          setCity(candidateProfile.city || candidateProfile.preferredWorkCity || '');
           const percent = completion?.percentage ?? candidateProfile.profileCompletion ?? 0;
           setCompletionPercent(percent);
-          setJobs(jobItems.slice(0, 4));
+          setBio(resolvePassportSummary(candidateProfile, resumeSummary || undefined));
+          setJobs(jobItems.slice(0, 3));
           const upcoming = interviews
             .filter((item) => item.status !== 'RESCHEDULE_REQUESTED')
             .sort((a, b) =>
@@ -401,176 +282,293 @@ export default function DashboardPage() {
       });
   }, [router]);
 
-  const displayJobs = jobs.slice(0, 4);
-  const displayInterviews = scheduledInterviews.slice(0, 4);
-  const isProfileComplete = completionPercent >= 100;
+  const fullName = useMemo(() => {
+    if (!profile) return formatPersonName(name);
+    return (
+      formatPersonName([profile.firstName, profile.lastName].filter(Boolean).join(' ')) ||
+      formatPersonName(name)
+    );
+  }, [profile, name]);
+
+  const initials = fullName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 1)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+
   const skillsCount = profile?.skills?.length || 0;
+  const isProfileComplete = completionPercent >= 100;
+  const displayInterviews = scheduledInterviews.slice(0, 3);
+  const experienceChip = activeExperienceChip(profile);
 
   if (!ready) {
     return (
-      <CandidateDashboardShell>
-        <DashboardSkeleton />
-      </CandidateDashboardShell>
+      <CandidateAppShell activeTab="home" maxWidth="max-w-[1180px]">
+        <div className="p-12 text-center text-sm text-slate-500">Loading dashboard...</div>
+      </CandidateAppShell>
     );
   }
 
   return (
-    <CandidateDashboardShell avatarUrl={profile?.photoUrl}>
-      <div className="mx-auto w-full space-y-6 lg:space-y-7">
-        <section className="grid items-start gap-5 lg:grid-cols-[minmax(220px,248px)_minmax(0,1fr)] lg:gap-5">
-          <div className="order-2 w-full lg:order-1 lg:sticky lg:top-24">
-            {profile ? (
-              <DashboardCareerPassport
-                profile={{ ...profile, profileCompletion: completionPercent }}
-              />
+    <CandidateAppShell activeTab="home" maxWidth="max-w-[1180px]" avatarUrl={profile?.photoUrl}>
+      <div className="cb-boarding">
+        <div className="cb-boarding__greet">
+          <p className="cb-boarding__eyebrow">BOARDING · CAREER JOURNEY</p>
+          <TypingHello name={name} />
+          <p className="cb-boarding__sub">
+            {isProfileComplete
+              ? 'Welcome back. Your check-in is complete — explore stronger job matches below.'
+              : 'Welcome back. Finish check-in on your profile to board better job matches.'}
+          </p>
+        </div>
+
+        <div className="cb-boarding__ticket">
+          <div className="cb-boarding__ticket-main">
+            <div className="cb-boarding__route">
+              <div>
+                <div className="cb-boarding__city">{statusLabel(profile)}</div>
+                <div className="cb-boarding__code">STATUS</div>
+              </div>
+              <div className="cb-boarding__plane" aria-hidden>
+                <p className="cb-boarding__plane-title">Career Passport</p>
+                <div className="cb-boarding__plane-line">
+                  <span className="cb-boarding__plane-icon">✈</span>
+                </div>
+              </div>
+              <div>
+                <div className="cb-boarding__city cb-boarding__city--target">{targetRole(profile)}</div>
+                <div className="cb-boarding__code">TARGET ROLE</div>
+              </div>
+            </div>
+
+            <div className="cb-boarding__level-row">
+              <div className="cb-boarding__field-label">LEVEL</div>
+              <div className="cb-boarding__chips">
+                {EXPERIENCE_LEVEL_CHIPS.map((chip) => (
+                  <span
+                    key={chip.key}
+                    className={`cb-boarding__chip${experienceChip === chip.key ? ' is-active' : ''}`}
+                  >
+                    {chip.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="cb-boarding__fields">
+              <div>
+                <div className="cb-boarding__field-label">PASSENGER</div>
+                <div className="cb-boarding__field-val">{fullName}</div>
+              </div>
+              <div>
+                <div className="cb-boarding__field-label">FROM</div>
+                <div className="cb-boarding__field-val">{city || '—'}</div>
+              </div>
+              <div>
+                <div className="cb-boarding__field-label">COMPANY</div>
+                <div className="cb-boarding__field-val">{currentCompany(profile)}</div>
+              </div>
+              <div>
+                <div className="cb-boarding__field-label">EXPERIENCE</div>
+                <div className="cb-boarding__field-val">{formatExperienceField(profile)}</div>
+              </div>
+            </div>
+
+            <div className="cb-boarding__progress">
+              <div className="cb-boarding__progress-label">
+                <span>Check-in progress</span>
+                <span>{completionPercent}%</span>
+              </div>
+              <div className="cb-boarding__progress-track">
+                <div
+                  className="cb-boarding__progress-fill"
+                  style={{ width: `${Math.min(100, Math.max(0, completionPercent))}%` }}
+                />
+              </div>
+            </div>
+
+            {!isProfileComplete ? (
+              <button
+                type="button"
+                className="cb-boarding__btn"
+                onClick={() => router.push('/profile')}
+              >
+                Complete Profile
+              </button>
             ) : (
-              <div className="h-[360px] max-w-[248px] animate-pulse rounded-2xl bg-slate-200" />
+              <button
+                type="button"
+                className="cb-boarding__btn"
+                onClick={() => router.push('/jobs')}
+              >
+                Browse Jobs
+              </button>
             )}
           </div>
 
-          <div className="order-1 flex min-w-0 flex-col gap-5 lg:order-2">
-            <div>
-              <h1 className="text-[2rem] font-extrabold tracking-tight text-[#111827] sm:text-[2.35rem]">
-                Hello {name} 👋
-              </h1>
-              <p className="mt-1.5 text-base text-slate-500">
-                {isProfileComplete
-                  ? 'Your Career Passport looks strong — explore matching roles.'
-                  : 'Keep going — finish your profile to unlock tailored matches.'}
+          <div className="cb-boarding__stub">
+            <div className="cb-boarding__stub-top">
+              <span>CAREER PASSPORT</span>
+              <span className="cb-boarding__tag">FREE</span>
+            </div>
+            <div className="cb-boarding__id-row">
+              <div className="cb-boarding__id-photo">
+                {profile?.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.photoUrl} alt="" />
+                ) : (
+                  initials || 'C'
+                )}
+              </div>
+              <div className="cb-boarding__id-meta">
+                <div className="cb-boarding__id-name">{fullName}</div>
+                <div className="cb-boarding__id-loc">{city || 'India'}</div>
+              </div>
+              <ProfileCompletedRing value={completionPercent} />
+            </div>
+
+            <div className="cb-boarding__summary">
+              <div className="cb-boarding__summary-label">SUMMARY</div>
+              <p className="cb-boarding__bio">
+                {bio || 'Complete your profile to unlock a stronger career summary.'}
               </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
-                <ProfileStrengthRing value={completionPercent} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-600">
-                    Profile Strength:{' '}
-                    <span className="font-extrabold text-[#111827]">{strengthLabel(completionPercent)}</span>
-                  </p>
-                  {!isProfileComplete ? (
-                    <button
-                      type="button"
-                      onClick={() => router.push('/profile')}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#f59e0b] px-4 py-2.5 text-sm font-bold text-[#111827] transition hover:brightness-105"
-                    >
-                      Complete Profile
-                      <span aria-hidden>→</span>
-                    </button>
-                  ) : (
-                    <span className="mt-3 inline-flex rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
-                      Profile complete
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <CareerPathMilestone />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <AccentStat value={`${completionPercent}%`} label="Strength" accent="#f59e0b" />
-              <AccentStat value={String(skillsCount)} label="Skills Added" accent="#22c55e" />
-              <AccentStat value={String(applicationCount)} label="Applications" accent="#3b82f6" />
-              <AccentStat value={String(scheduledInterviews.length)} label="Interviews" accent="#a855f7" />
-            </div>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-extrabold text-[#111827]">Recommended Jobs</h2>
-                <button
-                  type="button"
-                  className="text-sm font-bold text-[#2563eb] hover:underline"
-                  onClick={() => router.push('/jobs')}
-                >
-                  View all jobs →
-                </button>
-              </div>
-
-              {displayJobs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#eff6ff] text-[#3b82f6]">
-                    <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
-                      <circle cx="12" cy="12" r="9" />
-                      <circle cx="12" cy="12" r="5" />
-                      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-                    </svg>
-                  </div>
-                  <p className="text-sm font-semibold text-slate-600">No direct matches found yet.</p>
-                  <button
-                    type="button"
-                    className="mt-4 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-[#111827] hover:bg-slate-50"
-                    onClick={() => router.push('/jobs')}
-                  >
-                    Browse all jobs
-                  </button>
-                </div>
-              ) : (
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {displayJobs.map((job) => (
-                    <RecommendedJobCard
-                      key={job.id}
-                      job={job}
-                      cityFallback={city || 'India'}
-                      onView={() => router.push(`/jobs/${job.id}`)}
-                      onApply={() => router.push(`/jobs/${job.id}/apply`)}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-extrabold text-[#111827]">Scheduled Interviews</h2>
             <button
               type="button"
-              className="text-sm font-bold text-[#2563eb] hover:underline"
-              onClick={() => router.push('/interviews')}
+              className="cb-boarding__stub-btn"
+              onClick={() => router.push('/profile')}
             >
-              View all interviews →
+              View Profile
             </button>
           </div>
+        </div>
 
-          {displayInterviews.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center">
-              <p className="text-sm font-semibold text-[#111827]">No interviews scheduled yet</p>
-              <p className="mt-1 text-sm text-slate-500">
-                When an employer schedules an interview, it will show up here.
-              </p>
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-[#111827] hover:bg-slate-50"
-                  onClick={() => router.push('/applications')}
-                >
-                  Track applications
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg bg-[#f59e0b] px-4 py-2 text-sm font-bold text-[#111827] hover:brightness-105"
-                  onClick={() => router.push('/interviews/mock')}
-                >
-                  Practice mock interview
-                </button>
-              </div>
+        <div className="cb-boarding__stats">
+          <div className="cb-boarding__stat">
+            <div className="cb-boarding__stat-num">{completionPercent}%</div>
+            <div className="cb-boarding__stat-lbl">STRENGTH</div>
+          </div>
+          <div className="cb-boarding__stat">
+            <div className="cb-boarding__stat-num">{skillsCount}</div>
+            <div className="cb-boarding__stat-lbl">SKILLS</div>
+          </div>
+          <div className="cb-boarding__stat">
+            <div className="cb-boarding__stat-num">{scheduledInterviews.length}</div>
+            <div className="cb-boarding__stat-lbl">INTERVIEWS</div>
+          </div>
+          <div className="cb-boarding__stat">
+            <div className="cb-boarding__stat-num">{applicationCount}</div>
+            <div className="cb-boarding__stat-lbl">APPLICATIONS</div>
+          </div>
+        </div>
+
+        <div className="cb-boarding__section-title">
+          <h2>Recommended Jobs</h2>
+          <button type="button" onClick={() => router.push('/jobs')}>
+            View all jobs →
+          </button>
+        </div>
+
+        {jobs.length === 0 ? (
+          <div className="cb-boarding__empty">
+            <p>No recommended jobs yet. Browse the marketplace to explore openings.</p>
+            <button type="button" className="cb-boarding__btn" onClick={() => router.push('/jobs')}>
+              Browse jobs
+            </button>
+          </div>
+        ) : (
+          <div className="cb-boarding__jobs">
+            {jobs.map((job) => (
+              <article key={job.id} className="cb-boarding__job">
+                <h3>{job.title}</h3>
+                <div className="cb-boarding__job-co">
+                  {job.companyName} · {job.city || city || 'India'}
+                </div>
+                <div className="cb-boarding__job-pay">
+                  {formatSalaryShort(job.salaryMin, job.salaryMax)}
+                </div>
+                <div className="cb-boarding__job-match">
+                  {typeof job.match?.score === 'number' ? `${job.match.score}% MATCH` : 'RECOMMENDED'}
+                </div>
+                <div className="cb-boarding__job-actions">
+                  <button
+                    type="button"
+                    className="cb-boarding__job-view"
+                    onClick={() => router.push(`/jobs/${job.id}`)}
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    className="cb-boarding__job-apply"
+                    onClick={() => router.push(`/jobs/${job.id}/apply`)}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        <div className="cb-boarding__section-title cb-boarding__section-title--spaced">
+          <h2>Scheduled Interviews</h2>
+          <button type="button" onClick={() => router.push('/interviews')}>
+            View all interviews →
+          </button>
+        </div>
+
+        {displayInterviews.length === 0 ? (
+          <div className="cb-boarding__empty">
+            <p>No interviews scheduled yet. Practice a mock interview while you wait.</p>
+            <div className="cb-boarding__empty-actions">
+              <button
+                type="button"
+                className="cb-boarding__job-view"
+                onClick={() => router.push('/applications')}
+              >
+                Track applications
+              </button>
+              <button
+                type="button"
+                className="cb-boarding__job-apply"
+                onClick={() => router.push('/interviews/mock')}
+              >
+                Practice mock interview
+              </button>
             </div>
-          ) : (
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {displayInterviews.map((interview) => (
-                <ScheduledInterviewCard
-                  key={interview.id}
-                  interview={interview}
-                  onOpen={() => router.push(`/interviews/scheduled/${interview.id}`)}
-                  onPrepare={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+          </div>
+        ) : (
+          <div className="cb-boarding__jobs">
+            {displayInterviews.map((interview) => (
+              <article key={interview.id} className="cb-boarding__job">
+                <h3>{interview.jobTitle}</h3>
+                <div className="cb-boarding__job-co">{interview.companyName}</div>
+                <div className="cb-boarding__job-pay">{formatInterviewDate(interview.scheduledDate)}</div>
+                <div className="cb-boarding__job-match">{interviewStatusLabel(interview.status).toUpperCase()}</div>
+                <div className="cb-boarding__job-actions">
+                  <button
+                    type="button"
+                    className="cb-boarding__job-view"
+                    onClick={() => router.push(`/interviews/scheduled/${interview.id}`)}
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    className="cb-boarding__job-apply"
+                    onClick={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}
+                  >
+                    Prepare
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
-    </CandidateDashboardShell>
+    </CandidateAppShell>
   );
 }

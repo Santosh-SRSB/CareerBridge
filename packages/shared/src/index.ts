@@ -4,3 +4,4 @@ export * from './candidate';
 export * from './marketplace';
 export * from './ats';
 export * from './validation';
+export * from './resume-data';

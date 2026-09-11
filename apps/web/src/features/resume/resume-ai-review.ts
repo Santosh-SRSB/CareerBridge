@@ -247,17 +247,60 @@ export function findProjectSkillsMissingFromSkills(resume: MasterResumeDocument)
     for (const tech of KNOWN_TECH) {
       const n = normToken(tech);
       if (!n || found.has(n) || skillNorms.has(n)) continue;
-      const softHit = [...skillNorms].some(
-        (s) => s.includes(n) || n.includes(s) || (s.length > 2 && n.length > 2 && (s.startsWith(n) || n.startsWith(s))),
-      );
-      if (softHit) continue;
-      const escaped = tech.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(`(?:^|[^a-z0-9])${escaped}(?:[^a-z0-9]|$)`, 'i');
-      if (re.test(corpus)) found.set(n, tech);
+      if (new RegExp(`\\b${escapeRegExp(tech)}\\b`, 'i').test(corpus)) {
+        found.set(n, tech);
+      }
     }
   }
 
-  return [...found.values()].slice(0, 12);
+  return [...found.values()];
+}
+
+function experienceCorpus(resume: MasterResumeDocument): string {
+  return (resume.experience || [])
+    .map((row) =>
+      [row.jobTitle, row.company, ...(row.responsibilities || [])].filter(Boolean).join(' '),
+    )
+    .join(' ');
+}
+
+/** ADDITIVE: skills mentioned in experience descriptions but missing from Skills. */
+export function findExperienceSkillsMissingFromSkills(resume: MasterResumeDocument): string[] {
+  const skills = listedSkills(resume);
+  const skillNorms = new Set(skills.map(normToken).filter(Boolean));
+  const found = new Map<string, string>();
+  const corpus = experienceCorpus(resume);
+  if (!corpus.trim()) return [];
+
+  for (const tech of KNOWN_TECH) {
+    const n = normToken(tech);
+    if (!n || skillNorms.has(n)) continue;
+    const softHit = [...skillNorms].some(
+      (s) => s.includes(n) || n.includes(s) || (s.length > 2 && n.length > 2 && (s.startsWith(n) || n.startsWith(s))),
+    );
+    if (softHit) continue;
+    if (new RegExp(`\\b${escapeRegExp(tech)}\\b`, 'i').test(corpus)) {
+      found.set(n, tech);
+    }
+  }
+  return [...found.values()];
+}
+
+/** Combined project + experience skill mismatches. */
+export function findMentionedSkillsMissingFromSkills(resume: MasterResumeDocument): string[] {
+  const merged = new Map<string, string>();
+  for (const skill of [
+    ...findProjectSkillsMissingFromSkills(resume),
+    ...findExperienceSkillsMissingFromSkills(resume),
+  ]) {
+    const n = normToken(skill);
+    if (n && !merged.has(n)) merged.set(n, skill);
+  }
+  return [...merged.values()];
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export type SummaryQualityIssue = {
@@ -524,6 +567,12 @@ export type AtsSectionStatus = {
   status: 'good' | 'needs_work' | 'missing' | 'fix_needed';
   note: string;
   present: boolean;
+  /** Exact fields absent for incomplete sections (additive). */
+  missingFields?: string[];
+  /** When true, excluded from sectionCompleteness scoring so existing scores stay stable. */
+  scoreNeutral?: boolean;
+  /** Provenance hint for the section. */
+  source?: 'from_uploaded_resume' | 'added_manually' | 'ai_suggested';
 };
 
 function hasContactLink(resume: MasterResumeDocument) {
@@ -576,10 +625,11 @@ function projectLooksStrong(resume: MasterResumeDocument) {
  */
 export function evaluateAtsSections(
   resume: MasterResumeDocument,
-  options?: { formattingScore?: number; layoutIssues?: string[] },
+  options?: { formattingScore?: number; layoutIssues?: string[]; defaultSource?: AtsSectionStatus['source'] },
 ): AtsSectionStatus[] {
   const formattingScore = options?.formattingScore ?? 90;
   const layoutIssues = options?.layoutIssues || [];
+  const source = options?.defaultSource;
   const sections: AtsSectionStatus[] = [];
 
   // Contact
@@ -592,6 +642,12 @@ export function evaluateAtsSections(
     const hasEmail = Boolean(resume.personalInfo?.email?.trim());
     const hasPhone = Boolean(resume.personalInfo?.phone?.trim());
     const hasLocation = Boolean(resume.personalInfo?.location?.trim());
+    const missingFields: string[] = [];
+    if (!resume.personalInfo?.fullName?.trim()) missingFields.push('Full name');
+    if (!hasEmail) missingFields.push('Email');
+    if (!hasPhone) missingFields.push('Phone');
+    if (!hasLocation) missingFields.push('Location');
+    if (!hasContactLink(resume)) missingFields.push('LinkedIn / GitHub / Portfolio URL');
     let status: AtsSectionStatus['status'] = 'good';
     let note = 'Name, phone, email and location are detected and correctly formatted.';
     if (!present) {
@@ -609,7 +665,15 @@ export function evaluateAtsSections(
     } else {
       note = 'Name, phone, email, location and profile link look complete for ATS.';
     }
-    sections.push({ key: 'contact', label: 'Contact information', status, note, present });
+    sections.push({
+      key: 'contact',
+      label: 'Contact information',
+      status,
+      note,
+      present,
+      missingFields: status === 'good' ? [] : missingFields,
+      source,
+    });
   }
 
   // Summary
@@ -619,6 +683,8 @@ export function evaluateAtsSections(
     const quality = analyzeSummaryQuality(text);
     let status: AtsSectionStatus['status'] = 'good';
     let note = 'Professional summary is clear and reads well for ATS.';
+    const missingFields: string[] = [];
+    if (!present) missingFields.push('Professional summary');
     if (!present) {
       status = 'missing';
       note = 'Professional summary is missing from your resume.';
@@ -628,6 +694,7 @@ export function evaluateAtsSections(
     } else if (text.length < 50) {
       status = 'needs_work';
       note = 'Summary is too short — expand with your role, strengths, and experience.';
+      missingFields.push('Longer professional summary');
     } else {
       note = 'Professional summary is present, specific, and ATS-readable.';
     }
@@ -637,6 +704,8 @@ export function evaluateAtsSections(
       status,
       note,
       present,
+      missingFields: status === 'good' ? [] : missingFields,
+      source,
     });
   }
 
@@ -644,20 +713,32 @@ export function evaluateAtsSections(
   {
     const skills = listedSkills(resume);
     const present = skills.length > 0;
-    const missingFromProjects = findProjectSkillsMissingFromSkills(resume);
+    const missingMentioned = findMentionedSkillsMissingFromSkills(resume);
     let status: AtsSectionStatus['status'] = 'good';
     let note = 'Skills are listed as plain text and look ATS-readable.';
+    const missingFields: string[] = [];
     if (!present) {
       status = 'missing';
       note = 'Skills section is missing from your resume.';
-    } else if (missingFromProjects.length) {
+      missingFields.push('Skills list');
+    } else if (missingMentioned.length) {
       status = 'needs_work';
-      note = `Add skills used in projects but missing here: ${missingFromProjects.slice(0, 6).join(', ')}.`;
+      note = `Add skills used in projects/experience but missing here: ${missingMentioned.slice(0, 6).join(', ')}.`;
+      missingFields.push(...missingMentioned.slice(0, 8).map((s) => `Skill: ${s}`));
     } else if (skills.length < 3) {
       status = 'needs_work';
       note = 'Skills list is thin — add more relevant technical skills in plain text.';
+      missingFields.push('Additional skills (at least 3 total)');
     }
-    sections.push({ key: 'skills', label: 'Skills', status, note, present });
+    sections.push({
+      key: 'skills',
+      label: 'Skills',
+      status,
+      note,
+      present,
+      missingFields: status === 'good' ? [] : missingFields,
+      source,
+    });
   }
 
   // Experience
@@ -667,12 +748,20 @@ export function evaluateAtsSections(
     );
     let status: AtsSectionStatus['status'] = 'good';
     let note = 'Work experience has clear titles, dates, and plain-text bullets.';
+    const missingFields: string[] = [];
     if (!present) {
       status = 'missing';
       note = 'Work experience is missing from your resume.';
+      missingFields.push('At least one work experience entry');
     } else if (!experienceLooksStrong(resume)) {
       status = 'needs_work';
       note = 'Add clearer job titles, dates, and plain-text accomplishment bullets.';
+      const first = resume.experience?.[0];
+      if (first && !first.jobTitle?.trim()) missingFields.push('Job title');
+      if (first && !first.startDate?.trim() && !first.isCurrent) missingFields.push('Start date');
+      if (first && !(first.responsibilities || []).some((b) => b.trim().length >= 24)) {
+        missingFields.push('Accomplishment bullets');
+      }
     }
     sections.push({
       key: 'experience',
@@ -680,6 +769,8 @@ export function evaluateAtsSections(
       status,
       note,
       present,
+      missingFields: status === 'good' ? [] : missingFields,
+      source,
     });
   }
 
@@ -690,44 +781,102 @@ export function evaluateAtsSections(
     );
     let status: AtsSectionStatus['status'] = 'good';
     let note = 'Degree, institution and field of study are clearly readable.';
+    const missingFields: string[] = [];
     if (!present) {
       status = 'missing';
       note = 'Education is missing from your resume.';
+      missingFields.push('Degree', 'Institution');
     } else if (!educationHasField(resume)) {
       status = 'needs_work';
       note = 'Field of study is not specified — add it so education parses completely.';
+      missingFields.push('Field of study');
     } else {
       const degree = resume.education[0]?.degree?.trim() || '';
       if (/^[A-Za-z]$/.test(degree)) {
         status = 'fix_needed';
         note = 'Degree title looks truncated — fix it in Education (e.g. B.Tech).';
+        missingFields.push('Complete degree title');
       }
     }
-    sections.push({ key: 'education', label: 'Education', status, note, present });
-  }
-
-  // Projects (only if present)
-  if ((resume.projects || []).some((row) => row.name.trim() || row.description.trim())) {
-    const present = true;
-    let status: AtsSectionStatus['status'] = 'good';
-    let note = 'Projects include name, technologies, and description in plain text.';
-    if (!projectLooksStrong(resume)) {
-      status = 'needs_work';
-      note = 'Strengthen projects with a clear name, tech stack, and description.';
-    }
-    sections.push({ key: 'projects', label: 'Projects', status, note, present });
-  }
-
-  // Certifications (only if present)
-  if ((resume.certifications || []).some((row) => row.name.trim())) {
-    const count = resume.certifications.filter((c) => c.name.trim()).length;
     sections.push({
-      key: 'certifications',
-      label: 'Certifications',
-      status: 'good',
-      note: `${count} certification${count === 1 ? '' : 's'} listed in plain text.`,
-      present: true,
+      key: 'education',
+      label: 'Education',
+      status,
+      note,
+      present,
+      missingFields: status === 'good' ? [] : missingFields,
+      source,
     });
+  }
+
+  // Projects — always listed; empty projects are scoreNeutral so existing scores stay stable
+  {
+    const hasProjects = (resume.projects || []).some(
+      (row) => row.name.trim() || row.description.trim(),
+    );
+    if (hasProjects) {
+      let status: AtsSectionStatus['status'] = 'good';
+      let note = 'Projects include name, technologies, and description in plain text.';
+      const missingFields: string[] = [];
+      if (!projectLooksStrong(resume)) {
+        status = 'needs_work';
+        note = 'Strengthen projects with a clear name, tech stack, and description.';
+        const first = resume.projects?.[0];
+        if (first && !first.name?.trim()) missingFields.push('Project name');
+        if (first && !(first.technologies || []).some((t) => t.trim())) missingFields.push('Technologies');
+        if (first && !first.description?.trim() && !(first.bullets || []).some((b) => b.trim())) {
+          missingFields.push('Project description');
+        }
+      }
+      sections.push({
+        key: 'projects',
+        label: 'Projects',
+        status,
+        note,
+        present: true,
+        missingFields: status === 'good' ? [] : missingFields,
+        source,
+      });
+    } else {
+      sections.push({
+        key: 'projects',
+        label: 'Projects',
+        status: 'missing',
+        note: 'Projects section is empty — optional but recommended for ATS.',
+        present: false,
+        missingFields: ['At least one project'],
+        scoreNeutral: true,
+        source,
+      });
+    }
+  }
+
+  // Certifications — always listed; empty is scoreNeutral
+  {
+    const hasCerts = (resume.certifications || []).some((row) => row.name.trim());
+    if (hasCerts) {
+      const count = resume.certifications.filter((c) => c.name.trim()).length;
+      sections.push({
+        key: 'certifications',
+        label: 'Certifications',
+        status: 'good',
+        note: `${count} certification${count === 1 ? '' : 's'} listed in plain text.`,
+        present: true,
+        missingFields: [],
+        source,
+      });
+    } else {
+      sections.push({
+        key: 'certifications',
+        label: 'Certifications',
+        status: 'missing',
+        note: 'No certifications listed — optional for many roles.',
+        present: false,
+        missingFields: ['Certification name'],
+        scoreNeutral: true,
+        source,
+      });
+    }
   }
 
   // Formatting
@@ -738,6 +887,8 @@ export function evaluateAtsSections(
       status: 'fix_needed',
       note: layoutIssues[0],
       present: true,
+      missingFields: layoutIssues.slice(0, 5),
+      source,
     });
   } else {
     sections.push({
@@ -749,6 +900,8 @@ export function evaluateAtsSections(
           ? 'Layout looks ATS-friendly with readable plain-text sections.'
           : 'Simplify layout so ATS parsers can read every section.',
       present: true,
+      missingFields: formattingScore >= 75 ? [] : ['ATS-friendly plain-text layout'],
+      source,
     });
   }
 
@@ -844,19 +997,19 @@ export function buildAccurateImproveSuggestions(
     if (summarySuggestion) add(summarySuggestion);
   }
 
-  // 2) Skills — only project→skills gaps
-  const missingProjectSkills = findProjectSkillsMissingFromSkills(resume);
-  if (missingProjectSkills.length) {
+  // 2) Skills — project + experience → skills gaps (ADDITIVE experience coverage)
+  const missingMentionedSkills = findMentionedSkillsMissingFromSkills(resume);
+  if (missingMentionedSkills.length) {
     const existing = listedSkills(resume);
     const merged = [...existing];
-    for (const skill of missingProjectSkills) {
+    for (const skill of missingMentionedSkills) {
       if (!merged.some((s) => normToken(s) === normToken(skill))) merged.push(skill);
     }
     add({
-      id: 'local-skills-from-projects',
+      id: 'local-skills-from-mentions',
       section: 'skills',
       sectionLabel: SECTION_LABELS.skills,
-      issue: `Used in projects but missing from Skills: ${missingProjectSkills.join(', ')}.`,
+      issue: `Used in projects/experience but missing from Skills: ${missingMentionedSkills.join(', ')}.`,
       suggestion: merged.join(', '),
       currentText: existing.join(', ') || '—',
       improvedText: merged.join(', '),
@@ -901,6 +1054,6 @@ export function buildAccurateImproveSuggestions(
     score: mapped.score,
     strengths: goodSections,
     improvements: mapped.improvements,
-    missingSkills: missingProjectSkills,
+    missingSkills: missingMentionedSkills,
   };
 }

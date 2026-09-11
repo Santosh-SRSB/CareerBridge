@@ -22,6 +22,8 @@ const FIREBASE_MESSAGES: Record<string, string> = {
   'auth/network-request-failed': 'Network error. Check your connection and try again.',
   'auth/operation-not-allowed': 'Phone OTP is not enabled in Firebase yet.',
   'auth/billing-not-enabled': 'Firebase Phone OTP needs billing enabled for real SMS. Use a test phone number for local setup.',
+  'auth/invalid-app-credential':
+    'Firebase could not verify this browser session for phone OTP. Confirm: (1) URL is http://127.0.0.1:3000 not localhost, (2) Authentication → Settings → SMS region policy allows India, (3) Google Cloud API key has no HTTP-referrer block for 127.0.0.1. For local testing, add a test phone under Authentication → Sign-in method → Phone numbers for testing.',
 };
 
 function getClientAuth() {
@@ -132,4 +134,8 @@ export async function confirmFirebaseOtp(otp: string) {
 
 export function clearFirebaseOtp() {
   resetRecaptchaContainer();
+}
+
+export function hasFirebaseOtpConfirmation() {
+  return Boolean(confirmation);
 }

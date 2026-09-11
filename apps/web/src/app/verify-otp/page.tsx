@@ -16,6 +16,7 @@ import { patchStoredUser } from '@/lib/session';
 import {
   clearFirebaseOtp,
   confirmFirebaseOtp,
+  hasFirebaseOtpConfirmation,
   isDevOtpEnabled,
   isFirebaseConfigured,
   sendFirebaseOtp,
@@ -54,6 +55,27 @@ export default function VerifyOtpPage() {
     );
     setSecondsLeft(Math.max(0, Math.ceil((flow.expiresAt - Date.now()) / 1000)));
     setReady(true);
+
+    // Send Firebase SMS only if not already started on the previous screen.
+    let cancelled = false;
+    async function ensureFirebaseSms() {
+      if (flow.channel === 'EMAIL' || isDevOtpEnabled()) return;
+      if (!flow.phone || hasFirebaseOtpConfirmation()) return;
+      try {
+        if (!isFirebaseConfigured()) {
+          throw new Error('Firebase OTP is not configured yet.');
+        }
+        await sendFirebaseOtp(flow.phone);
+      } catch (err) {
+        if (!cancelled) {
+          setError(authErrorMessage(err, 'request'));
+        }
+      }
+    }
+    void ensureFirebaseSms();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   useEffect(() => {

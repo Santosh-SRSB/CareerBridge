@@ -4,19 +4,22 @@ const AUDIO_PLACEHOLDER_RE =
   /\(audio answer recorded|audio answer recorded|please type a summary for better ai feedback\)/i;
 
 export function formatInterviewAnswerDisplay(item: LiveInterviewQuestion) {
-  if (item.answerMode === 'AUDIO') {
-    const seconds = item.answerDurationSec ? ` (${item.answerDurationSec}s)` : '';
-    return `Audio answer submitted${seconds}.`;
-  }
   const text = (item.answer || '').trim();
-  if (!text || AUDIO_PLACEHOLDER_RE.test(text)) {
-    return 'Audio answer submitted.';
+  const hasText = Boolean(text) && !AUDIO_PLACEHOLDER_RE.test(text);
+  const seconds = item.answerDurationSec;
+  const audioSuffix =
+    typeof seconds === 'number' && seconds > 0 ? ` (audio ${seconds}s)` : item.answerMode === 'AUDIO' ? ' (audio)' : '';
+
+  if (hasText) {
+    return `${text}${audioSuffix}`;
   }
-  return text;
+  if (item.answerMode === 'AUDIO' || audioSuffix) {
+    return `Audio answer submitted${audioSuffix}.`;
+  }
+  return text || 'No answer recorded.';
 }
 
 export function shouldShowBetterAnswer(item: LiveInterviewQuestion) {
-  if (item.answerMode === 'AUDIO') return false;
   const improved = (item.improvedAnswer || '').trim();
   if (!improved) return false;
   return !AUDIO_PLACEHOLDER_RE.test(improved);

@@ -423,10 +423,14 @@ export function CertificationInlineForm({
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Machine Learning Certification" />
         </div>
         <div className="cb-field">
-          <label>Issuer</label>
-          <input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="IIT Roorkee" />
+          <label>Issuing organization</label>
+          <input
+            value={issuer}
+            onChange={(e) => setIssuer(e.target.value)}
+            placeholder="HackerRank"
+          />
         </div>
-        <MonthField label="Date obtained" value={date} onChange={setDate} />
+        <MonthField label="Date (Month + Year)" value={date} onChange={setDate} />
       </div>
     </FormShell>
   );

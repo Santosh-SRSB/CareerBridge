@@ -1,5 +1,5 @@
 const RESUME_WIZARD_DRAFT_KEY = 'cb.resumeWizardDraft';
-export const RESUME_WIZARD_DRAFT_VERSION = 2;
+export const RESUME_WIZARD_DRAFT_VERSION = 3;
 
 export type ResumeWizardFlowPhase = 'choose' | 'wizard' | 'preview' | 'finish';
 
@@ -18,6 +18,11 @@ export interface ResumeWizardDraft {
   projectList: unknown[];
   certificationList: unknown[];
   achievementList: unknown[];
+  linkedin?: string;
+  github?: string;
+  projectUrl?: string;
+  portfolio?: string;
+  gapReason?: string;
   languages: string[];
   availableLanguages: string[];
   preferredRole: string;

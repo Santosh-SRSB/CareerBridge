@@ -10,6 +10,7 @@ import { ResumePreviewScreen } from '@/components/resume/ResumePreviewScreen';
 import { buildResumeFromResumeContent } from '@/features/resume/build-resume-from-resume-content';
 import type { MasterResumeDocument } from '@/features/resume/master-resume.types';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
+import { startAtsSectionEdit } from '@/features/resume/resume-update-mode';
 import { createResume, getResume, listResumes, updateResume } from '@/lib/api';
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
 
@@ -25,6 +26,7 @@ function AtsCheckerInner() {
   const [master, setMaster] = useState<MasterResumeDocument | null>(null);
   const [resumeMeta, setResumeMeta] = useState<ResumeRecord | null>(null);
   const [checking, setChecking] = useState(false);
+  const [recheckNonce, setRecheckNonce] = useState(0);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -62,6 +64,10 @@ function AtsCheckerInner() {
       setMaster(doc);
       setResumeMeta(record);
       setSelectedId(id);
+      if (typeof window !== 'undefined' && sessionStorage.getItem('cb.atsAutoRecheck') === '1') {
+        sessionStorage.removeItem('cb.atsAutoRecheck');
+        setRecheckNonce((n) => n + 1);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open resume for ATS.');
       setMaster(null);
@@ -166,6 +172,7 @@ function AtsCheckerInner() {
             onClick={() => {
               setMaster(null);
               router.replace('/ats');
+              void refresh();
             }}
             className="text-sm font-semibold text-slate-600 hover:text-slate-900"
           >
@@ -179,18 +186,33 @@ function AtsCheckerInner() {
           resumeFileName={resumeMeta?.title}
           onEnsureSaved={ensureSaved}
           onResumeSaved={(id) => setSelectedId(id)}
+          onScoreUpdated={(id, score) => {
+            setItems((prev) => prev.map((row) => (row.id === id ? { ...row, score } : row)));
+            setResumeMeta((prev) => (prev && prev.id === id ? { ...prev, score } : prev));
+          }}
           onSyncProfile={async () => {
             /* Profile stays independent — optional light touch via passport elsewhere */
           }}
           onBack={() => {
             setMaster(null);
             router.replace('/ats');
+            void refresh();
           }}
           onEdit={() => {
             if (selectedId) {
               router.push(`/resume`);
             }
           }}
+          onAddSection={(sectionLabel, sectionKey) => {
+            if (!selectedId) return;
+            startAtsSectionEdit({
+              sectionKey: sectionKey || sectionLabel,
+              resumeId: selectedId,
+              returnTo: 'ats',
+            });
+            router.push('/resume');
+          }}
+          recheckNonce={recheckNonce}
           onApplySuggestion={applySuggestion}
         />
       </CandidateAppShell>

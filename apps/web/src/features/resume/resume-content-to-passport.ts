@@ -35,9 +35,15 @@ export function mapResumeContentToPassportPayload(content: ResumeContent): SaveP
       })),
     projects: (content.projects || [])
       .filter((row) => row.name?.trim())
-      .map((row) => ({
-        title: row.name.trim(),
-        description: row.description?.trim() || undefined,
-      })),
+      .map((row) => {
+        const overview = row.description?.trim() || '';
+        const bullets = (row.bullets || []).map((b) => String(b || '').trim()).filter(Boolean);
+        // Passport only has a single description field — keep overview, append bullets once.
+        const description = [overview, ...bullets].filter(Boolean).join('\n') || undefined;
+        return {
+          title: row.name.trim(),
+          description,
+        };
+      }),
   };
 }

@@ -2,6 +2,7 @@ import type { CandidateProfile, ResumeRecord } from '@careerbridge/shared';
 import { parseLanguageSkills } from '@careerbridge/shared';
 import type { ResumeWizardDraft } from './resume-wizard-draft';
 import { mapResumeRecordToWizardSeed } from './resume-record-to-wizard';
+import { splitProjectFields } from './project-fields';
 
 const LANGUAGE_POOL = [
   'English',
@@ -97,13 +98,19 @@ export function mapCandidateProfileToResumeWizard(
     responsibilities: splitBullets(exp.description),
   }));
 
-  const projectList = (profile.projects || []).map((project) => ({
-    id: project.id || newId('proj'),
-    name: project.title || '',
-    description: project.description || '',
-    technologies: project.role ? [project.role] : [],
-    bullets: splitBullets(project.description),
-  }));
+  const projectList = (profile.projects || []).map((project) => {
+    const { description, bullets } = splitProjectFields({
+      description: project.description,
+      bullets: undefined,
+    });
+    return {
+      id: project.id || newId('proj'),
+      name: project.title || '',
+      description,
+      technologies: project.role ? [project.role] : [],
+      bullets: [...bullets],
+    };
+  });
 
   const certificationList = (profile.certifications || []).map((cert) => ({
     id: cert.id || newId('cert'),
@@ -115,12 +122,17 @@ export function mapCandidateProfileToResumeWizard(
   const parsedLanguages = parseLanguageSkills(profile.preferredLanguage);
   const languages =
     parsedLanguages.length > 0
-      ? parsedLanguages.map((item) => item.name)
+      ? parsedLanguages.map((item) =>
+          item.level ? `${item.name} (${item.level})` : item.name,
+        )
       : profile.preferredLanguage?.trim()
         ? [profile.preferredLanguage.trim()]
         : [];
 
-  const availableLanguages = LANGUAGE_POOL.filter((name) => !languages.includes(name));
+  const languageNames = new Set(
+    languages.map((entry) => parseLanguageSkills(entry)[0]?.name || entry),
+  );
+  const availableLanguages = LANGUAGE_POOL.filter((name) => !languageNames.has(name));
 
   const skills = profile.skills.map((item) => item.name.trim()).filter(Boolean);
 

@@ -56,6 +56,11 @@ export interface MasterCertification {
   credentialUrl: string;
 }
 
+export interface MasterLanguage {
+  name: string;
+  level: string;
+}
+
 export interface MasterResumeDocument {
   personalInfo: MasterPersonalInfo;
   summary: string;
@@ -65,4 +70,5 @@ export interface MasterResumeDocument {
   projects: MasterProject[];
   achievements: MasterAchievement[];
   certifications: MasterCertification[];
+  languages: MasterLanguage[];
 }

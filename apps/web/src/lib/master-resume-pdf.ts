@@ -1,195 +1,335 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+/**
+ * PDF download from the SAME resume preview template DOM/CSS (resume-template-01).
+ * Preview is the source of truth — do not recreate a separate pdf-lib layout.
+ *
+ * PDF-only overrides (clone capture): Times-Roman / Times-Bold / Times-Italic
+ * and bullet+text alignment fixes for html2canvas (does not change on-screen preview).
+ */
+import { createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { PDFDocument } from 'pdf-lib';
+import html2canvas from 'html2canvas';
+import { getTemplateComponent } from '@/components/resume-templates/index.js';
+import { DENSITY_LEVELS, pickDensityLevel, RESUME_PAGE } from '@/components/resume-templates/pageFit.js';
+import '@/components/resume-templates/resume-template-01.css';
+import { masterResumeToAtsData } from '@/features/resume/master-to-ats-data';
 import type { MasterResumeDocument } from '@/features/resume/master-resume.types';
 import { savePdfBytes } from '@/lib/resume-pdf';
 
-const INK = rgb(0, 0, 0);
+/** A4 at 96dpi — matches existing preview sheet sizing used across templates. */
+const PAGE_WIDTH_PX = RESUME_PAGE.width;
+const PAGE_HEIGHT_PX = RESUME_PAGE.height;
+/** A4 in PDF points */
+const PDF_WIDTH = 595.28;
+const PDF_HEIGHT = 841.89;
 
-function winAnsi(value: string) {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+/** PDF-only font stack matching Times-Roman / Times-Bold / Times-Italic. */
+const PDF_TIMES_STACK = '"Times New Roman", Times, "Times-Roman", serif';
+
+const PDF_CAPTURE_STYLE_ID = 'cb-resume-pdf-capture-fonts';
+
+function waitFrames(count = 2) {
+  return new Promise<void>((resolve) => {
+    const step = (left: number) => {
+      if (left <= 0) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(() => step(left - 1));
+    };
+    step(count);
+  });
 }
 
-function dateRange(start: string, end: string, isCurrent: boolean) {
-  const parts: string[] = [];
-  if (start) parts.push(start);
-  if (isCurrent) parts.push('Present');
-  else if (end) parts.push(end);
-  return parts.join(' – ');
+async function waitForFonts() {
+  try {
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
-function educationDegreeLine(degree: string, field: string) {
-  if (degree && field) return `${degree} in ${field}`;
-  return degree || field;
+/**
+ * Apply PDF-only Times fonts + bullet alignment on the html2canvas clone.
+ * Does not touch the live preview DOM.
+ */
+function preparePdfCaptureClone(clonedDoc: Document) {
+  const clonedHost = clonedDoc.querySelector('[data-resume-pdf-capture="1"]') as HTMLElement | null;
+  if (clonedHost) {
+    clonedHost.style.left = '0';
+    clonedHost.style.position = 'absolute';
+    clonedHost.style.zIndex = '0';
+  }
+
+  if (!clonedDoc.getElementById(PDF_CAPTURE_STYLE_ID)) {
+    const style = clonedDoc.createElement('style');
+    style.id = PDF_CAPTURE_STYLE_ID;
+    style.textContent = `
+      [data-resume-pdf-capture="1"],
+      [data-resume-pdf-capture="1"] * {
+        font-family: ${PDF_TIMES_STACK} !important;
+      }
+      [data-resume-pdf-capture="1"] .resume-template-01,
+      [data-resume-pdf-capture="1"] .resume-template-01 p,
+      [data-resume-pdf-capture="1"] .resume-template-01 li,
+      [data-resume-pdf-capture="1"] .resume-template-01 span,
+      [data-resume-pdf-capture="1"] .resume-template-01 .rt01-contact,
+      [data-resume-pdf-capture="1"] .resume-template-01 .rt01-summary {
+        font-family: ${PDF_TIMES_STACK} !important;
+        font-weight: 400 !important;
+        font-style: normal !important;
+      }
+      [data-resume-pdf-capture="1"] .resume-template-01 h1,
+      [data-resume-pdf-capture="1"] .resume-template-01 h2,
+      [data-resume-pdf-capture="1"] .resume-template-01 strong,
+      [data-resume-pdf-capture="1"] .resume-template-01 b {
+        font-family: ${PDF_TIMES_STACK} !important;
+        font-weight: 700 !important;
+        font-style: normal !important;
+      }
+      /* Match View Resume spacing under section heading + divider */
+      [data-resume-pdf-capture="1"] .resume-template-01 h2 {
+        margin: 0 0 12px !important;
+        padding-bottom: 4px !important;
+        border-bottom: 1px solid #000 !important;
+        line-height: 1.35 !important;
+      }
+      [data-resume-pdf-capture="1"] .resume-template-01 section > p:first-of-type,
+      [data-resume-pdf-capture="1"] .resume-template-01 section > ul:first-of-type,
+      [data-resume-pdf-capture="1"] .resume-template-01 section > .rt01-entry:first-of-type,
+      [data-resume-pdf-capture="1"] .resume-template-01 section > .rt01-skills:first-of-type,
+      [data-resume-pdf-capture="1"] .resume-template-01 section > .rt01-languages:first-of-type {
+        margin-top: 2px !important;
+      }
+      [data-resume-pdf-capture="1"] .resume-template-01 section > ul:first-of-type {
+        margin-top: 6px !important;
+      }
+      [data-resume-pdf-capture="1"] .resume-template-01 .rt01-dates,
+      [data-resume-pdf-capture="1"] .resume-template-01 .rt01-sub,
+      [data-resume-pdf-capture="1"] .resume-template-01 .rt01-project-tech,
+      [data-resume-pdf-capture="1"] .resume-template-01 em,
+      [data-resume-pdf-capture="1"] .resume-template-01 i {
+        font-family: ${PDF_TIMES_STACK} !important;
+        font-style: italic !important;
+        font-weight: 400 !important;
+      }
+      [data-resume-pdf-capture="1"] .resume-template-01 ul {
+        list-style: none !important;
+        margin: 6px 0 0 !important;
+        padding-left: 0 !important;
+      }
+      [data-resume-pdf-capture="1"] .resume-template-01 li {
+        list-style: none !important;
+        display: flex !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+        margin-bottom: 2px !important;
+        padding-left: 0 !important;
+      }
+      [data-resume-pdf-capture="1"] .resume-template-01 li::marker {
+        content: none !important;
+      }
+      [data-resume-pdf-capture="1"] .cb-pdf-bullet {
+        flex: 0 0 12px;
+        width: 12px;
+        text-align: center;
+        line-height: 1.38;
+        font-family: ${PDF_TIMES_STACK} !important;
+        font-weight: 400 !important;
+        font-style: normal !important;
+      }
+      [data-resume-pdf-capture="1"] .cb-pdf-bullet-text {
+        flex: 1 1 auto;
+        min-width: 0;
+        line-height: 1.38;
+        font-family: ${PDF_TIMES_STACK} !important;
+        font-weight: 400 !important;
+        font-style: normal !important;
+      }
+      [data-resume-pdf-capture="1"] .cb-pdf-bullet-text strong,
+      [data-resume-pdf-capture="1"] .cb-pdf-bullet-text b {
+        font-weight: 700 !important;
+        font-style: normal !important;
+      }
+    `;
+    clonedDoc.head.appendChild(style);
+  }
+
+  // html2canvas often drops ::marker — rewrite list items so bullet + text stay aligned.
+  // Skip skills lists (should stay comma/inline, never bullets).
+  const lists = clonedDoc.querySelectorAll(
+    '[data-resume-pdf-capture="1"] .resume-template-01 ul:not(.rt01-skills-list)',
+  );
+  lists.forEach((ul) => {
+    if (ul.classList.contains('rt01-skills') || ul.closest('.rt01-skills')) return;
+    ul.querySelectorAll(':scope > li').forEach((li) => {
+      if (li.querySelector('.cb-pdf-bullet')) return;
+      const textWrap = clonedDoc.createElement('span');
+      textWrap.className = 'cb-pdf-bullet-text';
+      while (li.firstChild) {
+        textWrap.appendChild(li.firstChild);
+      }
+      const bullet = clonedDoc.createElement('span');
+      bullet.className = 'cb-pdf-bullet';
+      bullet.setAttribute('aria-hidden', 'true');
+      bullet.textContent = '•';
+      li.appendChild(bullet);
+      li.appendChild(textWrap);
+    });
+  });
 }
 
-export async function renderMasterResumePdf(doc: MasterResumeDocument) {
-  const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.TimesRoman);
-  const bold = await pdf.embedFont(StandardFonts.TimesRomanBold);
-  const italic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
-  const pageWidth = 595;
-  const pageHeight = 842;
-  let page = pdf.addPage([pageWidth, pageHeight]);
-  const left = 52;
-  const right = pageWidth - 52;
-  let y = pageHeight - 56;
+/**
+ * Render the live preview template off-screen, rasterize it, and place pages into an A4 PDF.
+ */
+export async function renderMasterResumePdf(doc: MasterResumeDocument): Promise<Uint8Array> {
+  if (typeof document === 'undefined') {
+    throw new Error('PDF download requires a browser environment.');
+  }
 
-  const wrap = (text: string, font: typeof regular, size: number, maxWidth: number) => {
-    const words = winAnsi(text || '').split(/\s+/).filter(Boolean);
-    const lines: string[] = [];
-    let line = '';
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word;
-      if (font.widthOfTextAtSize(next, size) <= maxWidth) line = next;
-      else {
-        if (line) lines.push(line);
-        line = word;
+  const data = masterResumeToAtsData(doc);
+  const Template = getTemplateComponent('resume-template-01');
+
+  const host = document.createElement('div');
+  host.setAttribute('data-resume-pdf-capture', '1');
+  host.style.cssText = [
+    'position:fixed',
+    'left:-10000px',
+    'top:0',
+    `width:${PAGE_WIDTH_PX}px`,
+    `min-width:${PAGE_WIDTH_PX}px`,
+    'background:#ffffff',
+    'z-index:-1',
+    'pointer-events:none',
+    'overflow:visible',
+    `font-family:${PDF_TIMES_STACK}`,
+  ].join(';');
+
+  const sheet = document.createElement('div');
+  sheet.className = 'preview-sheet';
+  sheet.style.cssText = [
+    `width:${PAGE_WIDTH_PX}px`,
+    `min-width:${PAGE_WIDTH_PX}px`,
+    'background:#ffffff',
+    'box-sizing:border-box',
+    'overflow:visible',
+    `font-family:${PDF_TIMES_STACK}`,
+  ].join(';');
+  host.appendChild(sheet);
+  document.body.appendChild(host);
+
+  const root = createRoot(sheet);
+  root.render(createElement(Template, { data }));
+
+  try {
+    await waitFrames(2);
+    await waitForFonts();
+    // Allow layout/paint after fonts
+    await new Promise((r) => window.setTimeout(r, 80));
+    await waitFrames(1);
+
+    // Measure content height at each density and pick the best page fit.
+    const resumeEl = sheet.querySelector('.resume') as HTMLElement | null;
+    if (resumeEl) {
+      const heights: Record<string, number> = {};
+      for (const level of DENSITY_LEVELS) {
+        sheet.dataset.density = level;
+        void resumeEl.offsetHeight;
+        heights[level] = resumeEl.scrollHeight;
       }
-    }
-    if (line) lines.push(line);
-    return lines.length ? lines : [''];
-  };
-
-  const ensure = (need: number) => {
-    if (y - need < 52) {
-      page = pdf.addPage([pageWidth, pageHeight]);
-      y = pageHeight - 56;
-    }
-  };
-
-  const drawLines = (text: string, font = regular, size = 10.5) => {
-    for (const line of wrap(text, font, size, right - left)) {
-      ensure(14);
-      page.drawText(line, { x: left, y, size, font, color: INK });
-      y -= 13;
-    }
-  };
-
-  const drawCentered = (text: string, font: typeof regular, size: number) => {
-    const t = winAnsi(text);
-    const w = font.widthOfTextAtSize(t, size);
-    ensure(16);
-    page.drawText(t, { x: (pageWidth - w) / 2, y, size, font, color: INK });
-    y -= size + 4;
-  };
-
-  const section = (title: string) => {
-    y -= 10;
-    ensure(24);
-    page.drawText(title.toUpperCase(), { x: left, y, size: 10, font: bold, color: INK });
-    y -= 4;
-    page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 0.75, color: INK });
-    y -= 10;
-  };
-
-  const drawRow = (leftText: string, rightText: string, leftFont = bold, rightFont = italic, size = 10.5) => {
-    ensure(14);
-    const lt = winAnsi(leftText);
-    const rt = winAnsi(rightText);
-    page.drawText(lt, { x: left, y, size, font: leftFont, color: INK });
-    if (rt) {
-      const rw = rightFont.widthOfTextAtSize(rt, size);
-      page.drawText(rt, { x: right - rw, y, size, font: rightFont, color: INK });
-    }
-    y -= 13;
-  };
-
-  const { personalInfo } = doc;
-  drawCentered(personalInfo.fullName || 'Candidate', bold, 22);
-
-  const contact = [personalInfo.location, personalInfo.email, personalInfo.phone, personalInfo.linkedin]
-    .filter(Boolean)
-    .join('  |  ');
-  if (contact) drawCentered(contact, regular, 9.5);
-
-  y -= 4;
-
-  if (doc.summary) {
-    section('Summary');
-    drawLines(doc.summary);
-  }
-
-  if (doc.experience.length) {
-    section('Experience');
-    for (const item of doc.experience) {
-      const dates = dateRange(item.startDate, item.endDate, item.isCurrent);
-      drawRow(item.jobTitle || 'Role', dates);
-      const companyLine = [item.company, item.location].filter(Boolean).join(', ');
-      if (companyLine) {
-        ensure(14);
-        page.drawText(winAnsi(companyLine), { x: left, y, size: 10, font: italic, color: INK });
-        y -= 13;
+      const { density, overfull } = pickDensityLevel(heights, PAGE_HEIGHT_PX);
+      sheet.dataset.density = density;
+      sheet.classList.toggle('resume-fitted', !overfull);
+      sheet.classList.toggle('resume-overfull', overfull);
+      // If still short on one page after relaxed, stretch spacing slightly via relaxed.
+      if (!overfull && density === 'relaxed' && heights.relaxed < PAGE_HEIGHT_PX * 0.72) {
+        sheet.dataset.density = 'relaxed';
       }
-      for (const bullet of item.responsibilities) {
-        drawLines(`• ${bullet}`);
-      }
-      y -= 2;
+      await waitFrames(1);
     }
-  }
 
-  const skillGroups = doc.technicalSkills.filter((g) => g.skills.length);
-  if (skillGroups.length) {
-    section('Technical Skills');
-    for (const group of skillGroups) {
-      const line = group.category
-        ? `${group.category}: ${group.skills.join(', ')}`
-        : group.skills.join(', ');
-      drawLines(`• ${line}`, regular, 10.5);
-    }
-  }
+    const canvas = await html2canvas(sheet, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      width: PAGE_WIDTH_PX,
+      windowWidth: PAGE_WIDTH_PX,
+      logging: false,
+      imageTimeout: 15000,
+      onclone: (clonedDoc) => {
+        preparePdfCaptureClone(clonedDoc);
+      },
+    });
 
-  if (doc.education.length) {
-    section('Education');
-    for (const edu of doc.education) {
-      const heading = educationDegreeLine(edu.degree, edu.field);
-      const years = [edu.startYear, edu.endYear].filter(Boolean).join(' – ');
-      drawRow(heading, years);
-      const place = [edu.institution, edu.location].filter(Boolean).join(', ');
-      const grade = edu.gradeType && edu.grade ? `${edu.gradeType}: ${edu.grade}` : edu.grade;
-      if (place || grade) {
-        drawRow(place, grade, italic, regular, 10);
-      }
-      y -= 2;
-    }
-  }
+    const scale = canvas.width / PAGE_WIDTH_PX;
+    const pageHeightCanvas = Math.max(1, Math.round(PAGE_HEIGHT_PX * scale));
+    const totalPages = Math.max(1, Math.ceil(canvas.height / pageHeightCanvas));
 
-  if (doc.projects.length) {
-    section('Projects');
-    for (const proj of doc.projects) {
-      const tech = proj.technologies.length ? ` | ${proj.technologies.join(', ')}` : '';
-      drawLines(`${proj.name}${tech}`, bold, 10.5);
-      if (proj.description) drawLines(proj.description);
-      for (const bullet of proj.bullets) {
-        drawLines(`• ${bullet}`);
-      }
-      y -= 2;
-    }
-  }
+    const pdf = await PDFDocument.create();
 
-  const hasAchievements = doc.achievements.some((a) => a.title || a.description);
-  const hasCerts = doc.certifications.some((c) => c.name);
-  if (hasAchievements || hasCerts) {
-    section('Achievements and Certifications');
-    for (const ach of doc.achievements) {
-      if (!ach.title && !ach.description) continue;
-      const line = [ach.title, ach.organization, ach.description].filter(Boolean).join(' — ');
-      drawRow(`• ${line}`, ach.date, regular, italic, 10);
-    }
-    for (const cert of doc.certifications) {
-      if (!cert.name) continue;
-      const line = [cert.name, cert.issuer].filter(Boolean).join(' — ');
-      drawRow(`• ${line}`, cert.date, regular, italic, 10);
-    }
-  }
+    for (let pageIndex = 0; pageIndex < totalPages; pageIndex += 1) {
+      const sourceY = pageIndex * pageHeightCanvas;
+      const sliceHeight = Math.min(pageHeightCanvas, canvas.height - sourceY);
+      if (sliceHeight <= 0) break;
 
-  return pdf.save();
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeight;
+      const ctx = pageCanvas.getContext('2d');
+      if (!ctx) throw new Error('Could not create PDF page canvas.');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      ctx.drawImage(
+        canvas,
+        0,
+        sourceY,
+        canvas.width,
+        sliceHeight,
+        0,
+        0,
+        canvas.width,
+        sliceHeight,
+      );
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        pageCanvas.toBlob(
+          (next) => (next ? resolve(next) : reject(new Error('Could not encode PDF page.'))),
+          'image/png',
+        );
+      });
+      const pngBytes = new Uint8Array(await blob.arrayBuffer());
+      const image = await pdf.embedPng(pngBytes);
+      const page = pdf.addPage([PDF_WIDTH, PDF_HEIGHT]);
+
+      // Map captured A4-width slice onto the PDF page (full width, top-aligned).
+      const drawWidth = PDF_WIDTH;
+      const drawHeight = (sliceHeight / canvas.width) * PDF_WIDTH;
+      page.drawImage(image, {
+        x: 0,
+        y: PDF_HEIGHT - drawHeight,
+        width: drawWidth,
+        height: drawHeight,
+      });
+    }
+
+    return pdf.save();
+  } finally {
+    try {
+      root.unmount();
+    } catch {
+      /* ignore */
+    }
+    host.remove();
+  }
 }
 
 export async function downloadMasterResumePdf(doc: MasterResumeDocument, fileName?: string) {
   const bytes = await renderMasterResumePdf(doc);
-  savePdfBytes(bytes, fileName || `${doc.personalInfo.fullName.replace(/\s+/g, '-')}-Resume.pdf`);
+  savePdfBytes(
+    bytes,
+    fileName || `${(doc.personalInfo.fullName || 'Resume').replace(/\s+/g, '-')}-Resume.pdf`,
+  );
 }

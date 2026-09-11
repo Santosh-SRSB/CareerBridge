@@ -37,6 +37,9 @@ import {
   getResumeUpdateResumeId,
   isResumeUpdateMode,
   clearResumeUpdateMode,
+  peekAtsSectionEdit,
+  clearAtsSectionEdit,
+  mapAtsSectionToWizardStep,
 } from '@/features/resume/resume-update-mode';
 import { validateWizardStep } from '@/features/resume/resume-wizard-validation';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
@@ -53,6 +56,7 @@ import {
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
 import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
 import type { CandidateProfile } from '@careerbridge/shared';
+import { parseLanguageSkills, serializeLanguageSkills } from '@careerbridge/shared';
 
 type FlowPhase = 'choose' | 'wizard' | 'preview' | 'finish';
 
@@ -155,11 +159,14 @@ const LANGUAGE_POOL = [
 
 function normalizeLanguagePool(selected: string[], available: string[] | undefined) {
   const selectedClean = (selected || []).filter(Boolean);
-  const fromDraft = (available || []).filter((name) => name && !selectedClean.includes(name));
+  const selectedNames = new Set(
+    selectedClean.map((entry) => parseLanguageSkills(entry)[0]?.name || entry),
+  );
+  const fromDraft = (available || []).filter((name) => name && !selectedNames.has(name));
   if (fromDraft.length > 0) return { languages: selectedClean, availableLanguages: fromDraft };
   return {
     languages: selectedClean,
-    availableLanguages: LANGUAGE_POOL.filter((name) => !selectedClean.includes(name)),
+    availableLanguages: LANGUAGE_POOL.filter((name) => !selectedNames.has(name)),
   };
 }
 
@@ -255,6 +262,10 @@ function ResumePageInner() {
   const [flowPhase, setFlowPhase] = useState<FlowPhase>('wizard');
   const [wizardIndex, setWizardIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  /** When set, wizard shows only this step and Save returns to ATS (does not advance creation flow). */
+  const [atsEditStep, setAtsEditStep] = useState<string | null>(null);
+  const [atsEditReturnTo, setAtsEditReturnTo] = useState<'preview' | 'ats'>('preview');
+  const [atsRecheckNonce, setAtsRecheckNonce] = useState(0);
 
   const [fullName, setFullName] = useState('');
   const [location, setLocation] = useState('');
@@ -332,6 +343,36 @@ function ResumePageInner() {
           setPreferredLocation,
           setExpectedSalary,
         });
+      }
+
+      // ATS dashboard → edit one section only (do not restart full creation wizard)
+      const pendingAtsEdit = peekAtsSectionEdit();
+      if (pendingAtsEdit?.resumeId) {
+        try {
+          const [profile, record] = await Promise.all([
+            getCandidateMe(),
+            getResume(pendingAtsEdit.resumeId),
+          ]);
+          if (!active) return;
+          if (profile && record) {
+            const step = mapAtsSectionToWizardStep(pendingAtsEdit.sectionKey);
+            const stepIndex = Math.max(0, WIZARD_STEPS.indexOf(step));
+            const seeded = buildWizardSeedFromCandidate(profile, record, {
+              flowPhase: 'wizard',
+              wizardIndex: stepIndex,
+            });
+            applySeed(seeded);
+            setSavedResumeId(record.id);
+            setAtsEditStep(step);
+            setAtsEditReturnTo(pendingAtsEdit.returnTo === 'ats' ? 'ats' : 'preview');
+            setFlowPhase('wizard');
+            setWizardIndex(stepIndex);
+            if (active) setDraftReady(true);
+            return;
+          }
+        } catch {
+          clearAtsSectionEdit();
+        }
       }
 
       // Path A: seed from uploaded resume → open Personal step (skip choose screen)
@@ -550,6 +591,9 @@ function ResumePageInner() {
         projectList,
         certificationList,
         achievementList,
+        languages: languages
+          .map((entry) => parseLanguageSkills(entry)[0] || { name: entry, level: '' })
+          .filter((item) => item.name.trim()),
       }),
     [
       fullName,
@@ -563,6 +607,7 @@ function ResumePageInner() {
       projectList,
       certificationList,
       achievementList,
+      languages,
     ],
   );
 
@@ -571,26 +616,35 @@ function ResumePageInner() {
 
   function addSkill(s: string) {
     const trimmed = s.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setSkills((prev) => [...prev, trimmed]);
-    }
+    if (!trimmed) return;
+    setSkills((prev) => {
+      if (prev.some((x) => x.toLowerCase() === trimmed.toLowerCase())) return prev;
+      return [...prev, trimmed];
+    });
   }
 
   function removeSkill(s: string) {
-    setSkills((prev) => prev.filter((x) => x !== s));
+    const target = s.trim().toLowerCase();
+    setSkills((prev) => prev.filter((x) => x.toLowerCase() !== target));
+  }
+
+  function languageName(entry: string) {
+    return parseLanguageSkills(entry)[0]?.name || entry;
   }
 
   function addLanguage(l: string) {
-    if (!languages.includes(l)) {
-      setLanguages((prev) => [...prev, l]);
-      setAvailableLanguages((prev) => prev.filter((x) => x !== l));
-    }
+    const name = l.trim();
+    if (!name) return;
+    if (languages.some((entry) => languageName(entry) === name)) return;
+    setLanguages((prev) => [...prev, name]);
+    setAvailableLanguages((prev) => prev.filter((x) => x !== name));
   }
 
   function removeLanguage(l: string) {
-    setLanguages((prev) => prev.filter((x) => x !== l));
-    if (!availableLanguages.includes(l)) {
-      setAvailableLanguages((prev) => [...prev, l]);
+    const name = languageName(l);
+    setLanguages((prev) => prev.filter((entry) => languageName(entry) !== name));
+    if (!availableLanguages.includes(name)) {
+      setAvailableLanguages((prev) => [...prev, name]);
     }
   }
 
@@ -607,7 +661,11 @@ function ResumePageInner() {
       try {
         const content = masterResumeToResumeContent(masterResume);
         const profile = await savePassport(mapResumeContentToPassportPayload(content));
-        const preferredLanguage = languages[0]?.trim();
+        const preferredLanguage = serializeLanguageSkills(
+          languages
+            .map((entry) => parseLanguageSkills(entry)[0] || { name: entry, level: '' })
+            .filter((item) => item.name.trim()),
+        );
         if (preferredLanguage) {
           await updateCandidateMe({ preferredLanguage }).catch(() => undefined);
         }
@@ -638,6 +696,11 @@ function ResumePageInner() {
   }
 
   function handleWizardNext() {
+    // ATS edit mode: never advance through the creation wizard
+    if (atsEditStep) {
+      void handleAtsEditSaveAndReturn();
+      return;
+    }
     const errors = validateWizardStep(currentStep, {
       fullName,
       location,
@@ -656,6 +719,56 @@ function ResumePageInner() {
     if (wizardIndex < REVIEW_INDEX) {
       setWizardIndex((prev) => prev + 1);
     }
+  }
+
+  async function handleAtsEditSaveAndReturn() {
+    const errors =
+      currentStep === 'Review'
+        ? validateMasterResume(masterResume)
+        : validateWizardStep(currentStep, {
+            fullName,
+            location,
+            email,
+            phone,
+            skills,
+            educationList,
+            languages,
+            preferredRole,
+          });
+    if (errors.length) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors([]);
+    setSaving(true);
+    try {
+      const id = await ensureResumeSaved();
+      const returnTo = atsEditReturnTo;
+      setAtsEditStep(null);
+      clearAtsSectionEdit();
+      if (returnTo === 'ats') {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('cb.atsAutoRecheck', '1');
+        }
+        router.push(`/ats?resumeId=${encodeURIComponent(id)}`);
+        return;
+      }
+      setAtsRecheckNonce((n) => n + 1);
+      setFlowPhase('preview');
+    } catch {
+      setValidationErrors(['Could not save your changes. Please try again.']);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function beginAtsSectionEdit(sectionLabel: string, sectionKey: string) {
+    const step = mapAtsSectionToWizardStep(sectionKey || sectionLabel);
+    setAtsEditStep(step);
+    setAtsEditReturnTo('preview');
+    setValidationErrors([]);
+    setFlowPhase('wizard');
+    setWizardIndex(Math.max(0, WIZARD_STEPS.indexOf(step)));
   }
 
   async function ensureResumeSaved(): Promise<string> {
@@ -698,7 +811,10 @@ function ResumePageInner() {
           improvedText
             .split(',')
             .map((skill) => skill.trim())
-            .filter(Boolean),
+            .filter(Boolean)
+            .filter((skill, index, all) =>
+              all.findIndex((x) => x.toLowerCase() === skill.toLowerCase()) === index,
+            ),
         );
         break;
       case 'experience':
@@ -816,7 +932,11 @@ function ResumePageInner() {
   async function syncProfileFromResume() {
     const content = masterResumeToResumeContent(masterResume);
     const profile = await savePassport(mapResumeContentToPassportPayload(content));
-    const preferredLanguage = languages[0]?.trim();
+    const preferredLanguage = serializeLanguageSkills(
+      languages
+        .map((entry) => parseLanguageSkills(entry)[0] || { name: entry, level: '' })
+        .filter((item) => item.name.trim()),
+    );
     if (preferredLanguage) {
       await updateCandidateMe({ preferredLanguage }).catch(() => undefined);
     }
@@ -834,6 +954,18 @@ function ResumePageInner() {
 
   function handleBack() {
     setValidationErrors([]);
+    // ATS edit mode: cancel section edit and return to ATS (never walk creation steps)
+    if (atsEditStep) {
+      const returnTo = atsEditReturnTo;
+      setAtsEditStep(null);
+      clearAtsSectionEdit();
+      if (returnTo === 'ats' && savedResumeId) {
+        router.push(`/ats?resumeId=${encodeURIComponent(savedResumeId)}`);
+        return;
+      }
+      setFlowPhase('preview');
+      return;
+    }
     if (flowPhase === 'finish') {
       setFlowPhase('wizard');
       setWizardIndex(REVIEW_INDEX);
@@ -1329,18 +1461,8 @@ function ResumePageInner() {
               setFlowPhase('wizard');
               setWizardIndex(REVIEW_INDEX);
             }}
-            onAddSection={(sectionLabel) => {
-              const key = sectionLabel.toLowerCase();
-              let step = 'Personal';
-              if (key.includes('educat')) step = 'Education';
-              else if (key.includes('experience') || key.includes('work')) step = 'Experience';
-              else if (key.includes('skill')) step = 'Skills';
-              else if (key.includes('project')) step = 'Projects';
-              else if (key.includes('cert') || key.includes('achiev')) step = 'Certifications';
-              else if (key.includes('summary') || key.includes('contact')) step = 'Personal';
-              setFlowPhase('wizard');
-              setWizardIndex(Math.max(0, WIZARD_STEPS.indexOf(step)));
-            }}
+            onAddSection={beginAtsSectionEdit}
+            recheckNonce={atsRecheckNonce}
             onApplySuggestion={handleApplyAiSuggestion}
           />
       ) : flowPhase === 'choose' ? (
@@ -1458,22 +1580,28 @@ function ResumePageInner() {
         <div className="cb-main-head">
           <div className="cb-main-head-row">
             <h1>
-              {isAutofillPath ? 'Complete your Profile' : 'Build your resume'}
+              {atsEditStep
+                ? 'Edit resume section'
+                : isAutofillPath
+                  ? 'Complete your Profile'
+                  : 'Build your resume'}
             </h1>
             <button type="button" className="cb-flow-back-btn" onClick={handleBack}>
-              Back ←
+              {atsEditStep ? '← Back to ATS' : 'Back ←'}
             </button>
           </div>
           <div className="desc">
-            {isAutofillPath
-              ? 'Fill in the gaps so your profile is ready.'
-              : isBuildPath
-                ? 'Fill each section, then check ATS score and improve with AI before you save.'
-                : 'One strong profile — ready for every application.'}
+            {atsEditStep
+              ? 'Update this section, then save to return to the ATS dashboard and recheck your score.'
+              : isAutofillPath
+                ? 'Fill in the gaps so your profile is ready.'
+                : isBuildPath
+                  ? 'Fill each section, then check ATS score and improve with AI before you save.'
+                  : 'One strong profile — ready for every application.'}
           </div>
         </div>
 
-        {!isReviewStep && (
+        {!isReviewStep && !atsEditStep && (
           <div className="cb-stepper-wrap cb-stepper-desktop">
             <div className="cb-stepper-row">
               {WIZARD_STEPS.map((label, i) => (
@@ -1713,6 +1841,9 @@ function ResumePageInner() {
 
               {currentStep === 'Certifications' && (
                 <div>
+                  <p className="cb-section-label" style={{ marginTop: 0 }}>
+                    Certifications
+                  </p>
                   {certificationList.map((cert) => (
                     <div key={cert.id} className="cb-entry-card">
                       <div>
@@ -1748,6 +1879,53 @@ function ResumePageInner() {
                       + Add certification
                     </button>
                   )}
+
+                  <p className="cb-section-label" style={{ marginTop: 28 }}>
+                    Achievements
+                  </p>
+                  {achievementList.map((ach) => (
+                    <div key={ach.id} className="cb-entry-card">
+                      <div>
+                        <div className="role">{ach.title}</div>
+                        <div className="meta">
+                          {[ach.organization, formatDateForResume(ach.date), ach.description]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="remove"
+                        onClick={() =>
+                          setAchievementList((prev) => prev.filter((x) => x.id !== ach.id))
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  {activeForm === 'achievement' ? (
+                    <AchievementInlineForm
+                      onCancel={() => setActiveForm(null)}
+                      onSave={(data) => {
+                        setAchievementList((prev) => [
+                          ...prev,
+                          {
+                            id: `ach-${Date.now()}`,
+                            title: data.title,
+                            organization: data.organization,
+                            description: data.description,
+                            date: data.date,
+                          },
+                        ]);
+                        setActiveForm(null);
+                      }}
+                    />
+                  ) : (
+                    <button type="button" className="cb-add-row" onClick={() => setActiveForm('achievement')}>
+                      + Add achievement
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1770,16 +1948,21 @@ function ResumePageInner() {
                   </p>
                   <p className="mb-3 text-sm text-[#5b6b7c]">
                     Tap a language to select it. Selected languages appear dark — tap again to remove.
+                    Proficiency from your profile (if any) is kept and shown on the resume.
                   </p>
                   <div className="cb-chip-wrap">
                     {Array.from(
                       new Set(
-                        languages.length || availableLanguages.length
-                          ? [...languages, ...availableLanguages]
-                          : LANGUAGE_POOL,
+                        [
+                          ...LANGUAGE_POOL,
+                          ...languages.map((entry) => languageName(entry)),
+                          ...availableLanguages,
+                        ].filter(Boolean),
                       ),
                     ).map((l) => {
-                      const selected = languages.includes(l);
+                      const selectedEntry = languages.find((entry) => languageName(entry) === l);
+                      const selected = Boolean(selectedEntry);
+                      const label = selectedEntry || l;
                       return (
                         <button
                           key={l}
@@ -1787,7 +1970,8 @@ function ResumePageInner() {
                           className={`cb-chip${selected ? ' selected' : ''}`}
                           onClick={() => (selected ? removeLanguage(l) : addLanguage(l))}
                         >
-                          {l} <span className={selected ? undefined : 'plus'}>{selected ? '×' : '+'}</span>
+                          {label}{' '}
+                          <span className={selected ? undefined : 'plus'}>{selected ? '×' : '+'}</span>
                         </button>
                       );
                     })}
@@ -1822,8 +2006,16 @@ function ResumePageInner() {
             </div>
 
             <div className="cb-btn-row">
-              <button className="cb-btn cb-btn-primary" onClick={handleWizardNext}>
-                Save &amp; continue
+              <button
+                className="cb-btn cb-btn-primary"
+                onClick={handleWizardNext}
+                disabled={saving}
+              >
+                {atsEditStep
+                  ? saving
+                    ? 'Saving…'
+                    : 'Save & recheck ATS'
+                  : 'Save & continue'}
               </button>
             </div>
           </>
@@ -2236,10 +2428,19 @@ function ResumePageInner() {
               <button
                 type="button"
                 className="cb-save-btn"
-                onClick={() => void handleFinishWizard()}
+                onClick={() => {
+                  if (atsEditStep) void handleAtsEditSaveAndReturn();
+                  else void handleFinishWizard();
+                }}
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Finish'}
+                {atsEditStep
+                  ? saving
+                    ? 'Saving…'
+                    : 'Save & recheck ATS'
+                  : saving
+                    ? 'Saving...'
+                    : 'Finish'}
               </button>
             </div>
           </div>
