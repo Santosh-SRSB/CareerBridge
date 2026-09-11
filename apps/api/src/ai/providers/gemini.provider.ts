@@ -26,7 +26,7 @@ export class GeminiProvider implements AiProvider {
   }
 
   getDefaultModel(): string {
-    return this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.5-flash';
+    return this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
   }
 
   getEmbeddingModel(): string {

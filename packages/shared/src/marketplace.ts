@@ -871,4 +871,61 @@ export type AdminDashboard = {
   openJobs: number;
   applications: number;
   interviews: number;
+  hires?: number;
+  funnel?: {
+    candidates: number;
+    applications: number;
+    shortlisted: number;
+    interviews: number;
+    hires: number;
+  };
+  recentActivity?: Array<{ at: string; label: string }>;
+  systemStatus?: Array<{ name: string; status: 'Healthy' | 'Degraded' }>;
+  activity?: {
+    candidateRegistrations7d: number;
+    employerRegistrations7d: number;
+    jobsPublished7d: number;
+    applications7d: number;
+    interviews7d: number;
+  };
+  alerts?: {
+    failedNotifications: number;
+    failedAiRequests: number;
+    suspendedAccounts: number;
+    jobsRequiringAttention: number;
+    unreadNotifications: number;
+  };
+  aiUsage?: {
+    totalRequests: number;
+    failedRequests?: number;
+    totalTokens?: number;
+    estimatedCostUsd?: number;
+    estimatedCostInr: number;
+    byFeature: Array<{
+      feature: string;
+      requests: number;
+      tokens?: number;
+      estimatedCostInr?: number;
+    }>;
+    byUser?: Array<{
+      userId: string | null;
+      email: string;
+      userType: string | null;
+      requests: number;
+      tokens: number;
+      estimatedCostInr: number;
+    }>;
+    recent?: Array<{
+      id: string;
+      feature: string;
+      provider: string;
+      model: string;
+      status: string;
+      tokens: number;
+      costInr: number;
+      latencyMs: number;
+      error: string | null;
+      at: string;
+    }>;
+  };
 };

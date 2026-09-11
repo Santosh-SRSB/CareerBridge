@@ -25,8 +25,21 @@ export class SeedService implements OnModuleInit {
 
   async onModuleInit() {
     await this.skills();
-    await this.admin();
     await this.srsbPortalAdmin();
+    await this.portalStaff(
+      'admin@careerbridge.local',
+      'Admin@12345',
+      '+919999999000',
+      'PLATFORM_ADMIN',
+      'SRSB Platform Admin',
+    );
+    await this.portalStaff(
+      'ops@careerbridge.local',
+      'Operator@12345',
+      '+919999999026',
+      'PLATFORM_OPERATOR',
+      'SRSB Platform Operator',
+    );
     // Demo ABC Services jobs are disabled — marketplace uses real employer posts only.
     if (process.env.SEED_DEMO_JOBS === 'true') {
       await this.demoEmployerAndJobs();
@@ -43,17 +56,42 @@ export class SeedService implements OnModuleInit {
     }
   }
 
-  private async admin() {
-    const email = 'admin@careerbridge.local';
-    const existing = await this.prisma.user.findFirst({ where: { email } });
-    if (existing) return;
-    await this.prisma.user.create({
-      data: {
+  private async portalStaff(
+    email: string,
+    password: string,
+    phone: string,
+    userType: 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR',
+    fullName: string,
+  ) {
+    const passwordHash = await hashPlatformPassword(password);
+    let user = await this.prisma.user.findFirst({ where: { email } });
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          phone,
+          passwordHash,
+          externalAuthId: `admin_portal_${email}`,
+          userType,
+          status: 'ACTIVE',
+        },
+      });
+    } else {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash, status: 'ACTIVE', userType, phone },
+      });
+    }
+    await this.prisma.admin.upsert({
+      where: { email },
+      update: { passwordHash, loginPassword: password, fullName, status: 'ACTIVE', userId: user.id },
+      create: {
         email,
-        phone: '+919999999000',
-        passwordHash: await hashPassword('Admin@12345'),
-        externalAuthId: 'seed_admin',
-        userType: 'PLATFORM_ADMIN',
+        passwordHash,
+        loginPassword: password,
+        fullName,
+        status: 'ACTIVE',
+        userId: user.id,
       },
     });
   }
@@ -64,7 +102,7 @@ export class SeedService implements OnModuleInit {
     const passwordHash = await hashPlatformPassword(SRSB_ADMIN_PASSWORD);
 
     let user = await this.prisma.user.findFirst({
-      where: { email, userType: 'PLATFORM_ADMIN' },
+      where: { email, userType: { in: ['SUPER_ADMIN', 'PLATFORM_ADMIN'] } },
     });
 
     if (!user) {
@@ -74,14 +112,14 @@ export class SeedService implements OnModuleInit {
           phone: SRSB_ADMIN_PHONE,
           passwordHash,
           externalAuthId: `admin_portal_${email}`,
-          userType: 'PLATFORM_ADMIN',
+          userType: 'SUPER_ADMIN',
           status: 'ACTIVE',
         },
       });
     } else {
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash, status: 'ACTIVE' },
+        data: { passwordHash, status: 'ACTIVE', userType: 'SUPER_ADMIN' },
       });
     }
 
@@ -89,14 +127,16 @@ export class SeedService implements OnModuleInit {
       where: { email },
       update: {
         passwordHash,
-        fullName: 'SRSB Admin',
+        loginPassword: SRSB_ADMIN_PASSWORD,
+        fullName: 'SRSB Super Admin',
         status: 'ACTIVE',
         userId: user.id,
       },
       create: {
         email,
         passwordHash,
-        fullName: 'SRSB Admin',
+        loginPassword: SRSB_ADMIN_PASSWORD,
+        fullName: 'SRSB Super Admin',
         status: 'ACTIVE',
         userId: user.id,
       },

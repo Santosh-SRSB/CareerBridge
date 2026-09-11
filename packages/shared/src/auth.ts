@@ -59,6 +59,7 @@ export type AuthUser = {
   role: UserType;
   phone: string;
   firstName: string | null;
+  email?: string | null;
   onboardingCompleted: boolean;
   /** Candidate only — true after they have opened the dashboard at least once. */
   dashboardReached?: boolean;
@@ -210,4 +211,7 @@ export type PlatformAdminRecord = {
   status: string;
   createdAt: string;
   lastLoginAt: string | null;
+  fullName?: string | null;
+  /** Present only for Super Admin responses. */
+  password?: string | null;
 };

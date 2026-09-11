@@ -63,6 +63,10 @@ export function isPlatformRole(role?: string | null) {
   return role === 'SUPER_ADMIN' || role === 'PLATFORM_ADMIN' || role === 'PLATFORM_OPERATOR';
 }
 
+export function isSuperAdminRole(role?: string | null) {
+  return role === 'SUPER_ADMIN';
+}
+
 /** Role-aware home after login / "My home". */
 export function homePathForUser(user?: AuthUser | null) {
   if (!user?.id) return '/';

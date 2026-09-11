@@ -72,6 +72,20 @@ async function request<T>(
     }
     if (response.status === 401 && path !== '/auth/refresh' && path !== '/auth/logout') {
       clearSession();
+      // After DB wipes / expired tokens, leave protected pages cleanly instead of
+      // bubbling an uncaught "Please sign in again" Next.js overlay.
+      if (typeof window !== 'undefined') {
+        const pathName = window.location.pathname;
+        const onPublicAuth =
+          pathName === '/login' ||
+          pathName === '/register' ||
+          pathName.startsWith('/verify-otp') ||
+          pathName.startsWith('/forgot');
+        if (!onPublicAuth) {
+          window.location.replace('/login?session=expired');
+          return new Promise<T>(() => undefined);
+        }
+      }
     }
     const error = new Error(body.error.message) as Error & { code: string };
     error.code = body.error.code;
@@ -1270,8 +1284,18 @@ export async function createPlatformAdmin(payload: {
   email: string;
   fullName: string;
   password: string;
+  phone?: string;
+  role?: 'SUPER_ADMIN' | 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR';
 }) {
-  return request('/admin/admins', {
+  return request<{
+    id: string;
+    email: string;
+    fullName: string | null;
+    userType: string;
+    status: string;
+    phone: string;
+    password: string;
+  }>('/admin/admins', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -1281,6 +1305,127 @@ export async function suspendPlatformAdmin(id: string) {
   return request(`/admin/admins/${id}/suspend`, {
     method: 'POST',
     body: JSON.stringify({}),
+  });
+}
+
+export async function setPlatformAdminStatus(
+  id: string,
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
+) {
+  return request(`/admin/admins/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function setPlatformAdminRole(
+  id: string,
+  role: 'SUPER_ADMIN' | 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR',
+) {
+  return request(`/admin/admins/${id}/role`, {
+    method: 'POST',
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function setPlatformAdminPassword(id: string, password: string) {
+  return request<{ id: string; email: string; password: string }>(`/admin/admins/${id}/password`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function getAdminAiUsage() {
+  return request<NonNullable<AdminDashboard['aiUsage']>>('/admin/ai-usage');
+}
+
+export async function verifyEmployer(id: string) {
+  return request(`/admin/employers/${id}/verify`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function setAdminUserStatus(userId: string, status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED') {
+  return request(`/admin/users/${userId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function setAdminCandidateStatus(
+  candidateId: string,
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
+) {
+  return request(`/admin/candidates/${candidateId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function setAdminEmployerStatus(
+  employerId: string,
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
+) {
+  return request(`/admin/employers/${employerId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function getAdminRecord(path: string) {
+  return request<Record<string, unknown>>(`/admin/${path}`);
+}
+
+export async function updateAdminSkill(
+  id: string,
+  payload: { name?: string; category?: string; aliases?: string; active?: boolean },
+) {
+  return request(`/admin/skills/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function setAdminJobStatus(jobId: string, status: 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED') {
+  return request(`/admin/jobs/${jobId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function getAdminNotifications() {
+  return request<{
+    summary: Record<string, number>;
+    inbox: Array<Record<string, unknown>>;
+    whatsapp: Array<Record<string, unknown>>;
+  }>('/admin/notifications');
+}
+
+export async function getAdminReports() {
+  return request<Record<string, unknown>>('/admin/reports');
+}
+
+export async function getAdminSettings() {
+  return request<Record<string, string>>('/admin/settings');
+}
+
+export async function updateAdminSettings(settings: Record<string, string>) {
+  return request<Record<string, string>>('/admin/settings', {
+    method: 'POST',
+    body: JSON.stringify({ settings }),
+  });
+}
+
+export async function getAdminAudit(query?: string) {
+  const q = query ? `?query=${encodeURIComponent(query)}` : '';
+  return request<Array<Record<string, unknown>>>(`/admin/audit${q}`);
+}
+
+export async function createAdminSkill(payload: { name: string; category: string; aliases?: string }) {
+  return request('/admin/skills', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 

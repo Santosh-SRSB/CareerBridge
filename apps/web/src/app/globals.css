@@ -18495,6 +18495,195 @@ a.ep-stat:hover {
   animation: cb-dashboard-shimmer 2.8s linear infinite;
 }
 
+@keyframes cb-candash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cb-candash-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cb-candash-sheen {
+  0% { transform: translateX(-120%) skewX(-18deg); }
+  100% { transform: translateX(220%) skewX(-18deg); }
+}
+
+@keyframes cb-candash-skeleton {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@keyframes cb-candash-pulse-soft {
+  0%, 100% { box-shadow: 0 8px 24px rgba(234, 179, 8, 0.16); }
+  50% { box-shadow: 0 12px 32px rgba(234, 179, 8, 0.34); }
+}
+
+@keyframes cb-candash-ring-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(234, 179, 8, 0)); }
+  50% { filter: drop-shadow(0 0 10px rgba(234, 179, 8, 0.35)); }
+}
+
+.cb-candash-cta {
+  background-image: linear-gradient(90deg, #ca8a04 0%, #eab308 55%, #facc15 100%);
+  color: #000;
+  border: 1px solid #000;
+}
+
+.cb-candash-cta-solid {
+  background-color: #0a2e2c;
+  color: #eab308;
+}
+
+.cb-candash-accent-soft {
+  background-color: rgba(10, 46, 44, 0.08);
+  color: #0a2e2c;
+}
+
+.cb-candash-orange-soft {
+  background-color: rgba(234, 179, 8, 0.16);
+  color: #ca8a04;
+}
+
+.cb-candash-rise {
+  animation: cb-candash-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cb-candash-rise-d1 { animation-delay: 0.06s; }
+.cb-candash-rise-d2 { animation-delay: 0.12s; }
+.cb-candash-rise-d3 { animation-delay: 0.18s; }
+.cb-candash-rise-d4 { animation-delay: 0.24s; }
+.cb-candash-rise-d5 { animation-delay: 0.3s; }
+.cb-candash-rise-d6 { animation-delay: 0.36s; }
+
+.cb-candash-fade {
+  animation: cb-candash-fade 0.55s ease both;
+}
+
+.cb-candash-card {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+}
+
+.cb-candash-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.1);
+}
+
+.cb-candash-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.cb-candash-sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 65%
+  );
+  transform: translateX(-120%) skewX(-18deg);
+  pointer-events: none;
+}
+
+.cb-candash-sheen:hover::after,
+.cb-candash-sheen.is-auto::after {
+  animation: cb-candash-sheen 1.6s ease 0.4s 1;
+}
+
+.cb-candash-sheen.is-auto:hover::after {
+  animation: cb-candash-sheen 1.2s ease 1;
+}
+
+.cb-candash-btn-shine {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, filter 0.25s ease;
+  animation: cb-candash-pulse-soft 2.8s ease-in-out infinite;
+}
+
+.cb-candash-btn-shine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+  animation: cb-candash-sheen 2.4s ease-in-out infinite;
+}
+
+.cb-candash-btn-shine:hover {
+  transform: translateY(-1px) scale(1.02);
+  filter: brightness(1.06);
+}
+
+.cb-candash-skeleton {
+  background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 40%, #eef2f7 55%);
+  background-size: 200% 100%;
+  animation: cb-candash-skeleton 1.35s ease-in-out infinite;
+  border-radius: 1rem;
+}
+
+.cb-candash-ring {
+  animation: cb-candash-ring-glow 3s ease-in-out infinite;
+}
+
+.cb-candash-float {
+  animation: cb-dashboard-float 4s ease-in-out infinite;
+}
+
+.cb-candash-nav-item {
+  transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
+}
+
+.cb-candash-nav-item:hover {
+  transform: translateX(3px);
+}
+
+.cb-candash-nav-item.is-active {
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-candash-rise,
+  .cb-candash-fade,
+  .cb-candash-float,
+  .cb-candash-ring,
+  .cb-candash-btn-shine,
+  .cb-candash-btn-shine::before,
+  .cb-candash-sheen::after,
+  .cb-candash-sheen.is-auto::after,
+  .cb-candash-skeleton {
+    animation: none !important;
+  }
+
+  .cb-candash-card:hover,
+  .cb-candash-nav-item:hover,
+  .cb-candash-btn-shine:hover {
+    transform: none;
+  }
+}
+
 .cb-dashboard-jobs-row {
   display: flex;
   flex-wrap: nowrap;
@@ -19063,4 +19252,234 @@ a.ep-stat:hover {
   .cb-nav-swipe {
     animation: none;
   }
+}
+
+/* —— Matrix / role admin: static styles (no shimmer) —— */
+.matrix-admin .matrix-shortcut,
+.matrix-admin .sa-tile {
+  background-color: var(--matrix-c1, #27a9e3);
+  transition: filter 0.15s ease;
+}
+.matrix-admin .matrix-shortcut:hover,
+.matrix-admin .sa-tile:hover {
+  filter: brightness(1.08);
+}
+.matrix-admin .matrix-shortcut::before,
+.matrix-admin .matrix-shortcut::after,
+.matrix-admin .sa-tile::before,
+.matrix-admin .sa-tile::after {
+  display: none !important;
+  content: none !important;
+  animation: none !important;
+}
+
+.matrix-admin .matrix-dark-stat {
+  background: #3d4957;
+}
+.matrix-admin .matrix-dark-stat::after {
+  display: none !important;
+  content: none !important;
+}
+
+.matrix-admin .matrix-metric {
+  border-left: 3px solid #c9a227;
+  background: #fff;
+}
+
+.matrix-admin .matrix-section::before {
+  display: none !important;
+  content: none !important;
+}
+
+.matrix-admin .matrix-dash-hero {
+  background: #e8f0f4;
+}
+.matrix-admin .matrix-dash-hero::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* —— Role-specific shell + dashboard homes —— */
+.role-shell--super {
+  background: #e8e6e1;
+}
+.role-shell--super .role-shell__aside {
+  background: #1a222c;
+  color: #c8c2b4;
+}
+.role-shell--super .role-shell__brand {
+  border-color: rgba(212, 175, 55, 0.25);
+}
+.role-shell--super .role-shell__brand-title {
+  color: #f5ecd0;
+}
+.role-shell--super .role-shell__brand-role {
+  color: #d4af37;
+}
+.role-shell--super .role-shell__brand-email {
+  color: #8a8478;
+}
+.role-shell--super .role-shell__nav-link {
+  color: #c8c2b4;
+}
+.role-shell--super .role-shell__nav-link:hover {
+  background: #242e3a;
+  color: #fff;
+}
+.role-shell--super .role-shell__header {
+  background: #1a222c;
+  color: #f5ecd0;
+}
+.role-shell--super .role-shell__header-label,
+.role-shell--super .role-shell__public {
+  color: rgba(245, 236, 208, 0.8);
+}
+.role-shell--super .role-shell__burger {
+  background: #f5ecd0;
+}
+.role-shell--super .role-shell__avatar {
+  background: #d4af37;
+  color: #1a222c !important;
+}
+.role-shell--super .role-shell__main {
+  background: #e8e6e1;
+}
+.role-shell--super .role-shell__scrim {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.role-shell--admin {
+  background: #eef7f6;
+}
+.role-shell--admin .role-shell__aside {
+  background: #ffffff;
+  color: #334155;
+  border-right: 1px solid #d5ebe7;
+  box-shadow: 4px 0 24px rgba(13, 148, 136, 0.06);
+}
+.role-shell--admin .role-shell__brand {
+  border-color: #d5ebe7;
+}
+.role-shell--admin .role-shell__brand-title {
+  color: #0f3d4c;
+}
+.role-shell--admin .role-shell__brand-role {
+  color: #0d9488;
+}
+.role-shell--admin .role-shell__brand-email {
+  color: #64748b;
+}
+.role-shell--admin .role-shell__nav-link {
+  color: #475569;
+}
+.role-shell--admin .role-shell__nav-link:hover {
+  background: #f0fdfa;
+  color: #0f766e;
+}
+.role-shell--admin .role-shell__header {
+  background: #ffffff;
+  color: #0f3d4c;
+  border-bottom: 1px solid #d5ebe7;
+}
+.role-shell--admin .role-shell__header-label,
+.role-shell--admin .role-shell__public {
+  color: #0f766e;
+}
+.role-shell--admin .role-shell__burger {
+  background: #0f3d4c;
+}
+.role-shell--admin .role-shell__avatar {
+  background: #0d9488;
+}
+.role-shell--admin .role-shell__main {
+  background: #eef7f6;
+}
+.role-shell--admin .role-shell__scrim {
+  background: rgba(15, 61, 76, 0.35);
+}
+
+.role-shell--ops {
+  background: #e8eef5;
+}
+.role-shell--ops .role-shell__aside {
+  background: #0c2744;
+  color: #9ec5d8;
+}
+.role-shell--ops .role-shell__brand {
+  border-color: rgba(34, 211, 238, 0.2);
+}
+.role-shell--ops .role-shell__brand-title {
+  color: #e0f7ff;
+}
+.role-shell--ops .role-shell__brand-role {
+  color: #22d3ee;
+}
+.role-shell--ops .role-shell__brand-email {
+  color: #6b93a8;
+}
+.role-shell--ops .role-shell__nav-link {
+  color: #9ec5d8;
+}
+.role-shell--ops .role-shell__nav-link:hover {
+  background: #123558;
+  color: #fff;
+}
+.role-shell--ops .role-shell__header {
+  background: #0c2744;
+  color: #e0f7ff;
+}
+.role-shell--ops .role-shell__header-label,
+.role-shell--ops .role-shell__public {
+  color: rgba(224, 247, 255, 0.8);
+}
+.role-shell--ops .role-shell__burger {
+  background: #e0f7ff;
+}
+.role-shell--ops .role-shell__avatar {
+  background: #22d3ee;
+  color: #0c2744 !important;
+}
+.role-shell--ops .role-shell__main {
+  background: #e8eef5;
+}
+.role-shell--ops .role-shell__scrim {
+  background: rgba(12, 39, 68, 0.45);
+}
+
+.role-hero {
+  position: relative;
+}
+.role-hero::after {
+  display: none !important;
+  content: none !important;
+}
+.role-hero--super {
+  border-color: #d4af37 !important;
+  background: #1a222c;
+  color: #f5ecd0;
+}
+.role-hero--super h1,
+.role-hero--super p {
+  color: inherit !important;
+}
+.role-hero--admin {
+  border-color: #0d9488 !important;
+  background: #ecfdf5;
+  color: #0f3d4c;
+}
+.role-hero--ops {
+  border-color: #22d3ee !important;
+  background: #0c2744;
+  color: #e0f7ff;
+}
+.role-hero--ops h1,
+.role-hero--ops p {
+  color: inherit !important;
+}
+
+.admin-bar {
+  background: #0d9488;
+}
+.ops-chip:hover {
+  filter: brightness(1.1);
 }

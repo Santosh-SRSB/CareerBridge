@@ -32,8 +32,8 @@ export function postAuthPath(user: {
   if (user.role === 'EMPLOYER_ADMIN' || user.role === 'EMPLOYER_RECRUITER') {
     return '/employer';
   }
-  if (user.role === 'PLATFORM_ADMIN' || user.role === 'PLATFORM_OPERATOR') {
-    return '/admin';
+  if (user.role === 'SUPER_ADMIN' || user.role === 'PLATFORM_ADMIN' || user.role === 'PLATFORM_OPERATOR') {
+    return '/srsbaadmin/dashboard';
   }
   if (!user.onboardingCompleted) {
     return '/onboarding';

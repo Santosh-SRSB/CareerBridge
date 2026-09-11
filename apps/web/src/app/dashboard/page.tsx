@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -14,9 +13,8 @@ import {
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import type { CandidateProfile, JobCard } from '@careerbridge/shared';
-import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { CandidateDashboardShell } from '@/components/CandidateDashboardShell';
 import { DashboardCareerPassport } from '@/components/dashboard/DashboardCareerPassport';
-import { Button } from '@/components/ui/Button';
 import {
   fetchScheduledInterviews,
   type ScheduledJobInterview,
@@ -54,6 +52,154 @@ function statusLabel(status: ScheduledJobInterview['status']) {
   return 'Pending confirmation';
 }
 
+function strengthLabel(value: number) {
+  if (value >= 80) return 'High';
+  if (value >= 50) return 'Medium';
+  return 'Getting started';
+}
+
+function ProfileStrengthRing({ value }: { value: number }) {
+  const safe = Math.min(100, Math.max(0, value));
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (safe / 100) * circumference;
+
+  return (
+    <div className="relative flex h-[108px] w-[108px] shrink-0 items-center justify-center">
+      <svg className="absolute inset-0 -rotate-90" viewBox="0 0 108 108" aria-hidden>
+        <circle cx="54" cy="54" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="9" />
+        <circle
+          cx="54"
+          cy="54"
+          r={radius}
+          fill="none"
+          stroke="#f59e0b"
+          strokeWidth="9"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="transition-[stroke-dashoffset] duration-1000 ease-out"
+        />
+      </svg>
+      <p className="relative text-2xl font-black text-[#111827]">{safe}%</p>
+    </div>
+  );
+}
+
+function CareerPathMilestone() {
+  return (
+    <div className="relative flex h-full min-h-[180px] flex-col overflow-hidden rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] p-4 sm:p-5">
+      <div className="relative z-[1] flex items-start justify-between gap-2">
+        <p className="text-sm font-bold text-[#1e3a8a]">Career Pathing Milestone</p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/dashboard/passport-sparkle.gif"
+          alt=""
+          className="h-6 w-6 object-contain opacity-90"
+        />
+      </div>
+
+      <div className="relative z-[1] mt-2 flex flex-1 items-center justify-center overflow-hidden rounded-xl">
+        {/* Realistic scene */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/dashboard/career-milestone-hero.png"
+          alt="Career path toward your next role"
+          className="cb-mile-hero h-[120px] w-auto max-w-[78%] object-contain drop-shadow-sm sm:h-[132px]"
+        />
+
+        {/* Floating pin */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/dashboard/career-milestone-pin.png"
+          alt=""
+          className="cb-mile-pin pointer-events-none absolute right-1 top-1 h-12 w-12 object-contain sm:right-2 sm:h-14 sm:w-14"
+        />
+
+        {/* Choose career character (bg removed) */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/dashboard/career-choose.png"
+          alt=""
+          className="cb-mile-choose pointer-events-none absolute bottom-0 left-0 h-14 w-auto object-contain sm:h-16"
+        />
+      </div>
+
+      <p className="relative z-[1] mt-3 text-xs font-medium text-[#3b82f6]">
+        Keep building — your next role is ahead.
+      </p>
+
+      <style jsx>{`
+        .cb-mile-hero {
+          animation: cb-mile-float 4.2s ease-in-out infinite;
+        }
+        .cb-mile-pin {
+          animation: cb-mile-bob 2.4s ease-in-out infinite;
+        }
+        .cb-mile-choose {
+          animation: cb-mile-slide 5s ease-in-out infinite;
+        }
+        @keyframes cb-mile-float {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-5px);
+          }
+        }
+        @keyframes cb-mile-bob {
+          0%,
+          100% {
+            transform: translateY(0) scale(1);
+          }
+          50% {
+            transform: translateY(-7px) scale(1.05);
+          }
+        }
+        @keyframes cb-mile-slide {
+          0%,
+          100% {
+            transform: translateX(0);
+            opacity: 0.95;
+          }
+          50% {
+            transform: translateX(6px);
+            opacity: 1;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cb-mile-hero,
+          .cb-mile-pin,
+          .cb-mile-choose {
+            animation: none !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function AccentStat({
+  value,
+  label,
+  accent,
+}: {
+  value: string;
+  label: string;
+  accent: string;
+}) {
+  return (
+    <div
+      className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
+      style={{ borderTopWidth: 3, borderTopColor: accent }}
+    >
+      <p className="text-xl font-black tracking-tight text-[#111827] sm:text-2xl">{value}</p>
+      <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">{label}</p>
+    </div>
+  );
+}
+
 function RecommendedJobCard({
   job,
   cityFallback,
@@ -68,55 +214,36 @@ function RecommendedJobCard({
   const matchScore = job.match?.score;
 
   return (
-    <article className="flex h-full flex-col rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <h3 className="line-clamp-2 text-[15px] font-extrabold leading-snug text-[#0a2e2c]">{job.title}</h3>
+    <article className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className="line-clamp-2 text-[15px] font-extrabold leading-snug text-[#111827]">{job.title}</h3>
       <p className="mt-1.5 truncate text-xs font-medium text-slate-500">
         {job.companyName} | {job.city || cityFallback}
       </p>
-      <p className="mt-3 text-sm font-extrabold text-[#0a2e2c]">
+      <p className="mt-3 text-sm font-extrabold text-[#111827]">
         {formatSalaryShort(job.salaryMin, job.salaryMax)}
       </p>
       {typeof matchScore === 'number' ? (
-        <p className="mt-1 text-xs font-bold text-[#16a34a]">{matchScore}% match</p>
+        <p className="mt-1 text-xs font-bold text-emerald-600">{matchScore}% match</p>
       ) : (
         <p className="mt-1 text-xs font-medium text-slate-400">Recommended</p>
       )}
       <div className="mt-auto flex items-center gap-2 pt-4">
-        <Button
+        <button
           type="button"
-          variant="outline"
           onClick={onView}
-          className="flex-1 rounded-xl border-slate-200 py-2 text-xs font-bold text-slate-800 hover:bg-slate-50"
+          className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
         >
           View
-        </Button>
-        <Button
+        </button>
+        <button
           type="button"
           onClick={onApply}
-          className="flex-1 rounded-xl bg-[#0a2e2c] py-2 text-xs font-bold text-white hover:bg-[#072422]"
+          className="flex-1 rounded-lg bg-[#f59e0b] py-2 text-xs font-bold text-[#111827] hover:brightness-105"
         >
           Apply
-        </Button>
+        </button>
       </div>
     </article>
-  );
-}
-
-function SeeAllJobsCard({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex h-full min-h-[190px] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-center shadow-sm transition hover:border-[#0a2e2c]/40 hover:shadow-md"
-    >
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0a2e2c] text-white transition group-hover:scale-105">
-        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-        </svg>
-      </span>
-      <span className="text-sm font-extrabold text-[#0a2e2c]">See all jobs</span>
-      <span className="text-[11px] font-medium text-slate-500">Browse full marketplace</span>
-    </button>
   );
 }
 
@@ -130,64 +257,61 @@ function ScheduledInterviewCard({
   onPrepare: () => void;
 }) {
   return (
-    <article className="flex h-full flex-col rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-[#0d9488]">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-[#111827]">
           {interview.mode === 'VIDEO' ? 'Video' : 'In person'}
         </p>
-        <span className="rounded-full bg-[#ecfdf5] px-2 py-0.5 text-[10px] font-bold text-[#047857]">
+        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
           {statusLabel(interview.status)}
         </span>
       </div>
-      <h3 className="mt-2 line-clamp-2 text-[15px] font-extrabold leading-snug text-[#0a2e2c]">
+      <h3 className="mt-2 line-clamp-2 text-[15px] font-extrabold leading-snug text-[#111827]">
         {interview.jobTitle}
       </h3>
       <p className="mt-1.5 truncate text-xs font-medium text-slate-500">{interview.companyName}</p>
-      <p className="mt-3 text-sm font-extrabold text-[#0a2e2c]">
-        {formatInterviewDate(interview.scheduledDate)}
-      </p>
+      <p className="mt-3 text-sm font-extrabold text-[#111827]">{formatInterviewDate(interview.scheduledDate)}</p>
       <p className="mt-1 text-xs font-semibold text-slate-600">{interview.scheduledTime}</p>
       {interview.location ? (
         <p className="mt-1 line-clamp-1 text-xs text-slate-500">{interview.location}</p>
       ) : null}
       <div className="mt-auto flex items-center gap-2 pt-4">
-        <Button
+        <button
           type="button"
-          variant="outline"
           onClick={onOpen}
-          className="flex-1 rounded-xl border-slate-200 py-2 text-xs font-bold text-slate-800 hover:bg-slate-50"
+          className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
         >
           View
-        </Button>
-        <Button
+        </button>
+        <button
           type="button"
           onClick={onPrepare}
-          className="flex-1 rounded-xl bg-[#0a2e2c] py-2 text-xs font-bold text-white hover:bg-[#072422]"
+          className="flex-1 rounded-lg bg-[#f59e0b] py-2 text-xs font-bold text-[#111827] hover:brightness-105"
         >
           Prepare
-        </Button>
+        </button>
       </div>
     </article>
   );
 }
 
-function StatCard({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-}) {
+function DashboardSkeleton() {
   return (
-    <div className="flex h-full min-h-[96px] items-center gap-3.5 rounded-2xl border border-slate-200/90 bg-white px-4 py-4 shadow-sm sm:min-h-[108px] sm:px-5 sm:py-5">
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#ecfdf5] text-[#0a2e2c] sm:h-14 sm:w-14">
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="text-xl font-extrabold leading-none text-[#0a2e2c] sm:text-2xl">{value}</p>
-        <p className="mt-1.5 truncate text-xs font-semibold text-slate-500 sm:text-[13px]">{label}</p>
+    <div className="mx-auto w-full space-y-6">
+      <div className="grid gap-5 lg:grid-cols-[minmax(220px,248px)_minmax(0,1fr)]">
+        <div className="h-[360px] max-w-[248px] animate-pulse rounded-2xl bg-slate-200" />
+        <div className="space-y-4">
+          <div className="h-8 w-48 animate-pulse rounded bg-slate-200" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="h-[180px] animate-pulse rounded-2xl bg-slate-200" />
+            <div className="h-[180px] animate-pulse rounded-2xl bg-slate-200" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-[88px] animate-pulse rounded-xl bg-slate-200" />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -284,184 +408,126 @@ export default function DashboardPage() {
 
   if (!ready) {
     return (
-      <CandidateAppShell activeTab="home" maxWidth="max-w-7xl">
-        <div className="p-12 text-center text-sm text-slate-500">Loading dashboard...</div>
-      </CandidateAppShell>
+      <CandidateDashboardShell>
+        <DashboardSkeleton />
+      </CandidateDashboardShell>
     );
   }
 
   return (
-    <CandidateAppShell activeTab="home" maxWidth="max-w-7xl" avatarUrl={profile?.photoUrl}>
-      <div className="mx-auto w-full space-y-8 lg:space-y-10">
-        <section className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,380px)] lg:gap-8">
-          <div className="flex min-h-0 min-w-0 flex-col gap-4 lg:h-full lg:gap-5">
-            <div className="flex flex-1 flex-col justify-center overflow-hidden rounded-[28px] border border-[#d7ebe4] bg-gradient-to-br from-[#edf8f4] via-[#f7fbf9] to-white px-6 py-7 sm:px-8 sm:py-8 lg:min-h-0">
-              <div className="flex h-full flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
-                <div className="min-w-0 flex-1 space-y-5">
-                  <div>
-                    <h1 className="text-[2.35rem] font-extrabold leading-[1.1] tracking-tight text-[#0a2e2c] sm:text-[2.75rem]">
-                      Hello {name} 👋
-                    </h1>
-                    <p className="mt-2 text-lg text-slate-600 sm:text-xl">
-                      Welcome back!{' '}
-                      {isProfileComplete
-                        ? 'Your profile looks great.'
-                        : 'Keep going — finish your profile for better matches.'}
-                    </p>
-                  </div>
-
-                  {isProfileComplete ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0a2e2c] px-4 py-1.5 text-sm font-bold text-white">
-                      Profile complete - {completionPercent}%
-                    </span>
-                  ) : (
-                    <div className="max-w-md space-y-2">
-                      <div className="flex items-center justify-between text-sm font-bold text-slate-700">
-                        <span>Profile progress</span>
-                        <span>{completionPercent}%</span>
-                      </div>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200">
-                        <div
-                          className="h-full rounded-full bg-[#0a2e2c] transition-all"
-                          style={{ width: `${completionPercent}%` }}
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={() => router.push('/profile')}
-                        className="mt-2 rounded-xl bg-[#0a2e2c] px-5 py-2.5 text-sm font-bold text-white"
-                      >
-                        Complete Profile
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mx-auto w-full max-w-[360px] shrink-0 lg:mx-0 lg:w-[46%] lg:max-w-none">
-                  <Image
-                    src="/dashboard/hero-workspace.png"
-                    alt=""
-                    width={720}
-                    height={480}
-                    className="h-auto w-full object-contain"
-                    unoptimized
-                    priority
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 lg:shrink-0">
-              <StatCard
-                label="Profile Strength"
-                value={`${completionPercent}%`}
-                icon={
-                  <svg className="h-6 w-6 sm:h-7 sm:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 21l4-2 4 2V5a2 2 0 00-2-2H10a2 2 0 00-2 2v16z" />
-                  </svg>
-                }
-              />
-              <StatCard
-                label="Skills Added"
-                value={String(skillsCount)}
-                icon={
-                  <svg className="h-6 w-6 sm:h-7 sm:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12M6 12h12" />
-                    <circle cx="12" cy="12" r="9" />
-                  </svg>
-                }
-              />
-              <StatCard
-                label="Applications"
-                value={String(applicationCount)}
-                icon={
-                  <svg className="h-6 w-6 sm:h-7 sm:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"
-                    />
-                  </svg>
-                }
-              />
-              <StatCard
-                label="Interviews"
-                value={String(scheduledInterviews.length)}
-                icon={
-                  <svg className="h-6 w-6 sm:h-7 sm:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 7V3m8 4V3M4 11h16M6 5h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2z"
-                    />
-                  </svg>
-                }
-              />
-            </div>
-          </div>
-
-          <div className="w-full">
+    <CandidateDashboardShell avatarUrl={profile?.photoUrl}>
+      <div className="mx-auto w-full space-y-6 lg:space-y-7">
+        <section className="grid items-start gap-5 lg:grid-cols-[minmax(220px,248px)_minmax(0,1fr)] lg:gap-5">
+          <div className="order-2 w-full lg:order-1 lg:sticky lg:top-24">
             {profile ? (
-              <DashboardCareerPassport profile={{ ...profile, profileCompletion: completionPercent }} />
+              <DashboardCareerPassport
+                profile={{ ...profile, profileCompletion: completionPercent }}
+              />
             ) : (
-              <div className="w-full rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-                Loading Career Passport…
-              </div>
+              <div className="h-[360px] max-w-[248px] animate-pulse rounded-2xl bg-slate-200" />
             )}
           </div>
-        </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-extrabold text-[#0a2e2c]">Recommended Jobs</h2>
-            <button
-              type="button"
-              className="text-sm font-bold text-[#0a2e2c] hover:underline"
-              onClick={() => router.push('/jobs')}
-            >
-              View all jobs →
-            </button>
-          </div>
-
-          {displayJobs.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center">
-              <p className="text-sm text-slate-600">
-                No published employer jobs match your profile yet. Browse all jobs to explore openings.
+          <div className="order-1 flex min-w-0 flex-col gap-5 lg:order-2">
+            <div>
+              <h1 className="text-[2rem] font-extrabold tracking-tight text-[#111827] sm:text-[2.35rem]">
+                Hello {name} 👋
+              </h1>
+              <p className="mt-1.5 text-base text-slate-500">
+                {isProfileComplete
+                  ? 'Your Career Passport looks strong — explore matching roles.'
+                  : 'Keep going — finish your profile to unlock tailored matches.'}
               </p>
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-4 rounded-xl text-sm font-bold"
-                onClick={() => router.push('/jobs')}
-              >
-                Browse jobs
-              </Button>
             </div>
-          ) : (
-            <div className="cb-dashboard-jobs-row -mx-1 px-1">
-              {displayJobs.map((job) => (
-                <div key={job.id} className="cb-dashboard-job-slot">
-                  <RecommendedJobCard
-                    job={job}
-                    cityFallback={city || 'India'}
-                    onView={() => router.push(`/jobs/${job.id}`)}
-                    onApply={() => router.push(`/jobs/${job.id}/apply`)}
-                  />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
+                <ProfileStrengthRing value={completionPercent} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-600">
+                    Profile Strength:{' '}
+                    <span className="font-extrabold text-[#111827]">{strengthLabel(completionPercent)}</span>
+                  </p>
+                  {!isProfileComplete ? (
+                    <button
+                      type="button"
+                      onClick={() => router.push('/profile')}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#f59e0b] px-4 py-2.5 text-sm font-bold text-[#111827] transition hover:brightness-105"
+                    >
+                      Complete Profile
+                      <span aria-hidden>→</span>
+                    </button>
+                  ) : (
+                    <span className="mt-3 inline-flex rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
+                      Profile complete
+                    </span>
+                  )}
                 </div>
-              ))}
-              <div className="cb-dashboard-job-slot">
-                <SeeAllJobsCard onClick={() => router.push('/jobs')} />
               </div>
+
+              <CareerPathMilestone />
             </div>
-          )}
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <AccentStat value={`${completionPercent}%`} label="Strength" accent="#f59e0b" />
+              <AccentStat value={String(skillsCount)} label="Skills Added" accent="#22c55e" />
+              <AccentStat value={String(applicationCount)} label="Applications" accent="#3b82f6" />
+              <AccentStat value={String(scheduledInterviews.length)} label="Interviews" accent="#a855f7" />
+            </div>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-extrabold text-[#111827]">Recommended Jobs</h2>
+                <button
+                  type="button"
+                  className="text-sm font-bold text-[#2563eb] hover:underline"
+                  onClick={() => router.push('/jobs')}
+                >
+                  View all jobs →
+                </button>
+              </div>
+
+              {displayJobs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#eff6ff] text-[#3b82f6]">
+                    <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
+                      <circle cx="12" cy="12" r="9" />
+                      <circle cx="12" cy="12" r="5" />
+                      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-600">No direct matches found yet.</p>
+                  <button
+                    type="button"
+                    className="mt-4 rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-[#111827] hover:bg-slate-50"
+                    onClick={() => router.push('/jobs')}
+                  >
+                    Browse all jobs
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {displayJobs.map((job) => (
+                    <RecommendedJobCard
+                      key={job.id}
+                      job={job}
+                      cityFallback={city || 'India'}
+                      onView={() => router.push(`/jobs/${job.id}`)}
+                      onApply={() => router.push(`/jobs/${job.id}/apply`)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
         </section>
 
-        <section className="space-y-4">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-extrabold text-[#0a2e2c]">Scheduled Interviews</h2>
+            <h2 className="text-lg font-extrabold text-[#111827]">Scheduled Interviews</h2>
             <button
               type="button"
-              className="text-sm font-bold text-[#0a2e2c] hover:underline"
+              className="text-sm font-bold text-[#2563eb] hover:underline"
               onClick={() => router.push('/interviews')}
             >
               View all interviews →
@@ -469,64 +535,42 @@ export default function DashboardPage() {
           </div>
 
           {displayInterviews.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center">
-              <p className="text-sm font-semibold text-[#0a2e2c]">No interviews scheduled yet</p>
-              <p className="mt-1 text-sm text-slate-600">
-                When an employer schedules an interview, it will show up here with date and time.
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 px-5 py-8 text-center">
+              <p className="text-sm font-semibold text-[#111827]">No interviews scheduled yet</p>
+              <p className="mt-1 text-sm text-slate-500">
+                When an employer schedules an interview, it will show up here.
               </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  className="rounded-xl text-sm font-bold"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-[#111827] hover:bg-slate-50"
                   onClick={() => router.push('/applications')}
                 >
                   Track applications
-                </Button>
-                <Button
+                </button>
+                <button
                   type="button"
-                  className="rounded-xl text-sm font-bold"
+                  className="rounded-lg bg-[#f59e0b] px-4 py-2 text-sm font-bold text-[#111827] hover:brightness-105"
                   onClick={() => router.push('/interviews/mock')}
                 >
                   Practice mock interview
-                </Button>
+                </button>
               </div>
             </div>
           ) : (
-            <div className="cb-dashboard-jobs-row -mx-1 px-1">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {displayInterviews.map((interview) => (
-                <div key={interview.id} className="cb-dashboard-job-slot">
-                  <ScheduledInterviewCard
-                    interview={interview}
-                    onOpen={() => router.push(`/interviews/scheduled/${interview.id}`)}
-                    onPrepare={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}
-                  />
-                </div>
+                <ScheduledInterviewCard
+                  key={interview.id}
+                  interview={interview}
+                  onOpen={() => router.push(`/interviews/scheduled/${interview.id}`)}
+                  onPrepare={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}
+                />
               ))}
-              <div className="cb-dashboard-job-slot">
-                <button
-                  type="button"
-                  onClick={() => router.push('/interviews')}
-                  className="group flex h-full min-h-[190px] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-center shadow-sm transition hover:border-[#0a2e2c]/40 hover:shadow-md"
-                >
-                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0a2e2c] text-white transition group-hover:scale-105">
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M8 7V3m8 4V3M4 11h16M6 5h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2z"
-                      />
-                    </svg>
-                  </span>
-                  <span className="text-sm font-extrabold text-[#0a2e2c]">All interviews</span>
-                  <span className="text-[11px] font-medium text-slate-500">Schedule & practice</span>
-                </button>
-              </div>
             </div>
           )}
         </section>
       </div>
-    </CandidateAppShell>
+    </CandidateDashboardShell>
   );
 }

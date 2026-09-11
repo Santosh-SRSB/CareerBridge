@@ -57,7 +57,7 @@ export class AuthService {
       const platformHit = await this.prisma.user.findFirst({
         where: {
           email,
-          userType: { in: ['PLATFORM_ADMIN', 'PLATFORM_OPERATOR'] },
+          userType: { in: ['PLATFORM_ADMIN', 'PLATFORM_OPERATOR', 'SUPER_ADMIN'] },
         },
       });
       if (platformHit) {
@@ -520,7 +520,7 @@ export class AuthService {
       }
       const staffTypes =
         accountType === 'SUPER_ADMIN'
-          ? (['PLATFORM_ADMIN'] as const)
+          ? (['SUPER_ADMIN'] as const)
           : (['PLATFORM_ADMIN', 'PLATFORM_OPERATOR'] as const);
 
       const user = await this.prisma.user.findFirst({
@@ -598,6 +598,18 @@ export class AuthService {
 
     if (!admin || admin.status !== 'ACTIVE' || admin.user.status !== 'ACTIVE') {
       throw new UnauthorizedException(invalid);
+    }
+
+    const staffRole = admin.user.userType;
+    if (
+      staffRole !== 'SUPER_ADMIN' &&
+      staffRole !== 'PLATFORM_ADMIN' &&
+      staffRole !== 'PLATFORM_OPERATOR'
+    ) {
+      throw new UnauthorizedException({
+        code: ErrorCode.UNAUTHORIZED,
+        message: 'Only Super Admin, Admin, and Operator can sign in to this portal.',
+      });
     }
 
     const ok = await verifyPassword(password, admin.passwordHash);
@@ -891,6 +903,7 @@ export class AuthService {
     id: string;
     userType: string;
     phone: string;
+    email?: string | null;
     candidate?: {
       onboardingCompleted: boolean;
       dashboardReached?: boolean;
@@ -935,6 +948,7 @@ export class AuthService {
         id: user.id,
         role: user.userType,
         phone: user.phone,
+        email: user.email ?? null,
         firstName: user.candidate?.firstName ?? user.employer?.contactName ?? null,
         onboardingCompleted: isCandidate ? user.candidate?.onboardingCompleted ?? false : true,
         dashboardReached: isCandidate ? user.candidate?.dashboardReached ?? false : true,

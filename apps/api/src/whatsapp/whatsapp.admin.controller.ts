@@ -74,7 +74,7 @@ class ReminderDto {
 @ApiTags('admin-whatsapp')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
-@Roles(UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+@Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
 @Controller('admin/integrations/whatsapp')
 export class WhatsAppAdminController {
   constructor(
