@@ -4,13 +4,14 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ONBOARDING_DOMAINS } from '@careerbridge/shared';
 import {
+  OB,
   OnboardingActions,
   OnboardingFrame,
   OnboardingQuestion,
+  onboardingInputClass,
   onboardingOptionButtonClass,
   onboardingPrimaryButtonClass,
 } from '@/components/OnboardingFrame';
-import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { getCandidateMe, updateCandidateMe } from '@/lib/api';
 import { nextOnboardingStepPath } from '@/lib/onboarding-flow';
@@ -70,7 +71,7 @@ export default function OnboardingDomainPage() {
 
   if (!ready) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
+      <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
         Loading...
       </main>
     );
@@ -78,33 +79,34 @@ export default function OnboardingDomainPage() {
 
   return (
     <OnboardingFrame step={2}>
-      <form onSubmit={onSubmit} className="space-y-6">
-        <OnboardingQuestion title="What is your domain?">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {ONBOARDING_DOMAINS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setDomain(item)}
-                className={onboardingOptionButtonClass(domain === item)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-          {domain === 'Other' ? (
-            <Input
-              label=""
-              name="customDomain"
-              required
-              value={customDomain}
-              onChange={(event) => setCustomDomain(event.target.value)}
-              placeholder="Type your domain"
-            />
-          ) : null}
-        </OnboardingQuestion>
-
-        {error ? <p className="text-xs font-semibold text-error">{error}</p> : null}
+      <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 overflow-x-hidden">
+          <OnboardingQuestion title="What is your domain?" hint="Pick the field you want to grow in.">
+            <div className="flex flex-wrap gap-2">
+              {ONBOARDING_DOMAINS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setDomain(item)}
+                  className={onboardingOptionButtonClass(domain === item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            {domain === 'Other' ? (
+              <input
+                name="customDomain"
+                required
+                value={customDomain}
+                onChange={(event) => setCustomDomain(event.target.value)}
+                placeholder="Type your domain"
+                className={`${onboardingInputClass} mt-3`}
+              />
+            ) : null}
+          </OnboardingQuestion>
+          {error ? <p className="mt-3 text-xs font-semibold text-red-600">{error}</p> : null}
+        </div>
 
         <OnboardingActions onSkip={onSkip}>
           <Button
@@ -114,6 +116,7 @@ export default function OnboardingDomainPage() {
             loading={loading}
             loadingLabel="Saving..."
             className={onboardingPrimaryButtonClass}
+            style={{ background: OB.moss }}
           >
             Continue
           </Button>

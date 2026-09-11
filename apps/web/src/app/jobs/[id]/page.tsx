@@ -2,14 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Lora } from 'next/font/google';
 import { useParams, useRouter } from 'next/navigation';
 import type { JobDetail } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
-import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
 import { formatJobType, formatSalary } from '@/lib/match';
 import { fetchJobDetails, submitApplication } from '@/lib/candidate-marketplace-api';
 import { saveJob, unsaveJob } from '@/lib/api';
+
+const lora = Lora({
+  subsets: ['latin'],
+  weight: ['600', '700'],
+  variable: '--font-lora-job',
+  display: 'swap',
+});
+
+const RING_C = 2 * Math.PI * 30;
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
@@ -18,12 +27,38 @@ export default function JobDetailPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [matchPct, setMatchPct] = useState(0);
+  const [ringOffset, setRingOffset] = useState(RING_C);
 
   useEffect(() => {
     fetchJobDetails(params.id)
       .then(setJob)
       .catch(() => setError('This job is no longer available.'));
   }, [params.id]);
+
+  useEffect(() => {
+    if (!job?.match) return;
+    const target = Math.max(0, Math.min(100, job.match.score)) / 100;
+    const start = performance.now();
+    let raf = 0;
+
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / 900, 1);
+      const eased = 1 - (1 - t) ** 3;
+      setMatchPct(Math.round(target * 100 * eased));
+      setRingOffset(RING_C - target * eased * RING_C);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+
+    const delay = window.setTimeout(() => {
+      raf = requestAnimationFrame(tick);
+    }, 400);
+
+    return () => {
+      window.clearTimeout(delay);
+      cancelAnimationFrame(raf);
+    };
+  }, [job?.match]);
 
   async function toggleSave() {
     if (!job || !getStoredUser()) {
@@ -81,107 +116,194 @@ export default function JobDetailPage() {
 
   const matched = job.match?.reasons || [];
   const gaps = job.match?.gaps || [];
+  const eyebrow = [formatJobType(job.jobType), job.city].filter(Boolean).join(' · ').toUpperCase();
 
   return (
-    <CandidateAppShell activeTab="jobs" maxWidth="max-w-3xl">
-      <div className="mx-auto w-full max-w-2xl space-y-5">
-        <Link href="/jobs" className="text-sm font-bold text-[#0a2e2c] hover:underline">
-          ← Find Jobs
+    <CandidateAppShell activeTab="jobs" maxWidth="max-w-[1440px]">
+      <div className={`cb-job-detail ${lora.variable}`}>
+        <Link href="/jobs" className="cb-job-detail__back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
+          Find Jobs
         </Link>
 
-        <article className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void toggleSave()}
-            aria-label={job.saved ? 'Unsave job' : 'Save job'}
-            title={job.saved ? 'Saved' : 'Save job'}
-            className="absolute right-4 top-4 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-[#0a2e2c]/30 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:right-5 sm:top-5"
-          >
-            {job.saved ? (
-              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-[#0a2e2c]" aria-hidden>
-                <path d="M6 2h12a1 1 0 0 1 1 1v19l-7-4-7 4V3a1 1 0 0 1 1-1z" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" aria-hidden>
-                <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" strokeLinejoin="round" />
-              </svg>
-            )}
-          </button>
+        <div className="cb-job-detail__layout">
+            <div className="cb-job-detail__hero cb-job-detail__fx">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void toggleSave()}
+                className="cb-job-detail__bookmark"
+                aria-label={job.saved ? 'Unsave job' : 'Save job'}
+                title={job.saved ? 'Saved' : 'Save job'}
+              >
+                {job.saved ? (
+                  <svg width="17" height="17" viewBox="0 0 24 24" className="fill-[#0c2822]" aria-hidden>
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#0c2822"
+                    strokeWidth="2"
+                    aria-hidden
+                  >
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                )}
+              </button>
 
-          <div className="min-w-0 pr-12">
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{job.title}</h1>
-            <p className="mt-1 text-lg font-semibold text-slate-700">{job.companyName}</p>
-          </div>
-          <p className="mt-3 text-xl font-extrabold text-slate-900">
-            {formatSalary(job.salaryMin, job.salaryMax)}/month
-          </p>
-          <p className="mt-1 text-sm font-semibold text-slate-600">{formatJobType(job.jobType)}</p>
-
-          <section className="mt-6">
-            <h2 className="text-base font-extrabold text-slate-900">About the job</h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-600">{job.description}</p>
-          </section>
-
-          <section className="mt-6">
-            <h2 className="text-base font-extrabold text-slate-900">Requirements</h2>
-            <ul className="mt-3 space-y-2">
-              {job.requiredSkills.map((skill) => (
-                <li key={skill} className="text-sm font-semibold text-emerald-800">
-                  ✓ {skill}
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          {job.match ? (
-            <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-bold text-slate-800">
-                Your match: <span className="text-[#0a2e2c]">{job.match.score}%</span>
+              {eyebrow ? <p className="cb-job-detail__eyebrow">{eyebrow}</p> : null}
+              <h1>{job.title}</h1>
+              <p className="cb-job-detail__company">{job.companyName}</p>
+              <p className="cb-job-detail__salary">
+                {formatSalary(job.salaryMin, job.salaryMax)}
+                <span> /month</span>
               </p>
-              {matched.length ? (
-                <ul className="mt-3 space-y-1.5">
-                  {matched.map((reason) => (
-                    <li key={reason} className="text-sm font-semibold text-emerald-800">
-                      ✓ {reason}
-                    </li>
-                  ))}
-                </ul>
+              {job.experience ? (
+                <p className="cb-job-detail__salary-meta">Experience: {job.experience}</p>
               ) : null}
-              {gaps.length ? (
-                <ul className="mt-2 space-y-1.5">
-                  {gaps.map((gap) => (
-                    <li key={gap} className="text-sm font-semibold text-amber-800">
-                      △ {gap}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </section>
-          ) : null}
 
-          {error ? <p className="mt-4 text-sm font-semibold text-error">{error}</p> : null}
+              <div className="cb-job-detail__tags">
+                {job.jobType ? <span>{formatJobType(job.jobType)}</span> : null}
+                {job.city ? <span>{job.city}</span> : null}
+                {job.category ? <span>{job.category}</span> : null}
+              </div>
+            </div>
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            {job.applied ? (
-              <Link
-                href="/applications"
-                className="inline-flex w-full cursor-pointer items-center justify-center rounded-xl bg-[#0a2e2c] px-4 py-3 text-sm font-bold text-white sm:w-auto"
-              >
-                Track Application
-              </Link>
-            ) : (
-              <Button
-                className="w-full sm:w-auto"
-                loading={applying}
-                loadingLabel="Applying…"
-                onClick={() => void onApply()}
-              >
-                Apply Now
-              </Button>
-            )}
-          </div>
-        </article>
+            <div className="cb-job-detail__panel cb-job-detail__about cb-job-detail__fx" style={{ animationDelay: '0.08s' }}>
+              <h3>About the job</h3>
+              <p className="cb-job-detail__body">{job.description}</p>
+            </div>
+
+            <div className="cb-job-detail__panel cb-job-detail__reqs cb-job-detail__fx" style={{ animationDelay: '0.16s' }}>
+              <h3>Requirements</h3>
+              <div className="cb-job-detail__req-grid">
+                {job.requiredSkills.map((skill, index) => (
+                  <div
+                    key={skill}
+                    className="cb-job-detail__req-chip"
+                    style={{ animationDelay: `${0.05 + index * 0.05}s` }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden>
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    {skill}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <aside className="cb-job-detail__aside">
+              {job.match ? (
+                <div
+                  className="cb-job-detail__side-card cb-job-detail__match cb-job-detail__fx"
+                  style={{ animationDelay: '0.12s' }}
+                >
+                  <div className="cb-job-detail__match-top">
+                    <div className="cb-job-detail__ring">
+                      <svg width="70" height="70" viewBox="0 0 70 70" aria-hidden>
+                        <circle cx="35" cy="35" r="30" fill="none" stroke="#e7e9e0" strokeWidth="8" />
+                        <circle
+                          cx="35"
+                          cy="35"
+                          r="30"
+                          fill="none"
+                          stroke="#f5821f"
+                          strokeWidth="8"
+                          strokeLinecap="round"
+                          strokeDasharray={RING_C}
+                          strokeDashoffset={ringOffset}
+                          style={{
+                            transform: 'rotate(-90deg)',
+                            transformOrigin: '50% 50%',
+                            transition: 'stroke-dashoffset 1.1s cubic-bezier(.22,.61,.36,1)',
+                          }}
+                        />
+                      </svg>
+                      <div className="cb-job-detail__ring-txt">{matchPct}%</div>
+                    </div>
+                    <div>
+                      <h4>Your match</h4>
+                      <span>Based on your current profile</span>
+                    </div>
+                  </div>
+
+                  {matched.length ? (
+                    <>
+                      <p className="cb-job-detail__gap-label" style={{ color: '#2f6b4f' }}>
+                        STRENGTHS
+                      </p>
+                      <ul className="cb-job-detail__gap-list">
+                        {matched.map((reason, index) => (
+                          <li key={reason} style={{ animationDelay: `${0.5 + index * 0.08}s` }}>
+                            <span className="cb-job-detail__check">✓</span>
+                            {reason}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+
+                  {gaps.length ? (
+                    <>
+                      <p className="cb-job-detail__gap-label">GAPS TO CLOSE</p>
+                      <ul className="cb-job-detail__gap-list">
+                        {gaps.map((gap, index) => (
+                          <li
+                            key={gap}
+                            style={{ animationDelay: `${0.55 + matched.length * 0.08 + index * 0.08}s` }}
+                          >
+                            <span className="cb-job-detail__tri">△</span>
+                            {gap}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
+              ) : (
+                <div
+                  className="cb-job-detail__side-card cb-job-detail__match cb-job-detail__fx"
+                  style={{ animationDelay: '0.12s' }}
+                >
+                  <h4 className="m-0 text-[14px] font-extrabold text-[#16211d]">Your match</h4>
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#4a534d]">
+                    Sign in with a complete profile to see how well you match this role.
+                  </p>
+                </div>
+              )}
+            </aside>
+
+            {error ? (
+              <p className="cb-job-detail__error mb-4 text-sm font-semibold text-red-600">{error}</p>
+            ) : null}
+
+            <div className="cb-job-detail__apply cb-job-detail__fx" style={{ animationDelay: '0.22s' }}>
+              <p>
+                Ready to apply for <b>{job.title}</b>?
+              </p>
+              {job.applied ? (
+                <Link href="/applications" className="cb-job-detail__btn-apply">
+                  Track Application
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="cb-job-detail__btn-apply"
+                  disabled={applying}
+                  onClick={() => void onApply()}
+                >
+                  {applying ? 'Applying…' : 'Apply Now'}
+                </button>
+              )}
+            </div>
+        </div>
       </div>
     </CandidateAppShell>
   );

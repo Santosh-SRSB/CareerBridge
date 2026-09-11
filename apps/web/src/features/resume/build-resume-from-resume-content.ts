@@ -1,6 +1,9 @@
 import type { ResumeContent } from '@careerbridge/shared';
+import { parseLanguageSkills } from '@careerbridge/shared';
 import { buildMasterResume } from './build-master-resume';
 import type { MasterResumeDocument } from './master-resume.types';
+import { splitProjectFields } from './project-fields';
+import { normalizeCertificationList } from './certification-fields';
 
 export function buildResumeFromResumeContent(
   content: ResumeContent,
@@ -36,22 +39,29 @@ export function buildResumeFromResumeContent(
       endDate: item.yearCompleted ? `${item.yearCompleted}-06` : '',
       isCurrent: false,
     })),
-    projectList: (content.projects || []).map((item) => ({
-      name: item.name || '',
-      description: item.description || '',
-      technologies: [],
-      bullets: item.description
-        ? item.description
-            .split(/\n+/)
-            .map((line) => line.replace(/^[-•*]\s*/, '').trim())
-            .filter(Boolean)
-        : [],
+    projectList: (content.projects || []).map((item) => {
+      const { description, bullets } = splitProjectFields({
+        description: item.description,
+        bullets: item.bullets,
+      });
+      return {
+        name: item.name || '',
+        description,
+        technologies: [],
+        bullets: [...bullets],
+      };
+    }),
+    certificationList: normalizeCertificationList(content.certifications).map((cert) => ({
+      name: cert.name,
+      issuer: cert.issuer || '',
+      date: cert.date || '',
     })),
-    certificationList: (content.certifications || []).map((name) => ({
-      name,
-      issuer: '',
-      date: '',
+    achievementList: (content.achievements || []).map((ach) => ({
+      title: ach.title || '',
+      organization: ach.organization || '',
+      description: ach.description || '',
+      date: ach.date || '',
     })),
-    achievementList: [],
+    languages: parseLanguageSkills((content.languages || []).join(', ')),
   });
 }

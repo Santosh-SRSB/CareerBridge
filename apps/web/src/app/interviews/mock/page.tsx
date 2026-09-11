@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import { JobRoleCombobox } from '@/components/marketplace/JobRoleCombobox';
 import { Button } from '@/components/ui/Button';
 import { createLiveInterview, getCandidateMe, startLiveInterview } from '@/lib/api';
@@ -91,14 +92,19 @@ export default function MockInterviewSetupPage() {
           ← My Interviews
         </Link>
 
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">AI Mock Interview</h1>
-          {roleFromUrl ? (
-            <p className="mt-2 text-sm text-slate-600">
-              Practising for <span className="font-bold text-slate-900">{roleFromUrl}</span>. You can change the role
-              below.
-            </p>
-          ) : null}
+        <div className="flex items-center gap-3 sm:gap-4">
+          <InterviewBotFace size="lg" />
+          <div className="min-w-0">
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">AI Mock Interview</h1>
+            {roleFromUrl ? (
+              <p className="mt-1 text-sm text-slate-600">
+                Practising for <span className="font-bold text-slate-900">{roleFromUrl}</span>. You can change the role
+                below.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-slate-600">Practise with your AI interviewer before the real thing.</p>
+            )}
+          </div>
         </div>
 
         <form onSubmit={(event) => void onSubmit(event)} className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

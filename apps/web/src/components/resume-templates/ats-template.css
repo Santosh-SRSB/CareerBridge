@@ -277,6 +277,18 @@
 .ats-modern h2 { color: #0F3D3A; border-bottom: 2px solid #0F766E; padding-bottom: 2px; }
 .ats-modern .entry { margin-bottom: 10px; }
 
+.preview-sheet[data-density="relaxed"] .resume {
+  padding: 64px 64px;
+  font-size: 14px;
+  line-height: 1.58;
+}
+.preview-sheet[data-density="relaxed"] .resume section { margin-top: 22px; }
+.preview-sheet[data-density="relaxed"] .resume h2 { margin-bottom: 12px; }
+.preview-sheet[data-density="relaxed"] .resume .entry,
+.preview-sheet[data-density="relaxed"] .resume .project-entry,
+.preview-sheet[data-density="relaxed"] .resume .edu-entry { margin-bottom: 14px; }
+.preview-sheet[data-density="relaxed"] .resume p { margin-bottom: 6px; }
+
 .preview-sheet[data-density="compact"] .resume {
   padding-top: 44px;
   padding-bottom: 44px;

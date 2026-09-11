@@ -80,9 +80,9 @@ export function Template01TechnicalSkills({ data }) {
   return (
     <section>
       <h2>Technical Skills</h2>
-      <ul className="rt01-skills-list">
+      <div className="rt01-skills">
         {groups.map((group, i) => (
-          <li key={i}>
+          <p className="rt01-skills-line" key={i}>
             {group.category ? (
               <>
                 <strong>{group.category}:</strong> {group.skills.join(", ")}
@@ -90,9 +90,9 @@ export function Template01TechnicalSkills({ data }) {
             ) : (
               group.skills.join(", ")
             )}
-          </li>
+          </p>
         ))}
-      </ul>
+      </div>
     </section>
   );
 }
@@ -154,14 +154,13 @@ export function Template01Projects({ data }) {
                 )}
               </p>
             )}
+            {p.description ? <p className="rt01-project-desc">{p.description}</p> : null}
             {bullets.length > 0 ? (
               <ul>
                 {bullets.map((b, j) => (
                   <li key={j}>{b}</li>
                 ))}
               </ul>
-            ) : p.description ? (
-              <p>{p.description}</p>
             ) : null}
           </div>
         );
@@ -170,15 +169,38 @@ export function Template01Projects({ data }) {
   );
 }
 
-export function Template01AchievementsCertifications({ data }) {
+export function Template01Languages({ data }) {
+  const languages = (data.languages || []).filter((lang) => {
+    if (typeof lang === "string") return Boolean(lang.trim());
+    return Boolean(lang?.name || lang?.language);
+  });
+  if (!languages.length) return null;
+  return (
+    <section>
+      <h2>Languages</h2>
+      <p className="rt01-languages">
+        {languages
+          .map((lang) => {
+            if (typeof lang === "string") return lang.trim();
+            const name = lang.name || lang.language || "";
+            const level = lang.level || lang.proficiency || lang.description || "";
+            return level ? `${name} — ${level}` : name;
+          })
+          .filter(Boolean)
+          .join("  ·  ")}
+      </p>
+    </section>
+  );
+}
+
+export function Template01Achievements({ data }) {
   const achievements = (data.achievements || []).filter(
     (a) => a.title || a.description || a.organization,
   );
-  const certs = (data.certifications || []).filter((c) => c.name || c.issuer);
-  if (!achievements.length && !certs.length) return null;
+  if (!achievements.length) return null;
   return (
     <section>
-      <h2>Achievements and Certifications</h2>
+      <h2>Achievements</h2>
       <ul>
         {achievements.map((a, i) => {
           const text = [a.title, a.organization, a.description].filter(Boolean).join(" — ");
@@ -191,18 +213,51 @@ export function Template01AchievementsCertifications({ data }) {
             </li>
           );
         })}
+      </ul>
+    </section>
+  );
+}
+
+export function Template01Certifications({ data }) {
+  const certs = (data.certifications || [])
+    .map((c) => {
+      if (typeof c === "string") return { name: c, issuer: "", date: "" };
+      return c;
+    })
+    .filter((c) => c.name || c.issuer);
+  if (!certs.length) return null;
+  return (
+    <section>
+      <h2>Certifications</h2>
+      <ul>
         {certs.map((c, i) => {
-          const text = [c.name, c.issuer].filter(Boolean).join(" — ");
+          const name = String(c.name || "").trim();
+          const issuer = String(c.issuer || "").trim();
+          const date = String(c.date || "").trim();
+          let text = name;
+          if (name && issuer && date) text = `${name} — ${issuer} (${date})`;
+          else if (name && issuer) text = `${name} — ${issuer}`;
+          else if (name && date) text = `${name} (${date})`;
+          else if (issuer && date) text = `${issuer} (${date})`;
+          else text = name || issuer;
+          if (!text) return null;
           return (
             <li key={c.id || `cert-${i}`}>
-              <div className="rt01-ach-row">
-                <span>{text}</span>
-                {c.date ? <span className="rt01-dates">{c.date}</span> : null}
-              </div>
+              <span>{text}</span>
             </li>
           );
         })}
       </ul>
     </section>
+  );
+}
+
+/** @deprecated Prefer Template01Achievements + Template01Certifications. Kept for older callers. */
+export function Template01AchievementsCertifications({ data }) {
+  return (
+    <>
+      <Template01Achievements data={data} />
+      <Template01Certifications data={data} />
+    </>
   );
 }

@@ -1,11 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ResumeRecord } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
-import { ResumeAtsTopSwitcher } from '@/components/ResumeAtsTopSwitcher';
 import { deleteResume, listResumes } from '@/lib/api';
 import { startResumeUpdate } from '@/features/resume/resume-update-mode';
 import { markResumeBuildPath } from '@/features/resume/resume-wizard-draft';
@@ -86,22 +84,13 @@ export default function ViewResumesPage() {
   return (
     <CandidateAppShell activeTab="resumes" title="View Resume">
       <div className="mx-auto max-w-3xl">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <ResumeAtsTopSwitcher active="resumes" />
-            <h1 className="mt-3 text-2xl font-extrabold text-slate-900">Your resumes</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Each save creates a new version (V1, V2…). Profile stays independent of any single
-              resume.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onAddNew}
-            className="rounded-xl bg-[#0a2e2c] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#072422]"
-          >
-            Add new resume
-          </button>
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-900">Your resumes</h1>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
+            Your profile stays independent of any resume.
+            <br />
+            Each save creates a new version of your resume.
+          </p>
         </div>
 
         {toast ? (
@@ -116,71 +105,77 @@ export default function ViewResumesPage() {
         ) : items.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
             <p className="text-sm font-semibold text-slate-700">No resumes yet.</p>
-            <p className="mt-1 text-sm text-slate-500">Build one or upload, then check ATS score.</p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <p className="mt-1 text-sm text-slate-500">Create your first resume to get started.</p>
+            <div className="mt-6 flex justify-center">
               <button
                 type="button"
                 onClick={onAddNew}
-                className="rounded-xl bg-[#0a2e2c] px-4 py-2.5 text-sm font-bold text-white"
+                className="min-w-[12rem] rounded-xl bg-[#0a2e2c] px-6 py-3 text-sm font-bold text-white hover:bg-[#072422]"
               >
-                Build resume
+                Add Resume
               </button>
-              <Link
-                href="/onboarding/complete"
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700"
-              >
-                Autofill upload
-              </Link>
             </div>
           </div>
         ) : (
-          <ul className="mt-6 space-y-3">
-            {items.map((row) => (
-              <li
-                key={row.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          <>
+            <ul className="mt-6 space-y-3">
+              {items.map((row) => (
+                <li
+                  key={row.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-extrabold text-slate-900">{row.title}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                        {versionLabel(row)}
+                        {row.score ? ` · Score ${row.score}` : ''}
+                        {row.applicationCount
+                          ? ` · Used in ${row.applicationCount} application${row.applicationCount === 1 ? '' : 's'}`
+                          : ''}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Updated {new Date(row.updatedAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(row)}
+                        className="min-w-[7.5rem] rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 sm:min-w-[8.5rem]"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onCheckAts(row)}
+                        className="min-w-[7.5rem] rounded-xl bg-[#0a2e2c] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#072422] sm:min-w-[8.5rem]"
+                      >
+                        Check ATS
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingDelete(row)}
+                        className="min-w-[7.5rem] rounded-xl border border-red-200 px-5 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 sm:min-w-[8.5rem]"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-8 flex justify-center pb-4">
+              <button
+                type="button"
+                onClick={onAddNew}
+                className="min-w-[12rem] rounded-xl bg-[#0a2e2c] px-6 py-3 text-sm font-bold text-white hover:bg-[#072422]"
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-base font-extrabold text-slate-900">{row.title}</p>
-                    <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                      {versionLabel(row)}
-                      {row.score ? ` · Score ${row.score}` : ''}
-                      {row.applicationCount
-                        ? ` · Used in ${row.applicationCount} application${row.applicationCount === 1 ? '' : 's'}`
-                        : ''}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      Updated {new Date(row.updatedAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onEdit(row)}
-                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onCheckAts(row)}
-                      className="rounded-lg bg-[#0a2e2c] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#072422]"
-                    >
-                      Check ATS
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPendingDelete(row)}
-                      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                Add Resume
+              </button>
+            </div>
+          </>
         )}
       </div>
 

@@ -163,10 +163,14 @@ export class AuthService {
       );
     }
 
-    const passwordError =
-      dto.purpose === 'REGISTER' && dto.accountType === 'EMPLOYER' && dto.password
-        ? registrationPasswordError(dto.password)
-        : null;
+    const passwordRequired =
+      dto.purpose === 'REGISTER' &&
+      (dto.accountType === 'EMPLOYER' || dto.accountType === 'CANDIDATE');
+    const passwordError = passwordRequired
+      ? !dto.password
+        ? 'Password is required.'
+        : registrationPasswordError(dto.password)
+      : null;
     if (passwordError) {
       throw new HttpException(
         { code: ErrorCode.VALIDATION_ERROR, message: passwordError },
@@ -174,10 +178,9 @@ export class AuthService {
       );
     }
 
-    const passwordHash =
-      dto.purpose === 'REGISTER' && (dto.accountType === 'EMPLOYER' || Boolean(dto.password))
-        ? await this.resolvePasswordHash(phone, dto.password, dto.accountType === 'EMPLOYER')
-        : null;
+    const passwordHash = passwordRequired
+      ? await this.resolvePasswordHash(phone, dto.password, true)
+      : null;
 
     const otpCode =
       channel === 'EMAIL'

@@ -114,7 +114,7 @@ export class InterviewsService {
     if (interview.status === 'COMPLETED') return this.toSession(interview);
     if (interview.startAt) return this.toSession(interview);
     const profile = this.profileOf(interview);
-    const first = this.ai.firstQuestion(profile, interview.interviewType);
+    const first = await this.ai.firstQuestion(profile, interview.interviewType);
     const question: LiveInterviewQuestion = {
       id: crypto.randomUUID(),
       number: 1,
@@ -546,7 +546,9 @@ function passportContent(candidate: {
     education: base.education.length ? base.education : fromResume.education || [],
     experiences: base.experiences.length ? base.experiences : fromResume.experiences || [],
     certifications: unique([
-      ...(fromResume.certifications || []),
+      ...(fromResume.certifications || []).map((item) =>
+        typeof item === 'string' ? item : [item.name, item.issuer, item.date].filter(Boolean).join(' — '),
+      ),
       ...certs.map((item) => (typeof item === 'string' ? item : item.name || '')),
     ]),
     projects: [

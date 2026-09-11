@@ -26,7 +26,7 @@ export class GeminiProvider implements AiProvider {
   }
 
   getDefaultModel(): string {
-    return this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.5-flash';
+    return this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-3.6-flash';
   }
 
   getEmbeddingModel(): string {
@@ -69,8 +69,17 @@ export class GeminiProvider implements AiProvider {
       if (rawText) {
         try {
           data = JSON.parse(rawText) as T;
-        } catch (e) {
-          this.logger.warn(`Failed to parse Gemini JSON output: ${(e as Error).message}`);
+        } catch {
+          const match = rawText.match(/\{[\s\S]*\}/);
+          if (match) {
+            try {
+              data = JSON.parse(match[0]) as T;
+            } catch (e) {
+              this.logger.warn(`Failed to parse Gemini JSON output: ${(e as Error).message}`);
+            }
+          } else {
+            this.logger.warn('Failed to parse Gemini JSON output: no JSON object found');
+          }
         }
       }
 

@@ -444,10 +444,85 @@ export class AiGatewayService {
       options: {
         ...options,
         promptVersion: prompt.version,
-        temperature: 0.2,
+        temperature: options?.temperature ?? 0.35,
       },
     });
     return res.data;
+  }
+
+  async generateInterviewQuestion(
+    input: {
+      interviewType: string;
+      questionNumber: number;
+      askedQuestions: string[];
+      lastExchange?: { question: string; answer: string } | null;
+      profile: unknown;
+      coverageFocus?: string;
+    },
+    options?: AiRequestOptions,
+  ): Promise<{
+    question: string;
+    category: string;
+    hint?: string;
+    thinkSeconds?: number;
+  } | null> {
+    const prompt = getPrompt('interview-question.v1');
+    const res = await this.generate<{
+      question?: string;
+      category?: string;
+      hint?: string;
+      thinkSeconds?: number;
+    }>({
+      task: 'INTERVIEW_QUESTION',
+      systemPrompt: [
+        prompt.system,
+        'Use the FULL candidate profile: education, skills, projects, work/internship experience, summary, and job role. Do not stick to only one skill, project, or topic across the interview.',
+        'coverageFocus tells you which profile area to emphasize for THIS question — follow it, while still staying natural.',
+        'Question 1 is already a fixed intro elsewhere. Never ask "tell me about yourself" or "who are you" again.',
+        'Rotate topics across questions. Prefer a new profile area over repeating the same project/skill.',
+        'Respect experienceLevel strictly: FRESHER = simple beginner questions; YEAR_1 = fundamentals; YEAR_2_3 = applied depth; YEAR_4_PLUS = harder design/ownership.',
+        'Do not ask senior-level architecture questions when experienceLevel is FRESHER.',
+        'Do not repeat any previously asked question.',
+        'If the last answer mentioned something concrete, a short follow-up is allowed, then move to another profile area next.',
+        'Keep the question clear, realistic, and answerable in 1-2 minutes.',
+        'Match interviewType: TECHNICAL → tech depth; ROLE/ROLE_BASED → role fit; BEHAVIOURAL/GENERIC/HR → soft skills; RESUME → resume projects; MIXED → rotate.',
+        'category one of TECHNICAL, PROJECT, EXPERIENCE, BEHAVIOURAL, ROLE, SCENARIO, FOLLOW_UP, EDUCATION.',
+      ].join(' '),
+      userPrompt: JSON.stringify(input).slice(0, 12000),
+      options: {
+        ...options,
+        promptVersion: prompt.version,
+        temperature: options?.temperature ?? 0.55,
+        maxOutputTokens: options?.maxOutputTokens ?? 1024,
+      },
+    });
+    let question = (res.data?.question || '').trim();
+    if (!question && res.rawText) {
+      try {
+        const match = res.rawText.match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]) as { question?: string; category?: string; hint?: string; thinkSeconds?: number };
+          question = (parsed.question || '').trim();
+          if (question.length >= 12) {
+            return {
+              question,
+              category: (parsed.category || 'MIXED').toUpperCase(),
+              hint: parsed.hint,
+              thinkSeconds: parsed.thinkSeconds,
+            };
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (question.length < 12) return null;
+    return {
+      question,
+      category: (res.data?.category || 'MIXED').toUpperCase(),
+      hint: res.data?.hint,
+      thinkSeconds: res.data?.thinkSeconds,
+    };
   }
 
   async matchJob(

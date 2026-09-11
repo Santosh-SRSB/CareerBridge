@@ -105,17 +105,30 @@ export function SkillSearchCombobox({
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
 
+  const uniqueSelected = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const skill of selected) {
+      const key = skill.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(skill.trim());
+    }
+    return out;
+  }, [selected]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const pool = ALL_SKILL_OPTIONS.filter((s) => !selected.includes(s));
+    const selectedLower = new Set(uniqueSelected.map((s) => s.toLowerCase()));
+    const pool = ALL_SKILL_OPTIONS.filter((s) => !selectedLower.has(s.toLowerCase()));
     if (!q) return pool.slice(0, 12);
     return pool.filter((s) => s.toLowerCase().includes(q)).slice(0, 12);
-  }, [query, selected]);
+  }, [query, uniqueSelected]);
 
   const trimmed = query.trim();
   const canAddCustom =
     trimmed.length > 0 &&
-    !selected.some((s) => s.toLowerCase() === trimmed.toLowerCase()) &&
+    !uniqueSelected.some((s) => s.toLowerCase() === trimmed.toLowerCase()) &&
     !ALL_SKILL_OPTIONS.some((s) => s.toLowerCase() === trimmed.toLowerCase());
 
   const options = canAddCustom
@@ -131,11 +144,18 @@ export function SkillSearchCombobox({
   }, []);
 
   function pick(value: string) {
-    if (value.startsWith('__add__:')) {
-      onAdd(value.slice('__add__:'.length));
-    } else {
-      onAdd(value);
+    const next = value.startsWith('__add__:') ? value.slice('__add__:'.length) : value;
+    const trimmed = next.trim();
+    if (
+      !trimmed ||
+      selected.some((s) => s.toLowerCase() === trimmed.toLowerCase())
+    ) {
+      setQuery('');
+      setOpen(false);
+      setHighlight(0);
+      return;
     }
+    onAdd(trimmed);
     setQuery('');
     setOpen(false);
     setHighlight(0);
@@ -217,10 +237,15 @@ export function SkillSearchCombobox({
         </ul>
       )}
 
-      {selected.length > 0 && (
+      {uniqueSelected.length > 0 && (
         <div className="cb-skill-chips">
-          {selected.map((s) => (
-            <button key={s} type="button" className="cb-skill-chip" onClick={() => onRemove(s)}>
+          {uniqueSelected.map((s, index) => (
+            <button
+              key={`${s.toLowerCase()}::${index}`}
+              type="button"
+              className="cb-skill-chip"
+              onClick={() => onRemove(s)}
+            >
               {s} <span aria-label={`Remove ${s}`}>×</span>
             </button>
           ))}

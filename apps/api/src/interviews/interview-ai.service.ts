@@ -28,8 +28,11 @@ type BuiltQuestion = {
 export class InterviewAiService {
   constructor(private readonly aiGateway: AiGatewayService) {}
 
-  firstQuestion(profile: InterviewProfile, interviewType = 'MIXED') {
-    return scriptedQuestion(profile, [], undefined, interviewType);
+  async firstQuestion(profile: InterviewProfile, interviewType = 'MIXED') {
+    if (usesFixedIntro(interviewType)) {
+      return introQuestion(profile, interviewType);
+    }
+    return this.generateQuestion(profile, interviewType, [], undefined);
   }
 
   async nextQuestion(
@@ -39,7 +42,72 @@ export class InterviewAiService {
     asked: string[],
     last?: { question: string; answer: string },
   ) {
-    return scriptedQuestion(profile, asked, last, interviewType);
+    return this.generateQuestion(profile, interviewType, asked, last);
+  }
+
+  private async generateQuestion(
+    profile: InterviewProfile,
+    interviewType: string,
+    asked: string[],
+    last?: { question: string; answer: string },
+  ): Promise<BuiltQuestion> {
+    if (!this.aiGateway.isConfigured()) {
+      return emergencyProfileQuestion(profile, interviewType, asked);
+    }
+
+    const experienceYears = Number(profile.experienceYears) || 0;
+    const experienceLevel =
+      experienceYears < 1
+        ? 'FRESHER'
+        : experienceYears < 2
+          ? 'YEAR_1'
+          : experienceYears < 4
+            ? 'YEAR_2_3'
+            : 'YEAR_4_PLUS';
+
+    const questionNumber = asked.length + 1;
+    const profilePayload = {
+      fullName: profile.fullName,
+      jobRole: profile.jobRole,
+      skills: profile.skills.slice(0, 25),
+      education: profile.education.slice(0, 8),
+      experiences: profile.experiences.slice(0, 12),
+      focusStacks: profile.focusStacks,
+      experienceYears,
+      experienceLevel,
+      summary: profile.summary?.slice(0, 800) || '',
+      city: profile.city || null,
+    };
+
+    const attempts = 3;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const fromAi = await this.aiGateway.generateInterviewQuestion({
+        interviewType,
+        questionNumber,
+        askedQuestions: asked.slice(-10),
+        lastExchange: last || null,
+        profile:
+          attempt === 0
+            ? profilePayload
+            : { ...profilePayload, avoidQuestions: asked.slice(-10), retryAttempt: attempt + 1 },
+        coverageFocus: coverageFocusForQuestion(questionNumber + attempt, interviewType, profile),
+      });
+
+      let text = (fromAi?.question || '').trim();
+      if (!fromAi || text.length < 12) continue;
+      if (asked.some((item) => item.toLowerCase() === text.toLowerCase())) continue;
+      if (asked.length > 0 && isPureIntroQuestion(text)) continue;
+
+      return {
+        text,
+        category: (fromAi.category || 'MIXED').toUpperCase(),
+        snippet: fromAi.hint || null,
+        thinkSeconds: clamp(Number(fromAi.thinkSeconds) || 0, 0, 30),
+      };
+    }
+
+    // Never block the interview: build a profile-based next question if the LLM fails.
+    return emergencyProfileQuestion(profile, interviewType, asked);
   }
 
   async analyzeAnswer(
@@ -48,15 +116,19 @@ export class InterviewAiService {
     answer: string,
     options?: { answerMode?: 'TEXT' | 'AUDIO'; durationSec?: number },
   ) {
-    if (options?.answerMode === 'AUDIO' || isAudioPlaceholderAnswer(answer)) {
+    const text = answer.trim();
+    const hasEvaluableText = text.length >= 8 && !isAudioPlaceholderAnswer(text);
+
+    if (!hasEvaluableText && (options?.answerMode === 'AUDIO' || isAudioPlaceholderAnswer(text))) {
       return analyzeAudioOnlyAnswer(options?.durationSec);
     }
-    const conduct = detectConduct(answer);
+
+    const conduct = detectConduct(text);
     if (conduct === 'abuse') {
       return {
         analysis:
           'This response used abusive or vulgar language. That is unprofessional and must not be scored as strong behaviour.',
-        improvedAnswer: 'I will answer this question professionally without abusive language.',
+        improvedAnswer: buildProperAnswerFromProfile(question, profile),
         strengths: [] as string[],
         weaknesses: ['Used abusive or vulgar language', 'Did not answer the question professionally'],
         score: 0,
@@ -65,50 +137,44 @@ export class InterviewAiService {
     if (conduct === 'nonsense') {
       return {
         analysis: 'This response was not a meaningful answer to the interview question.',
-        improvedAnswer: 'I will give a clear, relevant answer based on my real experience.',
+        improvedAnswer: buildProperAnswerFromProfile(question, profile),
         strengths: [] as string[],
         weaknesses: ['Answer was meaningless or too vague'],
-        score: 5,
+        score: 25,
       };
     }
-    const fromAi = await this.askJson<{
-      analysis: string;
-      improvedAnswer: string;
-      strengths: string[];
-      weaknesses: string[];
-      score: number;
-    }>(
-      [
-        'You are an expert interview coach evaluating ONE specific interview answer.',
-        'Return unique feedback for THIS question and THIS answer only — do not reuse generic phrases across questions.',
-        'Score 0-100 based on relevance to the question, clarity, depth, communication, and (for technical questions) accuracy.',
-        'The improvedAnswer must rewrite only what the candidate actually said, using facts from their profile and answer. Never invent companies, tools, years, or achievements.',
-        'If the answer is too short or vague, say so clearly and explain what was missing for this specific question.',
-        'Return JSON { analysis, improvedAnswer, strengths, weaknesses, score }.',
-      ].join(' '),
-      JSON.stringify({
-        profile: {
-          fullName: profile.fullName,
-          jobRole: profile.jobRole,
-          skills: profile.skills,
-          education: profile.education,
-          experiences: profile.experiences,
-          experienceYears: profile.experienceYears,
-        },
-        question,
-        answer,
-      }),
+
+    if (!this.aiGateway.isConfigured()) {
+      return softenScore(localAnalyze(question, text, profile));
+    }
+
+    const fromAi = await this.aiGateway.evaluateInterviewAnswer(
+      {
+        fullName: profile.fullName,
+        jobRole: profile.jobRole,
+        skills: profile.skills,
+        education: profile.education,
+        experiences: profile.experiences,
+        experienceYears: profile.experienceYears,
+        summary: profile.summary?.slice(0, 400) || '',
+      },
+      question,
+      text,
+      { temperature: 0.35 },
     );
-    const local = localAnalyze(question, answer, profile);
-    if (!fromAi) return local;
-    const improvedAnswer = sanitizeImproved(answer, fromAi.improvedAnswer || '', profile);
-    return {
+    const local = localAnalyze(question, text, profile);
+    if (!fromAi) return softenScore(local);
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    const improvedAnswer =
+      sanitizeImproved(text, fromAi.improvedAnswer || '', profile, wordCount < 8) ||
+      (wordCount < 8 ? buildProperAnswerFromProfile(question, profile) : improveLocal(text, profile));
+    return softenScore({
       analysis: fromAi.analysis || local.analysis,
       improvedAnswer: improvedAnswer || undefined,
       strengths: fromAi.strengths?.length ? fromAi.strengths.slice(0, 4) : local.strengths,
       weaknesses: fromAi.weaknesses?.length ? fromAi.weaknesses.slice(0, 4) : local.weaknesses,
       score: clamp(fromAi.score ?? local.score, 0, 100),
-    };
+    });
   }
 
   async report(
@@ -118,33 +184,47 @@ export class InterviewAiService {
     warningCounts: InterviewReport['integrity'],
     totalPlanned = 15,
   ): Promise<InterviewReport> {
-    const answered = questions.filter((item) => evaluableTextAnswer(item) || item.answerMode === 'AUDIO');
+    const answered = questions.filter(
+      (item) => evaluableTextAnswer(item) || item.answerMode === 'AUDIO' || Boolean(item.answer?.trim()),
+    );
     const answeredCount = answered.length;
-    const completionRatio = answeredCount / totalPlanned;
-    const avg = answered.length
+    // Overall must match average of per-question scores shown after each answer (/100 and /10).
+    const overall = answered.length
       ? Math.round(answered.reduce((sum, item) => sum + (item.score || 0), 0) / answered.length)
+      : 0;
+    const overallOutOf10 = answered.length
+      ? Math.round(
+          answered.reduce((sum, item) => sum + Math.max(0, Math.min(10, Math.round((item.score || 0) / 10))), 0) /
+            answered.length,
+        )
       : 0;
     const communication = scoreCommunication(answered);
     const behaviour = scoreBehaviour(answered, warningCounts);
     const listening = scoreListening(answered);
-    const completionPenalty = Math.round((1 - completionRatio) * 30);
-    const rawOverall = avg * 0.45 + communication * 5 + behaviour * 2.5 + listening * 2.5;
-    const overall = clamp(Math.round(rawOverall - completionPenalty), 0, 100);
     const fromAi = await this.askJson<Partial<InterviewReport>>(
-      'Summarize this interview. Do not invent experience. The candidate may have finished early — score only answered questions. If warningCounts show abuse, face missing, or tab switches, call that out clearly in summary and weaknesses, and do not praise behaviour. Return JSON { summary, strengths, weaknesses, dos, donts, recommendation } recommendation one of Strongly Recommended, Recommended, Needs Improvement, Not Ready.',
+      'Summarize this interview exactly from the answered questions and their scores. Do not invent experience. Keep the summary factual. Overall score must stay consistent with the per-question scores provided. Return JSON { summary, strengths, weaknesses, dos, donts, recommendation } recommendation one of Strongly Recommended, Recommended, Needs Improvement, Not Ready.',
       JSON.stringify({
         profile,
         durationSec,
         warningCounts,
         answeredCount,
         totalPlanned,
-        questions: answered,
+        overallScore: overall,
+        overallOutOf10,
+        questions: answered.map((item) => ({
+          question: item.text,
+          answer: item.answer,
+          score: item.score,
+          scoreOutOf10: Math.max(0, Math.min(10, Math.round((item.score || 0) / 10))),
+          analysis: item.analysis,
+          improvedAnswer: item.improvedAnswer,
+        })),
       }),
     );
     const baseSummary =
       answeredCount === 0
         ? `No answers were submitted out of ${totalPlanned} planned questions.`
-        : `${answeredCount} answer${answeredCount === 1 ? '' : 's'} given out of ${totalPlanned}. Overall scoring is based only on those ${answeredCount} response${answeredCount === 1 ? '' : 's'}.`;
+        : `You answered ${answeredCount} of ${totalPlanned} questions. Overall score ${overallOutOf10}/10 (${overall}/100) is the average of your per-question scores.`;
     const integrityNote =
       (warningCounts.abuseWarnings || 0) > 0
         ? ` Integrity: ${warningCounts.abuseWarnings} abuse warning(s) were recorded — behaviour must be marked poor.`
@@ -183,14 +263,18 @@ export class InterviewAiService {
     };
   }
 
-  private async askJson<T>(system: string, user: string): Promise<T | null> {
+  private async askJson<T>(
+    system: string,
+    user: string,
+    task: 'INTERVIEW_EVALUATION' | 'INTERVIEW_QUESTION' = 'INTERVIEW_EVALUATION',
+  ): Promise<T | null> {
     if (!this.aiGateway.isConfigured()) return null;
     const res = await this.aiGateway.generate<T>({
-      task: 'INTERVIEW_EVALUATION',
+      task,
       systemPrompt: system,
       userPrompt: user.slice(0, 12000),
       options: {
-        temperature: 0.3,
+        temperature: task === 'INTERVIEW_QUESTION' ? 0.55 : 0.35,
       },
     });
     return res.data;
@@ -225,294 +309,132 @@ export function profileFromResume(content: ResumeContent, jobRole: string): Inte
   };
 }
 
-function firstNameOf(fullName: string) {
-  const part = fullName.trim().split(/\s+/).filter(Boolean)[0] || 'there';
-  return part.charAt(0).toUpperCase() + part.slice(1);
-}
-
-function projectHint(profile: InterviewProfile) {
-  const project = profile.experiences.find((item) => /^Project:/i.test(item));
-  if (project) {
-    return project.replace(/^Project:\s*/i, '').split('—')[0].trim();
-  }
-  const job = profile.experiences[0];
-  if (!job) return '';
-  const title = job.split('—')[0].trim();
-  return title;
-}
-
-function introQuestion(_name: string): BuiltQuestion {
-  return {
-    text: `Let's start with a brief introduction. Tell me about yourself and walk me through your background.`,
-    category: 'INTRO',
-    thinkSeconds: 0,
-  };
-}
-
-function roleIntroQuestion(name: string, jobRole: string): BuiltQuestion {
-  const role = jobRole || 'this role';
-  return {
-    text: `${name}, let's begin.\n\nTell me about yourself and walk me through your background as it relates to the ${role} position.`,
-    category: 'INTRO',
-    thinkSeconds: 0,
-  };
-}
-
-function projectQuestion(profile: InterviewProfile): BuiltQuestion {
-  const project = projectHint(profile);
-  const stacks = profile.focusStacks.slice(0, 4).join(', ');
-  const fresher = profile.experienceYears < 1;
-  if (project && stacks) {
-    return {
-      text: `I noticed that you worked on ${project} using ${stacks}. Can you explain the architecture of the application and your specific contribution?`,
-      category: 'PROJECT',
-      thinkSeconds: 0,
-      snippet: project,
-    };
-  }
-  if (project) {
-    return {
-      text: `Thank you.\n\nPlease explain your project ${project}. What problem did it solve, what was your part, and which tools did you actually use?`,
-      category: 'PROJECT',
-      thinkSeconds: 0,
-      snippet: project,
-    };
-  }
-  if (fresher) {
-    return {
-      text: `Tell me about a challenging technical problem you faced in an academic or personal project, and how you handled it.`,
-      category: 'PROJECT',
-      thinkSeconds: 0,
-    };
-  }
-  return {
-    text: `Please explain one project from your resume. What was the problem, what did you build, and which tools did you actually use?`,
-    category: 'PROJECT',
-    thinkSeconds: 0,
-  };
-}
-
-function experienceQuestion(profile: InterviewProfile): BuiltQuestion {
-  const fresher = profile.experienceYears < 1;
-  if (fresher) return projectQuestion(profile);
-  const job = profile.experiences.find((item) => !/^Project:/i.test(item));
-  if (job) {
-    const title = job.split('—')[0].trim();
-    return {
-      text: `Walk me through your role as ${title}. What were your key responsibilities, and what impact did you have?`,
-      category: 'EXPERIENCE',
-      thinkSeconds: 0,
-    };
-  }
-  return projectQuestion(profile);
-}
-
-function scenarioQuestion(profile: InterviewProfile, stacks: string[]): BuiltQuestion {
-  const stack = stacks[0] || profile.skills[0] || 'your main stack';
-  const fresher = profile.experienceYears < 1;
-  if (fresher) {
-    return {
-      text: `Imagine you are building a ${profile.jobRole} project with ${stack}. How would you approach designing and implementing a core feature?`,
-      category: 'SCENARIO',
-      thinkSeconds: 0,
-    };
-  }
-  return {
-    text: `Suppose a production issue appears in your ${stack} application. How would you diagnose and resolve it?`,
-    category: 'SCENARIO',
-    thinkSeconds: 0,
-  };
-}
-
-function roleReadinessQuestion(name: string, jobRole: string): BuiltQuestion {
-  const role = jobRole || 'this role';
-  return {
-    text: `${name}, based on everything we have discussed, why do you believe you are ready for this ${role} position?`,
-    category: 'ROLE_READINESS',
-    thinkSeconds: 0,
-  };
-}
-
-function buildRoleSlots(limit: number, years: number): string[] {
-  const fresher = years < 1;
-  if (limit <= 5) {
-    return fresher
-      ? ['PROJECT', 'TECH', 'SCENARIO', 'BEHAVIOURAL']
-      : ['EXPERIENCE', 'PROJECT', 'TECH', 'BEHAVIOURAL'];
-  }
-  if (limit <= 8) {
-    const slots = ['EXPERIENCE', 'PROJECT', 'TECH', 'TECH', 'SCENARIO', 'BEHAVIOURAL', 'READINESS'];
-    return slots.slice(0, limit - 1);
-  }
-  const slots = [
-    'EXPERIENCE',
-    'PROJECT',
-    'TECH',
-    'TECH',
-    'SCENARIO',
-    'PROBLEM',
-    'SCENARIO',
-    'BEHAVIOURAL',
-    'READINESS',
-  ];
-  return slots.slice(0, limit - 1);
-}
-
-function roleQuestionAt(
-  profile: InterviewProfile,
-  stacks: string[],
-  name: string,
-  asked: string[],
-  last: { question: string; answer: string } | undefined,
-  n: number,
-): BuiltQuestion {
-  const limit = profile.questionLimit || 10;
-  const slots = buildRoleSlots(limit, profile.experienceYears);
-  const slot = slots[Math.min(n - 1, slots.length - 1)] || 'TECH';
-  switch (slot) {
-    case 'EXPERIENCE':
-      return experienceQuestion(profile);
-    case 'PROJECT':
-      return projectQuestion(profile);
-    case 'TECH':
-      return nextTech(profile, stacks, name, asked, last, n);
-    case 'SCENARIO':
-    case 'PROBLEM':
-      return scenarioQuestion(profile, stacks);
-    case 'BEHAVIOURAL':
-      return pickUnused(roleBank(name, profile.jobRole), asked);
-    case 'READINESS':
-      return roleReadinessQuestion(name, profile.jobRole);
-    default:
-      return nextTech(profile, stacks, name, asked, last, n);
-  }
-}
-
-function maybeFollowUp(
-  profile: InterviewProfile,
-  asked: string[],
-  last?: { question: string; answer: string },
-): BuiltQuestion | null {
-  if (!last?.answer?.trim() || asked.length < 2) return null;
-  if (asked.length % 3 !== 0) return null;
-  const answer = last.answer;
-  const lower = answer.toLowerCase();
-  const triggers: Array<{ pattern: RegExp; question: string }> = [
-    {
-      pattern: /\bjwt\b/i,
-      question: `You mentioned JWT authentication. Can you explain how you handled token validation and authorization on the backend?`,
-    },
-    {
-      pattern: /\breact\b/i,
-      question: `You mentioned React. Can you walk me through how you managed state and component structure in that project?`,
-    },
-    {
-      pattern: /\bnode(\.js)?\b/i,
-      question: `You brought up Node.js. How did you structure your API routes and handle errors on the server?`,
-    },
-    {
-      pattern: /\bmongo(db)?\b/i,
-      question: `You mentioned MongoDB. How did you design your data models and queries for that use case?`,
-    },
-    {
-      pattern: /\bteam\b/i,
-      question: `You mentioned working with a team. What was your specific contribution, and how did you coordinate with others?`,
-    },
-    {
-      pattern: /\bchallenge|difficult|problem\b/i,
-      question: `You described a challenge. What was the root cause, and what would you do differently if you faced it again?`,
-    },
-  ];
-  for (const skill of profile.skills.slice(0, 8)) {
-    if (skill.length > 3 && lower.includes(skill.toLowerCase())) {
-      const follow = `You mentioned ${skill}. Can you go deeper into how you used it and what trade-offs you considered?`;
-      if (!asked.includes(follow)) {
-        return { text: follow, category: 'FOLLOW_UP', thinkSeconds: 0 };
-      }
-    }
-  }
-  for (const item of triggers) {
-    if (item.pattern.test(answer)) {
-      if (!asked.includes(item.question)) {
-        return { text: item.question, category: 'FOLLOW_UP', thinkSeconds: 0 };
-      }
-    }
-  }
-  return null;
-}
-
-function normalizeKind(interviewType: string) {
+function usesFixedIntro(interviewType: string) {
   const kind = (interviewType || 'MIXED').toUpperCase();
-  if (kind === 'GENERIC') return 'BEHAVIOURAL';
-  if (kind === 'ROLE_BASED') return 'ROLE';
-  return kind;
+  return (
+    kind === 'ROLE' ||
+    kind === 'ROLE_BASED' ||
+    kind === 'BEHAVIOURAL' ||
+    kind === 'GENERIC' ||
+    kind === 'HR' ||
+    kind === 'MIXED'
+  );
 }
 
-function pickUnused(bank: BuiltQuestion[], asked: string[]): BuiltQuestion {
-  const unused = bank.filter((item) => !asked.includes(item.text));
-  const pool = unused.length ? unused : bank;
-  return pool[Math.floor(Math.random() * pool.length)] || pool[0];
-}
-
-function nextTech(
-  profile: InterviewProfile,
-  stacks: string[],
-  name: string,
-  asked: string[],
-  last?: { question: string; answer: string },
-  n = 0,
-): BuiltQuestion {
-  const unusedTech = techBank(stacks, name, profile.experienceYears).filter((item) => !asked.includes(item.text));
-  if (profile.experienceYears >= 1 && /javascript|\bjs\b|react|node/i.test(last?.answer || '') && n === 2) {
-    const output = unusedTech.find((item) => item.snippet && /javascript/i.test(item.category));
-    if (output) return output;
+function introQuestion(profile: InterviewProfile, interviewType: string): BuiltQuestion {
+  const kind = (interviewType || 'MIXED').toUpperCase();
+  const role = profile.jobRole?.trim() || 'this role';
+  if (kind === 'ROLE' || kind === 'ROLE_BASED') {
+    return {
+      text: `Tell me about yourself. Who are you, and walk me through your background as it relates to the ${role} role?`,
+      category: 'INTRO',
+      snippet: null,
+      thinkSeconds: 0,
+    };
   }
-  return unusedTech[n % Math.max(unusedTech.length, 1)] || unusedTech[0] || {
-    text: `Walk me through how you used ${stacks[0] || 'your main stack'} in a real task.`,
-    category: 'TECHNICAL',
+  return {
+    text: 'Tell me about yourself. Who are you, and walk me through your background?',
+    category: 'INTRO',
+    snippet: null,
     thinkSeconds: 0,
   };
 }
 
-function scriptedQuestion(
+function isPureIntroQuestion(text: string) {
+  return /^\s*tell me about yourself\b/i.test(text || '');
+}
+
+function emergencyProfileQuestion(
   profile: InterviewProfile,
+  interviewType: string,
   asked: string[],
-  last?: { question: string; answer: string },
-  interviewType = 'MIXED',
 ): BuiltQuestion {
-  const name = firstNameOf(profile.fullName || 'there');
-  const stacks = profile.focusStacks.length ? profile.focusStacks : pickFocusStacks(profile.skills, profile.experiences.join(' '));
-  const n = asked.length;
-  const kind = normalizeKind(interviewType);
+  const kind = (interviewType || 'MIXED').toUpperCase();
+  const skill = profile.skills.find((item) => item.trim().length > 1) || profile.focusStacks[0] || 'your skills';
+  const project =
+    profile.experiences.find((item) => /^Project:/i.test(item))?.replace(/^Project:\s*/i, '').split('—')[0]?.trim() ||
+    '';
+  const job =
+    profile.experiences.find((item) => !/^Project:/i.test(item))?.split('—')[0]?.trim() || '';
+  const education = profile.education[0] || '';
+  const role = profile.jobRole || 'this role';
 
-  if (n <= 0) {
-    if (kind === 'ROLE') return roleIntroQuestion(name, profile.jobRole);
-    return introQuestion(name);
-  }
+  const candidates: BuiltQuestion[] = [
+    education
+      ? {
+          text: `Looking at your education (${education}), what did you learn that you can apply in a real ${role} role?`,
+          category: 'EDUCATION',
+          thinkSeconds: 0,
+        }
+      : null,
+    project
+      ? {
+          text: `Tell me about your project ${project}. What was your contribution, and which tools did you use?`,
+          category: 'PROJECT',
+          thinkSeconds: 0,
+          snippet: project,
+        }
+      : null,
+    job
+      ? {
+          text: `Walk me through your experience as ${job}. What were your main responsibilities?`,
+          category: 'EXPERIENCE',
+          thinkSeconds: 0,
+        }
+      : null,
+    {
+      text: `You listed ${skill} on your profile. In simple words, what is it and how have you used it?`,
+      category: 'TECHNICAL',
+      thinkSeconds: 0,
+    },
+    kind === 'ROLE' || kind === 'ROLE_BASED'
+      ? {
+          text: `Why are you interested in the ${role} path, based on your background so far?`,
+          category: 'ROLE',
+          thinkSeconds: 0,
+        }
+      : {
+          text: `Tell me about a challenge you faced while learning or building something related to ${skill}. How did you handle it?`,
+          category: 'BEHAVIOURAL',
+          thinkSeconds: 0,
+        },
+    {
+      text: `Which part of ${role} work do you already feel comfortable with, and which part would you still need to learn?`,
+      category: 'ROLE',
+      thinkSeconds: 0,
+    },
+  ].filter(Boolean) as BuiltQuestion[];
 
-  const follow = maybeFollowUp(profile, asked, last);
-  if (follow && n > 1) return follow;
+  const unused = candidates.filter((item) => !asked.some((q) => q.toLowerCase() === item.text.toLowerCase()));
+  return unused[asked.length % Math.max(unused.length, 1)] || unused[0] || candidates[0];
+}
 
-  if (kind === 'HR' || kind === 'BEHAVIOURAL' || kind === 'CUSTOMER_SERVICE' || kind === 'SITUATIONAL') {
-    return pickUnused(hrBank(name, kind), asked);
-  }
-
-  if (kind === 'TECHNICAL') {
-    return nextTech(profile, stacks, name, asked, last, n);
-  }
-
-  if (kind === 'ROLE') {
-    return roleQuestionAt(profile, stacks, name, asked, last, n);
-  }
-
-  if (kind === 'RESUME') {
-    if (n === 1) return projectQuestion(profile);
-    return nextTech(profile, stacks, name, asked, last, n);
-  }
-
-  if (n === 1) return projectQuestion(profile);
-  if (n >= 11) return pickUnused(hrBank(name, 'HR'), asked);
-  return nextTech(profile, stacks, name, asked, last, n);
+function coverageFocusForQuestion(
+  questionNumber: number,
+  interviewType: string,
+  profile: InterviewProfile,
+): string {
+  const kind = (interviewType || 'MIXED').toUpperCase();
+  const hasProjects = profile.experiences.some((item) => /^Project:/i.test(item));
+  const hasJobs = profile.experiences.some((item) => !/^Project:/i.test(item));
+  const rotation = [
+    'education and academic or learning background from the full profile',
+    hasProjects
+      ? 'a project from the profile (pick a different project/topic than prior questions)'
+      : 'a concrete experience or responsibility from the profile',
+    hasJobs
+      ? 'work or internship experience from the profile'
+      : 'skills listed on the profile (pick skills not already deeply covered)',
+    'technical skills or tools from the profile (cover a different skill area than earlier questions)',
+    kind === 'ROLE' || kind === 'ROLE_BASED'
+      ? `role readiness for ${profile.jobRole || 'this role'} using profile facts`
+      : 'behavioural situation using something real from the profile',
+    'another uncovered part of the profile: education, skills, project, experience, or soft skills',
+    'a scenario tied to the job role using profile skills — do not repeat earlier topics',
+  ];
+  // questionNumber 1 is fixed intro; LLM starts at 2 → index 0
+  const index = Math.max(0, questionNumber - 2) % rotation.length;
+  return rotation[index];
 }
 
 function pickFocusStacks(skills: string[], projectText: string): string[] {
@@ -545,226 +467,17 @@ const STACKS = [
   { id: 'MongoDB', keys: ['mongodb', 'mongo'] },
 ];
 
-function experienceBand(years: number): 'FRESHER' | 'YEAR_1' | 'YEAR_2_3' | 'YEAR_4_PLUS' {
-  if (years < 1) return 'FRESHER';
-  if (years < 2) return 'YEAR_1';
-  if (years < 4) return 'YEAR_2_3';
-  return 'YEAR_4_PLUS';
-}
-
-function techBank(stacks: string[], name: string, years: number): BuiltQuestion[] {
-  const band = experienceBand(years);
-  const picked = stacks.flatMap((stack) => questionsForStack(stack, name, band));
-  return picked.length ? shuffle(picked) : shuffle(stacks.flatMap((stack) => questionsForStack(stack, name, 'FRESHER')));
-}
-
-function q(category: string, text: string, extra: Partial<BuiltQuestion> = {}): BuiltQuestion {
-  return { category, text, thinkSeconds: 0, snippet: null, ...extra };
-}
-
-function questionsForStack(stack: string, name: string, band: ReturnType<typeof experienceBand>): BuiltQuestion[] {
-  const fresher: Record<string, BuiltQuestion[]> = {
-    JavaScript: [
-      q('TECHNICAL-JS', `${name}, you have JavaScript on your profile.\n\nWhat is JavaScript, and why do we use it in web applications?`),
-      q('TECHNICAL-JS', `In simple words, what is the difference between JavaScript in the browser and JavaScript on the server?`),
-    ],
-    'React.js': [
-      q('TECHNICAL-REACT', `${name}, your project uses React.\n\nWhat is React, and why do people use it instead of only HTML and JavaScript?`),
-      q('TECHNICAL-REACT', `What are React hooks?\n\nName one or two hooks you know, and say what they are used for.`),
-    ],
-    'Node.js': [
-      q('TECHNICAL-NODE', `What is Node.js, and why is it used in a project like yours?`),
-      q('TECHNICAL-NODE', `What is the difference between Node.js and a normal JavaScript file that runs in the browser?`),
-    ],
-    SQL: [
-      q('TECHNICAL-SQL', `What is SQL, and why do we use it with a database?`),
-      q('TECHNICAL-SQL', `What is the difference between a table and a row, in simple words?`),
-    ],
-    HTML: [q('TECHNICAL-HTML', `What is HTML, and why do we need it in a website?`)],
-    CSS: [q('TECHNICAL-CSS', `What is CSS, and why do we use it with HTML?`)],
-    Java: [q('TECHNICAL-JAVA', `What is Java, and why would a company use it?`)],
-    Python: [q('TECHNICAL-PYTHON', `What is Python, and why is it used?`)],
-    TypeScript: [q('TECHNICAL-TS', `What is TypeScript, and why add it on top of JavaScript?`)],
-    MongoDB: [q('TECHNICAL-MONGO', `What is MongoDB, and when would you use it?`)],
-  };
-
-  const year1: Record<string, BuiltQuestion[]> = {
-    JavaScript: [
-      q('TECHNICAL-JS', `What is the difference between let, const, and var?`),
-      q(
-        'TECHNICAL-JS',
-        `${name}, look at this JavaScript on the screen.\n\nWhat will be the output of 1 + '1'? Take five seconds, then explain.`,
-        { snippet: "1 + '1'", thinkSeconds: 5 },
-      ),
-    ],
-    'React.js': [
-      q('TECHNICAL-REACT', `What is the difference between state and props in React?`),
-      q('TECHNICAL-REACT', `What does useState do, and when would you use useEffect?`),
-    ],
-    'Node.js': [
-      q('TECHNICAL-NODE', `What is npm, and how is it different from Node.js itself?`),
-      q('TECHNICAL-NODE', `What is an API in a Node.js project, in your own words?`),
-    ],
-    SQL: [
-      q('TECHNICAL-SQL', `What is the difference between WHERE and HAVING?`),
-      q('TECHNICAL-SQL', `What does a primary key do?`),
-    ],
-    HTML: [q('TECHNICAL-HTML', `What is the difference between a div and a semantic tag like header?`)],
-    CSS: [q('TECHNICAL-CSS', `What is the difference between margin and padding?`)],
-    Java: [q('TECHNICAL-JAVA', `What is the difference between JDK, JRE, and JVM, in short?`)],
-    Python: [q('TECHNICAL-PYTHON', `What is a list versus a tuple in Python?`)],
-    TypeScript: [q('TECHNICAL-TS', `What is a type error, and why is that useful before runtime?`)],
-    MongoDB: [q('TECHNICAL-MONGO', `What is a document in MongoDB compared to a SQL row?`)],
-  };
-
-  const year23: Record<string, BuiltQuestion[]> = {
-    JavaScript: [
-      q(
-        'TECHNICAL-JS',
-        `${name}, look at this JavaScript expression on the screen.\n\nWhat will be the output of 1 + '1'? Take five seconds to think, then I will ask you to explain.`,
-        { snippet: "1 + '1'", thinkSeconds: 5 },
-      ),
-      q('TECHNICAL-JS', `How does JavaScript work behind the scenes?\n\nTalk about the call stack, heap, and event loop in your own words.`),
-    ],
-    'React.js': [
-      q('TECHNICAL-REACT', `Explain how state updates work, and when you would lift state up.`),
-      q(
-        'TECHNICAL-REACT',
-        `Look at this React snippet on the screen.\n\nWhat does an empty dependency array mean, and what bug happens if you forget it?`,
-        { snippet: 'useEffect(() => { fetch() }, [])', thinkSeconds: 5 },
-      ),
-    ],
-    'Node.js': [
-      q('TECHNICAL-NODE', `How does the Node event loop handle a slow database call without blocking the server?`),
-      q('TECHNICAL-NODE', `When would you use middleware, and what should happen if an error is thrown in one?`),
-    ],
-    SQL: [
-      q(
-        'TECHNICAL-SQL',
-        `Look at this SQL on the screen.\n\nWhat is the difference between this LEFT JOIN and an INNER JOIN?`,
-        { snippet: 'SELECT * FROM users LEFT JOIN orders ON users.id = orders.user_id', thinkSeconds: 5 },
-      ),
-      q('TECHNICAL-SQL', `How would you find duplicate emails in a users table?`),
-    ],
-    HTML: [q('TECHNICAL-HTML', `Why does semantic markup matter for accessibility and SEO?`)],
-    CSS: [
-      q(
-        'TECHNICAL-CSS',
-        `Look at these CSS lines.\n\nWhat is the difference, including layout space?`,
-        { snippet: 'display: none;  vs  visibility: hidden;', thinkSeconds: 5 },
-      ),
-    ],
-    Java: [q('TECHNICAL-JAVA', `How does the JVM load and run a class, in simple steps?`)],
-    Python: [q('TECHNICAL-PYTHON', `How does the GIL affect a CPU-heavy Python program?`)],
-    TypeScript: [q('TECHNICAL-TS', `Why use TypeScript in a real project you have worked on?`)],
-    MongoDB: [q('TECHNICAL-MONGO', `When would you pick MongoDB over SQL for a project you have actually seen?`)],
-  };
-
-  const year4: Record<string, BuiltQuestion[]> = {
-    JavaScript: [
-      q('TECHNICAL-JS', `Explain closures and a real bug they can cause if you are not careful.`),
-      q('TECHNICAL-JS', `How would you debug a memory leak in a long-running JavaScript app?`),
-    ],
-    'React.js': [
-      q('TECHNICAL-REACT', `How does React reconciliation work, and when would you memoize a component?`),
-      q('TECHNICAL-REACT', `How would you design data fetching so a screen does not flicker or race?`),
-    ],
-    'Node.js': [
-      q('TECHNICAL-NODE', `How would you design retries, timeouts, and back-pressure for a Node API?`),
-      q('TECHNICAL-NODE', `Cluster vs worker threads: when would you pick each?`),
-    ],
-    SQL: [
-      q('TECHNICAL-SQL', `How would you speed up a slow query: indexes, explain plans, and what you would not do?`),
-      q('TECHNICAL-SQL', `How do you think about transactions and isolation in an order-payment flow?`),
-    ],
-    HTML: [q('TECHNICAL-HTML', `How do you keep a large HTML app accessible without slowing the team down?`)],
-    CSS: [q('TECHNICAL-CSS', `How would you structure CSS so a 20-page product does not become unmaintainable?`)],
-    Java: [q('TECHNICAL-JAVA', `How would you reason about garbage collection pauses in a busy Java service?`)],
-    Python: [q('TECHNICAL-PYTHON', `When would you move a Python bottleneck to async, multiprocessing, or another language?`)],
-    TypeScript: [q('TECHNICAL-TS', `How do you keep types useful without making the codebase too strict to ship?`)],
-    MongoDB: [q('TECHNICAL-MONGO', `How would you model a high-write collection to avoid hot shards or huge documents?`)],
-  };
-
-  const table = band === 'FRESHER' ? fresher : band === 'YEAR_1' ? year1 : band === 'YEAR_2_3' ? year23 : year4;
-  return table[stack] || fresher[stack] || [];
-}
-
-function hrBank(name: string, kind = 'HR'): BuiltQuestion[] {
-  const hr = [
-    `${name}, where do you want to see yourself in five years, in a realistic way?`,
-    `What is one real strength you bring to a team, with an example?`,
-    `What is one weakness you are actively working on, and how?`,
-    `Tell me about a time you disagreed with a teammate. What did you do?`,
-    `How do you handle a missed deadline?`,
-    `Why should a hiring manager pick you, using only work you have really done?`,
-    `Describe a failure at work or college, and what you changed after it.`,
-    `How do you take critical feedback?`,
-    `Tell me about a time you had too much work. How did you prioritise?`,
-    `What kind of manager helps you do your best work?`,
-    `How do you learn a new tool when the project needs it next week?`,
-    `Tell me about a time you had to explain a technical idea to a non-technical person.`,
-    `What does a good work day look like for you?`,
-    `Have you ever had to own a mistake in front of others? What happened?`,
-    `What would you do in the first 30 days if you joined a new team?`,
-    `How do you stay calm when a customer or teammate is upset?`,
-    `Tell me about a time you had to say no at work. How did you handle it?`,
-    `What motivates you to come to work besides salary?`,
-    `How do you build trust with people you have just met on a team?`,
-    `Describe a time you helped someone else succeed.`,
-    `How do you prepare before a meeting or an interview?`,
-    `What does professionalism mean to you in a daily job?`,
-    `Tell me about a time you had to change your plan quickly.`,
-    `How would your last teammate describe working with you?`,
-  ];
-  const situational = [
-    `A teammate is not delivering. What do you do in the first week?`,
-    `You are given two urgent tasks and can finish only one. How do you decide?`,
-    `A client is unhappy with a delay you did not cause. What do you say?`,
-    `You notice a mistake in work that already went out. What is your first step?`,
-    `Someone takes credit for your work in a meeting. How do you respond?`,
-  ];
-  const lines = kind === 'SITUATIONAL' || kind === 'CUSTOMER_SERVICE' ? [...situational, ...hr] : hr;
-  return shuffle(lines).map((text) => ({ text, category: kind === 'BEHAVIOURAL' ? 'BEHAVIOURAL' : 'HR', thinkSeconds: 0 }));
-}
-
-function roleBank(name: string, jobRole: string): BuiltQuestion[] {
-  const role = jobRole || 'this role';
-  const lines = [
-    `${name}, why this ${role} path, based on work you have actually done?`,
-    `What does a good first month look like in ${role}?`,
-    `Which part of ${role} do you already know, and which part would you need to learn?`,
-    `How would you measure success in ${role} after six months?`,
-    `What stakeholder would you talk to first in ${role}, and why?`,
-  ];
-  return shuffle(lines).map((text) => ({ text, category: 'ROLE', thinkSeconds: 0 }));
-}
-
-function shuffle<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
-function fallbackQuestion(
-  profile: InterviewProfile,
-  asked: string[],
-  _last?: { question: string; answer: string },
-) {
-  return scriptedQuestion(profile, asked, _last, 'MIXED');
-}
-
 function analyzeAudioOnlyAnswer(durationSec = 0) {
   const spokeLongEnough = durationSec >= 12;
   return {
     analysis: spokeLongEnough
-      ? 'You submitted an audio answer. We saved your recording, but typed answers help us give detailed, question-specific feedback.'
-      : 'You submitted a short audio answer. Try speaking a little longer, or add a short written summary for better AI feedback.',
+      ? 'You submitted an audio answer. Speech text was limited, so scoring is based mainly on completion and length.'
+      : 'Your audio answer was short. Try speaking a bit longer so the interview can capture more of your response.',
     improvedAnswer: '',
     strengths: spokeLongEnough ? ['Completed the spoken practice'] : ['Attempted a spoken answer'],
-    weaknesses: ['Add a written summary with your audio answer so AI can evaluate your content'],
+    weaknesses: spokeLongEnough
+      ? ['Speech capture was limited for this answer']
+      : ['Answer was too short to evaluate in detail'],
     score: spokeLongEnough ? 48 : 40,
   };
 }
@@ -807,12 +520,53 @@ function improveLocal(answer: string, profile: InterviewProfile) {
   return improved.trim();
 }
 
-function sanitizeImproved(original: string, improved: string, profile: InterviewProfile) {
-  if (!improved.trim() || isAudioPlaceholderAnswer(original) || isAudioPlaceholderAnswer(improved)) {
+function softenScore<T extends { score: number }>(result: T): T {
+  const score = result.score;
+  if (score <= 0) return result;
+  // Encourage sincere attempts without making scores unrealistically perfect.
+  const boosted = score < 40 ? score + 8 : score < 70 ? score + 10 : score < 85 ? score + 4 : score;
+  return { ...result, score: clamp(boosted, 0, 96) };
+}
+
+function buildProperAnswerFromProfile(question: string, profile: InterviewProfile) {
+  const skill = profile.skills.slice(0, 3).join(', ') || 'my core skills';
+  const experience =
+    profile.experiences.find((item) => !/^Project:/i.test(item)) ||
+    profile.experiences[0] ||
+    '';
+  const project = profile.experiences.find((item) => /^Project:/i.test(item));
+  const role = profile.jobRole || 'this role';
+  const parts = [
+    `For this question, a strong answer would sound like:`,
+    `I am preparing for ${role} opportunities`,
+    profile.experienceYears > 0
+      ? `with about ${profile.experienceYears} year${profile.experienceYears === 1 ? '' : 's'} of relevant exposure`
+      : 'and I have built practical skills through projects and learning',
+    `. My key skills include ${skill}.`,
+  ];
+  if (experience) {
+    parts.push(` From my background, ${experience.split('—')[0].trim()} taught me how to deliver work carefully and communicate clearly.`);
+  } else if (project) {
+    parts.push(` In ${project.replace(/^Project:\s*/i, '').split('—')[0].trim()}, I focused on solving a real problem end to end.`);
+  }
+  parts.push(` Related to the question — "${question.split(/[.?\n]/)[0]?.trim() || question.slice(0, 80)}" — I would explain my approach, the tools I used, and the outcome in simple terms.`);
+  return parts.join('').replace(/\s+/g, ' ').trim();
+}
+
+function sanitizeImproved(
+  original: string,
+  improved: string,
+  profile: InterviewProfile,
+  allowProfileSample = false,
+) {
+  if (!improved.trim() || isAudioPlaceholderAnswer(improved)) {
+    return allowProfileSample ? buildProperAnswerFromProfile('', profile) : '';
+  }
+  if (isAudioPlaceholderAnswer(original) && !allowProfileSample) {
     return '';
   }
-  const allowed = `${original} ${profile.fullName} ${profile.skills.join(' ')} ${profile.experiences.join(' ')} ${profile.summary}`.toLowerCase();
-  if (/\d{2,}/.test(improved) && !/\d{2,}/.test(original) && !allowed.match(/\d{2,}/)) {
+  const allowed = `${original} ${profile.fullName} ${profile.skills.join(' ')} ${profile.experiences.join(' ')} ${profile.summary} ${profile.jobRole}`.toLowerCase();
+  if (/\d{2,}/.test(improved) && !/\d{2,}/.test(original) && !allowed.match(/\d{2,}/) && !allowProfileSample) {
     return improveLocal(original, profile);
   }
   const cleaned = improved.trim();
@@ -923,7 +677,7 @@ function defaultStrengths(questions: LiveInterviewQuestion[]) {
 function defaultWeaknesses(questions: LiveInterviewQuestion[], answeredCount = 0, totalPlanned = 15) {
   const items: string[] = [];
   if (answeredCount < totalPlanned) {
-    items.push(`Only ${answeredCount} of ${totalPlanned} questions were answered — overall score reflects partial completion`);
+    items.push(`You answered ${answeredCount} of ${totalPlanned} planned questions`);
   }
   if (questions.some((item) => (item.answer || '').split(/\s+/).length < 20)) {
     items.push('Some answers were too short — add real examples from your profile');
