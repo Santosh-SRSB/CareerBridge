@@ -28,10 +28,58 @@ function useCountUp(value: number) {
 export default function AssessmentResultPage() {
   const params = useParams<{ id: string }>();
   const [session, setSession] = useState<SkillAssessmentSession | null>(null);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    getSkillAssessment(params.id).then(setSession);
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    async function load() {
+      while (!cancelled && attempts < maxAttempts) {
+        attempts += 1;
+        try {
+          const next = await getSkillAssessment(params.id);
+          if (cancelled) return;
+          setSession(next);
+          if (next.feedback) return;
+          await new Promise((r) => setTimeout(r, 1200));
+        } catch (err) {
+          if (cancelled) return;
+          if (attempts < 5) {
+            await new Promise((r) => setTimeout(r, 1000));
+            continue;
+          }
+          setLoadError(err instanceof Error ? err.message : 'Could not load your result.');
+          return;
+        }
+      }
+      if (!cancelled) setLoadError('Results are taking longer than usual. Please try again.');
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [params.id]);
+
+  if (loadError && !session?.feedback) {
+    return (
+      <CandidateShell studio scene="result">
+        <div className="cb-folio" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+          <p className="cb-folio-lead">{loadError}</p>
+          <div className="cb-folio-actions" style={{ justifyContent: 'center' }}>
+            <button type="button" className="cb-folio-btn" onClick={() => window.location.reload()}>
+              Try again
+            </button>
+            <Link href="/assessments" className="cb-folio-ghost">
+              Skill check
+            </Link>
+          </div>
+        </div>
+      </CandidateShell>
+    );
+  }
 
   if (!session?.feedback) {
     return (

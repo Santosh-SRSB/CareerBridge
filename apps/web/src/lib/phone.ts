@@ -41,7 +41,7 @@ export function postAuthPath(user: {
     user.role === 'PLATFORM_ADMIN' ||
     user.role === 'PLATFORM_OPERATOR'
   ) {
-    return '/admin';
+    return '/adminsrsb/dashboard';
   }
   if (user.purpose === 'REGISTER') {
     return POST_REGISTRATION_PATH;

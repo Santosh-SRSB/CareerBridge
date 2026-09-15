@@ -9,6 +9,7 @@ import {
   normalizeHttpUrl,
   optionalUrlError,
   yearNumberError,
+  computeCareerGapAfterHighestEducation,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
@@ -24,6 +25,7 @@ import {
   SavePassportDto,
   CertificationDto,
   ProjectDto,
+  AnalyzeCareerGapDto,
 } from './dto/update-candidate.dto';
 
 type CandidateRecord = Awaited<ReturnType<CandidatesService['loadCandidate']>>;
@@ -40,7 +42,60 @@ export class CandidatesService {
   ) {}
 
   async me(userId: string) {
-    return this.toProfile(await this.loadCandidate(userId));
+    return this.withReadablePhoto(this.toProfile(await this.loadCandidate(userId)));
+  }
+
+  /** Multipart profile photo upload — avoids large JSON data-URL payloads. */
+  async uploadPhotoFile(
+    userId: string,
+    file: { buffer: Buffer; mimetype: string; size: number; originalname?: string },
+  ) {
+    const mime = (file.mimetype || '').toLowerCase();
+    if (!mime.startsWith('image/jpeg') && !mime.startsWith('image/jpg') && !mime.startsWith('image/png')) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Please upload a JPG or PNG photo.',
+      });
+    }
+    if (!file.buffer?.length || file.size > 5 * 1024 * 1024) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Photo must be under 5 MB.',
+      });
+    }
+
+    const candidate = await this.loadCandidate(userId);
+    const ext = mime.includes('png') ? '.png' : '.jpg';
+    let storedUrl: string;
+
+    if (this.storage.isConfigured()) {
+      try {
+        const path = this.storage.imageObjectPath(
+          `photo-${Date.now()}${ext}`,
+          candidate.id.slice(0, 8),
+        );
+        const uploaded = await this.storage.uploadFile(path, file.buffer, {
+          contentType: mime.includes('png') ? 'image/png' : 'image/jpeg',
+          isPublic: true,
+          metadata: { candidateId: candidate.id, source: 'profile-photo' },
+        });
+        storedUrl = uploaded.publicUrl;
+      } catch (err) {
+        this.logger.error(
+          `Profile photo multipart GCS upload failed for ${candidate.id}: ${(err as Error).message}`,
+        );
+        storedUrl = `data:${mime.includes('png') ? 'image/png' : 'image/jpeg'};base64,${file.buffer.toString('base64')}`;
+      }
+    } else {
+      storedUrl = `data:${mime.includes('png') ? 'image/png' : 'image/jpeg'};base64,${file.buffer.toString('base64')}`;
+    }
+
+    await this.prisma.candidate.update({
+      where: { userId },
+      data: { photoUrl: storedUrl },
+    });
+    this.logger.log(`Saved profile photo for candidate ${candidate.id} (${file.size} bytes)`);
+    return this.recompute(userId);
   }
 
   async completion(userId: string) {
@@ -52,6 +107,85 @@ export class CandidatesService {
       onboardingCompleted: candidate.onboardingCompleted,
       sections,
       missing: profileOverviewMissingLabels(sections, candidate.skills.length),
+    };
+  }
+
+  /**
+   * Career gap after the candidate's highest education only.
+   * Optional body overrides use wizard journey dates; otherwise profile rows are used.
+   */
+  async analyzeCareerGap(userId: string, dto: AnalyzeCareerGapDto = {}) {
+    const candidate = await this.loadCandidate(userId);
+    const education =
+      dto.education?.length
+        ? dto.education.map((row) => ({
+            qualification: row.qualification,
+            startDate: row.startDate,
+            endDate: row.endDate,
+            yearCompleted: row.yearCompleted,
+            isCurrent: row.isCurrent,
+          }))
+        : [
+            ...candidate.education.map((row) => ({
+              qualification: row.qualification,
+              startDate: row.startDate,
+              endDate: row.endDate,
+              yearCompleted: row.yearCompleted,
+              isCurrent: false,
+            })),
+            ...(candidate.highestEducation
+              ? [
+                  {
+                    qualification: candidate.highestEducation,
+                    startDate: candidate.educationStart,
+                    endDate: candidate.stillInCollege ? null : candidate.educationEnd,
+                    yearCompleted: null as number | null,
+                    isCurrent: Boolean(candidate.stillInCollege),
+                  },
+                ]
+              : []),
+          ];
+
+    const toDateStr = (value: Date | string | null | undefined) => {
+      if (!value) return null;
+      if (value instanceof Date) return value.toISOString().slice(0, 10);
+      return String(value).slice(0, 10);
+    };
+
+    const experience =
+      dto.experience?.length
+        ? dto.experience.map((row) => ({
+            startDate: row.startDate,
+            endDate: row.endDate,
+            stillInCompany: row.stillInCompany,
+            isCurrent: row.isCurrent,
+          }))
+        : candidate.experiences.map((row) => ({
+            startDate: toDateStr(row.startDate),
+            endDate: toDateStr(row.endDate),
+            stillInCompany: row.stillInCompany,
+            isCurrent: false,
+          }));
+
+    const result = computeCareerGapAfterHighestEducation({ education, experience });
+
+    if (dto.persist) {
+      const gapReason = result.hasGap ? (dto.gapReason?.trim() || candidate.gapReason || null) : null;
+      await this.prisma.candidate.update({
+        where: { id: candidate.id },
+        data: {
+          gapMonths: result.hasGap ? result.gapMonths : 0,
+          gapReason: result.hasGap ? gapReason : null,
+        },
+      });
+    }
+
+    return {
+      ...result,
+      message: result.hasGap
+        ? `You have a gap of ${result.gapLabel}. Please explain why this gap is OK.`
+        : null,
+      savedGapReason: candidate.gapReason,
     };
   }
 
@@ -484,9 +618,12 @@ export class CandidatesService {
       const ext =
         mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : mime.includes('gif') ? '.gif' : '.jpg';
       const buffer = Buffer.from(dataUrl[2], 'base64');
-      const path = this.storage.imageObjectPath(`photo${ext}`, candidateId.slice(0, 8));
-      const uploaded = await this.storage.uploadFile(path, buffer, {
+      const path = this.storage.imageObjectPath(
+        `photo-${Date.now()}${ext}`,
+        candidateId.slice(0, 8),
+      );      const uploaded = await this.storage.uploadFile(path, buffer, {
         contentType: mime,
+        isPublic: true,
         metadata: { candidateId, source: 'profile-photo' },
       });
       return uploaded.publicUrl;
@@ -494,8 +631,36 @@ export class CandidatesService {
       this.logger.error(
         `Profile photo GCS upload failed for ${candidateId}: ${(err as Error).message}`,
       );
+      // Keep the data URL so the photo still saves and displays if GCS fails.
       return photoUrl;
     }
+  }
+
+  /** Turn private GCS object URLs into short-lived signed URLs for the browser. */
+  private async resolvePhotoUrl(photoUrl: string | null | undefined): Promise<string | null> {
+    if (!photoUrl) return null;
+    if (photoUrl.startsWith('data:') || !this.storage.isConfigured()) return photoUrl;
+    const match = photoUrl.match(
+      /^https?:\/\/storage\.googleapis\.com\/[^/]+\/(.+?)(?:\?|$)/i,
+    );
+    if (!match?.[1]) return photoUrl;
+    try {
+      const objectPath = decodeURIComponent(match[1]);
+      return await this.storage.getSignedUrl(objectPath, {
+        action: 'read',
+        expiresInMinutes: 60 * 24 * 7,
+      });
+    } catch (err) {
+      this.logger.warn(`Could not sign photo URL: ${(err as Error).message}`);
+      return photoUrl;
+    }
+  }
+
+  private async withReadablePhoto<T extends { photoUrl?: string | null }>(profile: T): Promise<T> {
+    return {
+      ...profile,
+      photoUrl: await this.resolvePhotoUrl(profile.photoUrl),
+    };
   }
 
   private async loadCandidate(userId: string) {
@@ -520,7 +685,7 @@ export class CandidatesService {
       data: { profileCompletion },
       include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
-    return this.toProfile(updated);
+    return this.withReadablePhoto(this.toProfile(updated));
   }
 
   private toProfile(candidate: NonNullable<CandidateRecord>) {

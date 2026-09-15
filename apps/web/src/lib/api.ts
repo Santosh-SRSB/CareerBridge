@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AdminDashboard,
   ApiResponse,
   ApplicationRecord,
@@ -92,22 +92,12 @@ export async function requestOtp(payload: RequestOtpPayload) {
 export async function loginWithPassword(
   identifier: string,
   password: string,
-  accountType: 'CANDIDATE' | 'EMPLOYER' | 'SUPER_ADMIN' | 'ADMIN' = 'CANDIDATE',
+  accountType: 'CANDIDATE' | 'EMPLOYER' = 'CANDIDATE',
 ) {
   const session = await request<AuthSession>('/auth/login', {
     method: 'POST',
     auth: false,
     body: JSON.stringify({ identifier, password, accountType }),
-  });
-  saveSession(session);
-  return session;
-}
-
-export async function loginAdminPortal(email: string, password: string) {
-  const session = await request<AuthSession>('/auth/admin/login', {
-    method: 'POST',
-    auth: false,
-    body: JSON.stringify({ email, password }),
   });
   saveSession(session);
   return session;
@@ -166,10 +156,59 @@ export async function getProfileCompletion() {
   return request<ProfileCompletion>('/candidates/me/completion');
 }
 
+export async function analyzeCareerGap(
+  payload: {
+    education?: Array<{
+      qualification: string;
+      startDate?: string;
+      endDate?: string;
+      yearCompleted?: number | string;
+      isCurrent?: boolean;
+    }>;
+    experience?: Array<{
+      startDate?: string;
+      endDate?: string;
+      stillInCompany?: boolean;
+      isCurrent?: boolean;
+    }>;
+    gapReason?: string;
+    persist?: boolean;
+  } = {},
+) {
+  return request<{
+    gapMonths: number;
+    gapDays: number;
+    totalDays: number;
+    hasGap: boolean;
+    gapLabel: string;
+    message: string | null;
+    savedGapReason?: string | null;
+    highestEducation: {
+      qualification: string;
+      endDate: string | null;
+      stillStudying: boolean;
+      rank: number;
+    } | null;
+  }>('/candidates/me/career-gap/analyze', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateCandidateMe(payload: UpdateCandidatePayload) {
   return request<CandidateProfile>('/candidates/me', {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+/** Multipart profile photo upload (preferred over JSON data URLs). */
+export async function uploadCandidatePhoto(file: Blob, fileName = 'photo.jpg') {
+  const form = new FormData();
+  form.append('file', file, fileName);
+  return request<CandidateProfile>('/candidates/me/photo', {
+    method: 'POST',
+    body: form,
   });
 }
 
@@ -294,6 +333,25 @@ export async function listJobs(params: Record<string, string | number | undefine
   const suffix = query.toString() ? `?${query}` : '';
   return request<PagedJobs>(`/jobs${suffix}`, { auth: Boolean(getAccessToken()) });
 }
+
+export async function listNearbyJobs(
+  params: Record<string, string | number | boolean | undefined | string[]> = {},
+) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === '') return;
+    if (Array.isArray(value)) {
+      if (value.length) query.set(key, value.join(','));
+      return;
+    }
+    query.set(key, String(value));
+  });
+  const suffix = query.toString() ? `?${query}` : '';
+  return request<import('@careerbridge/shared').NearbyJobsResponse>(`/jobs/nearby${suffix}`, {
+    auth: Boolean(getAccessToken()),
+  });
+}
+
 
 export async function recommendedJobs() {
   return request<PagedJobs>('/jobs/recommended');
@@ -1167,6 +1225,28 @@ export async function employerInterviewAction(
   });
 }
 
+export async function listPublicStates() {
+  return request<import('@careerbridge/shared').LocationState[]>('/locations/states', { auth: false });
+}
+
+export async function listPublicCities(stateId: string) {
+  return request<import('@careerbridge/shared').LocationCity[]>(
+    `/locations/cities?stateId=${encodeURIComponent(stateId)}`,
+    { auth: false },
+  );
+}
+
+export async function loginAdminPortal(email: string, password: string) {
+  const session = await request<AuthSession>('/auth/admin/login', {
+    method: 'POST',
+    auth: false,
+    body: JSON.stringify({ email, password }),
+  });
+  saveSession(session);
+  return session;
+}
+
+
 export async function getAdminDashboard() {
   return request<AdminDashboard>('/admin/dashboard');
 }
@@ -1270,8 +1350,18 @@ export async function createPlatformAdmin(payload: {
   email: string;
   fullName: string;
   password: string;
+  phone?: string;
+  role?: 'SUPER_ADMIN' | 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR';
 }) {
-  return request('/admin/admins', {
+  return request<{
+    id: string;
+    email: string;
+    fullName: string | null;
+    userType: string;
+    status: string;
+    phone: string;
+    password: string;
+  }>('/admin/admins', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -1284,15 +1374,125 @@ export async function suspendPlatformAdmin(id: string) {
   });
 }
 
-export async function listPublicStates() {
-  return request<import('@careerbridge/shared').LocationState[]>('/locations/states', { auth: false });
+export async function setPlatformAdminStatus(
+  id: string,
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
+) {
+  return request(`/admin/admins/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
 }
 
-export async function listPublicCities(stateId: string) {
-  return request<import('@careerbridge/shared').LocationCity[]>(
-    `/locations/cities?stateId=${encodeURIComponent(stateId)}`,
-    { auth: false },
-  );
+export async function setPlatformAdminRole(
+  id: string,
+  role: 'SUPER_ADMIN' | 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR',
+) {
+  return request(`/admin/admins/${id}/role`, {
+    method: 'POST',
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function setPlatformAdminPassword(id: string, password: string) {
+  return request<{ id: string; email: string; password: string }>(`/admin/admins/${id}/password`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function getAdminAiUsage() {
+  return request<NonNullable<AdminDashboard['aiUsage']>>('/admin/ai-usage');
+}
+
+export async function verifyEmployer(id: string) {
+  return request(`/admin/employers/${id}/verify`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function setAdminUserStatus(userId: string, status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED') {
+  return request(`/admin/users/${userId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function setAdminCandidateStatus(
+  candidateId: string,
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
+) {
+  return request(`/admin/candidates/${candidateId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function setAdminEmployerStatus(
+  employerId: string,
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
+) {
+  return request(`/admin/employers/${employerId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function getAdminRecord(path: string) {
+  return request<Record<string, unknown>>(`/admin/${path}`);
+}
+
+export async function updateAdminSkill(
+  id: string,
+  payload: { name?: string; category?: string; aliases?: string; active?: boolean },
+) {
+  return request(`/admin/skills/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function setAdminJobStatus(jobId: string, status: 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED') {
+  return request(`/admin/jobs/${jobId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function getAdminNotifications() {
+  return request<{
+    summary: Record<string, number>;
+    inbox: Array<Record<string, unknown>>;
+    whatsapp: Array<Record<string, unknown>>;
+  }>('/admin/notifications');
+}
+
+export async function getAdminReports() {
+  return request<Record<string, unknown>>('/admin/reports');
+}
+
+export async function getAdminSettings() {
+  return request<Record<string, string>>('/admin/settings');
+}
+
+export async function updateAdminSettings(settings: Record<string, string>) {
+  return request<Record<string, string>>('/admin/settings', {
+    method: 'POST',
+    body: JSON.stringify({ settings }),
+  });
+}
+
+export async function getAdminAudit(query?: string) {
+  const q = query ? `?query=${encodeURIComponent(query)}` : '';
+  return request<Array<Record<string, unknown>>>(`/admin/audit${q}`);
+}
+
+export async function createAdminSkill(payload: { name: string; category: string; aliases?: string }) {
+  return request('/admin/skills', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function adminListStates() {

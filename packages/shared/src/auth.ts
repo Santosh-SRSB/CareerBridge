@@ -27,8 +27,11 @@ export type OtpChannel = (typeof OtpChannel)[keyof typeof OtpChannel];
 /** Candidate / employer portals only — never platform roles. */
 export type AccountKind = 'CANDIDATE' | 'EMPLOYER';
 
-/** Password login portal — Super Admin and Admin are separate. */
-export type LoginAccountType = AccountKind | 'SUPER_ADMIN' | 'ADMIN';
+/**
+ * Public password login is Candidate / Employer only.
+ * Staff use `/adminsrsb` (not this union for the main RoleToggle).
+ */
+export type LoginAccountType = AccountKind;
 
 export const PLATFORM_USER_TYPES = [
   UserType.SUPER_ADMIN,
@@ -59,9 +62,12 @@ export type AuthUser = {
   role: UserType;
   phone: string;
   firstName: string | null;
+  email?: string | null;
   onboardingCompleted: boolean;
   /** Candidate only — true after they have opened the dashboard at least once. */
   dashboardReached?: boolean;
+  /** Candidate profile photo URL (GCS Images/ or data URL fallback). */
+  photoUrl?: string | null;
 };
 
 export type AuthSession = {
@@ -171,23 +177,6 @@ export function registrationPasswordError(password: string): string | null {
 export const REGISTRATION_PASSWORD_PATTERN =
   /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_\-+=[\]{};':"\\|,.<>/?`~]).{8,}$/;
 
-/** Stronger rules for Super Admin / Admin accounts. */
-export function platformPasswordError(password: string): string | null {
-  if (!password || password.length < 12) {
-    return 'Admin password must be at least 12 characters.';
-  }
-  if (!/[A-Z]/.test(password)) {
-    return 'Admin password must include an uppercase letter.';
-  }
-  if (!/[a-z]/.test(password)) {
-    return 'Admin password must include a lowercase letter.';
-  }
-  if (!/[0-9]/.test(password)) {
-    return 'Admin password must include a number.';
-  }
-  return null;
-}
-
 export type RequestOtpResult = {
   requestId: string;
   expiresIn: number;
@@ -210,4 +199,8 @@ export type PlatformAdminRecord = {
   status: string;
   createdAt: string;
   lastLoginAt: string | null;
+  fullName?: string | null;
+  /** Present only for Super Admin responses. */
+  password?: string | null;
 };
+

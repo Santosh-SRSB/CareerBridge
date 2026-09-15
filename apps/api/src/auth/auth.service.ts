@@ -57,14 +57,14 @@ export class AuthService {
       const platformHit = await this.prisma.user.findFirst({
         where: {
           email,
-          userType: { in: ['PLATFORM_ADMIN', 'PLATFORM_OPERATOR'] },
+          userType: { in: ['PLATFORM_ADMIN', 'PLATFORM_OPERATOR', 'SUPER_ADMIN'] },
         },
       });
       if (platformHit) {
         throw new HttpException(
           {
             code: ErrorCode.UNAUTHORIZED,
-            message: 'Platform staff must use email and password on the Admin sign-in form.',
+            message: 'Staff accounts use the admin portal password sign-in at /adminsrsb.',
           },
           HttpStatus.UNAUTHORIZED,
         );
@@ -497,12 +497,12 @@ export class AuthService {
   async loginWithPassword(
     identifier: string,
     password: string,
-    accountType: 'CANDIDATE' | 'EMPLOYER' | 'SUPER_ADMIN' | 'ADMIN',
+    accountType: 'CANDIDATE' | 'EMPLOYER',
   ) {
-    if (!['CANDIDATE', 'EMPLOYER', 'SUPER_ADMIN', 'ADMIN'].includes(accountType)) {
+    if (!['CANDIDATE', 'EMPLOYER'].includes(accountType)) {
       throw new UnauthorizedException({
         code: ErrorCode.UNAUTHORIZED,
-        message: 'Choose Candidate, Employer, Super Admin, or Admin before signing in.',
+        message: 'Choose Candidate or Employer before signing in.',
       });
     }
 
@@ -513,38 +513,6 @@ export class AuthService {
       code: ErrorCode.UNAUTHORIZED,
       message: 'Incorrect email, mobile number, or password.',
     };
-
-    if (accountType === 'SUPER_ADMIN' || accountType === 'ADMIN') {
-      if (!email) {
-        throw new UnauthorizedException({
-          code: ErrorCode.UNAUTHORIZED,
-          message: 'Use email and password for this sign-in.',
-        });
-      }
-      const staffTypes =
-        accountType === 'SUPER_ADMIN'
-          ? (['PLATFORM_ADMIN'] as const)
-          : (['PLATFORM_ADMIN', 'PLATFORM_OPERATOR'] as const);
-
-      const user = await this.prisma.user.findFirst({
-        where: { email, userType: { in: [...staffTypes] } },
-        include: { candidate: true, employer: true },
-      });
-
-      if (!user || user.status !== 'ACTIVE' || !user.passwordHash) {
-        throw new UnauthorizedException(invalid);
-      }
-      const ok = await verifyPassword(password, user.passwordHash);
-      if (!ok) {
-        throw new UnauthorizedException(invalid);
-      }
-      const updated = await this.prisma.user.update({
-        where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-        include: { candidate: true, employer: true },
-      });
-      return this.issueSession(updated);
-    }
 
     const userTypes = userTypesForAccount(accountType);
     const user = await this.prisma.user.findFirst({
@@ -586,7 +554,6 @@ export class AuthService {
     return this.issueSession(updated);
   }
 
-  /** Portal login for /srsbaadmin — credentials live in the `admins` table. */
   async loginAdmin(emailRaw: string, password: string) {
     const email = emailRaw.trim().toLowerCase();
     const invalid = {
@@ -601,6 +568,18 @@ export class AuthService {
 
     if (!admin || admin.status !== 'ACTIVE' || admin.user.status !== 'ACTIVE') {
       throw new UnauthorizedException(invalid);
+    }
+
+    const staffRole = admin.user.userType;
+    if (
+      staffRole !== 'SUPER_ADMIN' &&
+      staffRole !== 'PLATFORM_ADMIN' &&
+      staffRole !== 'PLATFORM_OPERATOR'
+    ) {
+      throw new UnauthorizedException({
+        code: ErrorCode.UNAUTHORIZED,
+        message: 'Only Super Admin, Admin, and Operator can sign in to this portal.',
+      });
     }
 
     const ok = await verifyPassword(password, admin.passwordHash);
@@ -828,13 +807,16 @@ export class AuthService {
     return {
       id: user.id,
       type: user.userType,
+      role: user.userType,
       phone: user.phone,
-        firstName: user.candidate?.firstName ?? user.employer?.contactName ?? null,
-        profileCompleted: user.candidate?.profileCompletion ?? 0,
-        onboardingCompleted:
-          user.userType === 'CANDIDATE' ? user.candidate?.onboardingCompleted ?? false : true,
-        dashboardReached:
-          user.userType === 'CANDIDATE' ? user.candidate?.dashboardReached ?? false : true,
+      email: user.email ?? null,
+      firstName: user.candidate?.firstName ?? user.employer?.contactName ?? null,
+      profileCompleted: user.candidate?.profileCompletion ?? 0,
+      onboardingCompleted:
+        user.userType === 'CANDIDATE' ? user.candidate?.onboardingCompleted ?? false : true,
+      dashboardReached:
+        user.userType === 'CANDIDATE' ? user.candidate?.dashboardReached ?? false : true,
+      photoUrl: user.userType === 'CANDIDATE' ? user.candidate?.photoUrl ?? null : null,
     };
   }
 
@@ -894,10 +876,12 @@ export class AuthService {
     id: string;
     userType: string;
     phone: string;
+    email?: string | null;
     candidate?: {
       onboardingCompleted: boolean;
       dashboardReached?: boolean;
       firstName: string | null;
+      photoUrl?: string | null;
     } | null;
     employer?: { contactName: string | null } | null;
   }) {
@@ -938,9 +922,11 @@ export class AuthService {
         id: user.id,
         role: user.userType,
         phone: user.phone,
+        email: user.email ?? null,
         firstName: user.candidate?.firstName ?? user.employer?.contactName ?? null,
         onboardingCompleted: isCandidate ? user.candidate?.onboardingCompleted ?? false : true,
         dashboardReached: isCandidate ? user.candidate?.dashboardReached ?? false : true,
+        photoUrl: isCandidate ? user.candidate?.photoUrl ?? null : null,
       },
     };
   }

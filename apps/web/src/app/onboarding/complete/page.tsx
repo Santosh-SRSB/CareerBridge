@@ -10,6 +10,7 @@ import {
   markResumeBuildPath,
 } from '@/features/resume/resume-wizard-draft';
 import { mapResumeRecordToWizardSeed } from '@/features/resume/resume-record-to-wizard';
+import { rememberReturnTo } from '@/lib/nav-return';
 import { SuccessCelebration } from '@/components/SuccessCelebration';
 
 const ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg';
@@ -140,6 +141,7 @@ export default function OnboardingCompletePage() {
       setStatus('');
       setUploadCelebration('success');
       await new Promise((r) => setTimeout(r, 1700));
+      rememberReturnTo('/onboarding/complete');
       router.push('/resume?from=autofill');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed. Please try again.';
@@ -276,6 +278,7 @@ export default function OnboardingCompletePage() {
             disabled={busy}
             onClick={() => {
               markResumeBuildPath();
+              rememberReturnTo('/onboarding/complete');
               router.push('/resume?from=build');
             }}
             className="cb-ob-complete-secondary flex w-full items-center justify-center gap-2 rounded-full border-[1.5px] bg-white py-3.5 text-[15px] font-semibold transition hover:-translate-y-px hover:bg-[#f6f5ee] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:py-4 sm:text-base"

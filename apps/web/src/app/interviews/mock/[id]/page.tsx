@@ -112,7 +112,11 @@ export default function MockInterviewQuestionPage() {
       const finished = next.status === 'COMPLETED' || Boolean(next.conductTerminated);
       if (finished) {
         if (!next.report) {
-          next = await endLiveInterview(params.id);
+          try {
+            next = await endLiveInterview(params.id);
+          } catch {
+            // Result page will retry / poll for the report — don't block navigation.
+          }
         }
         router.push(`/interviews/mock/${params.id}/result`);
         return;
@@ -147,7 +151,7 @@ export default function MockInterviewQuestionPage() {
 
   return (
     <CandidateAppShell activeTab="interviews" maxWidth="max-w-3xl">
-      <div className="mx-auto w-full max-w-2xl space-y-3 pb-28 sm:space-y-5 sm:pb-8">
+      <div className="mx-auto w-full max-w-2xl space-y-2 pb-24 sm:space-y-5 sm:pb-8">
         <Link
           href="/interviews/mock"
           className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0a2e2c] sm:text-sm"
@@ -157,18 +161,17 @@ export default function MockInterviewQuestionPage() {
         </Link>
 
         {/* Compact text header + bot (no green bar) */}
-        <header className="flex items-center gap-2.5 sm:gap-4">
-          <InterviewBotFace size="sm" speaking={isRecording || loading} className="sm:hidden" />
-          <InterviewBotFace size="md" speaking={isRecording || loading} className="hidden sm:inline-flex" />
+        <header className="flex items-center gap-2 sm:gap-4">
+          <InterviewBotFace size="sm" speaking={isRecording || loading} />
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 sm:text-xs">
               AI Mock Interview
             </p>
             <h1 className="truncate text-sm font-extrabold text-[#0a2e2c] sm:text-xl">{session.jobRole}</h1>
-            <p className="text-xs text-slate-600 sm:text-sm">
+            <p className="text-[11px] text-slate-600 sm:text-sm">
               {interviewTypeLabel(session.interviewType)} · Q {questionNumber}/{session.totalQuestions}
             </p>
-            <div className="mt-1.5 h-1.5 w-full max-w-[10rem] overflow-hidden rounded-full bg-slate-200 sm:mt-2 sm:max-w-xs">
+            <div className="mt-1 h-1 w-full max-w-[10rem] overflow-hidden rounded-full bg-slate-200 sm:mt-2 sm:h-1.5 sm:max-w-xs">
               <div
                 className="h-full rounded-full bg-[#0a2e2c] transition-all duration-500"
                 style={{ width: `${progressPct}%` }}
@@ -177,15 +180,15 @@ export default function MockInterviewQuestionPage() {
           </div>
         </header>
 
-        <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex w-max min-w-full items-center justify-start gap-1.5 sm:flex-wrap sm:justify-center sm:gap-2">
+        <div className="-mx-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:pb-1">
+          <div className="flex w-max min-w-full items-center justify-start gap-1 sm:flex-wrap sm:justify-center sm:gap-2">
             {Array.from({ length: session.totalQuestions }, (_, index) => {
               const isSaved = index < savedCount;
               const isCurrent = index === session.questionIndex;
               return (
                 <span
                   key={index}
-                  className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold transition sm:h-8 sm:w-8 sm:text-xs ${
+                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold transition sm:h-8 sm:w-8 sm:text-xs ${
                     isSaved
                       ? 'bg-emerald-500 text-white shadow-sm'
                       : isCurrent
@@ -201,14 +204,14 @@ export default function MockInterviewQuestionPage() {
         </div>
 
         <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(10,46,44,0.08)]">
-          <div className="border-b border-slate-100 bg-[#f4faf9] px-3.5 py-3 sm:px-5 sm:py-4">
-            <div className="flex items-start gap-3">
+          <div className="border-b border-slate-100 bg-[#f4faf9] px-3 py-2 sm:px-5 sm:py-4">
+            <div className="flex items-start gap-2 sm:gap-3">
               <InterviewBotFace size="sm" speaking={loading} className="mt-0.5" />
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0a2e2c]/70 sm:text-xs">
                   AI Interviewer
                 </p>
-                <blockquote className="mt-1.5 break-words text-[15px] font-bold leading-snug text-slate-900 sm:text-lg sm:leading-relaxed">
+                <blockquote className="mt-1 break-words text-[13px] font-bold leading-snug text-slate-900 sm:mt-1.5 sm:text-lg sm:leading-relaxed">
                   {questionText}
                 </blockquote>
               </div>
@@ -218,11 +221,11 @@ export default function MockInterviewQuestionPage() {
           <form
             ref={formRef}
             onSubmit={(event) => void onSubmit(event)}
-            className="space-y-3.5 p-3.5 sm:space-y-4 sm:p-5"
+            className="space-y-2 p-3 sm:space-y-4 sm:p-5"
           >
             <div>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <label htmlFor="mock-answer" className="text-sm font-bold text-slate-800">
+              <div className="mb-1 flex items-center justify-between gap-2 sm:mb-2">
+                <label htmlFor="mock-answer" className="text-xs font-bold text-slate-800 sm:text-sm">
                   Your answer
                 </label>
                 {isRecording ? (
@@ -246,9 +249,9 @@ export default function MockInterviewQuestionPage() {
                     ? 'Listening… speech appears here live'
                     : 'Type here, or record and watch speech appear live…'
                 }
-                rows={5}
+                rows={2}
                 disabled={loading}
-                className={`min-h-[120px] w-full resize-y rounded-xl border bg-[#fbfcfc] px-3 py-2.5 text-[15px] leading-6 text-slate-800 outline-none transition focus:bg-white focus:ring-2 disabled:opacity-60 sm:min-h-[160px] sm:px-3.5 sm:py-3 sm:text-sm sm:leading-7 ${
+                className={`min-h-[56px] w-full resize-y rounded-xl border bg-[#fbfcfc] px-2.5 py-2 text-[13px] leading-5 text-slate-800 outline-none transition focus:bg-white focus:ring-2 disabled:opacity-60 sm:min-h-[160px] sm:px-3.5 sm:py-3 sm:text-sm sm:leading-7 ${
                   isRecording
                     ? 'border-red-200 ring-2 ring-red-100'
                     : 'border-slate-200 ring-[#0a2e2c] focus:ring-[#0a2e2c]/30'
@@ -262,7 +265,7 @@ export default function MockInterviewQuestionPage() {
               onLiveTranscript={(text) => setAnswer(text)}
               onRecordingChange={(recording) => {
                 setIsRecording(recording);
-                if (recording) scrollToSubmitArea();
+                // Stay on the recorder while capturing — don't jump to Submit mid-recording.
               }}
               onRecorded={({ durationSec, transcript }) => {
                 setHasAudio(true);
@@ -282,14 +285,14 @@ export default function MockInterviewQuestionPage() {
               </p>
             ) : null}
 
-            <div ref={submitAreaRef} id="mock-submit-area" className="flex justify-center pt-1">
+            <div ref={submitAreaRef} id="mock-submit-area" className="flex justify-center pt-0 sm:pt-1">
               <Button
                 type="submit"
                 loading={loading}
-                loadingLabel="Your answer is analysing, please wait — almost done"
+                loadingLabel="Submitting"
                 disabled={isRecording}
                 block={false}
-                className="w-full !rounded-full !py-3 sm:w-auto sm:min-w-[260px] sm:!px-8"
+                className="w-full !rounded-full !py-2.5 text-sm sm:w-auto sm:min-w-[260px] sm:!px-8 sm:!py-3"
               >
                 Submit Answer
               </Button>

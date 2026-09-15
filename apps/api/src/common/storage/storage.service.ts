@@ -122,6 +122,16 @@ export class StorageService implements OnModuleInit {
         resumable: false,
       });
 
+      if (options?.isPublic) {
+        try {
+          await file.makePublic();
+        } catch (err) {
+          this.logger.warn(
+            `Could not make ${destinationPath} public (bucket may use uniform access): ${(err as Error).message}`,
+          );
+        }
+      }
+
       const gcsUri = `gs://${this.bucketName}/${destinationPath}`;
       const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${destinationPath}`;
       this.logger.log(`Uploaded ${destinationPath} to ${gcsUri} (${buffer.length} bytes)`);

@@ -234,6 +234,9 @@ export class InterviewsService {
     current.score = analysis.score;
     current.strengths = analysis.strengths;
     current.weaknesses = analysis.weaknesses;
+    current.whatWasGood = analysis.whatWasGood;
+    current.whatWasMissing = analysis.whatWasMissing;
+    current.improvementSuggestion = analysis.improvementSuggestion;
     const transcript = parseTurns(interview.transcriptJson);
     transcript.push({
       role: 'candidate',

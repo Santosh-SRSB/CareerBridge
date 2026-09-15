@@ -7,7 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import type { JobDetail } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { getStoredUser } from '@/lib/session';
-import { formatJobType, formatSalary } from '@/lib/match';
+import { formatJobType, formatSalary, matchLabel } from '@/lib/match';
 import { fetchJobDetails, submitApplication } from '@/lib/candidate-marketplace-api';
 import { saveJob, unsaveJob } from '@/lib/api';
 
@@ -116,6 +116,18 @@ export default function JobDetailPage() {
 
   const matched = job.match?.reasons || [];
   const gaps = job.match?.gaps || [];
+  const recommendations = job.match?.recommendations?.length
+    ? job.match.recommendations
+    : gaps.slice(0, 3).map((gap) => `Add ${gap} to your profile and resume`);
+  const breakdown = job.match
+    ? [
+        { label: 'Skills', value: job.match.skillScore },
+        { label: 'Experience', value: job.match.experienceScore },
+        { label: 'Education', value: job.match.educationScore ?? 0 },
+        { label: 'Location', value: job.match.locationScore },
+        { label: 'Resume Quality', value: job.match.resumeQualityScore ?? 0 },
+      ]
+    : [];
   const eyebrow = [formatJobType(job.jobType), job.city].filter(Boolean).join(' · ').toUpperCase();
 
   return (
@@ -205,9 +217,14 @@ export default function JobDetailPage() {
                   className="cb-job-detail__side-card cb-job-detail__match cb-job-detail__fx"
                   style={{ animationDelay: '0.12s' }}
                 >
-                  <div className="cb-job-detail__match-top">
-                    <div className="cb-job-detail__ring">
-                      <svg width="70" height="70" viewBox="0 0 70 70" aria-hidden>
+                  <div className="cb-job-detail__ats-head">
+                    <h4>Your Match</h4>
+                    <p className="cb-job-detail__ats-sub">Based on your profile, resume &amp; this job</p>
+                  </div>
+
+                  <div className="cb-job-detail__ats-score">
+                    <div className="cb-job-detail__ring" aria-hidden>
+                      <svg width="78" height="78" viewBox="0 0 70 70">
                         <circle cx="35" cy="35" r="30" fill="none" stroke="#e7e9e0" strokeWidth="8" />
                         <circle
                           cx="35"
@@ -226,45 +243,49 @@ export default function JobDetailPage() {
                           }}
                         />
                       </svg>
-                      <div className="cb-job-detail__ring-txt">{matchPct}%</div>
+                      <div className="cb-job-detail__ring-txt">{matchPct}</div>
                     </div>
                     <div>
-                      <h4>Your match</h4>
-                      <span>Based on your current profile</span>
+                      <p className="cb-job-detail__ats-score-num">
+                        {matchPct} <span>/ 100</span>
+                      </p>
+                      <p className="cb-job-detail__ats-label">{matchLabel(job.match.score)}</p>
                     </div>
                   </div>
 
-                  {matched.length ? (
-                    <>
-                      <p className="cb-job-detail__gap-label" style={{ color: '#2f6b4f' }}>
-                        STRENGTHS
-                      </p>
-                      <ul className="cb-job-detail__gap-list">
-                        {matched.map((reason, index) => (
-                          <li key={reason} style={{ animationDelay: `${0.5 + index * 0.08}s` }}>
-                            <span className="cb-job-detail__check">✓</span>
-                            {reason}
+                  <div className="cb-job-detail__ats-breakdown">
+                    {breakdown.map((row) => (
+                      <div key={row.label} className="cb-job-detail__ats-row">
+                        <span>{row.label}</span>
+                        <div className="cb-job-detail__ats-bar-wrap">
+                          <div
+                            className="cb-job-detail__ats-bar"
+                            style={{ width: `${Math.max(0, Math.min(100, row.value))}%` }}
+                          />
+                        </div>
+                        <strong>{Math.round(row.value)}%</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  {recommendations.length ? (
+                    <div className="cb-job-detail__ats-improve">
+                      <p className="cb-job-detail__ats-improve-title">Improve your match</p>
+                      <ul>
+                        {recommendations.map((tip) => (
+                          <li key={tip}>
+                            <span aria-hidden>→</span>
+                            {tip}
                           </li>
                         ))}
                       </ul>
-                    </>
+                    </div>
                   ) : null}
 
-                  {gaps.length ? (
-                    <>
-                      <p className="cb-job-detail__gap-label">GAPS TO CLOSE</p>
-                      <ul className="cb-job-detail__gap-list">
-                        {gaps.map((gap, index) => (
-                          <li
-                            key={gap}
-                            style={{ animationDelay: `${0.55 + matched.length * 0.08 + index * 0.08}s` }}
-                          >
-                            <span className="cb-job-detail__tri">△</span>
-                            {gap}
-                          </li>
-                        ))}
-                      </ul>
-                    </>
+                  {matched.length ? (
+                    <p className="cb-job-detail__ats-strengths">
+                      Strengths: {matched.join(' · ')}
+                    </p>
                   ) : null}
                 </div>
               ) : (
@@ -272,10 +293,14 @@ export default function JobDetailPage() {
                   className="cb-job-detail__side-card cb-job-detail__match cb-job-detail__fx"
                   style={{ animationDelay: '0.12s' }}
                 >
-                  <h4 className="m-0 text-[14px] font-extrabold text-[#16211d]">Your match</h4>
+                  <h4 className="m-0 text-[14px] font-extrabold text-[#16211d]">Your Match</h4>
                   <p className="mt-2 text-[13px] leading-relaxed text-[#4a534d]">
-                    Sign in with a complete profile to see how well you match this role.
+                    Sign in with a complete profile to see your ATS match for this role — score
+                    breakdown and tips to improve.
                   </p>
+                  <Link href="/login?role=candidate" className="cb-job-detail__ats-link mt-4 inline-flex">
+                    Sign in to see match
+                  </Link>
                 </div>
               )}
             </aside>

@@ -10,9 +10,10 @@ import { ResumePreviewScreen } from '@/components/resume/ResumePreviewScreen';
 import { buildResumeFromResumeContent } from '@/features/resume/build-resume-from-resume-content';
 import type { MasterResumeDocument } from '@/features/resume/master-resume.types';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
-import { startAtsSectionEdit } from '@/features/resume/resume-update-mode';
-import { createResume, getResume, listResumes, updateResume } from '@/lib/api';
+import { startAtsSectionEdit, startResumeUpdate } from '@/features/resume/resume-update-mode';
+import { createResume, getCandidateMe, getResume, listResumes, updateResume } from '@/lib/api';
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
+import { goToReturnTo, peekReturnTo, rememberReturnTo } from '@/lib/nav-return';
 
 function AtsCheckerInner() {
   const router = useRouter();
@@ -52,7 +53,10 @@ function AtsCheckerInner() {
     setChecking(true);
     setError('');
     try {
-      const record = await getResume(id);
+      const [record, profile] = await Promise.all([
+        getResume(id),
+        getCandidateMe().catch(() => null),
+      ]);
       const doc = buildResumeFromResumeContent(
         {
           ...record.content,
@@ -60,6 +64,11 @@ function AtsCheckerInner() {
           summary: record.content.summary || record.summary || '',
         },
         record.summary,
+        {
+          linkedin: profile?.links?.linkedin,
+          github: profile?.links?.github,
+          portfolio: profile?.links?.portfolio || profile?.links?.website,
+        },
       );
       setMaster(doc);
       setResumeMeta(record);
@@ -195,16 +204,25 @@ function AtsCheckerInner() {
           }}
           onBack={() => {
             setMaster(null);
+            if (peekReturnTo()) {
+              goToReturnTo(router, '/ats');
+              return;
+            }
             router.replace('/ats');
             void refresh();
           }}
           onEdit={() => {
             if (selectedId) {
-              router.push(`/resume`);
+              const returnTo = `/ats?resumeId=${encodeURIComponent(selectedId)}`;
+              startResumeUpdate(selectedId, returnTo);
+              rememberReturnTo(returnTo);
+              router.push('/resume');
             }
           }}
           onAddSection={(sectionLabel, sectionKey) => {
             if (!selectedId) return;
+            const returnTo = `/ats?resumeId=${encodeURIComponent(selectedId)}`;
+            rememberReturnTo(returnTo);
             startAtsSectionEdit({
               sectionKey: sectionKey || sectionLabel,
               resumeId: selectedId,

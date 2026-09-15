@@ -285,6 +285,44 @@ export const ONBOARDING_DOMAINS = [
   'Other',
 ] as const;
 
+/** Common preferred / target job roles for resume & preferences. */
+export const PREFERRED_JOB_ROLES = [
+  'Full Stack Developer',
+  'Frontend Developer',
+  'Backend Developer',
+  'Software Engineer',
+  'Software Developer',
+  'Web Developer',
+  'Mobile App Developer',
+  'Android Developer',
+  'iOS Developer',
+  'React Developer',
+  'Java Developer',
+  'Python Developer',
+  'Data Analyst',
+  'Data Engineer',
+  'Business Analyst',
+  'QA / Test Engineer',
+  'DevOps Engineer',
+  'Cloud Engineer',
+  'UI/UX Designer',
+  'Product Designer',
+  'Product Manager',
+  'Project Coordinator',
+  'Sales Executive',
+  'Business Development',
+  'Customer Support',
+  'Customer Success',
+  'Digital Marketing',
+  'Content Writer',
+  'HR Executive',
+  'Operations Executive',
+  'Finance / Accounts',
+  'Intern',
+  'Fresher / Graduate Trainee',
+  'Other',
+] as const;
+
 export type PassportSectionKey =
   | 'personal'
   | 'photo'

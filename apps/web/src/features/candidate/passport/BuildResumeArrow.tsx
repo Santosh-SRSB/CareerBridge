@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EagleMascot } from "@/features/candidate/passport/EagleMascot";
+import { rememberReturnTo } from "@/lib/nav-return";
 
 export function BuildResumeArrow() {
   const router = useRouter();
@@ -30,9 +31,12 @@ export function BuildResumeArrow() {
         <button
           type="button"
           className="cta-shine mt-10 inline-flex items-center justify-center rounded-full px-7 py-3.5 text-sm font-bold text-white"
-          onClick={() => router.push("/passport/create/form?source=manual")}
+          onClick={() => {
+            rememberReturnTo("/dashboard");
+            router.push("/onboarding/complete");
+          }}
         >
-          Continue to Career Passport
+          Continue
         </button>
       ) : null}
     </div>

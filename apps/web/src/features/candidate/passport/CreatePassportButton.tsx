@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CreatePassportModal } from "@/features/candidate/passport/CreatePassportModal";
 import { getAccessToken } from "@/lib/session";
+import { rememberReturnTo } from "@/lib/nav-return";
 
+/** Opens the single Autofill / Build ATS page (no card chooser). */
 export function CreatePassportButton({
   className,
   children,
@@ -13,24 +14,21 @@ export function CreatePassportButton({
   children: ReactNode;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
 
   return (
-    <>
-      <button
-        type="button"
-        className={className}
-        onClick={() => {
-          if (!getAccessToken()) {
-            router.push("/register?role=candidate");
-            return;
-          }
-          setOpen(true);
-        }}
-      >
-        {children}
-      </button>
-      <CreatePassportModal open={open} onClose={() => setOpen(false)} />
-    </>
+    <button
+      type="button"
+      className={className}
+      onClick={() => {
+        if (!getAccessToken()) {
+          router.push("/register?role=candidate");
+          return;
+        }
+        rememberReturnTo("/dashboard");
+        router.push("/onboarding/complete");
+      }}
+    >
+      {children}
+    </button>
   );
 }

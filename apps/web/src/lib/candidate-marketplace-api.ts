@@ -1,4 +1,4 @@
-import type { ApplicationRecord, JobDetail, PagedJobs } from '@careerbridge/shared';
+import type { ApplicationRecord, JobDetail, NearbyJobsResponse, PagedJobs } from '@careerbridge/shared';
 import {
   applyToJob,
   confirmCandidateScheduledInterview,
@@ -8,6 +8,7 @@ import {
   listApplications,
   listCandidateScheduledInterviews,
   listJobs,
+  listNearbyJobs,
   rescheduleCandidateScheduledInterview,
   type CandidateScheduledInterview,
 } from '@/lib/api';
@@ -71,6 +72,42 @@ export async function searchJobs(params: JobSearchParams = {}): Promise<PagedJob
     pageSize: params.pageSize || 20,
     total: filtered.length,
   };
+}
+
+function monthlyAmount(value: string, period: SalaryPeriod) {
+  const amount = Number(value.replace(/,/g, '').trim());
+  if (!Number.isFinite(amount) || amount <= 0) return undefined;
+  return period === 'ctc' ? Math.round(amount / 12) : amount;
+}
+
+export type NearbySearchParams = JobSearchParams & {
+  latitude: number;
+  longitude: number;
+  minDistanceKm: number;
+  maxDistanceKm: number;
+  page?: number;
+  limit?: number;
+  remoteOnly?: boolean;
+};
+
+export async function searchNearbyJobs(params: NearbySearchParams): Promise<NearbyJobsResponse> {
+  const period = params.salaryPeriod || 'monthly';
+  return listNearbyJobs({
+    latitude: params.latitude,
+    longitude: params.longitude,
+    minDistanceKm: params.minDistanceKm,
+    maxDistanceKm: params.maxDistanceKm,
+    page: params.page || 1,
+    limit: params.limit || 20,
+    q: params.q || undefined,
+    type: params.jobType || undefined,
+    category: params.category || undefined,
+    experience: params.experience || undefined,
+    salaryMin: monthlyAmount(params.salaryMin || '', period),
+    salaryMax: monthlyAmount(params.salaryMax || '', period),
+    skills: params.skills?.length ? params.skills : undefined,
+    remoteOnly: params.remoteOnly || undefined,
+  });
 }
 
 export async function fetchJobDetails(id: string): Promise<JobDetail> {

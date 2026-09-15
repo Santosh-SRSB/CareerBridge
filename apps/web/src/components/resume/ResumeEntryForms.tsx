@@ -9,6 +9,7 @@ import {
 } from '@/components/resume/EducationSelectors';
 import { MonthField, MonthRangeFields } from '@/components/resume/ResumeFormFields';
 import { formatEducationYearRange, formatMonthRange } from '@/lib/resume-dates';
+import { splitProjectFields } from '@/features/resume/project-fields';
 
 const formStyles = `
   .cb-inline-form {
@@ -139,28 +140,31 @@ export interface EducationFormData {
 export function EducationInlineForm({
   onSave,
   onCancel,
+  initial,
 }: {
   onSave: (data: EducationFormData) => void;
   onCancel: () => void;
+  initial?: Partial<EducationFormData>;
 }) {
-  const [degree, setDegree] = useState('');
-  const [field, setField] = useState('');
-  const [institution, setInstitution] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [isCurrent, setIsCurrent] = useState(false);
-  const [grade, setGrade] = useState('');
-  const [gradeType, setGradeType] = useState('CGPA');
+  const editing = Boolean(initial);
+  const [degree, setDegree] = useState(initial?.degree || '');
+  const [field, setField] = useState(initial?.field || '');
+  const [institution, setInstitution] = useState(initial?.institution || '');
+  const [startDate, setStartDate] = useState(initial?.startDate || '');
+  const [endDate, setEndDate] = useState(initial?.endDate || '');
+  const [isCurrent, setIsCurrent] = useState(Boolean(initial?.isCurrent));
+  const [grade, setGrade] = useState(initial?.grade || '');
+  const [gradeType, setGradeType] = useState(initial?.gradeType || 'CGPA');
 
   return (
     <FormShell
-      title="Add education"
+      title={editing ? 'Edit education' : 'Add education'}
       onCancel={onCancel}
       onSave={() =>
         degree.trim() &&
         onSave({ degree, field, institution, location: '', startDate, endDate, isCurrent, grade, gradeType })
       }
-      saveLabel={degree.trim() ? 'Add education' : 'Enter degree'}
+      saveLabel={degree.trim() ? (editing ? 'Save changes' : 'Add education') : 'Enter degree'}
     >
       <div className="cb-field-grid">
         <div className="cb-field">
@@ -211,18 +215,23 @@ export function ExperienceInlineForm({
   defaultLocation,
   onSave,
   onCancel,
+  initial,
 }: {
   defaultLocation?: string;
   onSave: (data: ExperienceFormData) => void;
   onCancel: () => void;
+  initial?: Partial<ExperienceFormData>;
 }) {
-  const [role, setRole] = useState('');
-  const [company, setCompany] = useState('');
-  const [location, setLocation] = useState(defaultLocation || '');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [isCurrent, setIsCurrent] = useState(false);
-  const [responsibilities, setResponsibilities] = useState<string[]>(['']);
+  const editing = Boolean(initial);
+  const [role, setRole] = useState(initial?.role || '');
+  const [company, setCompany] = useState(initial?.company || '');
+  const [location, setLocation] = useState(initial?.location || defaultLocation || '');
+  const [startDate, setStartDate] = useState(initial?.startDate || '');
+  const [endDate, setEndDate] = useState(initial?.endDate || '');
+  const [isCurrent, setIsCurrent] = useState(Boolean(initial?.isCurrent));
+  const [responsibilities, setResponsibilities] = useState<string[]>(
+    initial?.responsibilities?.length ? [...initial.responsibilities] : [''],
+  );
 
   function updateBullet(i: number, value: string) {
     setResponsibilities((prev) => prev.map((b, idx) => (idx === i ? value : b)));
@@ -230,7 +239,7 @@ export function ExperienceInlineForm({
 
   return (
     <FormShell
-      title="Add experience"
+      title={editing ? 'Edit experience' : 'Add experience'}
       onCancel={onCancel}
       onSave={() =>
         role.trim() &&
@@ -244,7 +253,7 @@ export function ExperienceInlineForm({
           responsibilities: responsibilities.filter((r) => r.trim()),
         })
       }
-      saveLabel={role.trim() ? 'Add experience' : 'Enter job title'}
+      saveLabel={role.trim() ? (editing ? 'Save changes' : 'Add experience') : 'Enter job title'}
     >
       <div className="cb-field-grid">
         <div className="cb-field">
@@ -317,18 +326,28 @@ export interface ProjectFormData {
 export function ProjectInlineForm({
   onSave,
   onCancel,
+  initial,
 }: {
   onSave: (data: ProjectFormData) => void;
   onCancel: () => void;
+  initial?: Partial<ProjectFormData>;
 }) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [technologies, setTechnologies] = useState<string[]>([]);
-  const [bullets, setBullets] = useState<string[]>(['']);
+  const editing = Boolean(initial);
+  const seeded = splitProjectFields({
+    description: initial?.description || '',
+    bullets: initial?.bullets || [],
+    technologies: initial?.technologies || [],
+  });
+  const [name, setName] = useState(initial?.name || '');
+  const [description, setDescription] = useState(seeded.description);
+  const [technologies, setTechnologies] = useState<string[]>(seeded.technologies);
+  const [bullets, setBullets] = useState<string[]>(
+    seeded.bullets.length ? [...seeded.bullets] : [''],
+  );
 
   return (
     <FormShell
-      title="Add project"
+      title={editing ? 'Edit project' : 'Add project'}
       onCancel={onCancel}
       onSave={() =>
         name.trim() &&
@@ -339,7 +358,7 @@ export function ProjectInlineForm({
           bullets: bullets.filter((b) => b.trim()),
         })
       }
-      saveLabel={name.trim() ? 'Add project' : 'Enter project name'}
+      saveLabel={name.trim() ? (editing ? 'Save changes' : 'Add project') : 'Enter project name'}
     >
       <div className="cb-field-grid">
         <div className="cb-field full">
@@ -402,20 +421,23 @@ export interface CertificationFormData {
 export function CertificationInlineForm({
   onSave,
   onCancel,
+  initial,
 }: {
   onSave: (data: CertificationFormData) => void;
   onCancel: () => void;
+  initial?: Partial<CertificationFormData>;
 }) {
-  const [name, setName] = useState('');
-  const [issuer, setIssuer] = useState('');
-  const [date, setDate] = useState('');
+  const editing = Boolean(initial);
+  const [name, setName] = useState(initial?.name || '');
+  const [issuer, setIssuer] = useState(initial?.issuer || '');
+  const [date, setDate] = useState(initial?.date || '');
 
   return (
     <FormShell
-      title="Add certification"
+      title={editing ? 'Edit certification' : 'Add certification'}
       onCancel={onCancel}
       onSave={() => name.trim() && onSave({ name, issuer, date })}
-      saveLabel={name.trim() ? 'Add certification' : 'Enter name'}
+      saveLabel={name.trim() ? (editing ? 'Save changes' : 'Add certification') : 'Enter name'}
     >
       <div className="cb-field-grid">
         <div className="cb-field full">
@@ -446,21 +468,24 @@ export interface AchievementFormData {
 export function AchievementInlineForm({
   onSave,
   onCancel,
+  initial,
 }: {
   onSave: (data: AchievementFormData) => void;
   onCancel: () => void;
+  initial?: Partial<AchievementFormData>;
 }) {
-  const [title, setTitle] = useState('');
-  const [organization, setOrganization] = useState('');
-  const [description, setDescription] = useState('');
-  const [date, setDate] = useState('');
+  const editing = Boolean(initial);
+  const [title, setTitle] = useState(initial?.title || '');
+  const [organization, setOrganization] = useState(initial?.organization || '');
+  const [description, setDescription] = useState(initial?.description || '');
+  const [date, setDate] = useState(initial?.date || '');
 
   return (
     <FormShell
-      title="Add achievement"
+      title={editing ? 'Edit achievement' : 'Add achievement'}
       onCancel={onCancel}
       onSave={() => title.trim() && onSave({ title, organization, description, date })}
-      saveLabel={title.trim() ? 'Add achievement' : 'Enter title'}
+      saveLabel={title.trim() ? (editing ? 'Save changes' : 'Add achievement') : 'Enter title'}
     >
       <div className="cb-field-grid">
         <div className="cb-field full">

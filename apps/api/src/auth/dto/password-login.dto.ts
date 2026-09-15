@@ -11,7 +11,7 @@ export class PasswordLoginDto {
   @MinLength(8, { message: 'Enter your password.' })
   password: string;
 
-  @ApiProperty({ enum: ['CANDIDATE', 'EMPLOYER', 'SUPER_ADMIN', 'ADMIN'] })
-  @IsIn(['CANDIDATE', 'EMPLOYER', 'SUPER_ADMIN', 'ADMIN'])
-  accountType: 'CANDIDATE' | 'EMPLOYER' | 'SUPER_ADMIN' | 'ADMIN';
+  @ApiProperty({ enum: ['CANDIDATE', 'EMPLOYER'] })
+  @IsIn(['CANDIDATE', 'EMPLOYER'])
+  accountType: 'CANDIDATE' | 'EMPLOYER';
 }

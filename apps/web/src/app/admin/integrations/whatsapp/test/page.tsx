@@ -47,8 +47,8 @@ export default function WhatsAppIntegrationTestPage() {
       setConnection(status.connection as unknown as Record<string, unknown>);
       setEvents(status.events || []);
     } catch {
-      // WhatsApp admin APIs require PLATFORM_ADMIN / PLATFORM_OPERATOR token
-      router.replace('/srsbaadmin?next=/admin/integrations/whatsapp/test');
+      // WhatsApp admin APIs require SUPER_ADMIN / PLATFORM_ADMIN token
+      router.replace('/adminsrsb?next=/admin/integrations/whatsapp/test');
     }
   }, [router]);
 

@@ -197,9 +197,10 @@ export class MatchingService {
       );
       const years =
         (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
+      const skillsScore = Math.min(40, Math.round((base.skillScore / 100) * 40));
       const experienceScore =
         experienceYearsMin <= 0
-          ? base.experienceScore
+          ? Math.min(30, Math.round((base.experienceScore / 100) * 30))
           : years >= experienceYearsMin
             ? 30
             : Math.round((years / experienceYearsMin) * 30);
@@ -210,7 +211,6 @@ export class MatchingService {
         hasResume: candidate.resumes.length > 0,
         profileCompletion: candidate.profileCompletion || 0,
       });
-      const skillsScore = Math.min(40, base.skillScore);
       const ruleScore = Math.min(
         100,
         skillsScore + experienceScore + Math.round(interviewReadinessScore * 0.3),

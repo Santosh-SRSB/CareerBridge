@@ -90,6 +90,14 @@ export function careerGapMonths({
   return Math.floor(totalDays / 30);
 }
 
+/** Prefer shared highest-education gap when a multi-row education list is available. */
+export {
+  computeCareerGapAfterHighestEducation,
+  educationQualificationRank,
+  pickHighestEducation,
+  formatCareerGapLabel,
+} from '@careerbridge/shared';
+
 function daysBetween(from: Date, to: Date) {
   const ms = startOfDay(to).getTime() - startOfDay(from).getTime();
   return Math.max(0, Math.floor(ms / 86400000));

@@ -12,6 +12,7 @@ import type { MasterResumeDocument } from '@/features/resume/master-resume.types
 import { downloadMasterResumePdf } from '@/lib/master-resume-pdf';
 import { listResumes } from '@/lib/api';
 import { startResumeUpdate } from '@/features/resume/resume-update-mode';
+import { rememberReturnTo } from '@/lib/nav-return';
 import { Button } from '@/components/ui/Button';
 import '@/components/resume-templates/resume-template-01.css';
 
@@ -113,7 +114,8 @@ export function DashboardResumePreviewModal({
   }
 
   function handleUpdate() {
-    startResumeUpdate(savedResume?.id);
+    startResumeUpdate(savedResume?.id, '/dashboard');
+    rememberReturnTo('/dashboard');
     onClose();
     router.push('/resume');
   }

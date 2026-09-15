@@ -82,11 +82,126 @@ function headingKey(line: string): SectionKey | null {
 }
 
 function looksLikePageMarker(line: string) {
-  return /^[-–—]?\s*\d+\s+of\s+\d+\s*[-–—]?$/i.test(line);
+  const cleaned = line
+    .trim()
+    .replace(/[-–—•|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return false;
+  // "1 of 1", "1of1", "Page 1 of 1", "Page 2"
+  if (/^(page\s+)?\d+\s*of\s*\d+$/i.test(cleaned.replace(/\s+/g, ''))) return true;
+  if (/^(page\s+)?\d+\s+of\s+\d+$/i.test(cleaned)) return true;
+  if (/^page\s+\d+$/i.test(cleaned)) return true;
+  return false;
+}
+
+export function isPageMarkerText(...parts: Array<string | null | undefined>) {
+  const blob = parts.filter(Boolean).join(' ').trim();
+  if (!blob) return false;
+  return looksLikePageMarker(blob);
+}
+
+export function extractProjectTechnologies(body: string[]): {
+  description: string | null;
+  technologies: string[];
+} {
+  const techLabel =
+    /^(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*(.+)$/i;
+  const techTrailing =
+    /^(.*?)(?:\s+)(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*(.+)$/i;
+  const splitTokens = (raw: string) =>
+    raw
+      .split(/[,;/|•]+/)
+      .map((item) => item.replace(/\.$/, '').trim())
+      .filter((item) => item.length > 1 && item.length < 48);
+
+  const found: string[] = [];
+  const kept: string[] = [];
+  for (const row of body) {
+    const labeled = row.match(techLabel);
+    if (labeled?.[1]) {
+      found.push(...splitTokens(labeled[1]));
+      continue;
+    }
+    const trailing = row.match(techTrailing);
+    if (trailing?.[2] && splitTokens(trailing[2]).length > 0) {
+      if (trailing[1]?.trim()) kept.push(trailing[1].trim());
+      found.push(...splitTokens(trailing[2]));
+      continue;
+    }
+    kept.push(row);
+  }
+
+  let description = kept.join('\n').trim();
+  const endMatch = description.match(
+    /\b(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*([^.]+)$/i,
+  );
+  if (endMatch?.[1] && splitTokens(endMatch[1]).length > 0) {
+    found.push(...splitTokens(endMatch[1]));
+    description = description.slice(0, endMatch.index).trim().replace(/[.,;:\s]+$/, '');
+  }
+
+  return {
+    description: description || null,
+    technologies: [...new Set(found)],
+  };
 }
 
 function extractEmail(text: string) {
   return text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || null;
+}
+
+function cleanCapturedUrl(raw: string) {
+  return raw.replace(/[),.;\]}>]+$/g, '').trim();
+}
+
+function ensureHttps(url: string) {
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url}`;
+}
+
+/** Pull LinkedIn / GitHub / other profile URLs from resume text. */
+export function extractProfileLinksFromText(rawText: string): NonNullable<ResumeContent['links']> {
+  const text = rawText.replace(/\u0000/g, ' ');
+  const urls = Array.from(
+    text.matchAll(
+      /(?:https?:\/\/)?(?:www\.)?(?:linkedin\.com\/[^\s)\]>,]+|github\.com\/[^\s)\]>,]+|(?:portfolio|behance|dribbble|notion\.site|vercel\.app|netlify\.app|github\.io)[^\s)\]>,]*)/gi,
+    ),
+  ).map((m) => cleanCapturedUrl(m[0]));
+
+  let linkedin: string | undefined;
+  let github: string | undefined;
+  let portfolio: string | undefined;
+
+  for (const url of urls) {
+    const lower = url.toLowerCase();
+    if (!linkedin && lower.includes('linkedin.com')) {
+      linkedin = ensureHttps(url);
+      continue;
+    }
+    if (!github && lower.includes('github.com') && !lower.includes('github.io')) {
+      github = ensureHttps(url);
+      continue;
+    }
+    if (!portfolio && !lower.includes('linkedin.com') && !lower.includes('github.com')) {
+      portfolio = ensureHttps(url);
+    }
+  }
+
+  if (!linkedin) {
+    const labeled = text.match(/linkedin\s*[:|\-–]\s*(\S+)/i)?.[1];
+    if (labeled && /linkedin\.com/i.test(labeled)) linkedin = ensureHttps(cleanCapturedUrl(labeled));
+  }
+  if (!github) {
+    const labeled = text.match(/github\s*[:|\-–]\s*(\S+)/i)?.[1];
+    if (labeled && /github\.com/i.test(labeled)) github = ensureHttps(cleanCapturedUrl(labeled));
+  }
+
+  return {
+    ...(linkedin ? { linkedin } : {}),
+    ...(github ? { github } : {}),
+    ...(portfolio ? { portfolio } : {}),
+  };
 }
 
 function extractPhone(text: string) {
@@ -234,7 +349,12 @@ function parseProjects(lines: string[]): NonNullable<ResumeContent['projects']> 
         i += 1;
       }
       if (orphan.length) {
-        projects.push({ name: 'Project', description: orphan.join('\n') || null });
+        const { description, technologies } = extractProjectTechnologies(orphan);
+        projects.push({
+          name: 'Project',
+          description,
+          ...(technologies.length ? { technologies } : {}),
+        });
       }
       continue;
     }
@@ -264,7 +384,12 @@ function parseProjects(lines: string[]): NonNullable<ResumeContent['projects']> 
         unique.push(row);
       }
     }
-    projects.push({ name, description: unique.join('\n') || null });
+    const { description, technologies } = extractProjectTechnologies(unique);
+    projects.push({
+      name,
+      description,
+      ...(technologies.length ? { technologies } : {}),
+    });
   }
 
   return projects;
@@ -306,6 +431,7 @@ function parseAchievements(lines: string[]) {
   return lines
     .map(stripBullet)
     .filter((item) => !PLACEHOLDER_LINES.has(item.toLowerCase()))
+    .filter((item) => !looksLikePageMarker(item))
     .map((line) => ({
       title: line,
       organization: null as string | null,
@@ -341,6 +467,7 @@ export function parseExtractedResumeText(rawText: string): ResumeContent {
   const contactLine = header.find((line) => line.includes('|') || line.includes('@')) || '';
   const city = extractCity(contactLine, email, phone);
   const fullName = header.find((line) => line !== contactLine && !line.includes('@')) || header[0] || 'Candidate';
+  const links = extractProfileLinksFromText(rawText);
 
   const summaryLines = sections.get('summary') || [];
   const summary = summaryLines.join(' ').replace(/\s+/g, ' ').trim();
@@ -359,6 +486,7 @@ export function parseExtractedResumeText(rawText: string): ResumeContent {
     achievements: parseAchievements(sections.get('achievements') || []),
     projects: parseProjects(sections.get('projects') || []),
     includePhoto: false,
+    ...(Object.keys(links).length ? { links } : {}),
   };
 }
 

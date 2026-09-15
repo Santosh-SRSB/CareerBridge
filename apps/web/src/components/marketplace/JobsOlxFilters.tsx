@@ -221,9 +221,13 @@ function SalaryRangeSlider({
 export function JobsOlxFilters({
   filters,
   onChange,
+  onViewJobs,
+  loading = false,
 }: {
   filters: JobSearchFilterValues;
   onChange: (patch: Partial<JobSearchFilterValues>) => void;
+  onViewJobs?: () => void;
+  loading?: boolean;
 }) {
   const [locationQuery, setLocationQuery] = useState(
     filters.city || filters.state || '',
@@ -462,6 +466,19 @@ export function JobsOlxFilters({
             ))}
         </div>
       </div>
+
+      {onViewJobs ? (
+        <div className="sticky bottom-0 -mx-3 mt-6 border-t border-slate-100 bg-white px-3 pb-2 pt-3">
+          <button
+            type="button"
+            onClick={onViewJobs}
+            disabled={loading}
+            className="w-full rounded-xl bg-[#0a2e2c] px-4 py-3.5 text-sm font-extrabold text-white disabled:opacity-60"
+          >
+            {loading ? 'Loading…' : 'View jobs'}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

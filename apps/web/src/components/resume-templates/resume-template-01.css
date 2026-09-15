@@ -67,7 +67,8 @@
   gap: 12px;
 }
 
-.resume-template-01 .rt01-row strong {
+.resume-template-01 .rt01-row strong,
+.resume-template-01 .rt01-role {
   font-weight: 700;
   color: #000;
 }

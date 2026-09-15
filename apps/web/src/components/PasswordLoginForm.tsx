@@ -68,10 +68,6 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
     setLoading(true);
     try {
       const session = await loginWithPassword(identifier.trim(), password, accountType);
-      if (accountType === 'SUPER_ADMIN' || accountType === 'ADMIN') {
-        router.replace('/srsbaadmin/dashboard');
-        return;
-      }
       const next = safeNextPath(searchParams.get('next'));
       const onboarding = postAuthPath(session.user);
       const destination =
@@ -99,15 +95,7 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
           type="email"
           required
           autoComplete="username"
-          placeholder={
-            accountType === 'SUPER_ADMIN'
-              ? 'superadmin@careerbridge.local'
-              : accountType === 'ADMIN'
-                ? 'admin@company.com'
-                : accountType === 'EMPLOYER'
-                  ? 'you@company.com'
-                  : 'Enter your email'
-          }
+          placeholder={accountType === 'EMPLOYER' ? 'you@company.com' : 'Enter your email'}
           value={identifier}
           onChange={(event) => {
             setIdentifier(event.target.value);

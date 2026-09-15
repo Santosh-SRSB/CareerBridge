@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  contactLine,
+  contactNodes,
   dateRange,
   educationHeading,
   educationMetaLine,
@@ -25,9 +25,24 @@ export function ProfilePhoto({ src, variant = "circle" }) {
 }
 
 export function ContactText({ data, separator = " | " }) {
-  const line = contactLine(data, separator);
-  if (!line) return null;
-  return <p className="contact">{line}</p>;
+  const nodes = contactNodes(data, separator);
+  if (!nodes.length) return null;
+  return (
+    <p className="contact">
+      {nodes.map((node, i) => (
+        <span key={`${node.value}-${i}`}>
+          {node.href ? (
+            <a className="resume-link" href={node.href} target="_blank" rel="noreferrer">
+              {node.label}
+            </a>
+          ) : (
+            node.label
+          )}
+          {node.separator}
+        </span>
+      ))}
+    </p>
+  );
 }
 
 export function SummarySection({ data, title = "Summary" }) {

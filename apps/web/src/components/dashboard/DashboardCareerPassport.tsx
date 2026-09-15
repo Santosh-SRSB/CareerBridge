@@ -130,7 +130,7 @@ export function DashboardCareerPassport({ profile }: { profile: CandidateProfile
         <p className="mt-4 text-sm font-extrabold text-[#0a2e2c]">Everything About you</p>
 
         <Link
-          href="/profile"
+          href="/profile/details"
           className="mt-3 block w-full rounded-xl bg-[#0a2e2c] py-2.5 text-center text-sm font-bold text-white transition hover:bg-[#072422]"
         >
           View Profile

@@ -8,6 +8,7 @@ import { PROFILE_OVERVIEW_SECTION_KEYS } from '@careerbridge/shared';
 import { getCandidateMe, getProfileCompletion } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
 import { markResumeSeedFromProfile } from '@/features/resume/resume-wizard-draft';
+import { rememberReturnTo } from '@/lib/nav-return';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { Button } from '@/components/ui/Button';
 
@@ -110,7 +111,8 @@ function PassportOverviewPage() {
           onClick={() => {
             if (allSectionsComplete) {
               markResumeSeedFromProfile();
-              router.push('/resume');
+              rememberReturnTo('/passport');
+              router.push('/resume?from=build');
               return;
             }
             router.push(firstIncompleteSectionHref(completion));

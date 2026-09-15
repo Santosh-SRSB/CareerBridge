@@ -2,6 +2,7 @@ import { clearResumeWizardDraft } from './resume-wizard-draft';
 
 const RESUME_UPDATE_MODE_KEY = 'cb.resumeUpdateMode';
 const RESUME_UPDATE_ID_KEY = 'cb.resumeUpdateResumeId';
+const RESUME_UPDATE_RETURN_KEY = 'cb.resumeUpdateReturnTo';
 
 /** ATS dashboard → edit one section → return to ATS (does not restart creation wizard). */
 const ATS_SECTION_EDIT_KEY = 'cb.atsSectionEdit';
@@ -13,13 +14,18 @@ export type AtsSectionEditState = {
   returnTo: 'preview' | 'ats';
 };
 
-export function startResumeUpdate(resumeId?: string) {
+export function startResumeUpdate(resumeId?: string, returnTo?: string) {
   if (typeof window === 'undefined') return;
   sessionStorage.setItem(RESUME_UPDATE_MODE_KEY, '1');
   if (resumeId) {
     sessionStorage.setItem(RESUME_UPDATE_ID_KEY, resumeId);
   } else {
     sessionStorage.removeItem(RESUME_UPDATE_ID_KEY);
+  }
+  if (returnTo && returnTo.startsWith('/')) {
+    sessionStorage.setItem(RESUME_UPDATE_RETURN_KEY, returnTo);
+  } else {
+    sessionStorage.removeItem(RESUME_UPDATE_RETURN_KEY);
   }
   clearResumeWizardDraft();
 }
@@ -34,10 +40,19 @@ export function getResumeUpdateResumeId() {
   return sessionStorage.getItem(RESUME_UPDATE_ID_KEY) || undefined;
 }
 
-export function clearResumeUpdateMode() {
+export function getResumeUpdateReturnTo() {
+  if (typeof window === 'undefined') return null;
+  const path = sessionStorage.getItem(RESUME_UPDATE_RETURN_KEY);
+  return path && path.startsWith('/') ? path : null;
+}
+
+export function clearResumeUpdateMode(options?: { keepReturnTo?: boolean }) {
   if (typeof window === 'undefined') return;
   sessionStorage.removeItem(RESUME_UPDATE_MODE_KEY);
   sessionStorage.removeItem(RESUME_UPDATE_ID_KEY);
+  if (!options?.keepReturnTo) {
+    sessionStorage.removeItem(RESUME_UPDATE_RETURN_KEY);
+  }
 }
 
 export function startAtsSectionEdit(state: AtsSectionEditState) {
@@ -74,10 +89,12 @@ export function mapAtsSectionToWizardStep(sectionKeyOrLabel: string): string {
   if (key === 'experience' || key.includes('experience') || key.includes('work')) return 'Experience';
   if (key === 'skills' || key.includes('skill')) return 'Skills';
   if (key === 'projects' || key.includes('project')) return 'Projects';
-  if (key === 'certifications' || key.includes('cert') || key.includes('achiev')) return 'Certifications';
+  if (key === 'achievements' || key.includes('achiev')) return 'Achievements';
+  if (key === 'certifications' || key.includes('cert')) return 'Certifications';
   if (key === 'formatting' || key.includes('format')) return 'Review';
   if (key === 'summary' || key.includes('summary')) return 'Personal';
-  if (key === 'contact' || key.includes('contact')) return 'Personal';
+  if (key === 'contact' || key.includes('contact') || key.includes('link')) return 'Links';
+  if (key === 'gap' || key.includes('gap')) return 'Career Gap';
   return 'Personal';
 }
 
@@ -97,6 +114,8 @@ export function atsEditActionLabel(sectionKey: string, sectionLabel: string): st
       return 'Edit Projects';
     case 'certifications':
       return 'Edit Certifications';
+    case 'achievements':
+      return 'Edit Achievements';
     case 'formatting':
       return 'Fix Formatting';
     default:

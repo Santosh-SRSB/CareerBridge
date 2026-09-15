@@ -36,6 +36,7 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
   const languageNames = new Set(
     languages.map((entry) => parseLanguageSkills(entry)[0]?.name || entry),
   );
+  const links = content.links || content.resumeData?.links || {};
 
   return {
     fullName: content.fullName || '',
@@ -44,6 +45,9 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
     phone: content.phone || '',
     summary: record.summary || content.summary || '',
     skills: content.skills || [],
+    linkedin: links.linkedin || '',
+    github: links.github || '',
+    portfolio: links.portfolio || links.website || '',
     educationList: (content.education || []).map((edu, index) => {
       const parsed = splitDegreeAndField(edu.qualification || '');
       return {
@@ -59,26 +63,35 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
         gradeType: '',
       };
     }),
-    experienceList: (content.experiences || []).map((exp, index) => ({
-      id: `exp-${index}`,
-      role: exp.jobTitle || '',
-      company: exp.company || '',
-      location: '',
-      startDate: '',
-      endDate: '',
-      isCurrent: false,
-      responsibilities: splitLines(exp.description),
-    })),
+    experienceList: (content.experiences || []).map((exp, index) => {
+      const fromData = content.resumeData?.experience?.[index];
+      return {
+        id: `exp-${index}`,
+        role: exp.jobTitle || '',
+        company: exp.company || '',
+        location: '',
+        startDate: exp.startDate || fromData?.startDate || '',
+        endDate: exp.endDate || fromData?.endDate || '',
+        isCurrent: Boolean(exp.isCurrent ?? fromData?.isCurrent),
+        isInternship: Boolean(exp.isInternship) || /\bintern(?:ship|s)?\b/i.test(exp.jobTitle || ''),
+        responsibilities: splitLines(exp.description),
+      };
+    }),
     projectList: (content.projects || []).map((project, index) => {
-      const { description, bullets } = splitProjectFields({
+      const fromData = content.resumeData?.projects?.[index];
+      const { description, bullets, technologies } = splitProjectFields({
         description: project.description,
-        bullets: project.bullets,
+        bullets: project.bullets ?? fromData?.bullets,
+        technologies: [
+          ...(project.technologies || []),
+          ...((fromData?.technologies as string[] | undefined) || []),
+        ],
       });
       return {
         id: `proj-${index}`,
         name: project.name || '',
         description,
-        technologies: [],
+        technologies,
         bullets: [...bullets],
       };
     }),
@@ -88,7 +101,12 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
       issuer: cert.issuer || '',
       date: cert.date || '',
     })),
-    achievementList: (content.achievements || []).map((ach, index) => ({
+    achievementList: (content.achievements || [])
+      .filter((ach) => {
+        const blob = [ach.title, ach.organization, ach.description].filter(Boolean).join(' ');
+        return blob.trim() && !/^\d+\s*of\s*\d+$/i.test(blob.replace(/[-–—]/g, '').replace(/\s+/g, ''));
+      })
+      .map((ach, index) => ({
       id: `ach-${index}`,
       title: ach.title || '',
       organization: ach.organization || '',

@@ -115,7 +115,16 @@ export class InterviewAiService {
     question: string,
     answer: string,
     options?: { answerMode?: 'TEXT' | 'AUDIO'; durationSec?: number },
-  ) {
+  ): Promise<{
+    analysis: string;
+    improvedAnswer?: string;
+    strengths: string[];
+    weaknesses: string[];
+    whatWasGood?: string[];
+    whatWasMissing?: string[];
+    improvementSuggestion?: string;
+    score: number;
+  }> {
     const text = answer.trim();
     const hasEvaluableText = text.length >= 8 && !isAudioPlaceholderAnswer(text);
 
@@ -131,6 +140,9 @@ export class InterviewAiService {
         improvedAnswer: buildProperAnswerFromProfile(question, profile),
         strengths: [] as string[],
         weaknesses: ['Used abusive or vulgar language', 'Did not answer the question professionally'],
+        whatWasGood: [] as string[],
+        whatWasMissing: ['A professional answer to the question'],
+        improvementSuggestion: 'Rewrite the answer professionally and address the question directly.',
         score: 0,
       };
     }
@@ -140,12 +152,15 @@ export class InterviewAiService {
         improvedAnswer: buildProperAnswerFromProfile(question, profile),
         strengths: [] as string[],
         weaknesses: ['Answer was meaningless or too vague'],
+        whatWasGood: [] as string[],
+        whatWasMissing: ['A clear, relevant answer to the question'],
+        improvementSuggestion: 'Answer the question in plain language with at least a few concrete sentences.',
         score: 25,
       };
     }
 
     if (!this.aiGateway.isConfigured()) {
-      return softenScore(localAnalyze(question, text, profile));
+      return calibrateScore(localAnalyze(question, text, profile), text);
     }
 
     const fromAi = await this.aiGateway.evaluateInterviewAnswer(
@@ -160,21 +175,41 @@ export class InterviewAiService {
       },
       question,
       text,
-      { temperature: 0.35 },
+      { temperature: 0.2 },
     );
     const local = localAnalyze(question, text, profile);
-    if (!fromAi) return softenScore(local);
+    if (!fromAi) return calibrateScore(local);
     const wordCount = text.split(/\s+/).filter(Boolean).length;
     const improvedAnswer =
       sanitizeImproved(text, fromAi.improvedAnswer || '', profile, wordCount < 8) ||
       (wordCount < 8 ? buildProperAnswerFromProfile(question, profile) : improveLocal(text, profile));
-    return softenScore({
-      analysis: fromAi.analysis || local.analysis,
+    const analysisParts = [
+      fromAi.analysis || local.analysis,
+      fromAi.improvementSuggestion
+        ? `Next step: ${fromAi.improvementSuggestion}`
+        : '',
+    ].filter(Boolean);
+    return calibrateScore({
+      analysis: analysisParts.join(' '),
       improvedAnswer: improvedAnswer || undefined,
-      strengths: fromAi.strengths?.length ? fromAi.strengths.slice(0, 4) : local.strengths,
-      weaknesses: fromAi.weaknesses?.length ? fromAi.weaknesses.slice(0, 4) : local.weaknesses,
+      strengths: fromAi.strengths?.length
+        ? fromAi.strengths.slice(0, 4)
+        : fromAi.whatWasGood?.length
+          ? fromAi.whatWasGood.slice(0, 4)
+          : local.strengths,
+      weaknesses: fromAi.weaknesses?.length
+        ? fromAi.weaknesses.slice(0, 4)
+        : fromAi.whatWasMissing?.length
+          ? fromAi.whatWasMissing.slice(0, 4)
+          : local.weaknesses,
+      whatWasGood: (fromAi.whatWasGood || fromAi.strengths || local.strengths).slice(0, 4),
+      whatWasMissing: (fromAi.whatWasMissing || fromAi.weaknesses || local.weaknesses).slice(0, 4),
+      improvementSuggestion:
+        fromAi.improvementSuggestion ||
+        local.weaknesses[0] ||
+        'Add specific examples that directly answer each part of the question.',
       score: clamp(fromAi.score ?? local.score, 0, 100),
-    });
+    }, text);
   }
 
   async report(
@@ -201,23 +236,59 @@ export class InterviewAiService {
     const communication = scoreCommunication(answered);
     const behaviour = scoreBehaviour(answered, warningCounts);
     const listening = scoreListening(answered);
-    const fromAi = await this.askJson<Partial<InterviewReport>>(
-      'Summarize this interview exactly from the answered questions and their scores. Do not invent experience. Keep the summary factual. Overall score must stay consistent with the per-question scores provided. Return JSON { summary, strengths, weaknesses, dos, donts, recommendation } recommendation one of Strongly Recommended, Recommended, Needs Improvement, Not Ready.',
+    const technicalKnowledge = scoreByCategories(answered, /TECHNICAL|PROJECT|EDUCATION|EXPERIENCE|RESUME/i);
+    const problemSolving = scoreByCategories(answered, /SCENARIO|PROBLEM|FOLLOW_UP/i);
+    const roleReadiness = scoreRoleReadiness(answered, communication, technicalKnowledge, overall);
+    const hasAudioAnswers = answered.some((item) => item.answerMode === 'AUDIO');
+    const confidence = hasAudioAnswers
+      ? scoreConfidenceFromAudio(answered)
+      : null;
+    const confidenceNote = hasAudioAnswers
+      ? null
+      : 'Confidence cannot be reliably measured from text answers alone.';
+
+    const fromAi = await this.askJson<{
+      summary?: string;
+      overallAnalysis?: string;
+      strengths?: string[];
+      weaknesses?: string[];
+      dos?: string[];
+      donts?: string[];
+      recommendation?: string;
+      postInterviewSuggestions?: InterviewReport['postInterviewSuggestions'];
+    }>(
+      [
+        'You are an expert interview evaluator summarizing a completed interview.',
+        'Be accurate and fair. Do NOT inflate praise. Do not invent experience.',
+        'overallAnalysis must explain why the overall score is what it is, based on actual answer quality.',
+        'strengths and weaknesses must be specific (not "completed the interview").',
+        'postInterviewSuggestions must be personalized to THIS candidate weaknesses: communication[], technical[], answerStructure[], topicsToRevise[], practicePlan[].',
+        'recommendation must match score bands: 85-100 Strongly Recommended; 70-84 Recommended; 55-69 Needs Improvement; 40-54 Significant Improvement Needed; 0-39 Not Recommended.',
+        'Return JSON { summary, overallAnalysis, strengths, weaknesses, dos, donts, recommendation, postInterviewSuggestions }.',
+      ].join(' '),
       JSON.stringify({
-        profile,
+        profile: {
+          fullName: profile.fullName,
+          jobRole: profile.jobRole,
+          skills: profile.skills.slice(0, 12),
+          experienceYears: profile.experienceYears,
+        },
         durationSec,
         warningCounts,
         answeredCount,
         totalPlanned,
         overallScore: overall,
         overallOutOf10,
+        perQuestionAvgOutOf10: overallOutOf10,
         questions: answered.map((item) => ({
           question: item.text,
+          category: item.category,
           answer: item.answer,
           score: item.score,
           scoreOutOf10: Math.max(0, Math.min(10, Math.round((item.score || 0) / 10))),
           analysis: item.analysis,
-          improvedAnswer: item.improvedAnswer,
+          whatWasMissing: item.whatWasMissing,
+          weaknesses: item.weaknesses,
         })),
       }),
     );
@@ -227,7 +298,7 @@ export class InterviewAiService {
         : `You answered ${answeredCount} of ${totalPlanned} questions. Overall score ${overallOutOf10}/10 (${overall}/100) is the average of your per-question scores.`;
     const integrityNote =
       (warningCounts.abuseWarnings || 0) > 0
-        ? ` Integrity: ${warningCounts.abuseWarnings} abuse warning(s) were recorded — behaviour must be marked poor.`
+        ? ` Integrity: ${warningCounts.abuseWarnings} abuse warning(s) were recorded — recommendation cannot be positive.`
         : '';
     const recommendation = recFromScore(
       overall,
@@ -240,13 +311,25 @@ export class InterviewAiService {
       (fromAi?.weaknesses?.length ? fromAi.weaknesses : defaultWeaknesses(answered, answeredCount, totalPlanned)).slice(0, 6),
       warningCounts,
     );
+    const postInterviewSuggestions =
+      fromAi?.postInterviewSuggestions ||
+      defaultPostInterviewSuggestions(answered, profile, overall);
+
     return {
       overallScore: overall,
       communication,
       behaviour,
       listening,
+      technicalKnowledge,
+      problemSolving,
+      roleReadiness,
+      confidence,
+      confidenceNote,
       recommendation,
       summary: fromAi?.summary ? `${baseSummary} ${fromAi.summary}${integrityNote}` : `${baseSummary}${integrityNote}`,
+      overallAnalysis:
+        fromAi?.overallAnalysis ||
+        `Average per-question quality is ${overallOutOf10}/10. Scores reflect demonstrated answer depth, not merely completing the interview.`,
       strengths:
         (warningCounts.abuseWarnings || 0) >= 2
           ? []
@@ -257,6 +340,7 @@ export class InterviewAiService {
         (fromAi?.donts?.length ? fromAi.donts : DEFAULT_DONTS).slice(0, 8),
         warningCounts,
       ),
+      postInterviewSuggestions,
       answeredCount,
       totalPlanned,
       integrity: warningCounts,
@@ -471,37 +555,68 @@ function analyzeAudioOnlyAnswer(durationSec = 0) {
   const spokeLongEnough = durationSec >= 12;
   return {
     analysis: spokeLongEnough
-      ? 'You submitted an audio answer. Speech text was limited, so scoring is based mainly on completion and length.'
-      : 'Your audio answer was short. Try speaking a bit longer so the interview can capture more of your response.',
+      ? 'You submitted an audio answer without usable transcript text, so content quality could not be fully verified. Score reflects attempt length only — not demonstrated technical depth.'
+      : 'Your audio answer was too short to evaluate content quality.',
     improvedAnswer: '',
-    strengths: spokeLongEnough ? ['Completed the spoken practice'] : ['Attempted a spoken answer'],
+    strengths: spokeLongEnough ? ['Attempted a spoken answer'] : [],
     weaknesses: spokeLongEnough
-      ? ['Speech capture was limited for this answer']
-      : ['Answer was too short to evaluate in detail'],
-    score: spokeLongEnough ? 48 : 40,
+      ? ['Content could not be verified from text — practice clearer speech for scoring']
+      : ['Answer was too short to evaluate'],
+    whatWasGood: spokeLongEnough ? ['Attempted a spoken answer'] : [],
+    whatWasMissing: ['Clear spoken content that can be evaluated against the question'],
+    improvementSuggestion:
+      'Speak for 45–90 seconds and cover the question’s key points with a concrete example.',
+    score: spokeLongEnough ? 35 : 25,
   };
 }
 
 function localAnalyze(question: string, answer: string, profile: InterviewProfile) {
   const words = answer.trim().split(/\s+/).filter(Boolean);
   const relevant = overlap(answer, `${question} ${profile.skills.join(' ')} ${profile.jobRole}`);
-  const score = clamp(40 + Math.min(30, words.length) + relevant * 4, 35, 92);
+  // Strict local fallback: short answers stay low; length alone cannot reach “excellent”.
+  let score = 15 + Math.min(25, words.length) + Math.min(20, relevant * 3);
+  if (words.length < 8) score = Math.min(score, 28);
+  else if (words.length < 20) score = Math.min(score, 45);
+  else if (words.length < 40) score = Math.min(score, 62);
+  else score = Math.min(score, 78);
+  score = clamp(score, 0, 78);
   const improved = improveLocal(answer, profile);
   const questionHint = question.split(/[.?\n]/).find((line) => line.trim().length > 12)?.trim() || question.slice(0, 80);
+  const whatWasMissing =
+    words.length < 20
+      ? [
+          'Enough detail to cover the question’s key points',
+          'A concrete example from your real experience',
+          'Clear personal contribution / tools used when asked',
+        ]
+      : [
+          'Stronger structure (situation → action → result)',
+          'More specific outcomes or technical detail',
+        ];
   return {
     analysis:
       words.length < 20
-        ? `For "${questionHint}", your answer was too brief. Add a real example from your background that directly addresses this question.`
-        : `For "${questionHint}", you made relevant points. Structure your answer with situation, action, and result for more impact.`,
+        ? `For "${questionHint}", your answer was too brief and incomplete. You did not cover enough of what the question asked.`
+        : `For "${questionHint}", you made some relevant points but need more depth and structure for a stronger score.`,
     improvedAnswer: improved || undefined,
-    strengths: [
-      words.length >= 20 ? 'You gave enough detail to follow' : 'You attempted the question',
-      relevant ? 'You stayed close to the topic' : 'You stayed professional',
-    ],
-    weaknesses: [
-      words.length < 25 ? 'Add a concrete example tied to this question' : 'Tighten the opening sentence',
-      'Mention your actual contribution, not only the team',
-    ],
+    strengths:
+      words.length >= 20
+        ? ['Attempted a relevant response', relevant ? 'Stayed related to the topic' : 'Stayed professional']
+        : words.length >= 5
+          ? ['Attempted the question']
+          : [],
+    weaknesses: whatWasMissing.slice(0, 3),
+    whatWasGood:
+      words.length >= 20
+        ? ['Provided a related response']
+        : words.length >= 5
+          ? ['Attempted the question']
+          : [],
+    whatWasMissing,
+    improvementSuggestion:
+      words.length < 20
+        ? 'Aim for 4–6 sentences: answer each part of the question, add one real example, and state your contribution or tools when relevant.'
+        : 'Use STAR (Situation → Task → Action → Result) and add one specific technical or project detail.',
     score,
   };
 }
@@ -509,23 +624,24 @@ function localAnalyze(question: string, answer: string, profile: InterviewProfil
 function improveLocal(answer: string, profile: InterviewProfile) {
   const clean = answer.replace(/\s+/g, ' ').trim();
   if (!clean || isAudioPlaceholderAnswer(clean)) return '';
-  const skill = profile.skills[0];
+  // Only polish grammar/structure — do NOT inject unrelated profile skills.
   let improved = `${clean.charAt(0).toUpperCase()}${clean.slice(1)}${clean.endsWith('.') ? '' : '.'}`;
-  if (skill && !clean.toLowerCase().includes(skill.toLowerCase()) && clean.length < 120) {
-    improved += ` This connects to my experience with ${skill}.`;
-  }
-  if (improved.length < 40 && profile.jobRole) {
-    improved += ` I am preparing for ${profile.jobRole} roles.`;
+  if (improved.length < 40 && profile.jobRole && clean.toLowerCase().includes(profile.jobRole.toLowerCase())) {
+    improved += ` I am preparing carefully for ${profile.jobRole} interviews.`;
   }
   return improved.trim();
 }
 
-function softenScore<T extends { score: number }>(result: T): T {
+/** Cap inflated scores for very short answers; never boost. */
+function calibrateScore<T extends { score: number }>(result: T, answerText = ''): T {
   const score = result.score;
   if (score <= 0) return result;
-  // Encourage sincere attempts without making scores unrealistically perfect.
-  const boosted = score < 40 ? score + 8 : score < 70 ? score + 10 : score < 85 ? score + 4 : score;
-  return { ...result, score: clamp(boosted, 0, 96) };
+  const words = answerText.trim().split(/\s+/).filter(Boolean).length;
+  let next = score;
+  if (words > 0 && words < 8) next = Math.min(next, 32);
+  else if (words > 0 && words < 15) next = Math.min(next, 48);
+  else if (words > 0 && words < 25) next = Math.min(next, 65);
+  return { ...result, score: clamp(next, 0, 100) };
 }
 
 function buildProperAnswerFromProfile(question: string, profile: InterviewProfile) {
@@ -579,8 +695,52 @@ function scoreCommunication(questions: LiveInterviewQuestion[]) {
     .map((item) => evaluableTextAnswer(item))
     .filter(Boolean);
   if (!textAnswers.length) return 4;
-  const words = textAnswers.reduce((sum, item) => sum + item.split(/\s+/).length, 0) / textAnswers.length;
-  return clamp(Math.round(3 + Math.min(7, words / 18)), 1, 10);
+  const avgWords =
+    textAnswers.reduce((sum, item) => sum + item.split(/\s+/).length, 0) / textAnswers.length;
+  const avgScore =
+    questions.reduce((sum, item) => sum + (item.score || 0), 0) / Math.max(questions.length, 1);
+  // Blend content quality with clarity/length — do not reward length alone.
+  const lengthPart = clamp(Math.round(2 + Math.min(4, avgWords / 25)), 2, 6);
+  const qualityPart = clamp(Math.round(avgScore / 20), 1, 5);
+  return clamp(lengthPart + qualityPart - 1, 1, 10);
+}
+
+function scoreByCategories(questions: LiveInterviewQuestion[], pattern: RegExp): number | null {
+  const matched = questions.filter(
+    (item) => item.score != null && pattern.test(item.category || ''),
+  );
+  if (matched.length < 1) return null;
+  const avg =
+    matched.reduce((sum, item) => sum + (item.score || 0), 0) / matched.length;
+  return clamp(Math.round(avg / 10), 1, 10);
+}
+
+function scoreRoleReadiness(
+  questions: LiveInterviewQuestion[],
+  communication: number,
+  technical: number | null,
+  overall: number,
+) {
+  const roleQs = questions.filter((item) =>
+    /ROLE|INTRO|EXPERIENCE|BEHAVIOURAL/i.test(item.category || ''),
+  );
+  const roleAvg = roleQs.length
+    ? roleQs.reduce((sum, item) => sum + (item.score || 0), 0) / roleQs.length / 10
+    : overall / 10;
+  const tech = technical ?? Math.round(overall / 12);
+  return clamp(Math.round((roleAvg + communication + tech) / 3), 1, 10);
+}
+
+function scoreConfidenceFromAudio(questions: LiveInterviewQuestion[]) {
+  const audio = questions.filter((item) => item.answerMode === 'AUDIO');
+  if (!audio.length) return null;
+  const avgDur =
+    audio.reduce((sum, item) => sum + (item.answerDurationSec || 0), 0) / audio.length;
+  const avgScore = audio.reduce((sum, item) => sum + (item.score || 0), 0) / audio.length;
+  // Duration + content quality proxy only — not a true vocal confidence metric.
+  const durationPart = avgDur >= 45 ? 4 : avgDur >= 20 ? 3 : 2;
+  const qualityPart = clamp(Math.round(avgScore / 25), 1, 4);
+  return clamp(durationPart + qualityPart, 1, 8);
 }
 
 function scoreBehaviour(questions: LiveInterviewQuestion[], integrity?: InterviewReport['integrity']) {
@@ -594,14 +754,13 @@ function scoreBehaviour(questions: LiveInterviewQuestion[], integrity?: Intervie
   const tabSwitches = integrity?.tabSwitches || 0;
   const multipleFaces = integrity?.multipleFaces || 0;
 
-  // Abuse must never look like strong behaviour (fixes 9/10 after vulgar answers).
   if (abuse >= 3) return 1;
   if (abuse >= 2) return 2;
   if (abuse >= 1) return 3;
 
   const rude = questions.some((item) => /stupid|hate|idk lol|whatever|shut up/i.test(item.answer || ''));
-  const complete = questions.filter((item) => (item.answer || '').length > 40).length / questions.length;
-  let base = clamp(Math.round((rude ? 3 : 7) + complete * 3), 1, 10);
+  const complete = questions.filter((item) => (item.answer || '').split(/\s+/).filter(Boolean).length >= 25).length / questions.length;
+  let base = clamp(Math.round((rude ? 3 : 6) + complete * 3), 1, 10);
   base = clamp(
     base - nonsense * 2 - faceMissing * 2 - tabSwitches * 1 - multipleFaces * 1,
     1,
@@ -632,17 +791,47 @@ function recFromScore(
   totalPlanned = 15,
   integrity?: InterviewReport['integrity'],
 ): InterviewReport['recommendation'] {
-  const allowed = ['Strongly Recommended', 'Recommended', 'Needs Improvement', 'Not Ready'] as const;
+  const allowed = [
+    'Strongly Recommended',
+    'Recommended',
+    'Needs Improvement',
+    'Significant Improvement Needed',
+    'Not Recommended',
+    'Not Ready',
+  ] as const;
   let pick: InterviewReport['recommendation'] =
-    score >= 85 ? 'Strongly Recommended' : score >= 70 ? 'Recommended' : score >= 55 ? 'Needs Improvement' : 'Not Ready';
-  if (answeredCount < Math.ceil(totalPlanned * 0.4)) pick = 'Not Ready';
-  else if (answeredCount < Math.ceil(totalPlanned * 0.6) && pick === 'Strongly Recommended') pick = 'Recommended';
+    score >= 85
+      ? 'Strongly Recommended'
+      : score >= 70
+        ? 'Recommended'
+        : score >= 55
+          ? 'Needs Improvement'
+          : score >= 40
+            ? 'Significant Improvement Needed'
+            : 'Not Recommended';
+  if (answeredCount < Math.ceil(totalPlanned * 0.4)) pick = 'Not Recommended';
+  else if (answeredCount < Math.ceil(totalPlanned * 0.6) && pick === 'Strongly Recommended') {
+    pick = 'Recommended';
+  }
   if ((integrity?.abuseWarnings || 0) >= 1) pick = 'Not Ready';
-  if ((integrity?.faceMissing || 0) >= 3 && pick === 'Strongly Recommended') pick = 'Needs Improvement';
+  if ((integrity?.faceMissing || 0) >= 3 && pick === 'Strongly Recommended') {
+    pick = 'Needs Improvement';
+  }
   if (raw && (allowed as readonly string[]).includes(raw)) {
-    // Never let the model override abuse into a positive recommendation.
     if ((integrity?.abuseWarnings || 0) >= 1) return 'Not Ready';
-    return raw as InterviewReport['recommendation'];
+    // Never accept a model recommendation higher than the score band allows.
+    const model = raw as InterviewReport['recommendation'];
+    const rank = (r: InterviewReport['recommendation']) =>
+      r === 'Strongly Recommended'
+        ? 5
+        : r === 'Recommended'
+          ? 4
+          : r === 'Needs Improvement'
+            ? 3
+            : r === 'Significant Improvement Needed'
+              ? 2
+              : 1;
+    return rank(model) <= rank(pick) ? model : pick;
   }
   return pick;
 }
@@ -669,8 +858,18 @@ function mergeIntegrityDonts(base: string[], integrity?: InterviewReport['integr
 }
 
 function defaultStrengths(questions: LiveInterviewQuestion[]) {
+  const strong = questions.filter((item) => (item.score || 0) >= 70);
+  if (strong.length) {
+    return strong
+      .slice(0, 3)
+      .map((item) => `Answered with useful detail on: ${item.text.slice(0, 60)}${item.text.length > 60 ? '…' : ''}`);
+  }
+  const decent = questions.filter((item) => (item.score || 0) >= 50);
+  if (decent.length) {
+    return ['Showed willingness to answer each question', 'Stayed on topic for at least some responses'];
+  }
   return questions.length
-    ? ['Showed up and completed the practice', 'Gave answers in your own words']
+    ? ['Attempted the interview questions']
     : ['Started the interview'];
 }
 
@@ -679,12 +878,52 @@ function defaultWeaknesses(questions: LiveInterviewQuestion[], answeredCount = 0
   if (answeredCount < totalPlanned) {
     items.push(`You answered ${answeredCount} of ${totalPlanned} planned questions`);
   }
-  if (questions.some((item) => (item.answer || '').split(/\s+/).length < 20)) {
-    items.push('Some answers were too short — add real examples from your profile');
+  const shortCount = questions.filter((item) => (item.answer || '').split(/\s+/).filter(Boolean).length < 20).length;
+  if (shortCount > 0) {
+    items.push(
+      `${shortCount} answer${shortCount === 1 ? ' was' : 's were'} too short — cover key points with concrete examples`,
+    );
   } else {
-    items.push('Structure answers more clearly');
+    items.push('Project/technical answers need clearer personal contribution and tools used');
   }
+  items.push('Avoid generic statements; explain why your experience matches the question');
   return items;
+}
+
+function defaultPostInterviewSuggestions(
+  questions: LiveInterviewQuestion[],
+  profile: InterviewProfile,
+  overall: number,
+): NonNullable<InterviewReport['postInterviewSuggestions']> {
+  const shortHeavy = questions.filter((item) => (item.answer || '').split(/\s+/).filter(Boolean).length < 20).length;
+  const role = profile.jobRole || 'your target role';
+  return {
+    communication: [
+      shortHeavy
+        ? 'Your biggest gap was answer completeness. Aim for 45–90 seconds / 4–6 sentences per question.'
+        : 'Tighten openings: state the direct answer in the first sentence, then support with an example.',
+      'Practice aloud without reading a script so delivery stays natural.',
+    ],
+    technical: [
+      `Revise fundamentals for ${role}: definitions, how it works, one practical example, and where you used it.`,
+      'When asked about a tool/language, explain usage on a real task — not only that you “used it for programming”.',
+    ],
+    answerStructure: [
+      'Behavioral/project: Situation → Task → Action (your contribution) → Result.',
+      'Technical: Definition → How it works → Example → Practical usage.',
+      'Project: Purpose → Your contribution → Technologies → Implementation → Challenge → Result.',
+    ],
+    topicsToRevise:
+      profile.skills.slice(0, 5).length > 0
+        ? profile.skills.slice(0, 5).map((skill) => `Be ready to explain ${skill} with a real example from your work/projects.`)
+        : ['Core concepts for your target role', 'One project end-to-end narrative', 'Basics of APIs, databases, and debugging'],
+    practicePlan: [
+      overall < 55
+        ? 'Re-do this mock focusing on longer answers for the first 3 question types you scored lowest on.'
+        : 'Do one timed mock weekly and rewrite each weak answer using STAR before the next attempt.',
+      'Record yourself once, then check: Did I answer every part of the question? Did I give an example?',
+    ],
+  };
 }
 
 function formatDuration(sec: number) {

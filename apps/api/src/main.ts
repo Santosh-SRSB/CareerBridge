@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded, type Request, type Response } from 'express';
 import { AppModule } from './app.module';
 import { CloudJsonLogger } from './common/logger/cloud-json-logger';
 
@@ -11,12 +13,22 @@ process.on('unhandledRejection', (reason) => {
   console.error('unhandledRejection (API kept running):', reason);
 });
 
+type ReqWithRawBody = Request & { rawBody?: Buffer };
+
 async function bootstrap() {
   const isCloudOrProd = process.env.NODE_ENV === 'production' || Boolean(process.env.GCP_PROJECT_ID);
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: isCloudOrProd ? new CloudJsonLogger() : ['log', 'error', 'warn', 'debug', 'verbose'],
-    rawBody: true,
+    bodyParser: false,
   });
+
+  // Profile photos may be sent as compressed JPEG data URLs — keep limit high.
+  // Also preserve rawBody for WhatsApp signature verification.
+  const captureRaw = (req: Request, _res: Response, buf: Buffer) => {
+    (req as ReqWithRawBody).rawBody = buf;
+  };
+  app.use(json({ limit: '8mb', verify: captureRaw }));
+  app.use(urlencoded({ extended: true, limit: '8mb', verify: captureRaw }));
 
   app.setGlobalPrefix('api/v1');
   const webOrigins = (process.env.WEB_ORIGIN || 'http://localhost:3000')

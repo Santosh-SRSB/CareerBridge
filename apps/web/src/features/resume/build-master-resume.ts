@@ -1,6 +1,7 @@
 import type { MasterResumeDocument } from './master-resume.types';
 import { formatDateForResume, formatEducationYearRange } from '@/lib/resume-dates';
 import { isValidEmail, isValidPhone } from './resume-wizard-validation';
+import { sortExperienceForResume } from './master-to-ats-data';
 
 interface EducationItem {
   degree: string;
@@ -22,6 +23,7 @@ interface ExperienceItem {
   endDate: string;
   isCurrent: boolean;
   responsibilities?: string[];
+  isInternship?: boolean;
 }
 
 interface ProjectItem {
@@ -82,14 +84,26 @@ export function buildMasterResume(input: BuildMasterResumeInput): MasterResumeDo
       portfolio: (input.portfolio || '').trim(),
     },
     summary: input.summary.trim(),
-    experience: input.experienceList.map((exp) => ({
-      jobTitle: exp.role.trim(),
-      company: exp.company.trim(),
-      location: exp.location.trim(),
-      startDate: formatDateForResume(exp.startDate),
-      endDate: exp.isCurrent ? '' : formatDateForResume(exp.endDate),
-      isCurrent: exp.isCurrent,
-      responsibilities: (exp.responsibilities || []).map((r) => r.trim()).filter(Boolean),
+    experience: sortExperienceForResume(
+      input.experienceList.map((exp) => ({
+        role: exp.role.trim(),
+        company: exp.company.trim(),
+        location: exp.location.trim(),
+        startDate: formatDateForResume(exp.startDate),
+        endDate: exp.isCurrent ? '' : formatDateForResume(exp.endDate),
+        current: exp.isCurrent,
+        responsibilities: (exp.responsibilities || []).map((r) => r.trim()).filter(Boolean),
+        isInternship: Boolean(exp.isInternship) || /\bintern(?:ship|s)?\b/i.test(exp.role),
+      })),
+    ).map((exp) => ({
+      jobTitle: exp.role,
+      company: exp.company,
+      location: exp.location,
+      startDate: exp.startDate,
+      endDate: exp.endDate,
+      isCurrent: Boolean(exp.current),
+      responsibilities: exp.responsibilities,
+      isInternship: exp.isInternship,
     })),
     technicalSkills,
     education: input.educationList.map((edu) => {
@@ -122,7 +136,20 @@ export function buildMasterResume(input: BuildMasterResumeInput): MasterResumeDo
         bullets: filteredBullets,
       };
     }),
-    achievements: input.achievementList.map((ach) => ({
+    achievements: input.achievementList
+      .filter((ach) => {
+        const blob = [ach.title, ach.organization, ach.description].filter(Boolean).join(' ');
+        const cleaned = blob
+          .trim()
+          .replace(/[-–—•|]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!cleaned) return false;
+        if (/^(page\s+)?\d+\s*of\s*\d+$/i.test(cleaned.replace(/\s+/g, ''))) return false;
+        if (/^(page\s+)?\d+\s+of\s+\d+$/i.test(cleaned)) return false;
+        return true;
+      })
+      .map((ach) => ({
       title: ach.title.trim(),
       organization: (ach.organization || '').trim(),
       date: formatDateForResume(ach.date || ''),

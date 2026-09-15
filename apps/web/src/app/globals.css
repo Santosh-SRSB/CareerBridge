@@ -18891,8 +18891,8 @@ a.ep-stat:hover {
 }
 
 .cb-boarding__id-photo {
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   background: #3e7cb1;
   display: flex;
@@ -18902,12 +18902,120 @@ a.ep-stat:hover {
   font-size: 1.35rem;
   overflow: hidden;
   flex-shrink: 0;
+  border: none;
+  padding: 0;
+  position: relative;
+  cursor: pointer;
+  color: inherit;
+}
+
+.cb-boarding__id-photo:disabled {
+  cursor: wait;
+}
+
+.cb-boarding__id-photo--empty {
+  background: transparent;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
 }
 
 .cb-boarding__id-photo img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.cb-boarding__id-photo-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background:
+    repeating-linear-gradient(
+      -28deg,
+      #cfd4cb,
+      #cfd4cb 6px,
+      #d9ddd4 6px,
+      #d9ddd4 12px
+    );
+  color: #5a625b;
+}
+
+.cb-boarding__id-photo-empty::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(160, 168, 158, 0.35);
+  pointer-events: none;
+}
+
+.cb-boarding__id-photo-cam {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  color: #4f574f;
+}
+
+.cb-boarding__id-photo-cam svg {
+  width: 26px;
+  height: 26px;
+}
+
+.cb-boarding__id-photo-stripe {
+  position: relative;
+  z-index: 1;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #3f463f;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px dashed rgba(79, 87, 79, 0.5);
+  padding: 3px 7px;
+  border-radius: 999px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.cb-boarding__id-photo-upload {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(12, 40, 34, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cb-boarding__id-photo-water {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(56, 168, 140, 0.55), rgba(12, 40, 34, 0.75));
+  transition: height 0.2s ease;
+}
+
+.cb-boarding__id-photo-upload-txt {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.cb-boarding__id-photo-err {
+  margin-top: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #ffb4a8;
 }
 
 .cb-boarding__id-name {
@@ -20223,6 +20331,15 @@ a.ep-stat:hover {
   height: 0.375rem;
 }
 
+/* Nearby jobs: dotted divider between distance buckets */
+.cb-jobs-bucket-divider {
+  width: 100%;
+  border: none;
+  border-top: 2px dotted #cbd5e1;
+  margin: 0.25rem 0 0.5rem;
+}
+
+
 /* ========== Job detail (mock layout) ========== */
 .cb-job-detail {
   --jd-dark: #0c2822;
@@ -20508,7 +20625,155 @@ a.ep-stat:hover {
 }
 
 .cb-job-detail__match {
-  padding: 24px;
+  padding: 22px;
+}
+
+.cb-job-detail__ats-head h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--jd-ink);
+}
+
+.cb-job-detail__ats-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--jd-muted);
+}
+
+.cb-job-detail__ats-score {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 16px 0 18px;
+}
+
+.cb-job-detail__ats-score-num {
+  margin: 0;
+  font-family: var(--font-lora-job), var(--font-fraunces), Georgia, serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--jd-ink);
+}
+
+.cb-job-detail__ats-score-num span {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--jd-muted);
+}
+
+.cb-job-detail__ats-label {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c45f0c;
+}
+
+.cb-job-detail__ats-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid var(--jd-hair);
+  border-bottom: 1px solid var(--jd-hair);
+}
+
+.cb-job-detail__ats-row {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr 2.6rem;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--jd-ink);
+}
+
+.cb-job-detail__ats-row strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.cb-job-detail__ats-bar-wrap {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef0e8;
+}
+
+.cb-job-detail__ats-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0c2822, #2f6b4f);
+  transition: width 0.8s cubic-bezier(.22,.61,.36,1);
+}
+
+.cb-job-detail__ats-improve {
+  margin-top: 16px;
+}
+
+.cb-job-detail__ats-improve-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--jd-ink);
+}
+
+.cb-job-detail__ats-improve ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cb-job-detail__ats-improve li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #2a352f;
+}
+
+.cb-job-detail__ats-improve li span {
+  color: #f5821f;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.cb-job-detail__ats-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cb-job-detail__ats-link {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #cfd5c8;
+  background: #fff;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0c2822;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.cb-job-detail__ats-link:hover {
+  background: #f4f6ef;
+  border-color: #0c2822;
+}
+
+.cb-job-detail__ats-strengths {
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #2f6b4f;
+  font-weight: 600;
 }
 
 .cb-job-detail__match-top {

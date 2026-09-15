@@ -28,7 +28,6 @@ function ForgotPasswordBody() {
   const [loading, setLoading] = useState(false);
 
   function selectRole(next: LoginAccountType) {
-    if (next === 'SUPER_ADMIN' || next === 'ADMIN') return;
     setRole(next);
     setStep('request');
     setRequestId('');
