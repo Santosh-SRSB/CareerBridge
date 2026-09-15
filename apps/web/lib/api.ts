@@ -1,5 +1,4 @@
 import type {
-  AdminDashboard,
   ApiResponse,
   ApplicationRecord,
   AuthSession,
@@ -316,14 +315,6 @@ export async function changeApplicationStatus(id: string, action: string) {
     method: 'POST',
     body: JSON.stringify({ action }),
   });
-}
-
-export async function getAdminDashboard() {
-  return request<AdminDashboard>('/admin/dashboard');
-}
-
-export async function getAdminList(path: string) {
-  return request<unknown[]>(`/admin/${path}`);
 }
 
 export async function logout() {

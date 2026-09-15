@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ScoreRing } from '@/components/ScoreRing';
 import { SkillEntryCard } from '@/components/SkillEntryCard';
+import { rememberReturnTo } from '@/lib/nav-return';
 
 type Props = {
   resumeScore: number | null;
@@ -25,7 +26,11 @@ export function HomePrepareSection({ resumeScore, interviewScore, hasResume, hea
       </header>
 
       <div className="cb-home-prepare-grid">
-        <Link href="/resume" className="cb-home-prepare-card">
+        <Link
+          href={hasResume ? '/resumes' : '/onboarding/complete'}
+          className="cb-home-prepare-card"
+          onClick={() => rememberReturnTo('/dashboard')}
+        >
           <p className="cb-home-prepare-card__label">Resume</p>
           <div className="cb-home-prepare-card__body">
             <ScoreRing value={resumeScore ?? 0} size={56} label="Score" />

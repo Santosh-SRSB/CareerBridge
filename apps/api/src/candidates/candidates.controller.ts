@@ -1,5 +1,20 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ErrorCode } from '@careerbridge/shared';
 import { UserType } from '../prisma/client';
 import { CandidatesService } from './candidates.service';
 import {
@@ -13,6 +28,7 @@ import {
   SavePassportDto,
   CertificationDto,
   ProjectDto,
+  AnalyzeCareerGapDto,
 } from './dto/update-candidate.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -36,6 +52,11 @@ export class CandidatesController {
     return this.candidates.completion(user.id);
   }
 
+  @Post('me/career-gap/analyze')
+  analyzeCareerGap(@CurrentUser() user: { id: string }, @Body() dto: AnalyzeCareerGapDto) {
+    return this.candidates.analyzeCareerGap(user.id, dto || {});
+  }
+
   @Put(['me', 'profile'])
   updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateCandidateDto) {
     return this.candidates.updateMe(user.id, dto);
@@ -49,6 +70,27 @@ export class CandidatesController {
   @Patch('me')
   patchMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateCandidateDto) {
     return this.candidates.updateMe(user.id, dto);
+  }
+
+  @Post('me/photo')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  uploadPhoto(
+    @CurrentUser() user: { id: string },
+    @UploadedFile()
+    file?: { buffer: Buffer; mimetype: string; size: number; originalname: string },
+  ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Please choose a JPG or PNG photo.',
+      });
+    }
+    return this.candidates.uploadPhotoFile(user.id, file);
   }
 
   @Put('me/preferences')

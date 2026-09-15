@@ -21,7 +21,6 @@ function RegisterBody() {
   }, [roleParam]);
 
   function selectRole(next: LoginAccountType) {
-    if (next === 'SUPER_ADMIN' || next === 'ADMIN') return;
     setRole(next);
     router.replace(`/register?role=${next.toLowerCase()}`, { scroll: false });
   }

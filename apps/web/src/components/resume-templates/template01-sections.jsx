@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  contactNodes,
   dateRange,
   nonEmptyList,
   projectBulletTexts,
@@ -7,10 +8,25 @@ import {
   visibleBullets,
 } from "./helpers.js";
 
-function contactLineTemplate01(data) {
-  return [data.location, data.email, data.phone, data.linkedin, data.website]
-    .filter(Boolean)
-    .join(" | ");
+function ContactLineTemplate01({ data }) {
+  const nodes = contactNodes(data, " | ");
+  if (!nodes.length) return null;
+  return (
+    <p className="rt01-contact">
+      {nodes.map((node, i) => (
+        <span key={`${node.value}-${i}`}>
+          {node.href ? (
+            <a className="resume-link" href={node.href} target="_blank" rel="noreferrer">
+              {node.label}
+            </a>
+          ) : (
+            node.label
+          )}
+          {node.separator}
+        </span>
+      ))}
+    </p>
+  );
 }
 
 function educationDegreeLine(ed) {
@@ -21,11 +37,10 @@ function educationDegreeLine(ed) {
 }
 
 export function Template01Header({ data }) {
-  const contact = contactLineTemplate01(data);
   return (
     <header>
       <h1>{data.fullName || "Your Name"}</h1>
-      {contact ? <p className="rt01-contact">{contact}</p> : null}
+      <ContactLineTemplate01 data={data} />
     </header>
   );
 }
@@ -49,10 +64,11 @@ export function Template01Experience({ data }) {
         const dates = dateRange(job.startDate, job.endDate, job.current);
         const bullets = visibleBullets(job.bullets);
         const companyLine = [job.company, job.location].filter(Boolean).join(", ");
+        const role = String(job.role || "Role").trim();
         return (
           <div className="rt01-entry" key={i}>
             <div className="rt01-row">
-              <strong>{job.role || "Role"}</strong>
+              <strong className="rt01-role">{role}</strong>
               {dates ? <span className="rt01-dates">{dates}</span> : null}
             </div>
             {companyLine ? <p className="rt01-sub">{companyLine}</p> : null}
@@ -141,6 +157,19 @@ export function Template01Projects({ data }) {
         const bullets = projectBulletTexts(p);
         const techs = projectTechnologies(p);
         const title = p.name || p.title;
+        let overview = String(p.description || "").trim();
+        if (techs.length && overview) {
+          overview = overview
+            .replace(
+              /(?:^|\n)\s*(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*.+$/gim,
+              "",
+            )
+            .replace(
+              /\b(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*[^.]+$/i,
+              "",
+            )
+            .trim();
+        }
         return (
           <div className="rt01-entry" key={p.id || i}>
             {title && (
@@ -154,7 +183,7 @@ export function Template01Projects({ data }) {
                 )}
               </p>
             )}
-            {p.description ? <p className="rt01-project-desc">{p.description}</p> : null}
+            {overview ? <p className="rt01-project-desc">{overview}</p> : null}
             {bullets.length > 0 ? (
               <ul>
                 {bullets.map((b, j) => (
@@ -194,9 +223,18 @@ export function Template01Languages({ data }) {
 }
 
 export function Template01Achievements({ data }) {
-  const achievements = (data.achievements || []).filter(
-    (a) => a.title || a.description || a.organization,
-  );
+  const achievements = (data.achievements || []).filter((a) => {
+    const text = [a.title, a.organization, a.description].filter(Boolean).join(" — ");
+    if (!text.trim()) return false;
+    const marker = text
+      .trim()
+      .replace(/[-–—•|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (/^(page\s+)?\d+\s*of\s*\d+$/i.test(marker.replace(/\s+/g, ""))) return false;
+    if (/^(page\s+)?\d+\s+of\s+\d+$/i.test(marker)) return false;
+    return true;
+  });
   if (!achievements.length) return null;
   return (
     <section>

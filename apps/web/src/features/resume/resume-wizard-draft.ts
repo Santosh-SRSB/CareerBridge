@@ -1,5 +1,5 @@
 const RESUME_WIZARD_DRAFT_KEY = 'cb.resumeWizardDraft';
-export const RESUME_WIZARD_DRAFT_VERSION = 3;
+export const RESUME_WIZARD_DRAFT_VERSION = 4;
 
 export type ResumeWizardFlowPhase = 'choose' | 'wizard' | 'preview' | 'finish';
 

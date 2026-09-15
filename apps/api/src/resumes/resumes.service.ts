@@ -20,7 +20,7 @@ import { ResumeOptimizeAi } from './resume-optimize-ai';
 import { ResumeProcessorService } from './resume-processor.service';
 import { analyzeRoleResume, rewriteRoleResume, recommendCareerRoles } from './ats-engine';
 import { resolveResumeTemplateId, CAREERBRIDGE_RESUME_TEMPLATE } from '@careerbridge/shared';
-import { isThinResumeContent, parseExtractedResumeText } from './parse-extracted-resume';
+import { extractProjectTechnologies, isPageMarkerText, isThinResumeContent, parseExtractedResumeText } from './parse-extracted-resume';
 
 @Injectable()
 export class ResumesService {
@@ -127,6 +127,9 @@ export class ResumesService {
       gapReason: '',
       skills: parsed.skills || [],
       careerInterests: [],
+      linkedin: parsed.links?.linkedin || '',
+      github: parsed.links?.github || '',
+      portfolio: parsed.links?.portfolio || parsed.links?.website || '',
       source: 'resume' as const,
     };
   }
@@ -805,7 +808,8 @@ export class ResumesService {
       const resume = await this.requireResume(userId, input.resumeId);
       const content = parseContent(resume.contentJson);
       templateId = resolveResumeTemplateId(input.templateId || resume.template);
-      payload = toRoleAtsResume(content, resume.targetJobTitle);
+      // Prefer the live client payload (post-edit) so recheck reflects latest changes.
+      payload = input.resume || toRoleAtsResume(content, resume.targetJobTitle);
     }
     if (!payload) {
       throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Resume data is required.' });
@@ -1361,31 +1365,35 @@ function toRoleAtsResume(content: ResumeContent & { _manual?: boolean; data?: Re
       title: (content.data.title as string) || title || '',
     };
   }
+  const links = content.links || content.resumeData?.links || {};
   return {
     fullName: content.fullName || '',
     title: title || '',
     email: content.email || '',
     phone: content.phone || '',
     location: content.city || '',
-    linkedin: '',
-    website: '',
+    linkedin: links.linkedin || '',
+    website: links.portfolio || links.website || links.github || '',
     photo: '',
     summary: content.summary || '',
     skills: content.skills || [],
-    experience: (content.experiences || []).map((item) => ({
-      company: item.company,
-      role: item.jobTitle,
-      location: '',
-      startDate: '',
-      endDate: '',
-      current: false,
-      bullets: item.description
-        ? item.description
-            .split(/\n|•/)
-            .map((line) => line.trim())
-            .filter(Boolean)
-        : [],
-    })),
+    experience: (content.experiences || []).map((item, index) => {
+      const fromData = content.resumeData?.experience?.[index];
+      return {
+        company: item.company,
+        role: item.jobTitle,
+        location: '',
+        startDate: item.startDate || fromData?.startDate || '',
+        endDate: item.endDate || fromData?.endDate || '',
+        current: Boolean(item.isCurrent ?? fromData?.isCurrent),
+        bullets: item.description
+          ? item.description
+              .split(/\n|•/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+          : [],
+      };
+    }),
     education: (content.education || []).map((item, index) => ({
       id: `education-${index}`,
       institution: item.institution || '',
@@ -1394,22 +1402,38 @@ function toRoleAtsResume(content: ResumeContent & { _manual?: boolean; data?: Re
       fieldOfStudy: '',
       endDate: item.yearCompleted ? String(item.yearCompleted) : '',
     })),
-    projects: (content.projects || []).map((item) => ({
-      name: item.name,
-      title: item.name,
-      description: item.description || '',
-      technologies: [],
-      bullets: Array.isArray(item.bullets)
-        ? item.bullets.map((b) => String(b || '').trim()).filter(Boolean)
-        : item.description
-          ? item.description
-              .split(/\n|•/)
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .slice(1)
-          : [],
-      url: item.url || '',
-    })),
+    projects: (content.projects || []).map((item, index) => {
+      const fromData = content.resumeData?.projects?.[index];
+      const existingTech = [
+        ...(item.technologies || []),
+        ...((fromData?.technologies as string[] | undefined) || []),
+      ]
+        .map((t) => String(t || '').trim())
+        .filter(Boolean);
+      const bodyLines = String(item.description || '')
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const peeled = extractProjectTechnologies(bodyLines);
+      const technologies = [...new Set([...existingTech, ...peeled.technologies])];
+      const description = peeled.description || item.description || '';
+      return {
+        name: item.name,
+        title: item.name,
+        description,
+        technologies,
+        bullets: Array.isArray(item.bullets)
+          ? item.bullets.map((b) => String(b || '').trim()).filter(Boolean)
+          : description
+            ? description
+                .split(/\n|•/)
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .slice(1)
+            : [],
+        url: item.url || '',
+      };
+    }),
     certifications: (content.certifications || []).map((entry) => {
       if (typeof entry === 'string') return { name: entry, issuer: '', date: '', url: '' };
       return {
@@ -1419,7 +1443,9 @@ function toRoleAtsResume(content: ResumeContent & { _manual?: boolean; data?: Re
         url: entry.url || '',
       };
     }),
-    achievements: (content.achievements || []).map((item) => ({
+    achievements: (content.achievements || [])
+      .filter((item) => !isPageMarkerText(item.title, item.organization, item.description))
+      .map((item) => ({
       title: item.title || '',
       organization: item.organization || '',
       description: item.description || '',

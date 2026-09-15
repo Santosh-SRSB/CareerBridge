@@ -48,7 +48,7 @@ export default function WhatsAppIntegrationTestPage() {
       setEvents(status.events || []);
     } catch {
       // WhatsApp admin APIs require SUPER_ADMIN / PLATFORM_ADMIN token
-      router.replace('/srsbaadmin?next=/admin/integrations/whatsapp/test');
+      router.replace('/adminsrsb?next=/admin/integrations/whatsapp/test');
     }
   }, [router]);
 

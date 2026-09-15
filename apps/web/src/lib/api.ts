@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AdminDashboard,
   ApiResponse,
   ApplicationRecord,
@@ -72,20 +72,6 @@ async function request<T>(
     }
     if (response.status === 401 && path !== '/auth/refresh' && path !== '/auth/logout') {
       clearSession();
-      // After DB wipes / expired tokens, leave protected pages cleanly instead of
-      // bubbling an uncaught "Please sign in again" Next.js overlay.
-      if (typeof window !== 'undefined') {
-        const pathName = window.location.pathname;
-        const onPublicAuth =
-          pathName === '/login' ||
-          pathName === '/register' ||
-          pathName.startsWith('/verify-otp') ||
-          pathName.startsWith('/forgot');
-        if (!onPublicAuth) {
-          window.location.replace('/login?session=expired');
-          return new Promise<T>(() => undefined);
-        }
-      }
     }
     const error = new Error(body.error.message) as Error & { code: string };
     error.code = body.error.code;
@@ -106,22 +92,12 @@ export async function requestOtp(payload: RequestOtpPayload) {
 export async function loginWithPassword(
   identifier: string,
   password: string,
-  accountType: 'CANDIDATE' | 'EMPLOYER' | 'SUPER_ADMIN' | 'ADMIN' = 'CANDIDATE',
+  accountType: 'CANDIDATE' | 'EMPLOYER' = 'CANDIDATE',
 ) {
   const session = await request<AuthSession>('/auth/login', {
     method: 'POST',
     auth: false,
     body: JSON.stringify({ identifier, password, accountType }),
-  });
-  saveSession(session);
-  return session;
-}
-
-export async function loginAdminPortal(email: string, password: string) {
-  const session = await request<AuthSession>('/auth/admin/login', {
-    method: 'POST',
-    auth: false,
-    body: JSON.stringify({ email, password }),
   });
   saveSession(session);
   return session;
@@ -180,10 +156,59 @@ export async function getProfileCompletion() {
   return request<ProfileCompletion>('/candidates/me/completion');
 }
 
+export async function analyzeCareerGap(
+  payload: {
+    education?: Array<{
+      qualification: string;
+      startDate?: string;
+      endDate?: string;
+      yearCompleted?: number | string;
+      isCurrent?: boolean;
+    }>;
+    experience?: Array<{
+      startDate?: string;
+      endDate?: string;
+      stillInCompany?: boolean;
+      isCurrent?: boolean;
+    }>;
+    gapReason?: string;
+    persist?: boolean;
+  } = {},
+) {
+  return request<{
+    gapMonths: number;
+    gapDays: number;
+    totalDays: number;
+    hasGap: boolean;
+    gapLabel: string;
+    message: string | null;
+    savedGapReason?: string | null;
+    highestEducation: {
+      qualification: string;
+      endDate: string | null;
+      stillStudying: boolean;
+      rank: number;
+    } | null;
+  }>('/candidates/me/career-gap/analyze', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateCandidateMe(payload: UpdateCandidatePayload) {
   return request<CandidateProfile>('/candidates/me', {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+/** Multipart profile photo upload (preferred over JSON data URLs). */
+export async function uploadCandidatePhoto(file: Blob, fileName = 'photo.jpg') {
+  const form = new FormData();
+  form.append('file', file, fileName);
+  return request<CandidateProfile>('/candidates/me/photo', {
+    method: 'POST',
+    body: form,
   });
 }
 
@@ -308,6 +333,25 @@ export async function listJobs(params: Record<string, string | number | undefine
   const suffix = query.toString() ? `?${query}` : '';
   return request<PagedJobs>(`/jobs${suffix}`, { auth: Boolean(getAccessToken()) });
 }
+
+export async function listNearbyJobs(
+  params: Record<string, string | number | boolean | undefined | string[]> = {},
+) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === '') return;
+    if (Array.isArray(value)) {
+      if (value.length) query.set(key, value.join(','));
+      return;
+    }
+    query.set(key, String(value));
+  });
+  const suffix = query.toString() ? `?${query}` : '';
+  return request<import('@careerbridge/shared').NearbyJobsResponse>(`/jobs/nearby${suffix}`, {
+    auth: Boolean(getAccessToken()),
+  });
+}
+
 
 export async function recommendedJobs() {
   return request<PagedJobs>('/jobs/recommended');
@@ -1181,6 +1225,28 @@ export async function employerInterviewAction(
   });
 }
 
+export async function listPublicStates() {
+  return request<import('@careerbridge/shared').LocationState[]>('/locations/states', { auth: false });
+}
+
+export async function listPublicCities(stateId: string) {
+  return request<import('@careerbridge/shared').LocationCity[]>(
+    `/locations/cities?stateId=${encodeURIComponent(stateId)}`,
+    { auth: false },
+  );
+}
+
+export async function loginAdminPortal(email: string, password: string) {
+  const session = await request<AuthSession>('/auth/admin/login', {
+    method: 'POST',
+    auth: false,
+    body: JSON.stringify({ email, password }),
+  });
+  saveSession(session);
+  return session;
+}
+
+
 export async function getAdminDashboard() {
   return request<AdminDashboard>('/admin/dashboard');
 }
@@ -1427,17 +1493,6 @@ export async function createAdminSkill(payload: { name: string; category: string
     method: 'POST',
     body: JSON.stringify(payload),
   });
-}
-
-export async function listPublicStates() {
-  return request<import('@careerbridge/shared').LocationState[]>('/locations/states', { auth: false });
-}
-
-export async function listPublicCities(stateId: string) {
-  return request<import('@careerbridge/shared').LocationCity[]>(
-    `/locations/cities?stateId=${encodeURIComponent(stateId)}`,
-    { auth: false },
-  );
 }
 
 export async function adminListStates() {

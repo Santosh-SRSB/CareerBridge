@@ -18,6 +18,13 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
+  @Throttle({ default: { limit: 40, ttl: 60000 } })
+  @Post('admin/login')
+  adminLogin(@Body() dto: AdminLoginDto) {
+    return this.auth.loginAdmin(dto.email, dto.password);
+  }
+
+  @Public()
   @Throttle({ default: { limit: 200, ttl: 60000 } })
   @Post('otp/request')
   requestOtp(@Body() dto: RequestOtpDto) {
@@ -36,13 +43,6 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: PasswordLoginDto) {
     return this.auth.loginWithPassword(dto.identifier, dto.password, dto.accountType);
-  }
-
-  @Public()
-  @Throttle({ default: { limit: 40, ttl: 60000 } })
-  @Post('admin/login')
-  adminLogin(@Body() dto: AdminLoginDto) {
-    return this.auth.loginAdmin(dto.email, dto.password);
   }
 
   @Public()

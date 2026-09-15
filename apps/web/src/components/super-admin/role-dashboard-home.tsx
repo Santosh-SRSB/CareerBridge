@@ -12,18 +12,18 @@ type Tile = {
 };
 
 const MODULE_TILES: Tile[] = [
-  { label: 'Candidates', href: '/srsbaadmin/dashboard?tab=candidates', color: '#27a9e3', icon: '👤' },
-  { label: 'Employers', href: '/srsbaadmin/dashboard?tab=employers', color: '#28b779', icon: '🏢' },
-  { label: 'Jobs', href: '/srsbaadmin/dashboard?tab=jobs', color: '#ffb848', icon: '📋' },
-  { label: 'Applications', href: '/srsbaadmin/dashboard?tab=applications', color: '#da542e', icon: '📄' },
-  { label: 'Interviews', href: '/srsbaadmin/dashboard?tab=interviews', color: '#2255a4', icon: '🎥' },
-  { label: 'Skills', href: '/srsbaadmin/dashboard?tab=skills', color: '#f74d4d', icon: '✦' },
-  { label: 'AI Usage', href: '/srsbaadmin/dashboard?tab=ai-usage', color: '#852b99', icon: '⚡' },
-  { label: 'Notifications', href: '/srsbaadmin/dashboard?tab=notifications', color: '#0aa3c2', icon: '🔔' },
-  { label: 'Reports', href: '/srsbaadmin/dashboard?tab=reports', color: '#1f9d68', icon: '📊' },
-  { label: 'Audit', href: '/srsbaadmin/dashboard?tab=audit', color: '#c9a227', icon: '🧾' },
-  { label: 'Administration', href: '/srsbaadmin/dashboard?tab=admins', color: '#2b3643', icon: '🛡' },
-  { label: 'Settings', href: '/srsbaadmin/dashboard?tab=settings', color: '#5c6570', icon: '⚙' },
+  { label: 'Candidates', href: '/adminsrsb/dashboard?tab=candidates', color: '#27a9e3', icon: '👤' },
+  { label: 'Employers', href: '/adminsrsb/dashboard?tab=employers', color: '#28b779', icon: '🏢' },
+  { label: 'Jobs', href: '/adminsrsb/dashboard?tab=jobs', color: '#ffb848', icon: '📋' },
+  { label: 'Applications', href: '/adminsrsb/dashboard?tab=applications', color: '#da542e', icon: '📄' },
+  { label: 'Interviews', href: '/adminsrsb/dashboard?tab=interviews', color: '#2255a4', icon: '🎥' },
+  { label: 'Skills', href: '/adminsrsb/dashboard?tab=skills', color: '#f74d4d', icon: '✦' },
+  { label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage', color: '#852b99', icon: '⚡' },
+  { label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications', color: '#0aa3c2', icon: '🔔' },
+  { label: 'Reports', href: '/adminsrsb/dashboard?tab=reports', color: '#1f9d68', icon: '📊' },
+  { label: 'Audit', href: '/adminsrsb/dashboard?tab=audit', color: '#c9a227', icon: '🧾' },
+  { label: 'Administration', href: '/adminsrsb/dashboard?tab=admins', color: '#2b3643', icon: '🛡' },
+  { label: 'Settings', href: '/adminsrsb/dashboard?tab=settings', color: '#5c6570', icon: '⚙' },
 ];
 
 function visibleTiles(role: string | null) {
@@ -40,22 +40,22 @@ function alertItems(metrics: AdminDashboard) {
     {
       label: 'Failed notifications',
       value: metrics.alerts?.failedNotifications ?? 0,
-      href: '/srsbaadmin/dashboard?tab=notifications',
+      href: '/adminsrsb/dashboard?tab=notifications',
     },
     {
       label: 'Failed AI',
       value: metrics.alerts?.failedAiRequests ?? 0,
-      href: '/srsbaadmin/dashboard?tab=ai-usage',
+      href: '/adminsrsb/dashboard?tab=ai-usage',
     },
     {
       label: 'Suspended',
       value: metrics.alerts?.suspendedAccounts ?? 0,
-      href: '/srsbaadmin/dashboard?tab=candidates',
+      href: '/adminsrsb/dashboard?tab=candidates',
     },
     {
       label: 'Jobs attention',
       value: metrics.alerts?.jobsRequiringAttention ?? 0,
-      href: '/srsbaadmin/dashboard?tab=jobs',
+      href: '/adminsrsb/dashboard?tab=jobs',
     },
   ];
 }

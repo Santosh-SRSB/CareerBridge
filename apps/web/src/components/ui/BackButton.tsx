@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useRouter } from 'next/navigation';
+import { goToReturnTo, peekReturnTo } from '@/lib/nav-return';
 
 export function BackButton({
   href,
@@ -18,6 +19,10 @@ export function BackButton({
   function goBack() {
     if (href) {
       router.push(href);
+      return;
+    }
+    if (peekReturnTo()) {
+      goToReturnTo(router, fallback);
       return;
     }
     if (typeof window !== 'undefined' && window.history.length > 1) {

@@ -86,6 +86,11 @@ model Candidate {
   state                 String?
   city                  String?
   preferredWorkCity     String?  @map("preferred_work_city")
+  searchLatitude        Float?   @map("search_latitude")
+  searchLongitude       Float?   @map("search_longitude")
+  searchLocationName    String?  @map("search_location_name")
+  searchLocationSource  String?  @map("search_location_source")
+  searchLocationUpdatedAt DateTime? @map("search_location_updated_at")
   preferredLanguage     String?  @map("preferred_language")
   dateOfBirth           DateTime? @map("date_of_birth")
   gender                String?
@@ -284,6 +289,8 @@ model Job {
   title                  String
   description            String
   city                   String
+  latitude               Float?
+  longitude              Float?
   department             String?
   hiringManager          String?   @map("hiring_manager")
   openings               Int       @default(1)
@@ -314,6 +321,7 @@ model Job {
 
   @@index([status, city])
   @@index([category])
+  @@index([latitude, longitude])
   @@map("jobs")
 }
 
@@ -803,7 +811,7 @@ model Skill {
   aliases   String?  @db.Text
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@index([category])
   @@index([active])

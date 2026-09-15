@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { ProfileCompletion } from '@careerbridge/shared';
+import { rememberReturnTo } from '@/lib/nav-return';
 
 type Props = {
   completion: ProfileCompletion;
@@ -23,7 +24,11 @@ export function HomeWhatToDoSection({ completion, hasResume }: Props) {
       <ul className="cb-home-what-to-do-list">
         {improve.map((item) => (
           <li key={item.key}>
-            <Link href={item.href} className="cb-home-what-to-do-item">
+            <Link
+              href={item.href}
+              className="cb-home-what-to-do-item"
+              onClick={() => rememberReturnTo('/dashboard')}
+            >
               <span>{item.label.startsWith('Add') ? item.label : `Add ${item.label.toLowerCase()}`}</span>
               <span className="cb-home-what-to-do-item__cta">Add</span>
             </Link>
@@ -31,7 +36,11 @@ export function HomeWhatToDoSection({ completion, hasResume }: Props) {
         ))}
         {!hasResume ? (
           <li>
-            <Link href="/resume" className="cb-home-what-to-do-item">
+            <Link
+              href="/onboarding/complete"
+              className="cb-home-what-to-do-item"
+              onClick={() => rememberReturnTo('/dashboard')}
+            >
               <span>Create your first resume</span>
               <span className="cb-home-what-to-do-item__cta">Start</span>
             </Link>

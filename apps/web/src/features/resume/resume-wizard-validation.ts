@@ -1,4 +1,5 @@
 import { parseCityState } from '@/data/india-locations';
+import { profileLinkError } from '@careerbridge/shared';
 
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -25,6 +26,13 @@ export interface WizardStepValidationInput {
   educationList: unknown[];
   languages: string[];
   preferredRole: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  gapReason?: string;
+  gapMonths?: number;
+  /** True when uncovered time after highest education is > 30 days. */
+  hasCareerGap?: boolean;
 }
 
 export function validateWizardStep(step: string, input: WizardStepValidationInput): string[] {
@@ -66,6 +74,20 @@ export function validateWizardStep(step: string, input: WizardStepValidationInpu
     case 'Preferences':
       if (!input.preferredRole.trim()) {
         errors.push('Preferred role is required.');
+      }
+      break;
+    case 'Links': {
+      const linkedinErr = profileLinkError('linkedin', input.linkedin);
+      const githubErr = profileLinkError('github', input.github);
+      const portfolioErr = profileLinkError('portfolio', input.portfolio);
+      if (linkedinErr) errors.push(linkedinErr);
+      if (githubErr) errors.push(githubErr);
+      if (portfolioErr) errors.push(portfolioErr);
+      break;
+    }
+    case 'Career Gap':
+      if (input.hasCareerGap && !(input.gapReason || '').trim()) {
+        errors.push('Please explain why this career gap is OK.');
       }
       break;
     default:

@@ -84,7 +84,8 @@ function preparePdfCaptureClone(clonedDoc: Document) {
       [data-resume-pdf-capture="1"] .resume-template-01 h1,
       [data-resume-pdf-capture="1"] .resume-template-01 h2,
       [data-resume-pdf-capture="1"] .resume-template-01 strong,
-      [data-resume-pdf-capture="1"] .resume-template-01 b {
+      [data-resume-pdf-capture="1"] .resume-template-01 b,
+      [data-resume-pdf-capture="1"] .resume-template-01 .rt01-role {
         font-family: ${PDF_TIMES_STACK} !important;
         font-weight: 700 !important;
         font-style: normal !important;

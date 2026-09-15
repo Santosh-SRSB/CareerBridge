@@ -96,7 +96,7 @@ export class SeedService implements OnModuleInit {
     });
   }
 
-  /** Dedicated `admins` row for http://localhost:3000/srsbaadmin */
+  /** Dedicated `admins` row for http://localhost:3000/adminsrsb */
   private async srsbPortalAdmin() {
     const email = SRSB_ADMIN_EMAIL;
     const passwordHash = await hashPlatformPassword(SRSB_ADMIN_PASSWORD);

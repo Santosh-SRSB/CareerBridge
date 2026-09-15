@@ -4,8 +4,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { listApplications, logout } from '@/lib/api';
-import { getStoredUser } from '@/lib/session';
+import { listApplications, logout, getCandidateMe } from '@/lib/api';
+import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { NotificationBell } from '@/components/NotificationBell';
 
 export type CandidateTab =
@@ -252,6 +252,7 @@ export function CandidateAppShell({
   const [initial, setInitial] = useState('C');
   const [menuOpen, setMenuOpen] = useState(false);
   const [appsCount, setAppsCount] = useState(0);
+  const [navPhoto, setNavPhoto] = useState<string | null>(avatarUrl || null);
   /** Auto-swiping Resume ⇄ ATS in the mobile last slot */
   const [mobileCarousel, setMobileCarousel] = useState<'resumes' | 'ats'>('resumes');
   const [carouselTick, setCarouselTick] = useState(0);
@@ -260,6 +261,36 @@ export function CandidateAppShell({
     const user = getStoredUser();
     const letter = (user?.firstName || 'C').trim().charAt(0).toUpperCase() || 'C';
     setInitial(letter);
+    if (user?.photoUrl) setNavPhoto(user.photoUrl);
+  }, []);
+
+  useEffect(() => {
+    setNavPhoto(avatarUrl ?? getStoredUser()?.photoUrl ?? null);
+  }, [avatarUrl]);
+
+  useEffect(() => {
+    let active = true;
+    getCandidateMe()
+      .then((profile) => {
+        if (!active || !profile.photoUrl) return;
+        setNavPhoto(profile.photoUrl);
+        patchStoredUser({ photoUrl: profile.photoUrl });
+      })
+      .catch(() => undefined);
+
+    const onPhoto = (event: Event) => {
+      const detail = (event as CustomEvent<{ photoUrl?: string | null }>).detail;
+      if (detail && 'photoUrl' in detail) {
+        setNavPhoto(detail.photoUrl || null);
+        return;
+      }
+      setNavPhoto(getStoredUser()?.photoUrl || null);
+    };
+    window.addEventListener('cb-photo-updated', onPhoto);
+    return () => {
+      active = false;
+      window.removeEventListener('cb-photo-updated', onPhoto);
+    };
   }, []);
 
   useEffect(() => {
@@ -414,9 +445,17 @@ export function CandidateAppShell({
               aria-label="Account menu"
               aria-expanded={menuOpen}
             >
-              {avatarUrl ? (
+              {navPhoto ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={
+                    navPhoto.startsWith('data:')
+                      ? navPhoto
+                      : `${navPhoto}${navPhoto.includes('?') ? '&' : '?'}v=${encodeURIComponent(navPhoto.slice(-24))}`
+                  }
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 initial
               )}
@@ -525,9 +564,17 @@ export function CandidateAppShell({
               aria-label="Account menu"
               aria-expanded={menuOpen}
             >
-              {avatarUrl ? (
+              {navPhoto ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={
+                    navPhoto.startsWith('data:')
+                      ? navPhoto
+                      : `${navPhoto}${navPhoto.includes('?') ? '&' : '?'}v=${encodeURIComponent(navPhoto.slice(-24))}`
+                  }
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 initial
               )}

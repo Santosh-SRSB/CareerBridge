@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import type { InterviewSession, LiveInterviewQuestion } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
@@ -14,11 +14,16 @@ import {
   shouldShowBetterAnswer,
 } from '@/lib/interview-answer-display';
 
-function ScoreRow({ label, value }: { label: string; value: number }) {
+function ScoreRow({ label, value, note }: { label: string; value: number | null; note?: string | null }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="min-w-0 flex-1 font-semibold text-slate-700">{label}</span>
-      <span className="shrink-0 font-extrabold text-slate-900">{value}%</span>
+    <div className="space-y-0.5">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="min-w-0 flex-1 font-semibold text-slate-700">{label}</span>
+        <span className="shrink-0 font-extrabold text-slate-900">
+          {value == null ? '—' : `${value}%`}
+        </span>
+      </div>
+      {note ? <p className="text-[11px] leading-snug text-slate-500">{note}</p> : null}
     </div>
   );
 }
@@ -81,33 +86,64 @@ function scaleTenToPercent(value?: number | null) {
 
 export default function MockInterviewResultPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const [session, setSession] = useState<InterviewSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 24;
+
+    async function loadOnce(): Promise<InterviewSession | null> {
+      let next = await getInterview(params.id);
+      if (next.status !== 'COMPLETED' || !next.report) {
+        next = await endLiveInterview(params.id);
+      }
+      return next;
+    }
+
     async function load() {
       setLoading(true);
-      try {
-        let next = await getInterview(params.id);
-        if (next.status !== 'COMPLETED') {
-          next = await endLiveInterview(params.id);
+      setLoadError('');
+      while (!cancelled && attempts < maxAttempts) {
+        attempts += 1;
+        try {
+          const next = await loadOnce();
+          if (cancelled) return;
+          setSession(next);
+          if (next.report) {
+            setLoading(false);
+            return;
+          }
+          // Report still generating — keep waiting on this page.
+          setLoading(true);
+          await new Promise((r) => setTimeout(r, 1500));
+        } catch (err) {
+          if (cancelled) return;
+          // Stay on results; retry a few times before showing error (do not bounce to setup).
+          if (attempts < 6) {
+            await new Promise((r) => setTimeout(r, 1200));
+            continue;
+          }
+          setLoadError(err instanceof Error ? err.message : 'Could not load your interview results.');
+          setLoading(false);
+          return;
         }
-        if (!cancelled) setSession(next);
-      } catch {
-        if (!cancelled) router.replace('/interviews/mock');
-      } finally {
-        if (!cancelled) setLoading(false);
+      }
+      if (!cancelled) {
+        setLoadError('Results are taking longer than usual. Please try again.');
+        setLoading(false);
       }
     }
+
     void load();
     return () => {
       cancelled = true;
     };
-  }, [params.id, router]);
+  }, [params.id]);
 
   const answeredQuestions = useMemo(
     () => (session?.liveQuestions || []).filter(isAnsweredInterviewQuestion),
@@ -124,30 +160,51 @@ export default function MockInterviewResultPage() {
       ? averageScoreOutOf10(answeredQuestions)
       : Math.round(overall / 10);
 
-    const technical = technicalAverage(answeredQuestions);
-    const problemSolving = problemSolvingAverage(answeredQuestions);
-    const roleReadiness = roleAverage(answeredQuestions);
+    const technicalFromQs = technicalAverage(answeredQuestions);
+    const problemFromQs = problemSolvingAverage(answeredQuestions);
+    const roleFromQs = roleAverage(answeredQuestions);
 
-    // Use distinct backend dimension scores (1–10 → %) so rows are not all identical.
     const communication =
       scaleTenToPercent(session.communicationScore ?? report.communication) ?? overall;
+
+    const technical =
+      scaleTenToPercent(report.technicalKnowledge) ??
+      technicalFromQs ??
+      null;
+    const problemSolving =
+      scaleTenToPercent(report.problemSolving) ??
+      problemFromQs ??
+      null;
+    const roleReadiness =
+      scaleTenToPercent(report.roleReadiness) ??
+      roleFromQs ??
+      scaleTenToPercent(session.behaviourScore ?? report.behaviour) ??
+      null;
+
     const confidence =
-      scaleTenToPercent(session.listeningScore ?? report.listening) ?? overall;
-    const behaviourPct =
-      scaleTenToPercent(session.behaviourScore ?? report.behaviour) ?? overall;
+      report.confidence != null
+        ? scaleTenToPercent(report.confidence)
+        : report.confidenceNote
+          ? null
+          : scaleTenToPercent(session.listeningScore ?? report.listening);
 
     return {
       overall,
       overallOutOf10,
       communication,
-      technical: technical ?? Math.round((communication + overall) / 2),
-      problemSolving: problemSolving ?? Math.round((behaviourPct + overall) / 2),
-      roleReadiness: roleReadiness ?? behaviourPct,
+      technical,
+      problemSolving,
+      roleReadiness,
       confidence,
+      confidenceNote: report.confidenceNote || null,
       strengths: report.strengths,
       improvements: report.weaknesses,
       recommendation: report.recommendation,
       summary: report.summary,
+      overallAnalysis: report.overallAnalysis || report.summary,
+      postInterviewSuggestions: report.postInterviewSuggestions || null,
+      dos: report.dos || [],
+      donts: report.donts || [],
     };
   }, [session, answeredQuestions]);
 
@@ -170,6 +227,27 @@ export default function MockInterviewResultPage() {
     } finally {
       setDownloading(false);
     }
+  }
+
+  if (loadError && !metrics) {
+    return (
+      <CandidateAppShell activeTab="interviews">
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-4 text-center">
+          <InterviewBotFace size="lg" />
+          <p className="text-sm font-semibold text-slate-700">{loadError}</p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button type="button" onClick={() => window.location.reload()}>
+              Try again
+            </Button>
+            <Link href="/interviews/mock">
+              <Button type="button" variant="outline">
+                Back to setup
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </CandidateAppShell>
+    );
   }
 
   if (loading || !session || !metrics) {
@@ -207,8 +285,7 @@ export default function MockInterviewResultPage() {
       <div className="mx-auto w-full max-w-2xl space-y-4 pb-36 sm:space-y-6 sm:pb-10">
         <article className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm sm:p-8">
           <div className="flex justify-center">
-            <InterviewBotFace size="lg" className="sm:hidden" />
-            <InterviewBotFace size="xl" className="hidden sm:inline-flex" />
+            <InterviewBotFace size="lg" />
           </div>
           <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 sm:mt-3 sm:text-xs">
             AI Mock Interview Result
@@ -226,17 +303,33 @@ export default function MockInterviewResultPage() {
 
           <div className="mt-5 space-y-2.5 text-left sm:mt-8 sm:space-y-3">
             <ScoreRow label="Communication" value={metrics.communication} />
-            <ScoreRow label="Technical Knowledge" value={metrics.technical} />
-            <ScoreRow label="Problem Solving" value={metrics.problemSolving} />
+            <ScoreRow
+              label="Technical Knowledge"
+              value={metrics.technical}
+              note={metrics.technical == null ? 'Not enough technical questions to score reliably.' : null}
+            />
+            <ScoreRow
+              label="Problem Solving"
+              value={metrics.problemSolving}
+              note={
+                metrics.problemSolving == null
+                  ? 'Not sufficiently evaluated — few or no problem-solving questions.'
+                  : null
+              }
+            />
             <ScoreRow label="Role Readiness" value={metrics.roleReadiness} />
-            <ScoreRow label="Confidence" value={metrics.confidence} />
+            <ScoreRow
+              label="Confidence"
+              value={metrics.confidence}
+              note={metrics.confidenceNote}
+            />
           </div>
         </article>
 
         <section className="space-y-2 sm:space-y-3">
           <h2 className="text-base font-extrabold text-slate-900 sm:text-lg">Overall analysis</h2>
           <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <p className="text-sm leading-relaxed break-words text-slate-600">{metrics.summary}</p>
+            <p className="text-sm leading-relaxed break-words text-slate-600">{metrics.overallAnalysis}</p>
             <p className="mt-3 text-sm font-bold text-[#0a2e2c]">
               Recommendation: {metrics.recommendation}
             </p>
@@ -264,6 +357,36 @@ export default function MockInterviewResultPage() {
             ))}
           </ul>
         </section>
+
+        {metrics.postInterviewSuggestions ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="text-sm font-extrabold text-slate-900">After-interview practice plan</h2>
+            <div className="mt-3 space-y-3 text-sm text-slate-600">
+              {(
+                [
+                  ['Communication', metrics.postInterviewSuggestions.communication],
+                  ['Technical', metrics.postInterviewSuggestions.technical],
+                  ['Answer structure', metrics.postInterviewSuggestions.answerStructure],
+                  ['Topics to revise', metrics.postInterviewSuggestions.topicsToRevise],
+                  ['Practice plan', metrics.postInterviewSuggestions.practicePlan],
+                ] as const
+              ).map(([title, items]) =>
+                items?.length ? (
+                  <div key={title}>
+                    <p className="font-bold text-slate-800">{title}</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {items.map((item) => (
+                        <li key={item} className="break-words">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          </section>
+        ) : null}
 
         <section className="space-y-3 sm:space-y-4">
           <h2 className="text-base font-extrabold text-slate-900 sm:text-lg">Question-wise review</h2>
@@ -298,6 +421,22 @@ export default function MockInterviewResultPage() {
                   <div>
                     <p className="font-bold text-slate-800">AI analysis</p>
                     <p className="mt-1 break-words text-slate-600">{item.analysis}</p>
+                  </div>
+                ) : null}
+                {item.whatWasMissing?.length ? (
+                  <div>
+                    <p className="font-bold text-slate-800">What was missing</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-600">
+                      {item.whatWasMissing.map((gap) => (
+                        <li key={gap}>{gap}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {item.improvementSuggestion ? (
+                  <div>
+                    <p className="font-bold text-slate-800">Improvement tip</p>
+                    <p className="mt-1 break-words text-slate-600">{item.improvementSuggestion}</p>
                   </div>
                 ) : null}
                 {shouldShowBetterAnswer(item) ? (

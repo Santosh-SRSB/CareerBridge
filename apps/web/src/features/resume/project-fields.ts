@@ -16,6 +16,69 @@ function normalizeKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+const TECH_LABEL =
+  /^(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*(.+)$/i;
+const TECH_TRAILING =
+  /^(.*?)(?:\s+)(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*(.+)$/i;
+
+function splitTechTokens(raw: string): string[] {
+  return raw
+    .split(/[,;/|•]+/)
+    .map((item) => item.replace(/\.$/, '').trim())
+    .filter((item) => item.length > 1 && item.length < 48);
+}
+
+/**
+ * Pull "Technologies: React, Node…" out of project description into chips.
+ * Leaves overview text without the technologies line.
+ */
+export function peelProjectTechnologies(
+  description: string | null | undefined,
+  existing: string[] = [],
+): { description: string; technologies: string[] } {
+  const found: string[] = [];
+  const kept: string[] = [];
+
+  for (const line of String(description || '').split(/\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      kept.push(line);
+      continue;
+    }
+    const labeled = trimmed.match(TECH_LABEL);
+    if (labeled?.[1]) {
+      found.push(...splitTechTokens(labeled[1]));
+      continue;
+    }
+    const trailing = trimmed.match(TECH_TRAILING);
+    if (trailing?.[2] && splitTechTokens(trailing[2]).length > 0) {
+      if (trailing[1]?.trim()) kept.push(trailing[1].trim());
+      found.push(...splitTechTokens(trailing[2]));
+      continue;
+    }
+    kept.push(line);
+  }
+
+  let nextDescription = kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const endMatch = nextDescription.match(
+    /\b(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*([^.]+)$/i,
+  );
+  if (endMatch?.[1] && splitTechTokens(endMatch[1]).length > 0) {
+    found.push(...splitTechTokens(endMatch[1]));
+    nextDescription = nextDescription.slice(0, endMatch.index).trim().replace(/[.,;:\s]+$/, '');
+  }
+
+  const technologies = [
+    ...new Set(
+      [...existing, ...found]
+        .map((item) => String(item || '').trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  return { description: nextDescription, technologies };
+}
+
 /** Drop exact duplicates while preserving order. */
 export function dedupeBulletList(bullets: string[]): string[] {
   const seen = new Set<string>();
@@ -38,17 +101,21 @@ export function dedupeBulletList(bullets: string[]): string[] {
 export function splitProjectFields(project: {
   description?: string | null;
   bullets?: string[] | null;
-}): { description: string; bullets: string[] } {
+  technologies?: string[] | null;
+}): { description: string; bullets: string[]; technologies: string[] } {
   const explicitBullets = dedupeBulletList(
     Array.isArray(project.bullets) ? project.bullets.map((b) => String(b || '')) : [],
   );
+
+  let description = '';
+  let bullets: string[] = [];
 
   if (explicitBullets.length > 0) {
     const bulletKeys = new Set(explicitBullets.map(normalizeKey));
     const descLines = splitLines(project.description);
     const overviewLines = descLines.filter((line) => !bulletKeys.has(normalizeKey(line)));
     // If description was only the joined bullet list, clear overview.
-    const description =
+    description =
       overviewLines.length > 0
         ? overviewLines.join('\n')
         : descLines.length === 0
@@ -58,19 +125,31 @@ export function splitProjectFields(project: {
             : ''
           : '';
     // Never keep a bullet that is identical to the overview.
-    const bullets = description
+    bullets = description
       ? explicitBullets.filter((b) => normalizeKey(b) !== normalizeKey(description))
       : explicitBullets;
-    return { description, bullets: dedupeBulletList(bullets) };
+    bullets = dedupeBulletList(bullets);
+  } else {
+    const lines = splitLines(project.description);
+    if (lines.length === 0) {
+      description = '';
+      bullets = [];
+    } else if (lines.length === 1) {
+      description = lines[0];
+      bullets = [];
+    } else {
+      // Legacy joined blob: first line = overview, remaining = bullets.
+      description = lines[0];
+      bullets = dedupeBulletList(lines.slice(1));
+    }
   }
 
-  const lines = splitLines(project.description);
-  if (lines.length === 0) return { description: '', bullets: [] };
-  if (lines.length === 1) return { description: lines[0], bullets: [] };
-  // Legacy joined blob: first line = overview, remaining = bullets.
+  const peeled = peelProjectTechnologies(description, project.technologies || []);
+  const techKeys = new Set(peeled.technologies.map(normalizeKey));
   return {
-    description: lines[0],
-    bullets: dedupeBulletList(lines.slice(1)),
+    description: peeled.description,
+    bullets: bullets.filter((b) => !techKeys.has(normalizeKey(b)) && !TECH_LABEL.test(b.trim())),
+    technologies: peeled.technologies,
   };
 }
 
@@ -82,12 +161,12 @@ export function cloneProjectFields(project: {
   technologies?: string[] | null;
   url?: string | null;
 }) {
-  const { description, bullets } = splitProjectFields(project);
+  const { description, bullets, technologies } = splitProjectFields(project);
   return {
     name: project.name || '',
     description,
     bullets: [...bullets],
-    technologies: [...(project.technologies || [])],
+    technologies: [...technologies],
     url: project.url || '',
   };
 }

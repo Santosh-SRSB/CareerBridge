@@ -18,13 +18,22 @@ export type NormalizedResumeData = {
     jobTitle: string;
     description: string | null;
     isInternship: boolean;
+    startDate?: string | null;
+    endDate?: string | null;
+    isCurrent?: boolean;
   }>;
   education: Array<{
     qualification: string;
     institution: string | null;
     yearCompleted: number | null;
   }>;
-  projects: Array<{ name: string; description: string | null; url?: string | null; bullets?: string[] }>;
+  projects: Array<{
+    name: string;
+    description: string | null;
+    url?: string | null;
+    bullets?: string[];
+    technologies?: string[];
+  }>;
   certifications: Array<{
     name: string;
     url?: string | null;
@@ -88,7 +97,13 @@ export function normalizeResumeData(
     description: row.description ?? null,
     url: extras?.projectUrls?.[index] ?? row.url ?? null,
     ...(Array.isArray(row.bullets) ? { bullets: [...row.bullets] } : {}),
+    ...(Array.isArray(row.technologies) && row.technologies.length
+      ? { technologies: [...row.technologies] }
+      : {}),
   }));
+
+  const linksFromContent = content.links || content.resumeData?.links;
+  const links = extras?.links || linksFromContent;
 
   return {
     contact: {
@@ -104,6 +119,9 @@ export function normalizeResumeData(
       jobTitle: row.jobTitle || '',
       description: row.description ?? null,
       isInternship: Boolean(row.isInternship),
+      startDate: row.startDate ?? null,
+      endDate: row.endDate ?? null,
+      isCurrent: Boolean(row.isCurrent),
     })),
     education: (content.education || []).map((row) => ({
       qualification: row.qualification || '',
@@ -114,8 +132,8 @@ export function normalizeResumeData(
     certifications,
     achievements: content.achievements || [],
     languages: [...(content.languages || [])],
-    careerGaps: extras?.careerGaps || [],
-    ...(extras?.links ? { links: extras.links } : {}),
+    careerGaps: extras?.careerGaps || content.resumeData?.careerGaps || [],
+    ...(links && Object.values(links).some(Boolean) ? { links } : {}),
   };
 }
 

@@ -16,13 +16,24 @@ export type MatchCandidate = {
   careerInterests: string[];
   skills: string[];
   hasExperience: string | null;
+  /** Years of experience (optional — improves experience scoring). */
+  experienceYears?: number;
+  hasEducation?: boolean;
+  highestEducation?: string | null;
+  educationCount?: number;
+  hasResume?: boolean;
+  /** Latest resume ATS readiness score 0–100. */
+  resumeScore?: number | null;
+  certifications?: string[];
 };
 
 export type MatchJob = {
   city: string;
   category: string;
   requiredSkills: string[];
+  preferredSkills?: string[];
   experience: string | null;
+  title?: string;
 };
 
 const QUESTIONS: Record<string, string[]> = {
@@ -62,35 +73,108 @@ const QUESTIONS: Record<string, string[]> = {
 export class IntelligenceService {
   match(candidate: MatchCandidate, job: MatchJob): JobMatch {
     const required = job.requiredSkills.map((item) => item.toLowerCase());
+    const preferred = (job.preferredSkills || []).map((item) => item.toLowerCase());
     const skills = candidate.skills.map((item) => item.toLowerCase());
-    const overlap = required.filter((skill) => skills.some((item) => item.includes(skill) || skill.includes(item)));
-    const skillScore = required.length ? Math.round((overlap.length / required.length) * 40) : 20;
-    const locationScore =
-      candidate.city && job.city && candidate.city.toLowerCase() === job.city.toLowerCase() ? 25 : 8;
+    const overlap = required.filter((skill) =>
+      skills.some((item) => item.includes(skill) || skill.includes(item)),
+    );
+    const preferredOverlap = preferred.filter((skill) =>
+      skills.some((item) => item.includes(skill) || skill.includes(item)),
+    );
+
+    const skillScore = required.length
+      ? Math.round((overlap.length / required.length) * 100)
+      : preferred.length
+        ? Math.min(100, 55 + Math.round((preferredOverlap.length / preferred.length) * 45))
+        : 70;
+
+    const cityMatch =
+      Boolean(candidate.city) &&
+      Boolean(job.city) &&
+      candidate.city!.toLowerCase() === job.city.toLowerCase();
+    const locationScore = cityMatch ? 100 : candidate.city ? 40 : 30;
+
     const categoryScore = candidate.careerInterests.some(
       (item) => item.toLowerCase() === job.category.toLowerCase(),
     )
-      ? 20
-      : 8;
-    const experienceScore =
-      !job.experience || job.experience === 'NONE' || candidate.hasExperience
-        ? 15
-        : 6;
-    const score = Math.min(100, skillScore + locationScore + categoryScore + experienceScore);
+      ? 100
+      : 40;
+
+    const years = candidate.experienceYears ?? 0;
+    const hasExp =
+      Boolean(candidate.hasExperience && candidate.hasExperience !== 'NO') || years > 0;
+    const jobNeedsExp =
+      Boolean(job.experience) &&
+      job.experience !== 'NONE' &&
+      !/fresher|0\s*[-–]\s*1|entry/i.test(job.experience || '');
+    let experienceScore = 70;
+    if (!jobNeedsExp) {
+      experienceScore = hasExp ? 100 : 85;
+    } else if (years >= 3) {
+      experienceScore = 100;
+    } else if (years >= 1 || hasExp) {
+      experienceScore = 80;
+    } else {
+      experienceScore = 35;
+    }
+
+    const educationCount = candidate.educationCount ?? 0;
+    const hasEducation =
+      Boolean(candidate.hasEducation) ||
+      educationCount > 0 ||
+      Boolean(candidate.highestEducation?.trim());
+    const educationScore = hasEducation ? 100 : 35;
+
+    const resumeScore = candidate.resumeScore ?? 0;
+    const hasResume = Boolean(candidate.hasResume) || resumeScore > 0;
+    let resumeQualityScore = 25;
+    if (hasResume) {
+      resumeQualityScore = resumeScore > 0 ? Math.max(40, Math.min(100, resumeScore)) : 55;
+    }
+
+    const score = Math.min(
+      100,
+      Math.round(
+        skillScore * 0.35 +
+          experienceScore * 0.2 +
+          educationScore * 0.15 +
+          locationScore * 0.15 +
+          resumeQualityScore * 0.15,
+      ),
+    );
+
+    const gaps = required.filter((skill) => !overlap.includes(skill)).map(titleCase);
     const reasons = [
       overlap.length ? overlap.slice(0, 3).map(titleCase).join(', ') : '',
-      locationScore === 25 ? 'Location' : '',
-      categoryScore === 20 ? job.category : '',
+      locationScore === 100 ? 'Location' : '',
+      categoryScore === 100 ? job.category : '',
+      educationScore === 100 ? 'Education' : '',
+      hasResume && resumeQualityScore >= 70 ? 'Resume quality' : '',
     ].filter(Boolean);
-    const gaps = required.filter((skill) => !overlap.includes(skill)).map(titleCase);
+
+    const recommendations = buildMatchRecommendations({
+      gaps,
+      jobTitle: job.title || job.category,
+      hasExperience: hasExp,
+      jobNeedsExp,
+      hasEducation,
+      hasResume,
+      resumeQualityScore,
+      locationScore,
+      certifications: candidate.certifications || [],
+    });
+
     return {
       score,
       skillScore,
-      locationScore,
-      categoryScore,
       experienceScore,
+      educationScore,
+      locationScore,
+      resumeQualityScore,
+      categoryScore,
       reasons,
       gaps,
+      recommendations,
     };
   }
 
@@ -366,6 +450,41 @@ export class IntelligenceService {
       ],
     };
   }
+}
+
+function buildMatchRecommendations(input: {
+  gaps: string[];
+  jobTitle: string;
+  hasExperience: boolean;
+  jobNeedsExp: boolean;
+  hasEducation: boolean;
+  hasResume: boolean;
+  resumeQualityScore: number;
+  locationScore: number;
+  certifications: string[];
+}): string[] {
+  const tips: string[] = [];
+  for (const skill of input.gaps.slice(0, 3)) {
+    tips.push(`Add ${skill} to your profile and resume`);
+  }
+  if (input.jobNeedsExp && !input.hasExperience) {
+    tips.push(`Add your relevant experience for ${input.jobTitle}`);
+  }
+  if (!input.hasEducation) {
+    tips.push('Add your education details');
+  }
+  if (!input.hasResume) {
+    tips.push('Upload or build a resume for this role');
+  } else if (input.resumeQualityScore < 75) {
+    tips.push('Update your resume with measurable achievements');
+  }
+  if (input.certifications.length === 0 && tips.length < 4) {
+    tips.push('Add a relevant certification to strengthen your match');
+  }
+  if (input.locationScore < 100 && tips.length < 4) {
+    tips.push('Update your preferred work city if you can relocate');
+  }
+  return [...new Set(tips)].slice(0, 5);
 }
 
 function titleCase(value: string) {

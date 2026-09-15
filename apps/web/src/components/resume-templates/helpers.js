@@ -23,11 +23,47 @@ export const CAREER_GAP_TYPES = [
 ];
 
 export function contactItems(data) {
-  return [data.email, data.phone, data.location, data.linkedin, data.website].filter(Boolean);
+  return [data.email, data.phone, data.location, data.linkedin, data.github, data.website, data.portfolio].filter(Boolean);
+}
+
+function hrefForContact(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^mailto:/i.test(raw) || /^tel:/i.test(raw)) return raw;
+  if (raw.includes("@") && !raw.includes(" ")) return `mailto:${raw}`;
+  if (/^[\d+\-\s().]{8,}$/.test(raw)) return `tel:${raw.replace(/[^\d+]/g, "")}`;
+  if (/linkedin\.com|github\.com|\w+\.\w{2,}/i.test(raw)) return `https://${raw.replace(/^\/\//, "")}`;
+  return "";
+}
+
+function contactLabel(value) {
+  const raw = String(value || "").trim();
+  if (/linkedin\.com/i.test(raw)) return "LinkedIn";
+  if (/github\.com/i.test(raw)) return "GitHub";
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      return new URL(raw).hostname.replace(/^www\./, "");
+    } catch {
+      return "Portfolio";
+    }
+  }
+  return raw;
 }
 
 export function contactLine(data, separator = "  •  ") {
   return contactItems(data).join(separator);
+}
+
+/** Contact bits for template rendering — links become clickable when possible. */
+export function contactNodes(data, separator = " | ") {
+  const items = contactItems(data);
+  return items.map((value, index) => {
+    const href = hrefForContact(value);
+    const isUrl = Boolean(href) && (/^https?:/i.test(href) || /linkedin|github/i.test(String(value)));
+    const label = isUrl ? contactLabel(value) : String(value);
+    return { value: String(value), href, label, separator: index < items.length - 1 ? separator : "" };
+  });
 }
 
 export const LEGACY_TEMPLATE_IDS = {
@@ -234,13 +270,21 @@ export function projectTechnologies(project) {
       }).filter(Boolean);
     }
     if (typeof value === "string" && value.trim()) {
-      return value.split(",").map((t) => t.trim()).filter(Boolean);
+      return value.split(/[,;/|•]+/).map((t) => t.trim()).filter(Boolean);
     }
     return [];
   };
   const listed = fromValue(source.technologies);
   if (listed.length) return listed;
-  return fromValue(source.technology || source.tech);
+  const fallback = fromValue(source.technology || source.tech);
+  if (fallback.length) return fallback;
+  // Peel "Technologies: …" from description when chips were never stored.
+  const desc = String(source.description || "");
+  const match = desc.match(
+    /(?:^|\n)\s*(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*(.+)$/im,
+  );
+  if (match?.[1]) return fromValue(match[1]);
+  return [];
 }
 
 export function normalizeProjectEntry(project, index = 0) {

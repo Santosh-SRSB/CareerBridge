@@ -14,7 +14,6 @@ function OtpLoginBody() {
   const [role, setRole] = useState<AccountKind>(() => parseAccountKind(params.get('role')));
 
   function selectRole(next: LoginAccountType) {
-    if (next === 'SUPER_ADMIN' || next === 'ADMIN') return;
     setRole(next);
     router.replace(`/login/otp?role=${next.toLowerCase()}`, { scroll: false });
   }

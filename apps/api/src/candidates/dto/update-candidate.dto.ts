@@ -478,3 +478,71 @@ export class ProjectDto {
   @MaxLength(300)
   url?: string;
 }
+
+export class AnalyzeCareerGapEducationDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  qualification!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  endDate?: string;
+
+  @IsOptional()
+  yearCompleted?: number | string;
+
+  @IsOptional()
+  @IsBoolean()
+  isCurrent?: boolean;
+}
+
+export class AnalyzeCareerGapExperienceDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  endDate?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  stillInCompany?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isCurrent?: boolean;
+}
+
+/** Compute career gap after highest education (school→college gaps ignored). */
+export class AnalyzeCareerGapDto {
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AnalyzeCareerGapEducationDto)
+  education?: AnalyzeCareerGapEducationDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AnalyzeCareerGapExperienceDto)
+  experience?: AnalyzeCareerGapExperienceDto[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  gapReason?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  persist?: boolean;
+}

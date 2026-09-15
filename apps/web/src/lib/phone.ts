@@ -36,8 +36,12 @@ export function postAuthPath(user: {
   if (user.role === 'EMPLOYER_ADMIN' || user.role === 'EMPLOYER_RECRUITER') {
     return '/employer';
   }
-  if (user.role === 'SUPER_ADMIN' || user.role === 'PLATFORM_ADMIN' || user.role === 'PLATFORM_OPERATOR') {
-    return '/srsbaadmin/dashboard';
+  if (
+    user.role === 'SUPER_ADMIN' ||
+    user.role === 'PLATFORM_ADMIN' ||
+    user.role === 'PLATFORM_OPERATOR'
+  ) {
+    return '/adminsrsb/dashboard';
   }
   if (user.purpose === 'REGISTER') {
     return POST_REGISTRATION_PATH;

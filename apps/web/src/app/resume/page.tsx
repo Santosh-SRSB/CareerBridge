@@ -35,6 +35,7 @@ import {
 } from '@/features/resume/profile-to-resume-wizard';
 import {
   getResumeUpdateResumeId,
+  getResumeUpdateReturnTo,
   isResumeUpdateMode,
   clearResumeUpdateMode,
   peekAtsSectionEdit,
@@ -44,6 +45,8 @@ import {
 import { validateWizardStep } from '@/features/resume/resume-wizard-validation';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
+import { OB } from '@/components/OnboardingFrame';
+import { goToReturnTo, peekReturnTo, clearReturnStack } from '@/lib/nav-return';
 import {
   getCandidateMe,
   getResume,
@@ -52,13 +55,19 @@ import {
   updateResume,
   savePassport,
   updateCandidateMe,
+  analyzeCareerGap,
 } from '@/lib/api';
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
 import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
 import type { CandidateProfile } from '@careerbridge/shared';
-import { parseLanguageSkills, serializeLanguageSkills } from '@careerbridge/shared';
+import {
+  parseLanguageSkills,
+  serializeLanguageSkills,
+  computeCareerGapAfterHighestEducation,
+  PREFERRED_JOB_ROLES,
+} from '@careerbridge/shared';
 
-type FlowPhase = 'choose' | 'wizard' | 'preview' | 'finish';
+type FlowPhase = 'wizard' | 'preview' | 'finish';
 
 function formatSalaryDisplay(value: string) {
   const digits = value.replace(/\D/g, '');
@@ -121,8 +130,11 @@ const WIZARD_STEPS = [
   'Skills',
   'Projects',
   'Certifications',
+  'Achievements',
+  'Links',
   'Languages',
   'Preferences',
+  'Career Gap',
   'Review',
 ];
 
@@ -133,8 +145,11 @@ const STEP_SECTION_LABELS: Record<string, string> = {
   Skills: 'Skills section',
   Projects: 'Project details',
   Certifications: 'Certification details',
+  Achievements: 'Achievement details',
+  Links: 'Profile links',
   Languages: 'Language details',
   Preferences: 'Job preference details',
+  'Career Gap': 'Career gap explanation',
   Review: 'Review details',
 };
 
@@ -174,7 +189,6 @@ function applyWizardDraft(draft: Omit<ResumeWizardDraft, 'savedAt'>) {
   const langs = normalizeLanguagePool(draft.languages, draft.availableLanguages);
   const phase =
     draft.flowPhase === 'preview' ||
-    draft.flowPhase === 'choose' ||
     draft.flowPhase === 'wizard' ||
     draft.flowPhase === 'finish'
       ? draft.flowPhase
@@ -193,6 +207,10 @@ function applyWizardDraft(draft: Omit<ResumeWizardDraft, 'savedAt'>) {
     projectList: draft.projectList as ProjectItem[],
     certificationList: draft.certificationList as CertificationItem[],
     achievementList: draft.achievementList as AchievementItem[],
+    linkedin: draft.linkedin || '',
+    github: draft.github || '',
+    portfolio: draft.portfolio || '',
+    gapReason: draft.gapReason || '',
     languages: langs.languages,
     availableLanguages: langs.availableLanguages,
     preferredRole: draft.preferredRole,
@@ -215,6 +233,10 @@ function applyProfileSeed(
     setProjectList: (value: ProjectItem[]) => void;
     setCertificationList: (value: CertificationItem[]) => void;
     setAchievementList: (value: AchievementItem[]) => void;
+    setLinkedin: (value: string) => void;
+    setGithub: (value: string) => void;
+    setPortfolio: (value: string) => void;
+    setGapReason: (value: string) => void;
     setLanguages: (value: string[]) => void;
     setAvailableLanguages: (value: string[]) => void;
     setPreferredRole: (value: string) => void;
@@ -233,6 +255,10 @@ function applyProfileSeed(
   setters.setProjectList(seed.projectList as ProjectItem[]);
   setters.setCertificationList(seed.certificationList as CertificationItem[]);
   setters.setAchievementList(seed.achievementList as AchievementItem[]);
+  setters.setLinkedin(seed.linkedin || '');
+  setters.setGithub(seed.github || '');
+  setters.setPortfolio(seed.portfolio || '');
+  setters.setGapReason(seed.gapReason || '');
   setters.setLanguages(seed.languages);
   setters.setAvailableLanguages(seed.availableLanguages);
   setters.setPreferredRole(seed.preferredRole);
@@ -279,7 +305,14 @@ function ResumePageInner() {
   const [projectList, setProjectList] = useState<ProjectItem[]>([]);
   const [certificationList, setCertificationList] = useState<CertificationItem[]>([]);
   const [achievementList, setAchievementList] = useState<AchievementItem[]>([]);
+  const [linkedin, setLinkedin] = useState('');
+  const [github, setGithub] = useState('');
+  const [portfolio, setPortfolio] = useState('');
+  const [gapReason, setGapReason] = useState('');
+  const [gapMonths, setGapMonths] = useState(0);
+  const [gapLabel, setGapLabel] = useState('');
   const [activeForm, setActiveForm] = useState<ActiveForm>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [draftReady, setDraftReady] = useState(false);
 
@@ -317,6 +350,10 @@ function ResumePageInner() {
         setProjectList(restored.projectList);
         setCertificationList(restored.certificationList);
         setAchievementList(restored.achievementList);
+        setLinkedin(restored.linkedin || '');
+        setGithub(restored.github || '');
+        setPortfolio(restored.portfolio || '');
+        setGapReason(restored.gapReason || '');
         setLanguages(restored.languages);
         setAvailableLanguages(restored.availableLanguages);
         setPreferredRole(restored.preferredRole);
@@ -337,6 +374,10 @@ function ResumePageInner() {
           setProjectList,
           setCertificationList,
           setAchievementList,
+          setLinkedin,
+          setGithub,
+          setPortfolio,
+          setGapReason,
           setLanguages,
           setAvailableLanguages,
           setPreferredRole,
@@ -398,6 +439,10 @@ function ResumePageInner() {
             projectList: seedFields.projectList || [],
             certificationList: seedFields.certificationList || [],
             achievementList: seedFields.achievementList || [],
+            linkedin: seedFields.linkedin || '',
+            github: seedFields.github || '',
+            portfolio: seedFields.portfolio || '',
+            gapReason: seedFields.gapReason || '',
             languages: seedFields.languages || [],
             availableLanguages: seedFields.availableLanguages || [],
             preferredRole: seedFields.preferredRole || '',
@@ -455,11 +500,12 @@ function ResumePageInner() {
           if (record?.id) setSavedResumeId(record.id);
           setFlowPhase('wizard');
           setWizardIndex(0);
-          clearResumeUpdateMode();
+          // Keep returnTo so Back goes to View Resume / ATS / dashboard.
+          clearResumeUpdateMode({ keepReturnTo: true });
           if (active) setDraftReady(true);
           return;
         } catch {
-          clearResumeUpdateMode();
+          clearResumeUpdateMode({ keepReturnTo: true });
           // Fall through to profile/draft path below.
         }
       }
@@ -480,7 +526,7 @@ function ResumePageInner() {
 
         if (seedFromProfile || !draft) {
           applySeed(mapCandidateProfileToResumeWizard(profile));
-          setFlowPhase(startWizard ? 'wizard' : 'choose');
+          setFlowPhase('wizard');
           setWizardIndex(0);
           setHighlightMissingPersonal(false);
           // Keep build/from-profile flags for Strict Mode remount; clear only ephemeral start flag after draft saves.
@@ -549,6 +595,10 @@ function ResumePageInner() {
       projectList,
       certificationList,
       achievementList,
+      linkedin,
+      github,
+      portfolio,
+      gapReason,
       languages,
       availableLanguages,
       preferredRole,
@@ -570,6 +620,10 @@ function ResumePageInner() {
     projectList,
     certificationList,
     achievementList,
+    linkedin,
+    github,
+    portfolio,
+    gapReason,
     languages,
     availableLanguages,
     preferredRole,
@@ -584,6 +638,9 @@ function ResumePageInner() {
         location,
         email,
         phone,
+        linkedin,
+        github,
+        portfolio,
         summary,
         skills,
         experienceList,
@@ -600,6 +657,9 @@ function ResumePageInner() {
       location,
       email,
       phone,
+      linkedin,
+      github,
+      portfolio,
       summary,
       skills,
       experienceList,
@@ -610,6 +670,33 @@ function ResumePageInner() {
       languages,
     ],
   );
+
+  const localGap = useMemo(
+    () =>
+      computeCareerGapAfterHighestEducation({
+        education: educationList.map((edu) => ({
+          qualification: edu.degree,
+          startDate: edu.startDate,
+          endDate: edu.endDate,
+          isCurrent: edu.isCurrent,
+        })),
+        experience: experienceList.map((exp) => ({
+          startDate: exp.startDate,
+          endDate: exp.endDate,
+          stillInCompany: exp.isCurrent,
+          isCurrent: exp.isCurrent,
+        })),
+      }),
+    [educationList, experienceList],
+  );
+
+  useEffect(() => {
+    setGapMonths(localGap.gapMonths);
+    setGapLabel(localGap.gapLabel);
+    if (!localGap.hasGap && gapReason) {
+      // Keep typed reason while browsing; clear only when gap disappears after edu/exp edits
+    }
+  }, [localGap, gapReason]);
 
   const currentStep = WIZARD_STEPS[wizardIndex];
   const isReviewStep = wizardIndex === REVIEW_INDEX;
@@ -695,13 +782,8 @@ function ResumePageInner() {
     setSaving(false);
   }
 
-  function handleWizardNext() {
-    // ATS edit mode: never advance through the creation wizard
-    if (atsEditStep) {
-      void handleAtsEditSaveAndReturn();
-      return;
-    }
-    const errors = validateWizardStep(currentStep, {
+  function wizardValidationInput() {
+    return {
       fullName,
       location,
       email,
@@ -710,14 +792,97 @@ function ResumePageInner() {
       educationList,
       languages,
       preferredRole,
-    });
+      linkedin,
+      github,
+      portfolio,
+      gapReason,
+      gapMonths: localGap.gapMonths,
+      hasCareerGap: localGap.hasGap,
+    };
+  }
+
+  function clearEntryForm() {
+    setActiveForm(null);
+    setEditingId(null);
+  }
+
+  function nextWizardIndex(from: number) {
+    const step = WIZARD_STEPS[from];
+    if (step === 'Preferences') {
+      if (localGap.hasGap) return WIZARD_STEPS.indexOf('Career Gap');
+      return WIZARD_STEPS.indexOf('Review');
+    }
+    return Math.min(from + 1, REVIEW_INDEX);
+  }
+
+  function previousWizardIndex(from: number) {
+    const step = WIZARD_STEPS[from];
+    if (step === 'Review') {
+      if (localGap.hasGap) return WIZARD_STEPS.indexOf('Career Gap');
+      return WIZARD_STEPS.indexOf('Preferences');
+    }
+    if (step === 'Career Gap') return WIZARD_STEPS.indexOf('Preferences');
+    return Math.max(0, from - 1);
+  }
+
+  async function refreshGapFromBackend(persist = false) {
+    try {
+      const result = await analyzeCareerGap({
+        education: educationList.map((edu) => ({
+          qualification: edu.degree,
+          startDate: edu.startDate,
+          endDate: edu.endDate,
+          isCurrent: edu.isCurrent,
+        })),
+        experience: experienceList.map((exp) => ({
+          startDate: exp.startDate,
+          endDate: exp.endDate,
+          stillInCompany: exp.isCurrent,
+          isCurrent: exp.isCurrent,
+        })),
+        gapReason: gapReason.trim() || undefined,
+        persist,
+      });
+      setGapMonths(result.gapMonths);
+      setGapLabel(result.gapLabel);
+      if (!gapReason.trim() && result.savedGapReason) {
+        setGapReason(result.savedGapReason);
+      }
+      return result;
+    } catch {
+      return localGap;
+    }
+  }
+
+  function handleWizardNext() {
+    // ATS edit mode: never advance through the creation wizard
+    if (atsEditStep) {
+      void handleAtsEditSaveAndReturn();
+      return;
+    }
+    const errors = validateWizardStep(currentStep, wizardValidationInput());
     if (errors.length) {
       setValidationErrors(errors);
       return;
     }
     setValidationErrors([]);
+    if (currentStep === 'Preferences' || currentStep === 'Career Gap') {
+      void (async () => {
+        const result = await refreshGapFromBackend(currentStep === 'Career Gap');
+        if (currentStep === 'Preferences') {
+          setWizardIndex(
+            result.hasGap
+              ? WIZARD_STEPS.indexOf('Career Gap')
+              : WIZARD_STEPS.indexOf('Review'),
+          );
+          return;
+        }
+        setWizardIndex(WIZARD_STEPS.indexOf('Review'));
+      })();
+      return;
+    }
     if (wizardIndex < REVIEW_INDEX) {
-      setWizardIndex((prev) => prev + 1);
+      setWizardIndex((prev) => nextWizardIndex(prev));
     }
   }
 
@@ -725,21 +890,30 @@ function ResumePageInner() {
     const errors =
       currentStep === 'Review'
         ? validateMasterResume(masterResume)
-        : validateWizardStep(currentStep, {
-            fullName,
-            location,
-            email,
-            phone,
-            skills,
-            educationList,
-            languages,
-            preferredRole,
-          });
+        : validateWizardStep(currentStep, wizardValidationInput());
     if (errors.length) {
       setValidationErrors(errors);
       return;
     }
     setValidationErrors([]);
+    if (currentStep === 'Links' || currentStep === 'Career Gap') {
+      try {
+        if (linkedin || github || portfolio) {
+          await updateCandidateMe({
+            links: {
+              linkedin: linkedin.trim() || undefined,
+              github: github.trim() || undefined,
+              portfolio: portfolio.trim() || undefined,
+            },
+          });
+        }
+        if (currentStep === 'Career Gap') {
+          await refreshGapFromBackend(true);
+        }
+      } catch {
+        /* non-blocking */
+      }
+    }
     setSaving(true);
     try {
       const id = await ensureResumeSaved();
@@ -914,6 +1088,8 @@ function ResumePageInner() {
     clearResumeFromAutofill();
     clearResumeFromBuild();
     clearResumeWizardDraft();
+    clearResumeUpdateMode();
+    clearReturnStack();
     try {
       const content = masterResumeToResumeContent(masterResume);
       await savePassport(mapResumeContentToPassportPayload(content));
@@ -931,7 +1107,58 @@ function ResumePageInner() {
 
   async function syncProfileFromResume() {
     const content = masterResumeToResumeContent(masterResume);
-    const profile = await savePassport(mapResumeContentToPassportPayload(content));
+    const profile = await savePassport({
+      ...mapResumeContentToPassportPayload(content),
+      education: educationList
+        .filter((edu) => edu.degree.trim())
+        .map((edu) => ({
+          qualification: [edu.degree, edu.field].filter(Boolean).join(' in '),
+          institution: edu.institution || undefined,
+          fieldOfStudy: edu.field || undefined,
+          yearCompleted: edu.endDate?.slice(0, 4) || undefined,
+          startDate: edu.startDate || undefined,
+          endDate: edu.isCurrent ? undefined : edu.endDate || undefined,
+        })),
+      experience: experienceList
+        .filter((exp) => exp.company.trim() || exp.role.trim())
+        .map((exp) => ({
+          company: exp.company || undefined,
+          jobTitle: exp.role || undefined,
+          startDate: exp.startDate || undefined,
+          endDate: exp.isCurrent ? undefined : exp.endDate || undefined,
+          stillInCompany: exp.isCurrent,
+          description: (exp.responsibilities || []).join('\n') || undefined,
+        })),
+      gapReason: localGap.hasGap ? gapReason.trim() : '',
+      gapMonths: localGap.hasGap ? localGap.gapMonths : 0,
+    });
+    if (linkedin.trim() || github.trim() || portfolio.trim()) {
+      await updateCandidateMe({
+        links: {
+          linkedin: linkedin.trim() || undefined,
+          github: github.trim() || undefined,
+          portfolio: portfolio.trim() || undefined,
+        },
+      }).catch(() => undefined);
+    }
+    if (localGap.hasGap) {
+      await analyzeCareerGap({
+        education: educationList.map((edu) => ({
+          qualification: edu.degree,
+          startDate: edu.startDate,
+          endDate: edu.endDate,
+          isCurrent: edu.isCurrent,
+        })),
+        experience: experienceList.map((exp) => ({
+          startDate: exp.startDate,
+          endDate: exp.endDate,
+          stillInCompany: exp.isCurrent,
+          isCurrent: exp.isCurrent,
+        })),
+        gapReason: gapReason.trim(),
+        persist: true,
+      }).catch(() => undefined);
+    }
     const preferredLanguage = serializeLanguageSkills(
       languages
         .map((entry) => parseLanguageSkills(entry)[0] || { name: entry, level: '' })
@@ -950,6 +1177,17 @@ function ResumePageInner() {
       onboardingCompleted: true,
       dashboardReached: true,
     });
+  }
+
+  function leaveResumeFlow(fallback = '/dashboard') {
+    const updateReturn = getResumeUpdateReturnTo();
+    clearResumeUpdateMode();
+    clearAtsSectionEdit();
+    if (updateReturn) {
+      router.push(updateReturn);
+      return;
+    }
+    goToReturnTo(router, fallback);
   }
 
   function handleBack() {
@@ -976,20 +1214,17 @@ function ResumePageInner() {
       setWizardIndex(REVIEW_INDEX);
       return;
     }
-    if (flowPhase === 'choose') {
-      router.push('/dashboard');
-      return;
-    }
     if (wizardIndex > 0) {
-      setWizardIndex((prev) => prev - 1);
+      setWizardIndex((prev) => previousWizardIndex(prev));
       return;
     }
     if (highlightMissingPersonal) {
       clearResumeFromAutofill();
-      router.push('/onboarding/complete');
+      leaveResumeFlow('/onboarding/complete');
       return;
     }
-    setFlowPhase('choose');
+    // Step 0: leave wizard back to where the user came from (View Resume, ATS, dashboard…)
+    leaveResumeFlow('/dashboard');
   }
 
   if (!draftReady) {
@@ -1367,56 +1602,85 @@ function ResumePageInner() {
 
       {flowPhase === 'finish' ? (
         <div className="cb-wizard-shell">
-          <div className="mx-auto max-w-xl px-4 py-10">
-            <div className="rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-sm sm:px-8">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#0a2e2c]/10 text-[#0a2e2c]">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M9 12.5l2 2 4.5-4.5"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-                </svg>
-              </div>
-              <h1 className="mt-4 text-center text-2xl font-extrabold text-slate-900">
-                {isBuildPath ? 'Resume built' : 'Resume ready'}
+          <div className="mx-auto flex max-w-md justify-center px-4 py-6 sm:py-8">
+            <div
+              className="relative flex h-[min(90dvh,640px)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white px-5 py-4 text-center sm:rounded-3xl sm:px-7 sm:py-5"
+              style={{
+                boxShadow: '0 1px 2px rgba(36,28,21,0.06), 0 12px 32px rgba(63,91,58,0.08)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleBack}
+                className="absolute right-3 top-3 z-10 inline-flex items-center gap-0.5 rounded-full border bg-white px-2 py-0.5 text-[11px] font-medium shadow-sm transition hover:border-[#0A2E2C] hover:text-[#0A2E2C] sm:right-4 sm:top-4"
+                style={{ borderColor: '#7A8270', color: '#5C5546' }}
+                aria-label="Go back"
+              >
+                ← Back
+              </button>
+
+              <h1
+                className="shrink-0 pt-5 text-[1.45rem] font-semibold leading-tight sm:text-[1.65rem]"
+                style={{
+                  fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
+                  color: OB.ink,
+                }}
+              >
+                You are all set!
               </h1>
-              <p className="mt-2 text-center text-sm text-slate-600">
-                {isBuildPath
-                  ? 'Next: check ATS score, improve with AI, then download and save. Your profile updates when you save.'
-                  : 'Your resume is saved and your profile is updated. What would you like to do next?'}
-              </p>
 
-              {isBuildPath ? (
-                <ol className="mt-5 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  <li className="font-semibold text-emerald-800">1. Build resume — done</li>
-                  <li className="font-semibold text-slate-900">2. Check ATS score — next</li>
-                  <li>3. Improve with AI (accept or reject each suggestion)</li>
-                  <li>4. Download &amp; save (cloud + profile)</li>
-                  <li>5. Candidate Dashboard</li>
-                </ol>
-              ) : null}
+              <div className="cb-success-hero mt-1 flex min-h-0 flex-[0.7] items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/illustrations/success-career-growth.png"
+                  alt=""
+                  className="cb-success-hero__img mx-auto h-full max-h-[150px] w-auto max-w-[140px] object-contain sm:max-h-[170px] sm:max-w-[160px]"
+                />
+              </div>
 
-              <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              <div className="mt-1 shrink-0 sm:mt-2">
+                <p
+                  className="text-[1.15rem] font-semibold leading-snug sm:text-[1.3rem]"
+                  style={{
+                    color: OB.ink,
+                    fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
+                  }}
+                >
+                  ALL THE BEST!
+                </p>
+                <p
+                  className="mt-0.5 text-[0.95rem] leading-snug sm:text-[1.05rem]"
+                  style={{ color: OB.ink }}
+                >
+                  Companies are waiting for you,{' '}
+                  <strong style={{ fontWeight: 700 }}>
+                    {(fullName.trim().split(/\s+/)[0] || getStoredUser()?.firstName || 'friend').replace(
+                      /^./,
+                      (c) => c.toUpperCase(),
+                    )}
+                  </strong>
+                </p>
+
+                <p
+                  className="text-xs font-bold sm:text-sm"
+                  style={{ marginTop: 40, color: OB.ink }}
+                >
+                  Is your resume ATS friendly?{' '}
+                  <span style={{ color: OB.clay }}>Sure</span>
+                </p>
+
                 <button
                   type="button"
                   onClick={() => {
                     clearResumeFromAutofill();
                     setFlowPhase('preview');
                   }}
-                  className="rounded-2xl border-2 border-[#0a2e2c] bg-[#0a2e2c] p-5 text-left text-white transition hover:bg-[#072422] sm:col-span-2"
+                  className="w-full rounded-full py-2.5 text-sm font-semibold text-white transition hover:opacity-95 sm:py-3"
+                  style={{ marginTop: 10, background: OB.moss }}
                 >
-                  <p className="text-base font-extrabold">Check ATS score</p>
-                  <p className="mt-1.5 text-sm text-white/75">
-                    See how ATS-ready your resume is, then Improve with AI, download, and save.
-                  </p>
-                  <span className="mt-4 inline-block text-sm font-bold text-[#e68a39]">
-                    Continue →
-                  </span>
+                  Check ATS score
                 </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -1424,24 +1688,12 @@ function ResumePageInner() {
                     clearResumeFromAutofill();
                     void goToDashboard();
                   }}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left transition hover:border-[#0a2e2c]/40 hover:bg-white sm:col-span-2"
+                  className="w-full rounded-full border-2 bg-white py-2.5 text-sm font-semibold transition hover:bg-[#F5F7F0] sm:py-3"
+                  style={{ marginTop: 50, borderColor: OB.ink, color: OB.ink }}
                 >
-                  <p className="text-base font-extrabold text-slate-900">Candidate Dashboard</p>
-                  <p className="mt-1.5 text-sm text-slate-600">
-                    Skip ATS for now and go to your dashboard.
-                  </p>
-                  <span className="mt-4 inline-block text-sm font-bold text-[#0a2e2c]">
-                    Open dashboard →
-                  </span>
+                  Continue to dashboard →
                 </button>
               </div>
-              <button
-                type="button"
-                className="cb-flow-back-btn mt-6 w-full"
-                onClick={handleBack}
-              >
-                ← Back to review
-              </button>
             </div>
           </div>
         </div>
@@ -1465,116 +1717,6 @@ function ResumePageInner() {
             recheckNonce={atsRecheckNonce}
             onApplySuggestion={handleApplyAiSuggestion}
           />
-      ) : flowPhase === 'choose' ? (
-        <div className="cb-wizard-shell">
-          <div className="mx-auto max-w-xl">
-            <div className="flex justify-end">
-              <button type="button" className="cb-flow-back-btn" onClick={() => router.push('/dashboard')}>
-                ← Back
-              </button>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-sm sm:px-8">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#0a2e2c]/10 text-[#0a2e2c]">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M9 12.5l2 2 4.5-4.5"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-                </svg>
-              </div>
-
-              <h1 className="mt-4 text-center text-2xl font-extrabold tracking-tight text-slate-900">
-                Create your resume
-              </h1>
-              <p className="mt-2 text-center text-sm leading-relaxed text-slate-600">
-                Your profile is ready. Choose how you want to add a resume — you can change this later.
-              </p>
-
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full w-full rounded-full bg-[#e68a39]" />
-              </div>
-
-              <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => router.push('/resume/upload')}
-                  className="group flex cursor-pointer flex-col items-start rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-left transition hover:border-[#0a2e2c]/40 hover:bg-white hover:shadow-md"
-                >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#0a2e2c] shadow-sm ring-1 ring-slate-200 transition group-hover:ring-[#0a2e2c]/30">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M12 16V7m0 0l-3.5 3.5M12 7l3.5 3.5"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M5 17.5V19a2 2 0 002 2h10a2 2 0 002-2v-1.5"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </span>
-                  <p className="mt-4 text-base font-extrabold text-slate-900">Upload resume</p>
-                  <p className="mt-1.5 text-sm leading-snug text-slate-600">
-                    Already have a PDF or Word file? Upload it and we&apos;ll extract your details.
-                  </p>
-                  <span className="mt-4 text-sm font-bold text-[#0a2e2c]">Upload file →</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof window !== 'undefined') {
-                      sessionStorage.setItem('cb.resumeFromBuild', '1');
-                    }
-                    setFlowPhase('wizard');
-                    setWizardIndex(0);
-                  }}
-                  className="group flex cursor-pointer flex-col items-start rounded-2xl border-2 border-[#0a2e2c] bg-[#0a2e2c] p-5 text-left text-white shadow-sm transition hover:bg-[#072422]"
-                >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M7 4h7l4 4v12a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1z"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinejoin="round"
-                      />
-                      <path d="M14 4v4h4" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-                      <path
-                        d="M8.5 13h7M8.5 16.5h5"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </span>
-                  <p className="mt-4 text-base font-extrabold">Build from Scratch</p>
-                  <p className="mt-1.5 text-sm leading-snug text-white/75">
-                    Guided wizard → ATS score → Improve with AI → download &amp; save.
-                  </p>
-                  <span className="mt-4 text-sm font-bold text-[#e68a39]">Start building →</span>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => router.push('/dashboard')}
-                className="mt-6 w-full cursor-pointer rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
-              >
-                Skip for now — go to Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
       ) : (
       <div className="cb-wizard-shell">
         <div className="cb-main-head">
@@ -1587,7 +1729,13 @@ function ResumePageInner() {
                   : 'Build your resume'}
             </h1>
             <button type="button" className="cb-flow-back-btn" onClick={handleBack}>
-              {atsEditStep ? '← Back to ATS' : 'Back ←'}
+              {atsEditStep
+                ? atsEditReturnTo === 'ats'
+                  ? '← Back to ATS'
+                  : '← Back'
+                : getResumeUpdateReturnTo() || peekReturnTo()
+                  ? '← Back'
+                  : 'Back ←'}
             </button>
           </div>
           <div className="desc">
@@ -1604,7 +1752,9 @@ function ResumePageInner() {
         {!isReviewStep && !atsEditStep && (
           <div className="cb-stepper-wrap cb-stepper-desktop">
             <div className="cb-stepper-row">
-              {WIZARD_STEPS.map((label, i) => (
+              {WIZARD_STEPS.filter((label) => label !== 'Career Gap' || localGap.hasGap).map((label) => {
+                const i = WIZARD_STEPS.indexOf(label);
+                return (
                 <div
                   key={label}
                   className="cb-step-h"
@@ -1620,7 +1770,8 @@ function ResumePageInner() {
                   />
                   <div className={`lab ${i === wizardIndex ? 'current' : ''}`}>{label}</div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -1700,41 +1851,88 @@ function ResumePageInner() {
                           {edu.grade ? ` · ${edu.gradeType || 'Grade'}: ${edu.grade}` : ''}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="remove"
-                        onClick={() =>
-                          setEducationList((prev) => prev.filter((x) => x.id !== edu.id))
-                        }
-                      >
-                        Remove
-                      </button>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(edu.id);
+                            setActiveForm('education');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => {
+                            setEducationList((prev) => prev.filter((x) => x.id !== edu.id));
+                            if (editingId === edu.id) clearEntryForm();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {activeForm === 'education' ? (
                     <EducationInlineForm
-                      onCancel={() => setActiveForm(null)}
+                      key={editingId || 'edu-new'}
+                      initial={
+                        editingId
+                          ? educationList.find((e) => e.id === editingId) || undefined
+                          : undefined
+                      }
+                      onCancel={clearEntryForm}
                       onSave={(data) => {
-                        setEducationList((prev) => [
-                          ...prev,
-                          {
-                            id: `edu-${Date.now()}`,
-                            degree: data.degree,
-                            field: data.field,
-                            institution: data.institution,
-                            location: data.location,
-                            startDate: data.startDate,
-                            endDate: data.endDate,
-                            isCurrent: data.isCurrent,
-                            grade: data.grade,
-                            gradeType: data.gradeType,
-                          },
-                        ]);
-                        setActiveForm(null);
+                        if (editingId) {
+                          setEducationList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? {
+                                    ...row,
+                                    degree: data.degree,
+                                    field: data.field,
+                                    institution: data.institution,
+                                    location: data.location,
+                                    startDate: data.startDate,
+                                    endDate: data.endDate,
+                                    isCurrent: data.isCurrent,
+                                    grade: data.grade,
+                                    gradeType: data.gradeType,
+                                  }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setEducationList((prev) => [
+                            ...prev,
+                            {
+                              id: `edu-${Date.now()}`,
+                              degree: data.degree,
+                              field: data.field,
+                              institution: data.institution,
+                              location: data.location,
+                              startDate: data.startDate,
+                              endDate: data.endDate,
+                              isCurrent: data.isCurrent,
+                              grade: data.grade,
+                              gradeType: data.gradeType,
+                            },
+                          ]);
+                        }
+                        clearEntryForm();
                       }}
                     />
                   ) : (
-                    <button type="button" className="cb-add-row" onClick={() => setActiveForm('education')}>
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('education');
+                      }}
+                    >
                       + Add education
                     </button>
                   )}
@@ -1753,40 +1951,85 @@ function ResumePageInner() {
                           {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' · ')}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="remove"
-                        onClick={() =>
-                          setExperienceList((prev) => prev.filter((x) => x.id !== exp.id))
-                        }
-                      >
-                        Remove
-                      </button>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(exp.id);
+                            setActiveForm('experience');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => {
+                            setExperienceList((prev) => prev.filter((x) => x.id !== exp.id));
+                            if (editingId === exp.id) clearEntryForm();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {activeForm === 'experience' ? (
                     <ExperienceInlineForm
+                      key={editingId || 'exp-new'}
                       defaultLocation={location}
-                      onCancel={() => setActiveForm(null)}
+                      initial={
+                        editingId
+                          ? experienceList.find((e) => e.id === editingId) || undefined
+                          : undefined
+                      }
+                      onCancel={clearEntryForm}
                       onSave={(data) => {
-                        setExperienceList((prev) => [
-                          ...prev,
-                          {
-                            id: `exp-${Date.now()}`,
-                            role: data.role,
-                            company: data.company,
-                            location: data.location,
-                            startDate: data.startDate,
-                            endDate: data.endDate,
-                            isCurrent: data.isCurrent,
-                            responsibilities: data.responsibilities,
-                          },
-                        ]);
-                        setActiveForm(null);
+                        if (editingId) {
+                          setExperienceList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? {
+                                    ...row,
+                                    role: data.role,
+                                    company: data.company,
+                                    location: data.location,
+                                    startDate: data.startDate,
+                                    endDate: data.endDate,
+                                    isCurrent: data.isCurrent,
+                                    responsibilities: data.responsibilities,
+                                  }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setExperienceList((prev) => [
+                            ...prev,
+                            {
+                              id: `exp-${Date.now()}`,
+                              role: data.role,
+                              company: data.company,
+                              location: data.location,
+                              startDate: data.startDate,
+                              endDate: data.endDate,
+                              isCurrent: data.isCurrent,
+                              responsibilities: data.responsibilities,
+                            },
+                          ]);
+                        }
+                        clearEntryForm();
                       }}
                     />
                   ) : (
-                    <button type="button" className="cb-add-row" onClick={() => setActiveForm('experience')}>
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('experience');
+                      }}
+                    >
                       + Add experience
                     </button>
                   )}
@@ -1803,36 +2046,78 @@ function ResumePageInner() {
                           {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="remove"
-                        onClick={() =>
-                          setProjectList((prev) => prev.filter((x) => x.id !== proj.id))
-                        }
-                      >
-                        Remove
-                      </button>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(proj.id);
+                            setActiveForm('project');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => {
+                            setProjectList((prev) => prev.filter((x) => x.id !== proj.id));
+                            if (editingId === proj.id) clearEntryForm();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {activeForm === 'project' ? (
                     <ProjectInlineForm
-                      onCancel={() => setActiveForm(null)}
+                      key={editingId || 'proj-new'}
+                      initial={
+                        editingId
+                          ? projectList.find((p) => p.id === editingId) || undefined
+                          : undefined
+                      }
+                      onCancel={clearEntryForm}
                       onSave={(data) => {
-                        setProjectList((prev) => [
-                          ...prev,
-                          {
-                            id: `proj-${Date.now()}`,
-                            name: data.name,
-                            description: data.description,
-                            technologies: data.technologies,
-                            bullets: data.bullets,
-                          },
-                        ]);
-                        setActiveForm(null);
+                        if (editingId) {
+                          setProjectList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? {
+                                    ...row,
+                                    name: data.name,
+                                    description: data.description,
+                                    technologies: data.technologies,
+                                    bullets: data.bullets,
+                                  }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setProjectList((prev) => [
+                            ...prev,
+                            {
+                              id: `proj-${Date.now()}`,
+                              name: data.name,
+                              description: data.description,
+                              technologies: data.technologies,
+                              bullets: data.bullets,
+                            },
+                          ]);
+                        }
+                        clearEntryForm();
                       }}
                     />
                   ) : (
-                    <button type="button" className="cb-add-row" onClick={() => setActiveForm('project')}>
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('project');
+                      }}
+                    >
                       + Add project
                     </button>
                   )}
@@ -1844,6 +2129,9 @@ function ResumePageInner() {
                   <p className="cb-section-label" style={{ marginTop: 0 }}>
                     Certifications
                   </p>
+                  <p className="mb-3 text-sm text-[#5b6b7c]">
+                    Optional for many roles — add any certificates that strengthen your profile.
+                  </p>
                   {certificationList.map((cert) => (
                     <div key={cert.id} className="cb-entry-card">
                       <div>
@@ -1852,36 +2140,79 @@ function ResumePageInner() {
                           {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="remove"
-                        onClick={() =>
-                          setCertificationList((prev) => prev.filter((x) => x.id !== cert.id))
-                        }
-                      >
-                        Remove
-                      </button>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(cert.id);
+                            setActiveForm('certification');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => {
+                            setCertificationList((prev) => prev.filter((x) => x.id !== cert.id));
+                            if (editingId === cert.id) clearEntryForm();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {activeForm === 'certification' ? (
                     <CertificationInlineForm
-                      onCancel={() => setActiveForm(null)}
+                      key={editingId || 'cert-new'}
+                      initial={
+                        editingId
+                          ? certificationList.find((c) => c.id === editingId) || undefined
+                          : undefined
+                      }
+                      onCancel={clearEntryForm}
                       onSave={(data) => {
-                        setCertificationList((prev) => [
-                          ...prev,
-                          { id: `cert-${Date.now()}`, name: data.name, issuer: data.issuer, date: data.date },
-                        ]);
-                        setActiveForm(null);
+                        if (editingId) {
+                          setCertificationList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? { ...row, name: data.name, issuer: data.issuer, date: data.date }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setCertificationList((prev) => [
+                            ...prev,
+                            { id: `cert-${Date.now()}`, name: data.name, issuer: data.issuer, date: data.date },
+                          ]);
+                        }
+                        clearEntryForm();
                       }}
                     />
                   ) : (
-                    <button type="button" className="cb-add-row" onClick={() => setActiveForm('certification')}>
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('certification');
+                      }}
+                    >
                       + Add certification
                     </button>
                   )}
+                </div>
+              )}
 
-                  <p className="cb-section-label" style={{ marginTop: 28 }}>
+              {currentStep === 'Achievements' && (
+                <div>
+                  <p className="cb-section-label" style={{ marginTop: 0 }}>
                     Achievements
+                  </p>
+                  <p className="mb-3 text-sm text-[#5b6b7c]">
+                    Awards, hackathons, publications, or other highlights (optional).
                   </p>
                   {achievementList.map((ach) => (
                     <div key={ach.id} className="cb-entry-card">
@@ -1893,39 +2224,165 @@ function ResumePageInner() {
                             .join(' · ')}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="remove"
-                        onClick={() =>
-                          setAchievementList((prev) => prev.filter((x) => x.id !== ach.id))
-                        }
-                      >
-                        Remove
-                      </button>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(ach.id);
+                            setActiveForm('achievement');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => {
+                            setAchievementList((prev) => prev.filter((x) => x.id !== ach.id));
+                            if (editingId === ach.id) clearEntryForm();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {activeForm === 'achievement' ? (
                     <AchievementInlineForm
-                      onCancel={() => setActiveForm(null)}
+                      key={editingId || 'ach-new'}
+                      initial={
+                        editingId
+                          ? achievementList.find((a) => a.id === editingId) || undefined
+                          : undefined
+                      }
+                      onCancel={clearEntryForm}
                       onSave={(data) => {
-                        setAchievementList((prev) => [
-                          ...prev,
-                          {
-                            id: `ach-${Date.now()}`,
-                            title: data.title,
-                            organization: data.organization,
-                            description: data.description,
-                            date: data.date,
-                          },
-                        ]);
-                        setActiveForm(null);
+                        if (editingId) {
+                          setAchievementList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? {
+                                    ...row,
+                                    title: data.title,
+                                    organization: data.organization,
+                                    description: data.description,
+                                    date: data.date,
+                                  }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setAchievementList((prev) => [
+                            ...prev,
+                            {
+                              id: `ach-${Date.now()}`,
+                              title: data.title,
+                              organization: data.organization,
+                              description: data.description,
+                              date: data.date,
+                            },
+                          ]);
+                        }
+                        clearEntryForm();
                       }}
                     />
                   ) : (
-                    <button type="button" className="cb-add-row" onClick={() => setActiveForm('achievement')}>
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('achievement');
+                      }}
+                    >
                       + Add achievement
                     </button>
                   )}
+                </div>
+              )}
+
+              {currentStep === 'Links' && (
+                <div className="cb-field-grid">
+                  <p className="cb-section-label" style={{ marginTop: 0, gridColumn: '1 / -1' }}>
+                    Profile links
+                  </p>
+                  <p className="mb-1 text-sm text-[#5b6b7c]" style={{ gridColumn: '1 / -1' }}>
+                    Add a LinkedIn, GitHub, or portfolio URL so ATS and employers can verify your work.
+                  </p>
+                  <div className="cb-field full">
+                    <label>LinkedIn</label>
+                    <input
+                      value={linkedin}
+                      onChange={(e) => setLinkedin(e.target.value)}
+                      placeholder="https://linkedin.com/in/your-profile"
+                    />
+                  </div>
+                  <div className="cb-field full">
+                    <label>GitHub</label>
+                    <input
+                      value={github}
+                      onChange={(e) => setGithub(e.target.value)}
+                      placeholder="https://github.com/your-username"
+                    />
+                  </div>
+                  <div className="cb-field full">
+                    <label>Portfolio / website</label>
+                    <input
+                      value={portfolio}
+                      onChange={(e) => setPortfolio(e.target.value)}
+                      placeholder="https://your-portfolio.com"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {currentStep === 'Career Gap' && (
+                <div>
+                  <p className="cb-section-label" style={{ marginTop: 0 }}>
+                    Career gap
+                  </p>
+                  <div
+                    className="rounded-2xl border border-[#dde0d3] bg-[#faf8f4] px-4 py-4"
+                    style={{ marginBottom: 16 }}
+                  >
+                    <p className="text-base font-bold text-[#142a4f]">
+                      You have a gap of {gapLabel || localGap.gapLabel}.
+                    </p>
+                    <p className="mt-2 text-sm text-[#43526b]">
+                      Please explain why this gap is OK. A clear reason helps employers and your career
+                      story.
+                    </p>
+                    {localGap.highestEducation ? (
+                      <p className="mt-2 text-xs text-[#6b7789]">
+                        Calculated after your highest education
+                        {localGap.highestEducation.qualification
+                          ? ` (${localGap.highestEducation.qualification})`
+                          : ''}
+                        {localGap.highestEducation.endDate
+                          ? ` ending ${localGap.highestEducation.endDate}`
+                          : ''}
+                        . Only gaps longer than 30 days are shown. Gaps between school and college are
+                        not counted.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="cb-field full">
+                    <label>Why is this gap OK?</label>
+                    <textarea
+                      rows={4}
+                      value={gapReason}
+                      onChange={(e) => setGapReason(e.target.value)}
+                      placeholder="e.g. Prepared for competitive exams, caregiving, health recovery, full-time upskilling…"
+                      style={{
+                        width: '100%',
+                        borderRadius: 12,
+                        border: '1px solid #c9cfc0',
+                        padding: '12px 14px',
+                        fontSize: 14,
+                      }}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1983,7 +2440,43 @@ function ResumePageInner() {
                 <div className="cb-field-grid">
                   <div className="cb-field">
                     <label>Preferred role</label>
-                    <input value={preferredRole} onChange={(e) => setPreferredRole(e.target.value)} />
+                    {(() => {
+                      const roleInList = (PREFERRED_JOB_ROLES as readonly string[]).includes(
+                        preferredRole,
+                      );
+                      const selectValue = roleInList ? preferredRole : preferredRole ? 'Other' : '';
+                      const showCustom = selectValue === 'Other';
+                      return (
+                        <>
+                          <select
+                            value={selectValue}
+                            onChange={(e) => {
+                              const next = e.target.value;
+                              if (next === 'Other') {
+                                setPreferredRole(roleInList ? '' : preferredRole);
+                                return;
+                              }
+                              setPreferredRole(next);
+                            }}
+                          >
+                            <option value="">Select a role</option>
+                            {PREFERRED_JOB_ROLES.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                          {showCustom ? (
+                            <input
+                              className="mt-2"
+                              value={roleInList ? '' : preferredRole}
+                              onChange={(e) => setPreferredRole(e.target.value)}
+                              placeholder="Type your preferred role"
+                            />
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="cb-field">
                     <label>Preferred location</label>
@@ -2137,8 +2630,9 @@ function ResumePageInner() {
                         type="button"
                         className="edit"
                         onClick={() => {
+                          setEditingId(exp.id);
+                          setActiveForm('experience');
                           setWizardIndex(WIZARD_STEPS.indexOf('Experience'));
-                          setActiveForm(null);
                         }}
                       >
                         Edit
@@ -2150,34 +2644,66 @@ function ResumePageInner() {
                           setExperienceList((prev) => prev.filter((x) => x.id !== exp.id))
                         }
                       >
-                        Remove
+                        Delete
                       </button>
                     </div>
                   </div>
                 ))}
                 {activeForm === 'experience' ? (
                   <ExperienceInlineForm
+                    key={editingId || 'review-exp-new'}
                     defaultLocation={location}
-                    onCancel={() => setActiveForm(null)}
+                    initial={
+                      editingId
+                        ? experienceList.find((e) => e.id === editingId) || undefined
+                        : undefined
+                    }
+                    onCancel={clearEntryForm}
                     onSave={(data) => {
-                      setExperienceList((prev) => [
-                        ...prev,
-                        {
-                          id: `exp-${Date.now()}`,
-                          role: data.role,
-                          company: data.company,
-                          startDate: data.startDate,
-                          endDate: data.endDate,
-                          isCurrent: data.isCurrent,
-                          location: data.location,
-                          responsibilities: data.responsibilities,
-                        },
-                      ]);
-                      setActiveForm(null);
+                      if (editingId) {
+                        setExperienceList((prev) =>
+                          prev.map((row) =>
+                            row.id === editingId
+                              ? {
+                                  ...row,
+                                  role: data.role,
+                                  company: data.company,
+                                  startDate: data.startDate,
+                                  endDate: data.endDate,
+                                  isCurrent: data.isCurrent,
+                                  location: data.location,
+                                  responsibilities: data.responsibilities,
+                                }
+                              : row,
+                          ),
+                        );
+                      } else {
+                        setExperienceList((prev) => [
+                          ...prev,
+                          {
+                            id: `exp-${Date.now()}`,
+                            role: data.role,
+                            company: data.company,
+                            startDate: data.startDate,
+                            endDate: data.endDate,
+                            isCurrent: data.isCurrent,
+                            location: data.location,
+                            responsibilities: data.responsibilities,
+                          },
+                        ]);
+                      }
+                      clearEntryForm();
                     }}
                   />
                 ) : (
-                  <button type="button" className="cb-add-row" onClick={() => setActiveForm('experience')}>
+                  <button
+                    type="button"
+                    className="cb-add-row"
+                    onClick={() => {
+                      setEditingId(null);
+                      setActiveForm('experience');
+                    }}
+                  >
                     + Add Experience
                   </button>
                 )}
@@ -2191,7 +2717,7 @@ function ResumePageInner() {
                     <div>
                       <div className="role">{proj.name}</div>
                       <div className="meta">
-                        {[proj.technologies, proj.description].filter(Boolean).join(' · ')}
+                        {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -2199,8 +2725,9 @@ function ResumePageInner() {
                         type="button"
                         className="edit"
                         onClick={() => {
+                          setEditingId(proj.id);
+                          setActiveForm('project');
                           setWizardIndex(WIZARD_STEPS.indexOf('Projects'));
-                          setActiveForm(null);
                         }}
                       >
                         Edit
@@ -2212,7 +2739,7 @@ function ResumePageInner() {
                           setProjectList((prev) => prev.filter((x) => x.id !== proj.id))
                         }
                       >
-                        Remove
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -2260,8 +2787,9 @@ function ResumePageInner() {
                         type="button"
                         className="edit"
                         onClick={() => {
+                          setEditingId(edu.id);
+                          setActiveForm('education');
                           setWizardIndex(WIZARD_STEPS.indexOf('Education'));
-                          setActiveForm(null);
                         }}
                       >
                         Edit
@@ -2273,7 +2801,7 @@ function ResumePageInner() {
                           setEducationList((prev) => prev.filter((x) => x.id !== edu.id))
                         }
                       >
-                        Remove
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -2323,8 +2851,9 @@ function ResumePageInner() {
                         type="button"
                         className="edit"
                         onClick={() => {
+                          setEditingId(cert.id);
+                          setActiveForm('certification');
                           setWizardIndex(WIZARD_STEPS.indexOf('Certifications'));
-                          setActiveForm(null);
                         }}
                       >
                         Edit
@@ -2336,7 +2865,7 @@ function ResumePageInner() {
                           setCertificationList((prev) => prev.filter((x) => x.id !== cert.id))
                         }
                       >
-                        Remove
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -2375,8 +2904,9 @@ function ResumePageInner() {
                         type="button"
                         className="edit"
                         onClick={() => {
-                          setWizardIndex(WIZARD_STEPS.indexOf('Certifications'));
-                          setActiveForm(null);
+                          setEditingId(ach.id);
+                          setActiveForm('achievement');
+                          setWizardIndex(WIZARD_STEPS.indexOf('Achievements'));
                         }}
                       >
                         Edit
@@ -2388,7 +2918,7 @@ function ResumePageInner() {
                           setAchievementList((prev) => prev.filter((x) => x.id !== ach.id))
                         }
                       >
-                        Remove
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -2416,6 +2946,56 @@ function ResumePageInner() {
                   </button>
                 )}
               </section>
+
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Links</h2>
+                <div className="cb-field-grid">
+                  <div className="cb-field full">
+                    <label>LinkedIn</label>
+                    <input value={linkedin} onChange={(e) => setLinkedin(e.target.value)} />
+                  </div>
+                  <div className="cb-field full">
+                    <label>GitHub</label>
+                    <input value={github} onChange={(e) => setGithub(e.target.value)} />
+                  </div>
+                  <div className="cb-field full">
+                    <label>Portfolio</label>
+                    <input value={portfolio} onChange={(e) => setPortfolio(e.target.value)} />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="cb-add-row"
+                  onClick={() => setWizardIndex(WIZARD_STEPS.indexOf('Links'))}
+                >
+                  Edit links
+                </button>
+              </section>
+
+              {localGap.hasGap ? (
+                <section className="cb-review-section">
+                  <h2 className="cb-review-section-title">Career gap</h2>
+                  <p className="text-sm font-semibold text-[#142a4f]">
+                    You have a gap of {gapLabel || localGap.gapLabel}.
+                  </p>
+                  <div className="cb-field full" style={{ marginTop: 12 }}>
+                    <label>Why is this gap OK?</label>
+                    <textarea
+                      rows={3}
+                      value={gapReason}
+                      onChange={(e) => setGapReason(e.target.value)}
+                      placeholder="Explain why this gap is OK…"
+                      style={{
+                        width: '100%',
+                        borderRadius: 12,
+                        border: '1px solid #c9cfc0',
+                        padding: '12px 14px',
+                        fontSize: 14,
+                      }}
+                    />
+                  </div>
+                </section>
+              ) : null}
 
               {validationErrors.length > 0 && (
                 <div className="cb-validation-errors">

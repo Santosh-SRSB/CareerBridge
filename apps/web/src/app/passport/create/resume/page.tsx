@@ -1,15 +1,17 @@
-import { Navbar } from "@/components/landing/Navbar";
-import { Footer } from "@/components/landing/Footer";
-import { ResumeCreateFlow } from "@/features/candidate/passport/ResumeCreateFlow";
+'use client';
 
-export default function ResumePassportPage() {
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+/** Old drop-resume / card chooser — use /onboarding/complete only. */
+export default function PassportCreateResumeRedirectPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/onboarding/complete');
+  }, [router]);
   return (
-    <div className="min-h-full bg-fog">
-      <Navbar landingLinks={false} />
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-        <ResumeCreateFlow />
-      </main>
-      <Footer />
-    </div>
+    <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
+      Opening resume options…
+    </main>
   );
 }

@@ -71,6 +71,10 @@ export interface StructuredResumeDraft {
   lastName: string;
   city: string;
   about: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  website?: string;
   education: Array<{
     qualification: string;
     institution: string;
@@ -91,6 +95,7 @@ export interface StructuredResumeDraft {
     year: string;
     description: string;
     url: string;
+    technologies?: string[];
   }>;
   languages?: string[];
   certifications?: Array<{

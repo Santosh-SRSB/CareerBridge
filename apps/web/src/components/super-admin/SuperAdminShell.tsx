@@ -12,19 +12,19 @@ import { getStoredUser } from '@/lib/session';
 export type { SuperAdminNavId };
 
 const NAV: Array<{ id: SuperAdminNavId; label: string; href: string; icon: string }> = [
-  { id: 'dashboard', label: 'Dashboard', href: '/srsbaadmin/dashboard', icon: '▣' },
-  { id: 'candidates', label: 'Candidates', href: '/srsbaadmin/dashboard?tab=candidates', icon: '👤' },
-  { id: 'employers', label: 'Employers', href: '/srsbaadmin/dashboard?tab=employers', icon: '🏢' },
-  { id: 'jobs', label: 'Jobs', href: '/srsbaadmin/dashboard?tab=jobs', icon: '📋' },
-  { id: 'applications', label: 'Applications', href: '/srsbaadmin/dashboard?tab=applications', icon: '📄' },
-  { id: 'interviews', label: 'Interviews', href: '/srsbaadmin/dashboard?tab=interviews', icon: '🎥' },
-  { id: 'skills', label: 'Skills', href: '/srsbaadmin/dashboard?tab=skills', icon: '✦' },
-  { id: 'ai-usage', label: 'AI Usage', href: '/srsbaadmin/dashboard?tab=ai-usage', icon: '⚡' },
-  { id: 'notifications', label: 'Notifications', href: '/srsbaadmin/dashboard?tab=notifications', icon: '🔔' },
-  { id: 'reports', label: 'Reports', href: '/srsbaadmin/dashboard?tab=reports', icon: '📊' },
-  { id: 'admins', label: 'Administration', href: '/srsbaadmin/dashboard?tab=admins', icon: '🛡' },
-  { id: 'settings', label: 'Settings', href: '/srsbaadmin/dashboard?tab=settings', icon: '⚙' },
-  { id: 'audit', label: 'Audit', href: '/srsbaadmin/dashboard?tab=audit', icon: '🧾' },
+  { id: 'dashboard', label: 'Dashboard', href: '/adminsrsb/dashboard', icon: '▣' },
+  { id: 'candidates', label: 'Candidates', href: '/adminsrsb/dashboard?tab=candidates', icon: '👤' },
+  { id: 'employers', label: 'Employers', href: '/adminsrsb/dashboard?tab=employers', icon: '🏢' },
+  { id: 'jobs', label: 'Jobs', href: '/adminsrsb/dashboard?tab=jobs', icon: '📋' },
+  { id: 'applications', label: 'Applications', href: '/adminsrsb/dashboard?tab=applications', icon: '📄' },
+  { id: 'interviews', label: 'Interviews', href: '/adminsrsb/dashboard?tab=interviews', icon: '🎥' },
+  { id: 'skills', label: 'Skills', href: '/adminsrsb/dashboard?tab=skills', icon: '✦' },
+  { id: 'ai-usage', label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage', icon: '⚡' },
+  { id: 'notifications', label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications', icon: '🔔' },
+  { id: 'reports', label: 'Reports', href: '/adminsrsb/dashboard?tab=reports', icon: '📊' },
+  { id: 'admins', label: 'Administration', href: '/adminsrsb/dashboard?tab=admins', icon: '🛡' },
+  { id: 'settings', label: 'Settings', href: '/adminsrsb/dashboard?tab=settings', icon: '⚙' },
+  { id: 'audit', label: 'Audit', href: '/adminsrsb/dashboard?tab=audit', icon: '🧾' },
 ];
 
 function shellMeta(role?: string | null) {
@@ -84,7 +84,7 @@ export function SuperAdminShell({
       >
         <div className="role-shell__brand flex h-14 items-center border-b px-3">
           <Link
-            href="/srsbaadmin/dashboard"
+            href="/adminsrsb/dashboard"
             className="flex min-w-0 items-center gap-2"
             onClick={() => setOpen(false)}
           >
@@ -159,7 +159,7 @@ export function SuperAdminShell({
               className={`rounded px-3 py-1.5 text-xs font-bold ${meta.signOut}`}
               onClick={async () => {
                 await logout();
-                router.replace('/srsbaadmin');
+                router.replace('/adminsrsb');
               }}
             >
               Sign out

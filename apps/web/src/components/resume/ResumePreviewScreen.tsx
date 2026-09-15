@@ -244,6 +244,11 @@ export function ResumePreviewScreen({
   const resumeRef = useRef(resume);
   resumeRef.current = resume;
   const previewSheetRef = useRef<HTMLDivElement | null>(null);
+  const improvePrefetchRef = useRef<{
+    resumeId: string;
+    promise: Promise<Record<string, unknown> | null>;
+    result?: Record<string, unknown> | null;
+  } | null>(null);
   useResumePageFit(previewSheetRef, [resume, phase]);
 
   const templateData = useMemo(() => masterResumeToAtsData(resume), [resume]);
@@ -300,14 +305,16 @@ export function ResumePreviewScreen({
     setError('');
     setPhase('analyzing');
     setAnalyzeStep(0);
+    improvePrefetchRef.current = null;
     try {
       const id = onEnsureSaved ? await onEnsureSaved() : resumeId;
       if (id) onResumeSaved?.(id);
-      // Structure/ATS readiness only — do not score against a specific job role.
+      // Always send the live in-memory resume so post-edit recheck sees latest fields.
+      const liveResume = masterResumeToAtsData(resumeRef.current) as unknown as Record<string, unknown>;
       const raw = (await analyzeResumeRole({
         resumeId: id || undefined,
         targetRole: 'General Professional',
-        resume: masterResumeToAtsData(resumeRef.current) as unknown as Record<string, unknown>,
+        resume: liveResume,
       })) as Record<string, unknown>;
       const nextReport = mapAtsReport(raw, resumeRef.current);
       setReport(nextReport);
@@ -315,6 +322,8 @@ export function ResumePreviewScreen({
       if (id) {
         await enhanceResume(id).catch(() => undefined);
         onScoreUpdated?.(id, nextReport.overallScore);
+        // Prefetch Improve-with-AI while the user reads the ATS report.
+        startImprovePrefetch(id);
       }
       setPhase('report');
     } catch (err) {
@@ -322,6 +331,45 @@ export function ResumePreviewScreen({
       setPhase('ready');
     }
   }
+
+  function startImprovePrefetch(id: string) {
+    if (!id) return;
+    if (improvePrefetchRef.current?.resumeId === id) return;
+    const promise = aiReviewResume(id, { targetRole: 'General Professional' })
+      .then((res) => {
+        const payload = res as Record<string, unknown>;
+        if (improvePrefetchRef.current?.resumeId === id) {
+          improvePrefetchRef.current.result = payload;
+        }
+        return payload;
+      })
+      .catch(() => {
+        if (improvePrefetchRef.current?.resumeId === id) {
+          improvePrefetchRef.current.result = null;
+        }
+        return null;
+      });
+    improvePrefetchRef.current = { resumeId: id, promise };
+  }
+
+  useEffect(() => {
+    if (phase !== 'report' || !report) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const id = onEnsureSaved ? await onEnsureSaved() : resumeId;
+        if (!id || cancelled) return;
+        onResumeSaved?.(id);
+        startImprovePrefetch(id);
+      } catch {
+        /* prefetch is best-effort */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, report, resumeId, recheckNonce]);
 
   useEffect(() => {
     if (!recheckNonce || recheckNonce === lastRecheckNonce.current) return;
@@ -345,12 +393,21 @@ export function ResumePreviewScreen({
       onResumeSaved?.(id);
 
       let gatewayRes: Record<string, unknown> | null = null;
-      try {
-        gatewayRes = (await aiReviewResume(id, {
-          targetRole: 'General Professional',
-        })) as Record<string, unknown>;
-      } catch {
-        gatewayRes = null;
+      const prefetch = improvePrefetchRef.current;
+      if (prefetch?.resumeId === id) {
+        if (prefetch.result !== undefined) {
+          gatewayRes = prefetch.result;
+        } else {
+          gatewayRes = await prefetch.promise;
+        }
+      } else {
+        try {
+          gatewayRes = (await aiReviewResume(id, {
+            targetRole: 'General Professional',
+          })) as Record<string, unknown>;
+        } catch {
+          gatewayRes = null;
+        }
       }
 
       const built = buildAccurateImproveSuggestions(
@@ -721,6 +778,9 @@ export function ResumePreviewScreen({
           >
             Improve with AI
           </button>
+          <p className="text-center text-xs text-slate-500">
+            Improvements prepare in the background while you review this score.
+          </p>
         </div>
       ) : null}
 

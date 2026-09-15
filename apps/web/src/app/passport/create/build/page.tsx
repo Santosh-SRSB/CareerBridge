@@ -3,13 +3,17 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-/** Legacy URL — without-resume now opens the same first form as the shared flow. */
+/** Legacy URL — resume create options live only on /onboarding/complete. */
 export default function BuildWithoutResumeRedirectPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/passport/create/form?source=manual");
+    router.replace("/onboarding/complete");
   }, [router]);
 
-  return <main className="cb-app text-muted">Opening your Career Passport form...</main>;
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
+      Opening resume options…
+    </main>
+  );
 }

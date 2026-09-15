@@ -31,6 +31,9 @@ export interface InterviewEvaluationResult {
   improvedAnswer: string;
   strengths: string[];
   weaknesses: string[];
+  whatWasGood?: string[];
+  whatWasMissing?: string[];
+  improvementSuggestion?: string;
   score: number;
 }
 

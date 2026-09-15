@@ -51,16 +51,14 @@ function SegmentToggle({
 export function RoleToggle({
   value,
   onChange,
-  includeStaff = false,
 }: {
   value: LoginAccountType;
   onChange: (role: LoginAccountType) => void;
-  includeStaff?: boolean;
 }) {
   return (
     <SegmentToggle
       options={['CANDIDATE', 'EMPLOYER']}
-      value={value === 'SUPER_ADMIN' || value === 'ADMIN' ? 'CANDIDATE' : value}
+      value={value}
       onChange={onChange}
       labels={{ CANDIDATE: 'Candidate', EMPLOYER: 'Employer' }}
     />
@@ -72,9 +70,5 @@ export function parseAccountKind(value: string | null | undefined): AccountKind 
 }
 
 export function parseLoginAccountType(value: string | null | undefined): LoginAccountType {
-  const raw = value?.toUpperCase();
-  if (raw === 'EMPLOYER') return 'EMPLOYER';
-  if (raw === 'SUPER_ADMIN' || raw === 'SUPERADMIN') return 'SUPER_ADMIN';
-  if (raw === 'ADMIN' || raw === 'PLATFORM') return 'ADMIN';
-  return 'CANDIDATE';
+  return value?.toUpperCase() === 'EMPLOYER' ? 'EMPLOYER' : 'CANDIDATE';
 }

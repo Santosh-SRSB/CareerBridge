@@ -16,6 +16,8 @@ export interface MasterExperience {
   endDate: string;
   isCurrent: boolean;
   responsibilities: string[];
+  /** True when this role is an internship (for ordering + display). */
+  isInternship?: boolean;
 }
 
 export interface MasterTechnicalSkillGroup {

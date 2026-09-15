@@ -148,6 +148,10 @@ export function mapCandidateProfileToResumeWizard(
     projectList,
     certificationList,
     achievementList: [],
+    linkedin: profile.links?.linkedin || '',
+    github: profile.links?.github || '',
+    portfolio: profile.links?.portfolio || profile.links?.website || '',
+    gapReason: profile.gapReason || '',
     languages,
     availableLanguages,
     preferredRole: profile.careerInterests?.filter(Boolean).join(', ') || '',
@@ -185,6 +189,10 @@ export function mergeProfileSeedWithDraft(
     projectList: pickList(draft.projectList, seed.projectList),
     certificationList: pickList(draft.certificationList, seed.certificationList),
     achievementList: pickList(draft.achievementList, seed.achievementList),
+    linkedin: pickString(draft.linkedin || '', seed.linkedin || ''),
+    github: pickString(draft.github || '', seed.github || ''),
+    portfolio: pickString(draft.portfolio || '', seed.portfolio || ''),
+    gapReason: pickString(draft.gapReason || '', seed.gapReason || ''),
     languages: pickList(draft.languages, seed.languages),
     availableLanguages:
       draft.languages.length > 0

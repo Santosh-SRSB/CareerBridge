@@ -1,9 +1,8 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
-import { IsOptional, IsString } from 'class-validator';
-import { Type } from 'class-transformer';
-import { IsInt, Min } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, IsInt, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { JobsService } from './jobs.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -40,6 +39,90 @@ class JobQueryDto {
   pageSize?: number;
 }
 
+class NearbyJobsQueryDto {
+  @Type(() => Number)
+  @IsNumber()
+  latitude!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  longitude!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minDistanceKm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(50)
+  maxDistanceKm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  experience?: string;
+
+  @IsOptional()
+  @IsString()
+  workMode?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  salaryMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  salaryMax?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value.map(String);
+    if (typeof value === 'string' && value.trim()) {
+      return value
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+    }
+    return undefined;
+  })
+  skills?: string[];
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  remoteOnly?: boolean;
+}
+
 class ApplyDto {
   @IsOptional()
   @IsString()
@@ -55,6 +138,32 @@ export class JobsController {
   @Get()
   list(@Query() query: JobQueryDto, @CurrentUser() user?: { id: string; role: string }) {
     return this.jobs.list(query, user?.role === 'CANDIDATE' ? user.id : undefined);
+  }
+
+  /** OLX-style distance-bucketed job discovery. Registered before :id. */
+  @Public()
+  @Get('nearby')
+  nearby(@Query() query: NearbyJobsQueryDto, @CurrentUser() user?: { id: string; role: string }) {
+    return this.jobs.nearby(
+      {
+        latitude: query.latitude,
+        longitude: query.longitude,
+        minDistanceKm: query.minDistanceKm,
+        maxDistanceKm: query.maxDistanceKm,
+        page: query.page,
+        limit: query.limit,
+        q: query.q,
+        type: query.type,
+        category: query.category,
+        experience: query.experience,
+        workMode: query.workMode,
+        salaryMin: query.salaryMin,
+        salaryMax: query.salaryMax,
+        skills: query.skills,
+        remoteOnly: query.remoteOnly,
+      },
+      user?.role === 'CANDIDATE' ? user.id : undefined,
+    );
   }
 
   @ApiBearerAuth()

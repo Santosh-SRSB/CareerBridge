@@ -1,4 +1,4 @@
-import Image from 'next/image';
+'use client';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -27,13 +27,14 @@ export function InterviewBotFace({
       className={`relative inline-flex shrink-0 items-center justify-center ${speaking ? 'animate-pulse' : ''} ${className}`}
       style={{ width: px, height: px }}
     >
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src="/illustrations/ai-interview-bot.png"
         alt={alt}
         width={px}
         height={px}
         className="h-full w-full object-contain drop-shadow-sm"
-        priority={size === 'lg' || size === 'xl'}
+        draggable={false}
       />
     </span>
   );

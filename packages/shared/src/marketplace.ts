@@ -271,13 +271,20 @@ export type ResumeTemplate = (typeof RESUME_TEMPLATES)[number];
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 export type JobMatch = {
+  /** Overall ATS match for this job (0–100). */
   score: number;
+  /** Factor scores as 0–100 percentages for the Candidate ATS UI. */
   skillScore: number;
-  locationScore: number;
-  categoryScore: number;
   experienceScore: number;
+  educationScore: number;
+  locationScore: number;
+  resumeQualityScore: number;
+  /** Career-interest / category fit (0–100). Kept for list ranking compatibility. */
+  categoryScore: number;
   reasons: string[];
   gaps: string[];
+  /** Actionable tips shown under “Improve your match”. */
+  recommendations: string[];
 };
 
 export type JobCard = {
@@ -293,6 +300,10 @@ export type JobCard = {
   preferredSkills: string[];
   /** Required experience label from the employer job post (e.g. Fresher, 1-3 years). */
   experience?: string | null;
+  workMode?: string | null;
+  publishedAt?: string | null;
+  /** Distance from search origin in km (nearby feed only). */
+  distanceKm?: number | null;
   match?: JobMatch;
   saved?: boolean;
 };
@@ -312,6 +323,34 @@ export type PagedJobs = {
   total: number;
 };
 
+/** Default OLX-style distance rings (km). Last bucket is inclusive on max. */
+export const NEARBY_DISTANCE_BUCKETS = [
+  { minKm: 0, maxKm: 10, label: 'Within 10 km', inclusiveMax: false },
+  { minKm: 10, maxKm: 20, label: '10–20 km away', inclusiveMax: false },
+  { minKm: 20, maxKm: 30, label: '20–30 km away', inclusiveMax: false },
+  { minKm: 30, maxKm: 50, label: '30–50 km away', inclusiveMax: true },
+] as const;
+
+export const NEARBY_MAX_RADIUS_KM = 50;
+
+export type NearbyDistanceBucket = {
+  minKm: number;
+  maxKm: number;
+};
+
+export type NearbyJobsResponse = {
+  items: JobCard[];
+  distanceBucket: NearbyDistanceBucket;
+  hasMoreInBucket: boolean;
+  nextPage: number | null;
+  nextBucket: NearbyDistanceBucket | null;
+  page: number;
+  pageSize: number;
+  totalInBucket: number;
+  /** When true, results are remote jobs (no distance filter). */
+  remoteOnly?: boolean;
+};
+
 export type ResumeContent = {
   fullName: string;
   city: string | null;
@@ -325,6 +364,10 @@ export type ResumeContent = {
     jobTitle: string;
     description: string | null;
     isInternship: boolean;
+    /** Optional — kept for ATS date feedback / recheck sync */
+    startDate?: string | null;
+    endDate?: string | null;
+    isCurrent?: boolean;
   }>;
   languages: string[];
   /**
@@ -352,8 +395,17 @@ export type ResumeContent = {
     url?: string | null;
     /** Optional bullet points — kept separate from description to avoid duplication. */
     bullets?: string[];
+    /** Tech stack tokens — required for ATS project feedback to clear after edits. */
+    technologies?: string[];
   }>;
   includePhoto?: boolean;
+  /** Profile / resume links — also mirrored under resumeData.links. */
+  links?: {
+    linkedin?: string;
+    github?: string;
+    portfolio?: string;
+    website?: string;
+  };
   /** ADDITIVE optional normalized blob — existing fields above remain source of truth for legacy readers. */
   resumeData?: import('./resume-data').NormalizedResumeData;
 };
@@ -432,6 +484,9 @@ export type LiveInterviewQuestion = {
   score?: number;
   strengths?: string[];
   weaknesses?: string[];
+  whatWasGood?: string[];
+  whatWasMissing?: string[];
+  improvementSuggestion?: string;
   snippet?: string | null;
   thinkSeconds?: number;
 };
@@ -448,12 +503,34 @@ export type InterviewReport = {
   communication: number;
   behaviour: number;
   listening: number;
-  recommendation: 'Strongly Recommended' | 'Recommended' | 'Needs Improvement' | 'Not Ready';
+  /** 1–10 when enough technical questions were asked; otherwise omitted/null */
+  technicalKnowledge?: number | null;
+  /** 1–10 when problem-solving evidence exists; otherwise omitted/null */
+  problemSolving?: number | null;
+  roleReadiness?: number | null;
+  /** 1–10; text-only interviews cannot reliably measure confidence */
+  confidence?: number | null;
+  confidenceNote?: string | null;
+  recommendation:
+    | 'Strongly Recommended'
+    | 'Recommended'
+    | 'Needs Improvement'
+    | 'Significant Improvement Needed'
+    | 'Not Recommended'
+    | 'Not Ready';
   summary: string;
+  overallAnalysis?: string;
   strengths: string[];
   weaknesses: string[];
   dos: string[];
   donts: string[];
+  postInterviewSuggestions?: {
+    communication: string[];
+    technical: string[];
+    answerStructure: string[];
+    topicsToRevise: string[];
+    practicePlan: string[];
+  };
   answeredCount: number;
   totalPlanned: number;
   integrity: {

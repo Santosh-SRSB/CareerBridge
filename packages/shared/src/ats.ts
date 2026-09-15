@@ -237,6 +237,27 @@ export function analyzeResumeContent(content: ResumeContent, rawText = ''): Resu
 
   const contactBits = [content.fullName, content.phone, content.email, content.city].filter(Boolean).length;
   let contact = contactBits >= 3 ? 95 : contactBits === 2 ? 72 : 40;
+  const links = content.links || content.resumeData?.links;
+  const hasProfileLink = Boolean(
+    links &&
+      [links.linkedin, links.github, links.portfolio, links.website].some(
+        (value) => Boolean(value && String(value).trim()),
+      ),
+  );
+  if (hasProfileLink && contactBits >= 3) {
+    contact = Math.min(100, contact + 5);
+  } else if (!hasProfileLink && contactBits >= 3) {
+    contact = Math.min(contact, 88);
+    add({
+      section: ATS_SECTION_LABELS.contact,
+      sectionKey: 'contact',
+      severity: 'MEDIUM',
+      problem: 'LinkedIn, GitHub, or portfolio URL is missing.',
+      location: 'Contact Information',
+      why: 'Profile links help ATS and recruiters verify your work beyond the resume PDF.',
+      recommendation: 'Add a LinkedIn, GitHub, or portfolio URL as plain text in contact details.',
+    });
+  }
   if (!content.phone) {
     add({
       section: ATS_SECTION_LABELS.contact,

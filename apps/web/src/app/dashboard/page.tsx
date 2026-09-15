@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { photoFileError } from '@careerbridge/shared';
 import {
   getCandidateMe,
   getProfileCompletion,
@@ -11,6 +12,7 @@ import {
   recommendedJobs,
   fetchMe,
   updateCandidateMe,
+  uploadCandidatePhoto,
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import type { CandidateProfile, JobCard } from '@careerbridge/shared';
@@ -22,6 +24,9 @@ import {
   type ScheduledJobInterview,
 } from '@/lib/candidate-marketplace-api';
 import { mockInterviewSetupUrl } from '@/lib/mock-interview-url';
+import { compressImageBlob } from '@/lib/image';
+
+const PHOTO_ACCEPT = 'image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png';
 
 function formatPersonName(value: string) {
   return value
@@ -201,6 +206,22 @@ export default function DashboardPage() {
   const [scheduledInterviews, setScheduledInterviews] = useState<ScheduledJobInterview[]>([]);
   const [applicationCount, setApplicationCount] = useState(0);
   const [ready, setReady] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoPct, setPhotoPct] = useState(0);
+  const [photoError, setPhotoError] = useState('');
+
+  useEffect(() => {
+    if (!photoUploading) return;
+    setPhotoPct(8);
+    const id = window.setInterval(() => {
+      setPhotoPct((prev) => {
+        if (prev >= 88) return prev;
+        return prev + Math.max(2, Math.round((90 - prev) * 0.12));
+      });
+    }, 180);
+    return () => window.clearInterval(id);
+  }, [photoUploading]);
 
   useEffect(() => {
     const stored = getStoredUser();
@@ -221,6 +242,7 @@ export default function DashboardPage() {
           firstName: me.firstName ?? stored.firstName,
           onboardingCompleted: onboardingDone,
           dashboardReached,
+          ...(me.photoUrl !== undefined ? { photoUrl: me.photoUrl } : {}),
         });
         if (!onboardingDone) {
           router.replace('/onboarding/continue');
@@ -257,6 +279,9 @@ export default function DashboardPage() {
             .catch(() => ''),
         ]).then(([, candidateProfile, completion, jobItems, interviews, appsCount, resumeSummary]) => {
           setProfile(candidateProfile);
+          if (candidateProfile.photoUrl) {
+            patchStoredUser({ photoUrl: candidateProfile.photoUrl });
+          }
           setName(formatPersonName(candidateProfile.firstName || me.firstName || stored.firstName || 'there'));
           setCity(candidateProfile.city || candidateProfile.preferredWorkCity || '');
           const percent = completion?.percentage ?? candidateProfile.profileCompletion ?? 0;
@@ -282,6 +307,41 @@ export default function DashboardPage() {
       });
   }, [router]);
 
+  useEffect(() => {
+    const onPhoto = (event: Event) => {
+      const detail = (event as CustomEvent<{ photoUrl?: string | null }>).detail;
+      if (!detail || !('photoUrl' in detail)) return;
+      const url = detail.photoUrl ?? null;
+      setProfile((prev) => (prev ? { ...prev, photoUrl: url } : prev));
+      patchStoredUser({ photoUrl: url });
+    };
+    window.addEventListener('cb-photo-updated', onPhoto);
+    return () => window.removeEventListener('cb-photo-updated', onPhoto);
+  }, []);
+
+  useEffect(() => {
+    function refreshPhoto() {
+      getCandidateMe()
+        .then((candidateProfile) => {
+          if (!candidateProfile.photoUrl) return;
+          setProfile((prev) =>
+            prev ? { ...prev, photoUrl: candidateProfile.photoUrl } : prev,
+          );
+          patchStoredUser({ photoUrl: candidateProfile.photoUrl });
+        })
+        .catch(() => undefined);
+    }
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refreshPhoto();
+    };
+    window.addEventListener('focus', refreshPhoto);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('focus', refreshPhoto);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+
   const fullName = useMemo(() => {
     if (!profile) return formatPersonName(name);
     return (
@@ -290,12 +350,39 @@ export default function DashboardPage() {
     );
   }, [profile, name]);
 
-  const initials = fullName
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 1)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
+  function notifyPhotoUpdated(photoUrl: string | null) {
+    patchStoredUser({ photoUrl });
+    window.dispatchEvent(new CustomEvent('cb-photo-updated', { detail: { photoUrl } }));
+  }
+
+  async function onPickDashboardPhoto(file?: File) {
+    if (!file || photoUploading) return;
+    const invalid = photoFileError(file.type, file.size);
+    if (invalid) {
+      setPhotoError(invalid);
+      return;
+    }
+    setPhotoError('');
+    setPhotoUploading(true);
+    setPhotoPct(10);
+    try {
+      const blob = await compressImageBlob(file, 420);
+      setPhotoPct(55);
+      const updated = await uploadCandidatePhoto(blob, 'photo.jpg');
+      const nextUrl = updated.photoUrl;
+      if (!nextUrl) throw new Error('Photo was not saved. Please try again.');
+      setProfile((prev) => (prev ? { ...prev, photoUrl: nextUrl } : prev));
+      notifyPhotoUpdated(nextUrl);
+      setPhotoPct(100);
+      await new Promise((r) => setTimeout(r, 280));
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Could not upload that photo.');
+    } finally {
+      setPhotoUploading(false);
+      setPhotoPct(0);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  }
 
   const skillsCount = profile?.skills?.length || 0;
   const isProfileComplete = completionPercent >= 100;
@@ -413,17 +500,65 @@ export default function DashboardPage() {
               <span className="cb-boarding__tag">FREE</span>
             </div>
             <div className="cb-boarding__id-row">
-              <div className="cb-boarding__id-photo">
-                {profile?.photoUrl ? (
+              <button
+                type="button"
+                className={`cb-boarding__id-photo ${profile?.photoUrl ? '' : 'cb-boarding__id-photo--empty'}`}
+                onClick={() => photoInputRef.current?.click()}
+                disabled={photoUploading}
+                aria-label={profile?.photoUrl ? 'Change profile photo' : 'Add profile photo'}
+              >
+                {profile?.photoUrl && !photoUploading ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={profile.photoUrl} alt="" />
+                  <img
+                    src={
+                      profile.photoUrl.startsWith('data:')
+                        ? profile.photoUrl
+                        : `${profile.photoUrl}${profile.photoUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(profile.photoUrl.slice(-24))}`
+                    }
+                    alt=""
+                  />
                 ) : (
-                  initials || 'C'
+                  <span className="cb-boarding__id-photo-empty">
+                    <span className="cb-boarding__id-photo-cam" aria-hidden>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M4 8.5A2.5 2.5 0 016.5 6h2.1l1.2-1.8A1.5 1.5 0 0111 3.5h2a1.5 1.5 0 011.2.7L15.4 6h2.1A2.5 2.5 0 0120 8.5v9A2.5 2.5 0 0117.5 20h-11A2.5 2.5 0 014 17.5v-9z"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        />
+                        <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+                      </svg>
+                    </span>
+                    <span className="cb-boarding__id-photo-stripe">Add Photo</span>
+                  </span>
                 )}
-              </div>
+                {photoUploading ? (
+                  <span className="cb-boarding__id-photo-upload" aria-live="polite">
+                    <span
+                      className="cb-boarding__id-photo-water"
+                      style={{ height: `${Math.max(12, photoPct)}%` }}
+                    />
+                    <span className="cb-boarding__id-photo-upload-txt">
+                      {photoPct < 100 ? `${photoPct}%` : '✓'}
+                    </span>
+                  </span>
+                ) : null}
+              </button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept={PHOTO_ACCEPT}
+                className="sr-only"
+                tabIndex={-1}
+                disabled={photoUploading}
+                onChange={(event) => void onPickDashboardPhoto(event.target.files?.[0])}
+              />
               <div className="cb-boarding__id-meta">
                 <div className="cb-boarding__id-name">{fullName}</div>
                 <div className="cb-boarding__id-loc">{city || 'India'}</div>
+                {photoError ? (
+                  <div className="cb-boarding__id-photo-err">{photoError}</div>
+                ) : null}
               </div>
               <ProfileCompletedRing value={completionPercent} />
             </div>
@@ -438,7 +573,7 @@ export default function DashboardPage() {
             <button
               type="button"
               className="cb-boarding__stub-btn"
-              onClick={() => router.push('/profile')}
+              onClick={() => router.push('/profile/details')}
             >
               View Profile
             </button>

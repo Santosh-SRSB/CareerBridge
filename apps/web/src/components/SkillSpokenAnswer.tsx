@@ -56,6 +56,7 @@ export function SkillSpokenAnswer({
   const hasVoiceRef = useRef(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [recording, setRecording] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [liveMs, setLiveMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [hasClip, setHasClip] = useState(false);
@@ -182,6 +183,24 @@ export function SkillSpokenAnswer({
     }
   }
 
+  async function beginCountdownThenRecord() {
+    if (recording || countdown != null || loading) return;
+    const media = streamRef.current;
+    if (!isLive(media) || !media) {
+      setCameraError('Open the camera first and wait until you see your face.');
+      return;
+    }
+    setCameraError('');
+    for (const n of [1, 2, 3] as const) {
+      setCountdown(n);
+      await new Promise((r) => setTimeout(r, 700));
+    }
+    setCountdown(0); // 0 = "Start speaking" cue before mic opens
+    await new Promise((r) => setTimeout(r, 900));
+    setCountdown(null);
+    startRecording();
+  }
+
   function startRecording() {
     const media = streamRef.current;
     if (!isLive(media) || !media) {
@@ -270,7 +289,21 @@ export function SkillSpokenAnswer({
       <div className={`cb-polaroid ${recording ? 'is-rec' : ''} ${live ? 'is-live' : ''} ${hasClip && !recording ? 'is-play' : ''}`}>
         <div className={`cb-cast-stage ${recording ? 'is-rec' : ''} ${live ? 'is-live' : ''} ${hasClip && !recording ? 'is-play' : ''}`}>
           <video ref={videoRef} autoPlay muted playsInline />
-          {!live && !hasClip ? (
+          {countdown != null ? (
+            <div
+              className="cb-cast-empty"
+              role="status"
+              aria-live="assertive"
+              style={{ background: 'rgba(10,46,44,0.55)' }}
+            >
+              {countdown === 0 ? (
+                <strong style={{ fontSize: '1.75rem', color: '#fff' }}>Start speaking</strong>
+              ) : (
+                <strong style={{ fontSize: '3.5rem', color: '#fff' }}>{countdown}</strong>
+              )}
+            </div>
+          ) : null}
+          {!live && !hasClip && countdown == null ? (
             <div className="cb-cast-empty">
               <strong>Camera is off</strong>
               <span>Open it, then record 8–20 seconds</span>
@@ -295,19 +328,20 @@ export function SkillSpokenAnswer({
       ) : null}
 
       <div className="cb-cast-dock">
-        <button type="button" className="cb-cast-side" disabled={opening} onClick={() => void enableCamera()}>
+        <button type="button" className="cb-cast-side" disabled={opening || countdown != null} onClick={() => void enableCamera()}>
           {opening ? 'Opening' : live ? 'Restart' : 'Open camera'}
         </button>
         <button
           type="button"
           className={`cb-cast-rec ${recording ? 'is-on' : ''}`}
           aria-label={recording ? 'Stop recording' : 'Record'}
-          onClick={recording ? stopRecording : startRecording}
+          disabled={countdown != null}
+          onClick={recording ? stopRecording : () => void beginCountdownThenRecord()}
         >
           <span />
         </button>
-        <button type="button" className="cb-cast-side is-go" disabled={loading} onClick={submitClip}>
-          {loading ? 'Scoring' : 'Submit'}
+        <button type="button" className="cb-cast-side is-go" disabled={loading || countdown != null} onClick={submitClip}>
+          {loading ? 'Submitting' : 'Submit'}
         </button>
       </div>
     </div>

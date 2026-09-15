@@ -11,6 +11,7 @@ import {
   ErrorCode as SharedError,
   designationError,
   emailError,
+  lookupCityCentroid,
   normalizeHttpUrl,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -228,12 +229,16 @@ export class EmployersService {
   async createJob(userId: string, dto: CreateJobInput) {
     const employer = await this.requireEmployer(userId);
     const screeningQuestions = normalizeScreeningQuestions(dto.screeningQuestions);
+    const city = dto.city.trim();
+    const geo = lookupCityCentroid(city);
     const job = await this.prisma.job.create({
       data: {
         employerId: employer.id,
         title: dto.title.trim(),
         description: dto.description.trim(),
-        city: dto.city.trim(),
+        city,
+        latitude: geo?.lat ?? null,
+        longitude: geo?.lng ?? null,
         department: dto.department?.trim() || null,
         hiringManager: dto.hiringManager?.trim() || null,
         openings: dto.openings && dto.openings > 0 ? dto.openings : 1,
@@ -266,12 +271,16 @@ export class EmployersService {
   async updateJob(userId: string, id: string, dto: CreateJobInput) {
     const existing = await this.requireJob(userId, id);
     const screeningQuestions = normalizeScreeningQuestions(dto.screeningQuestions);
+    const city = dto.city.trim();
+    const geo = lookupCityCentroid(city);
     const updated = await this.prisma.job.update({
       where: { id },
       data: {
         title: dto.title.trim(),
         description: dto.description.trim(),
-        city: dto.city.trim(),
+        city,
+        latitude: geo?.lat ?? null,
+        longitude: geo?.lng ?? null,
         department: dto.department?.trim() || null,
         hiringManager: dto.hiringManager?.trim() || null,
         openings: dto.openings && dto.openings > 0 ? dto.openings : 1,

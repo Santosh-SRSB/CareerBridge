@@ -1,8 +1,20 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ErrorCode } from '@careerbridge/shared';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ErrorCode,
+  type NearbyJobsResponse,
+  lookupCityCentroid,
+} from '@careerbridge/shared';
+import { Prisma } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import {
+  assertValidNearbyCoords,
+  isRemoteWorkMode,
+  nextNearbyBucket,
+  normalizeNearbyRadius,
+  type NearbyQueryInput,
+} from './jobs-nearby.util';
 
 @Injectable()
 export class JobsService {
@@ -61,6 +73,224 @@ export class JobsService {
       page,
       pageSize,
       total,
+    };
+  }
+
+  async nearby(query: NearbyQueryInput, userId?: string): Promise<NearbyJobsResponse> {
+    try {
+      assertValidNearbyCoords(query.latitude, query.longitude);
+    } catch {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'latitude and longitude must be valid WGS84 coordinates',
+      });
+    }
+
+    const page = Math.max(1, query.page || 1);
+    const pageSize = Math.min(Math.max(1, query.limit || 20), 50);
+
+    if (query.remoteOnly) {
+      return this.nearbyRemote(query, page, pageSize, userId);
+    }
+
+    let radius: ReturnType<typeof normalizeNearbyRadius>;
+    try {
+      radius = normalizeNearbyRadius(query.minDistanceKm, query.maxDistanceKm);
+    } catch (err) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: err instanceof Error ? err.message : 'Invalid distance range',
+      });
+    }
+
+    const distExpr = Prisma.sql`(
+      6371 * acos(
+        LEAST(1::float, GREATEST(-1::float,
+          cos(radians(${query.latitude})) * cos(radians(j.latitude))
+          * cos(radians(j.longitude) - radians(${query.longitude}))
+          + sin(radians(${query.latitude})) * sin(radians(j.latitude))
+        ))
+      )
+    )`;
+
+    const filters: Prisma.Sql[] = [
+      Prisma.sql`j.status = 'PUBLISHED'`,
+      Prisma.sql`j.latitude IS NOT NULL`,
+      Prisma.sql`j.longitude IS NOT NULL`,
+      Prisma.sql`(j.work_mode IS NULL OR j.work_mode NOT ILIKE ${'%remote%'})`,
+    ];
+
+    if (radius.inclusiveMax) {
+      filters.push(Prisma.sql`${distExpr} >= ${radius.minKm}`);
+      filters.push(Prisma.sql`${distExpr} <= ${radius.maxKm}`);
+    } else {
+      filters.push(Prisma.sql`${distExpr} >= ${radius.minKm}`);
+      filters.push(Prisma.sql`${distExpr} < ${radius.maxKm}`);
+    }
+
+    if (query.q?.trim()) {
+      const like = `%${query.q.trim()}%`;
+      filters.push(Prisma.sql`(
+        j.title ILIKE ${like}
+        OR j.description ILIKE ${like}
+        OR j.category ILIKE ${like}
+        OR j.required_skills ILIKE ${like}
+        OR j.preferred_skills ILIKE ${like}
+      )`);
+    }
+    if (query.type?.trim()) {
+      filters.push(Prisma.sql`j.job_type = ${query.type.trim()}`);
+    }
+    if (query.category?.trim()) {
+      filters.push(Prisma.sql`j.category = ${query.category.trim()}`);
+    }
+    if (query.experience?.trim()) {
+      filters.push(Prisma.sql`j.experience ILIKE ${`%${query.experience.trim()}%`}`);
+    }
+    if (query.workMode?.trim() && !isRemoteWorkMode(query.workMode)) {
+      filters.push(Prisma.sql`j.work_mode ILIKE ${`%${query.workMode.trim()}%`}`);
+    }
+    if (typeof query.salaryMin === 'number' && Number.isFinite(query.salaryMin)) {
+      filters.push(Prisma.sql`COALESCE(j.salary_max, j.salary_min, 0) >= ${query.salaryMin}`);
+    }
+    if (typeof query.salaryMax === 'number' && Number.isFinite(query.salaryMax)) {
+      filters.push(Prisma.sql`COALESCE(j.salary_min, j.salary_max, 0) <= ${query.salaryMax}`);
+    }
+    for (const skill of query.skills || []) {
+      const s = skill.trim();
+      if (!s) continue;
+      const like = `%${s}%`;
+      filters.push(Prisma.sql`(j.required_skills ILIKE ${like} OR j.preferred_skills ILIKE ${like})`);
+    }
+
+    const whereSql = Prisma.join(filters, ' AND ');
+    const offset = (page - 1) * pageSize;
+
+    type NearbyRow = {
+      id: string;
+      distance_km: number;
+    };
+
+    const [countRows, idRows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM jobs j
+        WHERE ${whereSql}
+      `,
+      this.prisma.$queryRaw<NearbyRow[]>`
+        SELECT j.id, ${distExpr} AS distance_km
+        FROM jobs j
+        WHERE ${whereSql}
+        ORDER BY distance_km ASC, j.published_at DESC NULLS LAST, j.id ASC
+        LIMIT ${pageSize} OFFSET ${offset}
+      `,
+    ]);
+
+    const totalInBucket = Number(countRows[0]?.count || 0);
+    const distanceById = new Map(idRows.map((row) => [row.id, Number(row.distance_km)]));
+    const ids = idRows.map((row) => row.id);
+
+    const jobs =
+      ids.length === 0
+        ? []
+        : await this.prisma.job.findMany({
+            where: { id: { in: ids } },
+            include: { employer: true },
+          });
+    const byId = new Map(jobs.map((job) => [job.id, job]));
+    const ordered = ids.map((id) => byId.get(id)).filter(Boolean) as typeof jobs;
+
+    const candidate = userId ? await this.loadCandidate(userId) : null;
+    const savedJobIds = candidate
+      ? new Set(
+          (
+            await this.prisma.savedJob.findMany({
+              where: { candidateId: candidate.id, jobId: { in: ids } },
+              select: { jobId: true },
+            })
+          ).map((row) => row.jobId),
+        )
+      : new Set<string>();
+
+    const items = ordered.map((job) =>
+      this.toCard(job, candidate, savedJobIds.has(job.id), distanceById.get(job.id) ?? null),
+    );
+
+    const hasMoreInBucket = page * pageSize < totalInBucket;
+    const bucket = { minKm: radius.minKm, maxKm: radius.maxKm };
+
+    return {
+      items,
+      distanceBucket: bucket,
+      hasMoreInBucket,
+      nextPage: hasMoreInBucket ? page + 1 : null,
+      nextBucket: hasMoreInBucket ? null : nextNearbyBucket(bucket),
+      page,
+      pageSize,
+      totalInBucket,
+      remoteOnly: false,
+    };
+  }
+
+  private async nearbyRemote(
+    query: NearbyQueryInput,
+    page: number,
+    pageSize: number,
+    userId?: string,
+  ): Promise<NearbyJobsResponse> {
+    const where: Prisma.JobWhereInput = {
+      status: 'PUBLISHED',
+      workMode: { contains: 'remote', mode: 'insensitive' },
+      ...(query.q
+        ? {
+            OR: [
+              { title: { contains: query.q, mode: 'insensitive' } },
+              { description: { contains: query.q, mode: 'insensitive' } },
+              { category: { contains: query.q, mode: 'insensitive' } },
+              { requiredSkills: { contains: query.q, mode: 'insensitive' } },
+              { preferredSkills: { contains: query.q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      ...(query.type ? { jobType: query.type } : {}),
+      ...(query.category ? { category: query.category } : {}),
+      ...(query.experience ? { experience: { contains: query.experience, mode: 'insensitive' } } : {}),
+    };
+
+    const [totalInBucket, rows] = await this.prisma.$transaction([
+      this.prisma.job.count({ where }),
+      this.prisma.job.findMany({
+        where,
+        include: { employer: true },
+        orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const candidate = userId ? await this.loadCandidate(userId) : null;
+    const savedJobIds = candidate
+      ? new Set(
+          (
+            await this.prisma.savedJob.findMany({
+              where: { candidateId: candidate.id, jobId: { in: rows.map((r) => r.id) } },
+              select: { jobId: true },
+            })
+          ).map((row) => row.jobId),
+        )
+      : new Set<string>();
+
+    const hasMoreInBucket = page * pageSize < totalInBucket;
+    return {
+      items: rows.map((job) => this.toCard(job, candidate, savedJobIds.has(job.id), null)),
+      distanceBucket: { minKm: 0, maxKm: 0 },
+      hasMoreInBucket,
+      nextPage: hasMoreInBucket ? page + 1 : null,
+      nextBucket: hasMoreInBucket ? null : { minKm: 0, maxKm: 10 },
+      page,
+      pageSize,
+      totalInBucket,
+      remoteOnly: true,
     };
   }
 
@@ -232,7 +462,17 @@ export class JobsService {
   private async loadCandidate(userId: string) {
     return this.prisma.candidate.findUnique({
       where: { userId },
-      include: { skills: true },
+      include: {
+        skills: true,
+        education: true,
+        experiences: true,
+        resumes: {
+          where: { archivedAt: null },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          select: { id: true, score: true },
+        },
+      },
     });
   }
 
@@ -256,15 +496,25 @@ export class JobsService {
       requiredSkills: string;
       preferredSkills: string;
       experience: string | null;
+      workMode?: string | null;
+      publishedAt?: Date | null;
       employer: { companyName: string };
     },
     candidate?: {
       city: string | null;
       careerInterests: string;
       hasExperience: string | null;
+      highestEducation?: string | null;
+      totalExperienceYears?: number | null;
+      totalExperienceMonths?: number | null;
+      certifications?: string;
       skills: Array<{ name: string }>;
+      education?: Array<{ id: string }>;
+      experiences?: Array<{ id: string }>;
+      resumes?: Array<{ id: string; score: number }>;
     } | null,
     saved = false,
+    distanceKm: number | null = null,
   ) {
     const requiredSkills = parseList(job.requiredSkills);
     const preferredSkills = parseList(job.preferredSkills);
@@ -275,12 +525,25 @@ export class JobsService {
             careerInterests: parseList(candidate.careerInterests),
             skills: candidate.skills.map((item) => item.name),
             hasExperience: candidate.hasExperience,
+            experienceYears:
+              (candidate.totalExperienceYears || 0) +
+              (candidate.totalExperienceMonths || 0) / 12,
+            hasEducation: Boolean(
+              candidate.highestEducation?.trim() || (candidate.education?.length || 0) > 0,
+            ),
+            highestEducation: candidate.highestEducation || null,
+            educationCount: candidate.education?.length || 0,
+            hasResume: (candidate.resumes?.length || 0) > 0,
+            resumeScore: candidate.resumes?.[0]?.score ?? null,
+            certifications: parseList(candidate.certifications || '[]'),
           },
           {
             city: job.city,
             category: job.category,
             requiredSkills,
+            preferredSkills,
             experience: job.experience,
+            title: job.title,
           },
         )
       : undefined;
@@ -296,6 +559,12 @@ export class JobsService {
       requiredSkills,
       preferredSkills,
       experience: job.experience,
+      workMode: job.workMode ?? null,
+      publishedAt: job.publishedAt?.toISOString() ?? null,
+      distanceKm:
+        distanceKm == null || !Number.isFinite(distanceKm)
+          ? null
+          : Math.round(distanceKm * 10) / 10,
       match,
       saved,
     };
@@ -309,4 +578,10 @@ export function parseList(raw: string) {
   } catch {
     return [];
   }
+}
+
+/** Resolve lat/lng for a job city string (employer create/update). */
+export function coordsForCity(city: string): { latitude: number; longitude: number } | null {
+  const hit = lookupCityCentroid(city);
+  return hit ? { latitude: hit.lat, longitude: hit.lng } : null;
 }

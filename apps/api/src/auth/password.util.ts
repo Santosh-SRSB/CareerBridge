@@ -33,7 +33,7 @@ function scryptPlatform(password: string, salt: string): Promise<Buffer> {
 }
 
 /**
- * Higher-cost scrypt for Super Admin / Admin passwords.
+ * Higher-cost scrypt for elevated account passwords (v2 hashes).
  * Format: v2:salt:hexHash
  */
 export async function hashPlatformPassword(password: string) {

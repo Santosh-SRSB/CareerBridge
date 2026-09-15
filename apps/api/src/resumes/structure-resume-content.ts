@@ -1,6 +1,6 @@
 import type { ResumeContent } from '@careerbridge/shared';
 import type { StructuredResumeDraft } from '../ai/ai.types';
-import { parseExtractedResumeText } from './parse-extracted-resume';
+import { extractProjectTechnologies, isPageMarkerText, parseExtractedResumeText } from './parse-extracted-resume';
 
 function richness(content: Pick<ResumeContent, 'skills' | 'education' | 'experiences' | 'projects'>): number {
   return (
@@ -65,11 +65,29 @@ export function mergeStructuredIntoResumeContent(
   const projectsFromAi =
     Array.isArray(draft.projects) && draft.projects.length
       ? draft.projects
-          .map((row) => ({
-            name: String(row.title || '').trim(),
-            description: String(row.description || '').trim() || null,
-            url: String(row.url || '').trim() || null,
-          }))
+          .map((row) => {
+            const name = String(row.title || '').trim();
+            const rawDescription = String(row.description || '').trim();
+            const fromAiTech = Array.isArray(row.technologies)
+              ? row.technologies.map((t) => String(t || '').trim()).filter(Boolean)
+              : [];
+            // Older prompts put stack in `role` — treat as tech when it looks like a stack list.
+            const role = String(row.role || '').trim();
+            const roleAsTech =
+              role && /[,|/]/.test(role)
+                ? role.split(/[,;/|]+/).map((t) => t.trim()).filter((t) => t.length > 1 && t.length < 48)
+                : [];
+            const { description, technologies } = extractProjectTechnologies(
+              rawDescription ? rawDescription.split(/\n+/).map((l) => l.trim()).filter(Boolean) : [],
+            );
+            const mergedTech = [...new Set([...fromAiTech, ...roleAsTech, ...technologies])];
+            return {
+              name,
+              description,
+              url: String(row.url || '').trim() || null,
+              ...(mergedTech.length ? { technologies: mergedTech } : {}),
+            };
+          })
           .filter((row) => row.name)
       : [];
 
@@ -104,6 +122,7 @@ export function mergeStructuredIntoResumeContent(
           .map((row) => {
             const title = String(row?.title || '').trim();
             if (!title) return null;
+            if (isPageMarkerText(title, row?.organization, row?.description)) return null;
             return {
               title,
               organization: String(row?.organization || '').trim() || null,
@@ -133,6 +152,7 @@ export function mergeStructuredIntoResumeContent(
     name: row.name,
     description: row.description || null,
     url: row.url ?? null,
+    ...(row.technologies?.length ? { technologies: row.technologies } : {}),
   }));
   const heuristicSlice = {
     skills: fallback.skills || [],
@@ -167,9 +187,36 @@ export function mergeStructuredIntoResumeContent(
     certifications: certificationsFromAi.length
       ? certificationsFromAi
       : fallback.certifications || [],
-    achievements: achievementsFromAi.length ? achievementsFromAi : fallback.achievements || [],
+    achievements: (achievementsFromAi.length ? achievementsFromAi : fallback.achievements || []).filter(
+      (row) => !isPageMarkerText(row.title, row.organization, row.description),
+    ),
     projects: pickRicher(projectsFromAi, heuristicProjects, aiRich, heuristicRich),
     includePhoto: false,
+    ...( (() => {
+      const links = {
+        linkedin:
+          String(draft.linkedin || '').trim() ||
+          fallback.links?.linkedin ||
+          undefined,
+        github:
+          String(draft.github || '').trim() ||
+          fallback.links?.github ||
+          undefined,
+        portfolio:
+          String(draft.portfolio || '').trim() ||
+          fallback.links?.portfolio ||
+          undefined,
+        website:
+          String(draft.website || '').trim() ||
+          fallback.links?.website ||
+          undefined,
+      };
+      return links.linkedin || links.github || links.portfolio || links.website
+        ? { links }
+        : fallback.links
+          ? { links: fallback.links }
+          : {};
+    })() ),
   };
 }
 
