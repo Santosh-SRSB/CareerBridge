@@ -7,7 +7,7 @@
  */
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFString, type PDFPage } from 'pdf-lib';
 import html2canvas from 'html2canvas';
 import { getTemplateComponent } from '@/components/resume-templates/index.js';
 import { DENSITY_LEVELS, pickDensityLevel, RESUME_PAGE } from '@/components/resume-templates/pageFit.js';
@@ -28,6 +28,14 @@ const PDF_TIMES_STACK = '"Times New Roman", Times, "Times-Roman", serif';
 
 const PDF_CAPTURE_STYLE_ID = 'cb-resume-pdf-capture-fonts';
 
+type ResumeLinkBox = {
+  href: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 function waitFrames(count = 2) {
   return new Promise<void>((resolve) => {
     const step = (left: number) => {
@@ -39,6 +47,105 @@ function waitFrames(count = 2) {
     };
     step(count);
   });
+}
+
+/** Normalize profile/contact URLs for PDF URI annotations (https when protocol missing). */
+function normalizePdfHref(raw: string): string | null {
+  const value = String(raw || '').trim();
+  if (!value) return null;
+  if (/^(javascript|data|vbscript):/i.test(value)) return null;
+  if (/^mailto:/i.test(value) || /^tel:/i.test(value)) return value;
+  let candidate = value;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate)) {
+    candidate = `https://${candidate.replace(/^\/\//, '')}`;
+  }
+  if (!/^https?:\/\//i.test(candidate)) return null;
+  try {
+    const parsed = new URL(candidate);
+    if (!parsed.hostname) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Measure clickable resume links from the html2canvas clone (after PDF-only styles),
+ * so annotation rects match the rasterized image.
+ */
+function collectResumeLinkBoxes(clonedDoc: Document): ResumeLinkBox[] {
+  const root = clonedDoc.querySelector('[data-resume-pdf-capture="1"]') as HTMLElement | null;
+  if (!root) return [];
+  const sheet = (root.querySelector('.preview-sheet') as HTMLElement | null) || root;
+  const origin = sheet.getBoundingClientRect();
+  const boxes: ResumeLinkBox[] = [];
+  sheet.querySelectorAll('a.resume-link[href]').forEach((node) => {
+    const el = node as HTMLAnchorElement;
+    const href = normalizePdfHref(el.getAttribute('href') || el.href || '');
+    if (!href) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    boxes.push({
+      href,
+      x: rect.left - origin.left,
+      y: rect.top - origin.top,
+      w: rect.width,
+      h: rect.height,
+    });
+  });
+  return boxes;
+}
+
+/** Attach a real PDF Link annotation (URI action) over existing visible text. */
+function addPdfUriLink(page: PDFPage, uri: string, rect: [number, number, number, number]) {
+  const [x1, y1, x2, y2] = rect;
+  if (!(x2 > x1) || !(y2 > y1)) return;
+  const annotRef = page.doc.context.register(
+    page.doc.context.obj({
+      Type: 'Annot',
+      Subtype: 'Link',
+      Rect: [x1, y1, x2, y2],
+      Border: [0, 0, 0],
+      A: {
+        Type: 'Action',
+        S: 'URI',
+        URI: PDFString.of(uri),
+      },
+    }),
+  );
+  page.node.addAnnot(annotRef);
+}
+
+/**
+ * Map DOM link boxes (CSS px on the A4 sheet) onto a rasterized PDF page slice.
+ */
+function addLinksForPage(
+  page: PDFPage,
+  links: ResumeLinkBox[],
+  pageIndex: number,
+  pageHeightPx: number,
+  pageWidthPx: number,
+  drawWidth: number,
+  drawHeight: number,
+  sliceHeightPx: number,
+) {
+  const pageTop = pageIndex * pageHeightPx;
+  const pageBottom = pageTop + sliceHeightPx;
+  for (const link of links) {
+    const linkBottom = link.y + link.h;
+    if (linkBottom <= pageTop || link.y >= pageBottom) continue;
+
+    const topOnPage = Math.max(link.y, pageTop) - pageTop;
+    const bottomOnPage = Math.min(linkBottom, pageBottom) - pageTop;
+    if (bottomOnPage - topOnPage < 0.5) continue;
+
+    const x1 = (link.x / pageWidthPx) * drawWidth;
+    const x2 = ((link.x + link.w) / pageWidthPx) * drawWidth;
+    // PDF y origin is bottom-left; image is top-aligned on the page.
+    const y2 = PDF_HEIGHT - (topOnPage / sliceHeightPx) * drawHeight;
+    const y1 = PDF_HEIGHT - (bottomOnPage / sliceHeightPx) * drawHeight;
+    addPdfUriLink(page, link.href, [x1, y1, x2, y2]);
+  }
 }
 
 async function waitForFonts() {
@@ -251,6 +358,9 @@ export async function renderMasterResumePdf(doc: MasterResumeDocument): Promise<
       await waitFrames(1);
     }
 
+    // Measured from the html2canvas clone (post PDF-only styles) so link hit-boxes match pixels.
+    let resumeLinks: ResumeLinkBox[] = [];
+
     const canvas = await html2canvas(sheet, {
       scale: 2,
       useCORS: true,
@@ -262,6 +372,7 @@ export async function renderMasterResumePdf(doc: MasterResumeDocument): Promise<
       imageTimeout: 15000,
       onclone: (clonedDoc) => {
         preparePdfCaptureClone(clonedDoc);
+        resumeLinks = collectResumeLinkBoxes(clonedDoc);
       },
     });
 
@@ -314,6 +425,21 @@ export async function renderMasterResumePdf(doc: MasterResumeDocument): Promise<
         width: drawWidth,
         height: drawHeight,
       });
+
+      // Overlay real PDF URI annotations on LinkedIn / GitHub / other resume-link text.
+      // Use the same rounded page stride as the canvas slicer (scale-aware).
+      const pageHeightPx = pageHeightCanvas / scale;
+      const sliceHeightPx = sliceHeight / scale;
+      addLinksForPage(
+        page,
+        resumeLinks,
+        pageIndex,
+        pageHeightPx,
+        PAGE_WIDTH_PX,
+        drawWidth,
+        drawHeight,
+        sliceHeightPx,
+      );
     }
 
     return pdf.save();
