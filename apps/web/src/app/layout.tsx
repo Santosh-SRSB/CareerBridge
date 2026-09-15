@@ -1,13 +1,21 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter, Manrope, Poppins, Space_Mono } from "next/font/google";
+import { Fraunces, Inter, Manrope, Poppins, Space_Grotesk, Space_Mono } from "next/font/google";
 import { AppLoader } from "@/components/landing/AppLoader";
 import { AuthCookieSync } from "@/components/AuthCookieSync";
 import { PushNotificationBootstrap } from "@/components/PushNotificationBootstrap";
 import "./globals.css";
+import "./employer-pro.css";
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
   display: "swap",
 });
 
@@ -53,7 +61,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${poppins.variable} ${fraunces.variable} ${manrope.variable} ${spaceMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${spaceGrotesk.variable} ${poppins.variable} ${fraunces.variable} ${manrope.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-fog font-sans text-ink">
         <AuthCookieSync />

@@ -135,16 +135,19 @@ export default function EmployerScheduleInterviewPage() {
 
   return (
     <EmployerShellFallback title="Schedule interview">
-      <div className="ep-schedule">
+      <div className="ep-schedule ep-page ep-page--schedule">
         <div className="ep-schedule__shell">
           <header className="ep-schedule__head">
             <Link href="/employer/interviews" className="ep-schedule__back">
               ← Interviews
             </Link>
-            <h1 className="ep-schedule__title">Schedule interview</h1>
-            <p className="ep-schedule__sub">
-              Pick the candidate, select timing, and send the invite. They get a product notification with the details.
-            </p>
+            <div className="ep-schedule__head-main">
+              <h1 className="ep-schedule__title">Schedule interview</h1>
+              <p className="ep-schedule__sub">
+                Pick the candidate, select timing, and send the invite. They get a product notification with the
+                details.
+              </p>
+            </div>
           </header>
 
           <form onSubmit={(e) => void onSubmit(e)} className="ep-schedule__card">

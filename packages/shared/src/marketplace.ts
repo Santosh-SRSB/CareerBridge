@@ -271,13 +271,15 @@ export type ResumeTemplate = (typeof RESUME_TEMPLATES)[number];
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 export type JobMatch = {
-  /** Overall ATS match for this job (0–100). */
+  /** Overall ATS match for this job (0–100). Job-specific — not a permanent candidate score. */
   score: number;
-  /** Factor scores as 0–100 percentages for the Candidate ATS UI. */
+  /** Factor scores as 0–100 percentages. */
   skillScore: number;
   experienceScore: number;
   educationScore: number;
   locationScore: number;
+  /** Preferred / job-specific skills (0–100). */
+  preferredSkillScore: number;
   resumeQualityScore: number;
   /** Career-interest / category fit (0–100). Kept for list ranking compatibility. */
   categoryScore: number;
@@ -286,6 +288,123 @@ export type JobMatch = {
   /** Actionable tips shown under “Improve your match”. */
   recommendations: string[];
 };
+
+/** PDF ATS bands for employer + candidate match UI. */
+export type AtsMatchBand = 'EXCELLENT' | 'STRONG' | 'GOOD' | 'POTENTIAL' | 'LOW';
+
+export const ATS_MATCH_BANDS: Array<{
+  band: AtsMatchBand;
+  min: number;
+  label: string;
+}> = [
+  { band: 'EXCELLENT', min: 90, label: 'Excellent Match' },
+  { band: 'STRONG', min: 80, label: 'Strong Match' },
+  { band: 'GOOD', min: 70, label: 'Good Match' },
+  { band: 'POTENTIAL', min: 60, label: 'Potential Match' },
+  { band: 'LOW', min: 0, label: 'Low Match' },
+];
+
+/** PDF factor weights (points toward 100). */
+export const ATS_JOB_MATCH_WEIGHTS = {
+  skills: 35,
+  experience: 20,
+  education: 10,
+  location: 10,
+  preferred: 15,
+  resumeQuality: 10,
+} as const;
+
+export function atsMatchBand(score: number): AtsMatchBand {
+  const n = Math.max(0, Math.min(100, Math.round(score)));
+  if (n >= 90) return 'EXCELLENT';
+  if (n >= 80) return 'STRONG';
+  if (n >= 70) return 'GOOD';
+  if (n >= 60) return 'POTENTIAL';
+  return 'LOW';
+}
+
+export function atsMatchBandLabel(score: number): string {
+  const band = atsMatchBand(score);
+  return ATS_MATCH_BANDS.find((item) => item.band === band)?.label || 'Low Match';
+}
+
+export type AtsMatchFactor = {
+  key: keyof typeof ATS_JOB_MATCH_WEIGHTS;
+  label: string;
+  /** Points earned toward the factor max. */
+  score: number;
+  max: number;
+  /** 0–100 percentage for bars. */
+  pct: number;
+};
+
+export type AtsMatchBreakdown = {
+  score: number;
+  band: AtsMatchBand;
+  bandLabel: string;
+  factors: AtsMatchFactor[];
+  reasons: string[];
+  gaps: string[];
+  recommendations: string[];
+};
+
+export function toAtsMatchBreakdown(match: JobMatch): AtsMatchBreakdown {
+  const w = ATS_JOB_MATCH_WEIGHTS;
+  const preferredPct = match.preferredSkillScore ?? match.categoryScore ?? 0;
+  const factors: AtsMatchFactor[] = [
+    {
+      key: 'skills',
+      label: 'Required Skills',
+      pct: match.skillScore,
+      max: w.skills,
+      score: Math.round((match.skillScore / 100) * w.skills),
+    },
+    {
+      key: 'experience',
+      label: 'Experience',
+      pct: match.experienceScore,
+      max: w.experience,
+      score: Math.round((match.experienceScore / 100) * w.experience),
+    },
+    {
+      key: 'education',
+      label: 'Education',
+      pct: match.educationScore,
+      max: w.education,
+      score: Math.round((match.educationScore / 100) * w.education),
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      pct: match.locationScore,
+      max: w.location,
+      score: Math.round((match.locationScore / 100) * w.location),
+    },
+    {
+      key: 'preferred',
+      label: 'Job-specific skills',
+      pct: preferredPct,
+      max: w.preferred,
+      score: Math.round((preferredPct / 100) * w.preferred),
+    },
+    {
+      key: 'resumeQuality',
+      label: 'Resume quality',
+      pct: match.resumeQualityScore,
+      max: w.resumeQuality,
+      score: Math.round((match.resumeQualityScore / 100) * w.resumeQuality),
+    },
+  ];
+  return {
+    score: match.score,
+    band: atsMatchBand(match.score),
+    bandLabel: atsMatchBandLabel(match.score),
+    factors,
+    reasons: match.reasons || [],
+    gaps: match.gaps || [],
+    recommendations: match.recommendations || [],
+  };
+}
 
 export type JobCard = {
   id: string;
@@ -856,6 +975,7 @@ export type EmployerApplication = {
     city: string | null;
     skills: string[];
     highestEducation: string | null;
+    experienceYears?: number;
   };
   job: { id: string; title: string };
   match?: JobMatch;
@@ -927,7 +1047,7 @@ export type EmployerCandidatePassport = {
     jobId: string;
     jobTitle: string;
   } | null;
-  match: { score: number; reasons: string[]; gaps: string[] } | null;
+  match: JobMatch | null;
   view: 'CONTROLLED_PASSPORT';
 };
 

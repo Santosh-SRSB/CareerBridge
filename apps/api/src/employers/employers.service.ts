@@ -324,7 +324,15 @@ export class EmployersService {
     const questionMap = new Map(questions.map((item) => [item.id, item.prompt]));
     const rows = await this.prisma.application.findMany({
       where: { jobId: job.id },
-      include: { candidate: { include: { skills: true } } },
+      include: {
+        candidate: {
+          include: {
+            skills: true,
+            education: { select: { id: true } },
+            resumes: { orderBy: { updatedAt: 'desc' }, take: 1, select: { id: true, score: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((row) => ({
@@ -346,20 +354,7 @@ export class EmployersService {
         answer: item.answer,
         prompt: questionMap.get(item.questionId) || item.questionId,
       })),
-      match: this.intelligence.match(
-        {
-          city: row.candidate.city,
-          careerInterests: parseList(row.candidate.careerInterests),
-          skills: row.candidate.skills.map((item) => item.name),
-          hasExperience: row.candidate.hasExperience,
-        },
-        {
-          city: job.city,
-          category: job.category,
-          requiredSkills: parseList(job.requiredSkills),
-          experience: job.experience,
-        },
-      ),
+      match: this.scoreApplicationMatch(row.candidate, job),
     }));
   }
 
@@ -368,7 +363,13 @@ export class EmployersService {
     const rows = await this.prisma.application.findMany({
       where: { job: { employerId: employer.id } },
       include: {
-        candidate: { include: { skills: true } },
+        candidate: {
+          include: {
+            skills: true,
+            education: { select: { id: true } },
+            resumes: { orderBy: { updatedAt: 'desc' }, take: 1, select: { id: true, score: true } },
+          },
+        },
         job: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -388,20 +389,7 @@ export class EmployersService {
         experienceYears: row.candidate.totalExperienceYears || 0,
       },
       job: { id: row.job.id, title: row.job.title },
-      match: this.intelligence.match(
-        {
-          city: row.candidate.city,
-          careerInterests: parseList(row.candidate.careerInterests),
-          skills: row.candidate.skills.map((item) => item.name),
-          hasExperience: row.candidate.hasExperience,
-        },
-        {
-          city: row.job.city,
-          category: row.job.category,
-          requiredSkills: parseList(row.job.requiredSkills),
-          experience: row.job.experience,
-        },
-      ),
+      match: this.scoreApplicationMatch(row.candidate, row.job),
     }));
   }
 
@@ -549,7 +537,11 @@ export class EmployersService {
         skills: true,
         education: { orderBy: { yearCompleted: 'desc' }, take: 4 },
         experiences: { orderBy: { startDate: 'desc' }, take: 3 },
-        resumes: { select: { id: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+        resumes: {
+          select: { id: true, score: true },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+        },
       },
     });
     if (!candidate || !candidate.onboardingCompleted) {
@@ -583,22 +575,7 @@ export class EmployersService {
       : applied
         ? await this.prisma.job.findUnique({ where: { id: applied.job.id } })
         : null;
-    const match = job
-      ? this.intelligence.match(
-          {
-            city: candidate.city,
-            careerInterests: parseList(candidate.careerInterests),
-            skills: candidate.skills.map((item) => item.name),
-            hasExperience: candidate.hasExperience,
-          },
-          {
-            city: job.city,
-            category: job.category,
-            requiredSkills: parseList(job.requiredSkills),
-            experience: job.experience,
-          },
-        )
-      : null;
+    const match = job ? this.scoreApplicationMatch(candidate, job) : null;
 
     const resumeId = applied?.resumeId || candidate.resumes[0]?.id || null;
 
@@ -637,9 +614,7 @@ export class EmployersService {
             jobTitle: applied.job.title,
           }
         : null,
-      match: match
-        ? { score: match.score, reasons: match.reasons, gaps: match.gaps }
-        : null,
+      match,
       view: 'CONTROLLED_PASSPORT',
     };
   }
@@ -1006,6 +981,10 @@ export class EmployersService {
       verified: employer.verified || verificationStatus === 'VERIFIED',
     };
   }
+
+  private scoreApplicationMatch(candidate: MatchCandidateRow, job: MatchJobRow) {
+    return scoreApplicationMatchImpl(this.intelligence, candidate, job);
+  }
 }
 
 type CreateJobInput = {
@@ -1042,6 +1021,62 @@ function parseList(raw: string) {
   } catch {
     return [];
   }
+}
+
+type MatchCandidateRow = {
+  city: string | null;
+  careerInterests: string;
+  hasExperience: string | null;
+  highestEducation?: string | null;
+  totalExperienceYears?: number | null;
+  totalExperienceMonths?: number | null;
+  certifications?: string | null;
+  skills: Array<{ name: string }>;
+  education?: Array<{ id: string }>;
+  resumes?: Array<{ id: string; score?: number | null }>;
+};
+
+type MatchJobRow = {
+  city: string;
+  category: string;
+  requiredSkills: string;
+  preferredSkills?: string;
+  experience: string | null;
+  title?: string;
+};
+
+/** Shared ATS scorer for employer application + passport views (PDF hybrid model). */
+function scoreApplicationMatchImpl(
+  intelligence: IntelligenceService,
+  candidate: MatchCandidateRow,
+  job: MatchJobRow,
+) {
+  return intelligence.match(
+    {
+      city: candidate.city,
+      careerInterests: parseList(candidate.careerInterests),
+      skills: candidate.skills.map((item) => item.name),
+      hasExperience: candidate.hasExperience,
+      experienceYears:
+        (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12,
+      hasEducation: Boolean(
+        candidate.highestEducation?.trim() || (candidate.education?.length || 0) > 0,
+      ),
+      highestEducation: candidate.highestEducation || null,
+      educationCount: candidate.education?.length || 0,
+      hasResume: (candidate.resumes?.length || 0) > 0,
+      resumeScore: candidate.resumes?.[0]?.score ?? null,
+      certifications: parseList(candidate.certifications || '[]'),
+    },
+    {
+      city: job.city,
+      category: job.category,
+      requiredSkills: parseList(job.requiredSkills),
+      preferredSkills: parseList(job.preferredSkills || '[]'),
+      experience: job.experience,
+      title: job.title,
+    },
+  );
 }
 
 function parseScreeningAnswers(raw: string | null | undefined) {

@@ -37,7 +37,8 @@ export function authErrorMessage(err: unknown, stage: 'request' | 'verify') {
   }
 
   if (code === 'ACCOUNT_NOT_FOUND') {
-    return 'No account found for this number. Create your free Career Passport.';
+    if (err instanceof Error && err.message) return err.message;
+    return 'No account found. Create your free Career Passport.';
   }
   if (code === 'ACCOUNT_EXISTS' || code === 'DUPLICATE_RESOURCE') {
     if (err instanceof Error && err.message) return err.message;

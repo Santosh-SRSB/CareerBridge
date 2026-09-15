@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
-import { EmployerPortal } from '@/components/EmployerPortal';
+import { EmployerShellFallback } from '@/components/EmployerPortal';
+import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
 import { Button } from '@/components/ui/Button';
 import {
   listNotifications,
@@ -31,60 +32,112 @@ function NotificationsList({
   homeHref,
   onOpen,
   onMarkAll,
+  employer,
 }: {
   items: InAppNotification[];
   loading: boolean;
   homeHref: string;
   onOpen: (item: InAppNotification) => void;
   onMarkAll: () => void;
+  employer?: boolean;
 }) {
-  return (
-    <div className="mx-auto w-full max-w-2xl space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Notifications</h1>
-          <p className="mt-1 text-sm text-slate-600">Applications, interviews, and account updates.</p>
+  if (!employer) {
+    return (
+      <div className="mx-auto w-full max-w-2xl space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Notifications</h1>
+            <p className="mt-1 text-sm text-slate-600">Applications, interviews, and account updates.</p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => void onMarkAll()}>
+            Mark all read
+          </Button>
         </div>
-        <Button type="button" variant="outline" onClick={() => void onMarkAll()}>
-          Mark all read
-        </Button>
+
+        {loading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+
+        {!loading && items.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-600">
+            No notifications yet.
+          </div>
+        ) : null}
+
+        <div className="space-y-3">
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => void onOpen(item)}
+              className={`w-full rounded-2xl border p-4 text-left shadow-sm transition ${
+                item.read ? 'border-slate-200 bg-white' : 'border-emerald-200 bg-emerald-50/40'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold text-slate-900">{item.title}</p>
+                  <p className="mt-1 text-sm text-slate-600">{item.body}</p>
+                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {formatWhen(item.createdAt)}
+                  </p>
+                </div>
+                {!item.read ? (
+                  <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#dc2626]" />
+                ) : null}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <Link href={homeHref} className="inline-block text-sm font-bold text-[#0a2e2c] hover:underline">
+          ← Back to dashboard
+        </Link>
       </div>
+    );
+  }
 
-      {loading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+  return (
+    <div className="ep-page ep-page--messages">
+      <EmployerSectionHero
+        tone="messages"
+        title="Messages"
+        subtitle="Applications, interviews, and account updates."
+        action={
+          <Button type="button" variant="outline" onClick={() => void onMarkAll()}>
+            Mark all read
+          </Button>
+        }
+      />
 
-      {!loading && items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-600">
-          No notifications yet.
-        </div>
-      ) : null}
+      {loading ? <p className="text-sm text-muted">Loading…</p> : null}
 
-      <div className="space-y-3">
+      <div className="ep-msg-shell">
+        {!loading && items.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted">No messages yet.</div>
+        ) : null}
         {items.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => void onOpen(item)}
-            className={`w-full rounded-2xl border p-4 text-left shadow-sm transition ${
-              item.read ? 'border-slate-200 bg-white' : 'border-emerald-200 bg-emerald-50/40'
-            }`}
+            className={`ep-msg-item ${item.read ? '' : 'is-unread'}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-extrabold text-slate-900">{item.title}</p>
-                <p className="mt-1 text-sm text-slate-600">{item.body}</p>
-                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <p className="text-sm font-extrabold text-primary">{item.title}</p>
+                <p className="mt-1 text-sm text-muted">{item.body}</p>
+                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                   {formatWhen(item.createdAt)}
                 </p>
               </div>
               {!item.read ? (
-                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#dc2626]" />
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#1f9d8a]" />
               ) : null}
             </div>
           </button>
         ))}
       </div>
 
-      <Link href={homeHref} className="inline-block text-sm font-bold text-[#0a2e2c] hover:underline">
+      <Link href={homeHref} className="ep-link text-sm font-extrabold">
         ← Back to dashboard
       </Link>
     </div>
@@ -134,11 +187,12 @@ export default function NotificationsPage() {
       homeHref={isEmployer ? '/employer' : '/dashboard'}
       onOpen={onOpen}
       onMarkAll={onMarkAll}
+      employer={isEmployer}
     />
   );
 
   if (isEmployer) {
-    return <EmployerPortal>{list}</EmployerPortal>;
+    return <EmployerShellFallback title="Messages">{list}</EmployerShellFallback>;
   }
 
   return (

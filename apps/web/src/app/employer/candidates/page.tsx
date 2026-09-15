@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { EmployerCandidateSearchResult, EmployerJobSummary } from '@careerbridge/shared';
 import { listEmployerJobs, searchEmployerCandidates, changeApplicationStatus } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
+import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 import { Button } from '@/components/ui/Button';
 
 function candidateName(row: EmployerCandidateSearchResult) {
@@ -104,40 +105,44 @@ export default function EmployerCandidatesPage() {
 
   return (
     <EmployerShellFallback title="Candidates">
-      <div className="ep-cand">
+      <div className="ep-cand ep-page ep-page--candidates">
         <div className="ep-cand__shell">
-          <header className="ep-cand__head">
-            <h1 className="ep-cand__title">Search candidates</h1>
-            <p className="ep-cand__sub">
-              Find ranked matches for your open roles — free while we are in early access.
-            </p>
-          </header>
-
           <form
-            className="ep-cand__card"
+            className="ep-cand__card ep-cand__card--search"
             onSubmit={(e) => {
               e.preventDefault();
               void runSearch();
             }}
           >
-            <div className="ep-cand__hero-band">
-              <span className="ep-cand__band-label">Match against job</span>
-              <span className="ep-cand__band-dot" aria-hidden>
-                ·
-              </span>
-              <span className="ep-cand__band-copy">
-                {selectedJob
-                  ? `${selectedJob.title}${selectedJob.city ? ` · ${selectedJob.city}` : ''}`
-                  : 'Choose an active posting to rank candidates'}
-              </span>
-              <span className="ep-cand__band-dot" aria-hidden>
-                ·
-              </span>
-              <span className="ep-cand__band-pill">{jobs.length} jobs</span>
+            <div className="ep-cand__top">
+              <div className="ep-cand__top-copy">
+                <p className="ep-cand__top-eyebrow">Candidate search</p>
+                <h1 className="ep-cand__top-title">Search candidates</h1>
+                <p className="ep-cand__top-sub">
+                  Ranked matches for your open roles — free while we are in early access.
+                </p>
+              </div>
+              <div className="ep-cand__top-art" aria-hidden>
+                <svg viewBox="0 0 160 120" className="ep-cand__top-svg">
+                  <ellipse cx="80" cy="110" rx="50" ry="6" fill="#eef1f4" />
+                  <g className="ep-hero__float">
+                    <circle cx="52" cy="58" r="26" fill="#fff" stroke="#e2e8ef" strokeWidth="2.2" />
+                    <path d="M70 76 92 98" stroke="#e8a63b" strokeWidth="6" strokeLinecap="round" />
+                  </g>
+                  <g className="ep-hero__char">
+                    <circle cx="118" cy="44" r="18" fill="#fff" stroke="#e2e8ef" strokeWidth="2.2" />
+                    <circle cx="112" cy="41" r="1.7" fill="#3d4f5f" />
+                    <circle cx="124" cy="41" r="1.7" fill="#3d4f5f" />
+                    <path d="M113 50c2.6 2.2 8 2.2 10.6 0" stroke="#e8a63b" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+                    <path d="M128 28c5-8 11-4 11 2" stroke="#e8a63b" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+                    <circle className="ep-hero__spark" cx="138" cy="20" r="4" fill="#e8a63b" />
+                  </g>
+                </svg>
+              </div>
             </div>
 
-            <label className="ep-cand__field">
-              <span>Job</span>
+            <label className="ep-cand__field ep-cand__field--job">
+              <span>Match against job</span>
               <select
                 value={jobId}
                 onChange={(e) => {
@@ -227,17 +232,7 @@ export default function EmployerCandidatesPage() {
 
             {!loading && !searching && !hasSearched ? (
               <div className="ep-cand__empty-state">
-                <div className="ep-cand__empty-icon" aria-hidden>
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <circle cx="10.5" cy="10.5" r="5.5" stroke="currentColor" strokeWidth="1.8" />
-                    <path
-                      d="M15 15.5 19.5 20"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </div>
+                <EmployerEmptyCue cue="search" />
                 <p>Ready when you are</p>
                 <span>Pick a job, refine filters if needed, then search.</span>
               </div>
@@ -245,6 +240,7 @@ export default function EmployerCandidatesPage() {
 
             {!loading && !searching && hasSearched && (results?.length ?? 0) === 0 ? (
               <div className="ep-cand__empty-state">
+                <EmployerEmptyCue cue="search" />
                 <p>No candidates found</p>
                 <span>Try broader filters or another job posting.</span>
               </div>
@@ -284,7 +280,9 @@ export default function EmployerCandidatesPage() {
                       </div>
                       <div className="ep-cand__side">
                         {row.matchScore !== null ? (
-                          <span className="ep-cand__score">{row.matchScore}%</span>
+                          <span className="ep-cand__score" title="ATS match for selected job">
+                            {row.matchScore}/100
+                          </span>
                         ) : null}
                         <Link
                           href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}

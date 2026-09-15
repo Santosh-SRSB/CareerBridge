@@ -524,30 +524,39 @@ export default function NewJobPage() {
 
   return (
     <EmployerShellFallback title={isEditing ? 'Edit Job' : 'Submit Job'}>
-      <div className="ep-create">
-        <p className="ep-dash__eyebrow">Home · Jobs · {isEditing ? 'Edit' : 'Create'}</p>
-        <header className="ep-dash__hello">
-          <div>
-            <h1 className="ep-dash__title">
-              {isEditing ? (
-                <>
-                  Edit <span>job</span>
-                </>
-              ) : (
-                <>
-                  Create <span>job</span>
-                </>
-              )}
+      <div className="ep-create ep-page ep-page--create">
+        <header className="ep-create-hero">
+          <div className="ep-create-hero__copy">
+            <p className="ep-create-hero__crumb">Home · Jobs · {isEditing ? 'Edit' : 'Create'}</p>
+            <h1 className="ep-create-hero__title">
+              {isEditing ? 'Edit job' : 'Create job'}
             </h1>
-            <p className="ep-dash__sub">
+            <p className="ep-create-hero__sub">
               {isEditing
                 ? 'Update basics, requirements, and details — then save.'
                 : 'Job title, department, employment type, and location.'}
             </p>
           </div>
+          <div className="ep-create-hero__art" aria-hidden>
+            <svg viewBox="0 0 160 120" className="ep-create-hero__svg">
+              <ellipse cx="80" cy="112" rx="48" ry="6" fill="#eef1f4" />
+              <rect className="ep-create-float" x="28" y="22" width="72" height="80" rx="12" fill="#fff" stroke="#e2e8ef" strokeWidth="2.2" />
+              <rect x="42" y="16" width="44" height="12" rx="6" fill="#fff6e8" stroke="#e8a63b" strokeWidth="2" />
+              <path d="M42 46h44M42 58h36M42 70h40" stroke="#edf1f5" strokeWidth="4" strokeLinecap="round" />
+              <rect x="42" y="82" width="28" height="8" rx="4" fill="#ffe0a0" />
+              <g className="ep-create-bob">
+                <circle cx="122" cy="44" r="18" fill="#fff" stroke="#e2e8ef" strokeWidth="2.2" />
+                <circle cx="116" cy="41" r="1.7" fill="#3d4f5f" />
+                <circle cx="128" cy="41" r="1.7" fill="#3d4f5f" />
+                <path d="M117 50c2.8 2.4 8.4 2.4 11.2 0" stroke="#e8a63b" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+                <path d="M132 28c5-8 11-5 11 2" stroke="#e8a63b" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+              </g>
+              <circle className="ep-create-float" cx="138" cy="22" r="5" fill="#e8a63b" />
+            </svg>
+          </div>
         </header>
 
-        <nav className="ep-flow-steps" aria-label="Job posting steps">
+        <nav className="ep-flow-steps ep-flow-steps--rail" aria-label="Job posting steps">
           {STEPS.map((item, index) => {
             const active = item.id === step;
             const done = item.id < step;
@@ -587,6 +596,7 @@ export default function NewJobPage() {
         <article className="ep-card ep-flow-card">
           <div className="ep-flow-card__head">
             <div>
+              <p className="ep-flow-card__step-tag">Step {step}</p>
               <h2>{current.title}</h2>
               <p>{current.subtitle}</p>
             </div>

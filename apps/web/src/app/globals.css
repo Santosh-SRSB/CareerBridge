@@ -16567,9 +16567,11 @@ button.cb-ticket-go {
 /* Employer — Candidates search */
 .ep-cand {
   display: flex;
-  justify-content: stretch;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
   width: 100%;
-  padding-bottom: 28px;
+  padding-bottom: 32px;
 }
 .ep-cand__shell {
   width: 100%;
@@ -16644,13 +16646,11 @@ button.cb-ticket-go {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   gap: 8px 10px;
-  text-align: center;
   padding: 10px 14px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(240, 253, 250, 0.95), rgba(204, 251, 241, 0.55));
-  border: 1px solid rgba(13, 148, 136, 0.18);
+  border-radius: 12px;
+  background: #eef7f5;
+  border: 1px solid #cfe8e2;
 }
 .ep-cand__band-label {
   margin: 0;
