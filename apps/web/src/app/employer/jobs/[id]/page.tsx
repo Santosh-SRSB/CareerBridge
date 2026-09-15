@@ -16,9 +16,11 @@ import {
   type JobMatchRow,
 } from '@/lib/api';
 import { EmployerShellFallback, EmployerPageHeader } from '@/components/EmployerPortal';
+import { EmployerAtsBandChip, EmployerAtsPanel } from '@/components/employer/EmployerAtsPanel';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
 import { StatusBadge } from '@/components/AppNav';
 import { Button } from '@/components/ui/Button';
+import { atsMatchBandLabel, toAtsMatchBreakdown } from '@careerbridge/shared';
 
 const ACTIONS = [
   { value: 'REVIEW', label: 'Review' },
@@ -90,7 +92,7 @@ export default function EmployerJobApplicationsPage() {
     try {
       const next = await recomputeJobMatches(params.id);
       setMatches(next);
-      setMessage('Candidates ranked by skills, experience, and interview readiness.');
+      setMessage('Candidates ranked by ATS match for this job (skills, experience, and semantic fit).');
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not rank candidates.');
@@ -184,7 +186,7 @@ export default function EmployerJobApplicationsPage() {
                     </div>
                     <div className="mt-4 grid gap-2 sm:grid-cols-4">
                       <div className="cb-hire-score">
-                        <span>Total</span>
+                        <span>ATS score</span>
                         <strong>{row.totalScore}</strong>
                       </div>
                       <div className="cb-hire-score">
@@ -196,10 +198,34 @@ export default function EmployerJobApplicationsPage() {
                         <strong>{row.experienceScore}</strong>
                       </div>
                       <div className="cb-hire-score">
-                        <span>Interview ready</span>
-                        <strong>{row.interviewReadinessScore}</strong>
+                        <span>Band</span>
+                        <strong className="text-sm">{atsMatchBandLabel(row.totalScore).replace(' Match', '')}</strong>
                       </div>
                     </div>
+                    {(row.reasons?.length || row.gaps?.length) ? (
+                      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        {row.reasons?.length ? (
+                          <div>
+                            <p className="text-xs font-extrabold uppercase tracking-wide text-muted">Why this match</p>
+                            <ul className="mt-1 space-y-0.5 text-primary/90">
+                              {row.reasons.slice(0, 4).map((reason) => (
+                                <li key={reason}>✓ {reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {row.gaps?.length ? (
+                          <div>
+                            <p className="text-xs font-extrabold uppercase tracking-wide text-muted">Missing / weaker</p>
+                            <ul className="mt-1 space-y-0.5 text-primary/90">
+                              {row.gaps.slice(0, 4).map((gap) => (
+                                <li key={gap}>! {gap}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </section>
                 );
               })}
@@ -214,6 +240,8 @@ export default function EmployerJobApplicationsPage() {
                 const name =
                   [item.candidate.firstName, item.candidate.lastName].filter(Boolean).join(' ') ||
                   'Candidate';
+                const atsScore = item.match?.score ?? rank?.totalScore ?? null;
+                const breakdown = item.match ? toAtsMatchBreakdown(item.match) : null;
                 return (
                   <section key={item.id} className="cb-hire-applicant">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -225,6 +253,7 @@ export default function EmployerJobApplicationsPage() {
                             </span>
                           ) : null}
                           <p className="text-lg font-extrabold text-primary">{name}</p>
+                          {atsScore != null ? <EmployerAtsBandChip score={atsScore} /> : null}
                         </div>
                         <p className="mt-1 text-sm text-muted">
                           {item.candidate.city || 'Location n/a'}
@@ -236,24 +265,55 @@ export default function EmployerJobApplicationsPage() {
                       <StatusBadge status={item.status} />
                     </div>
 
-                    <div className="mt-4 grid gap-2 sm:grid-cols-4">
-                      <div className="cb-hire-score">
-                        <span>Total</span>
-                        <strong>{rank?.totalScore ?? item.match?.score ?? '—'}</strong>
+                    {item.match ? (
+                      <EmployerAtsPanel match={item.match} compact className="!mt-4" />
+                    ) : (
+                      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                        <div className="cb-hire-score">
+                          <span>ATS score</span>
+                          <strong>{rank?.totalScore ?? '—'}</strong>
+                        </div>
+                        <div className="cb-hire-score">
+                          <span>Skills</span>
+                          <strong>{rank?.skillsScore ?? '—'}</strong>
+                        </div>
+                        <div className="cb-hire-score">
+                          <span>Experience</span>
+                          <strong>{rank?.experienceScore ?? '—'}</strong>
+                        </div>
+                        <div className="cb-hire-score">
+                          <span>Band</span>
+                          <strong className="text-sm">
+                            {rank ? atsMatchBandLabel(rank.totalScore).replace(' Match', '') : '—'}
+                          </strong>
+                        </div>
                       </div>
-                      <div className="cb-hire-score">
-                        <span>Skills</span>
-                        <strong>{rank?.skillsScore ?? '—'}</strong>
+                    )}
+
+                    {breakdown ? null : (rank?.reasons?.length || rank?.gaps?.length) ? (
+                      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                        {rank?.reasons?.length ? (
+                          <div>
+                            <p className="text-xs font-extrabold uppercase tracking-wide text-muted">Why this match</p>
+                            <ul className="mt-1 space-y-0.5 text-primary/90">
+                              {rank.reasons.slice(0, 4).map((reason) => (
+                                <li key={reason}>✓ {reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {rank?.gaps?.length ? (
+                          <div>
+                            <p className="text-xs font-extrabold uppercase tracking-wide text-muted">Missing / weaker</p>
+                            <ul className="mt-1 space-y-0.5 text-primary/90">
+                              {rank.gaps.slice(0, 4).map((gap) => (
+                                <li key={gap}>! {gap}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="cb-hire-score">
-                        <span>Experience</span>
-                        <strong>{rank?.experienceScore ?? '—'}</strong>
-                      </div>
-                      <div className="cb-hire-score">
-                        <span>Interview ready</span>
-                        <strong>{rank?.interviewReadinessScore ?? '—'}</strong>
-                      </div>
-                    </div>
+                    ) : null}
 
                     <div className="mt-4 flex flex-wrap gap-3">
                       <Link

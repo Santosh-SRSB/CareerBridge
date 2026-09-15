@@ -52,22 +52,22 @@ export function AuthShell({
   const heroHeadline =
     panelTitle ||
     (scene === 'employer'
-      ? 'Hire verified talent simply and quickly'
+      ? 'Hire verified talent with clarity'
       : 'Find your dream job simply and quickly');
 
   return (
     <main className="min-h-screen w-full flex flex-col bg-[#f0f4f8] text-[#0f172a]">
-      <div className="flex flex-1 items-center justify-center px-3 py-5 sm:px-5 md:px-6 lg:px-8">
-        <div className="relative w-full max-w-6xl xl:max-w-[1160px] bg-white rounded-2xl md:rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.08)] overflow-hidden border border-slate-200/80 flex flex-col md:flex-row md:min-h-[min(680px,calc(100dvh-3rem))]">
+      <div className="flex flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-5 md:px-6 lg:px-8">
+        <div className="relative w-full max-w-6xl xl:max-w-[1160px] bg-white rounded-2xl md:rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.08)] overflow-hidden border border-slate-200/80 flex flex-col md:flex-row md:min-h-[min(680px,calc(100dvh-3rem))] max-h-[none] md:max-h-[calc(100dvh-2rem)]">
           <Link
             href={backHref ?? '/'}
-            className="absolute right-4 top-4 z-20 inline-flex items-center gap-1 text-sm font-semibold text-[#142a4f] transition hover:text-[#43526b] sm:right-5 sm:top-5"
+            className="absolute right-3 top-3 z-20 inline-flex items-center gap-1 text-sm font-semibold text-[#142a4f] transition hover:text-[#43526b] sm:right-5 sm:top-5"
           >
             Back ←
           </Link>
           <AuthSplitHero headline={heroHeadline} subhead={panelCopy} scene={scene} />
 
-          <div className="flex flex-1 flex-col justify-between p-5 pt-12 sm:p-6 sm:pt-14 md:p-8 md:pt-16 lg:p-10 xl:p-12 bg-white min-w-0">
+          <div className="flex flex-1 flex-col justify-between p-4 pt-12 sm:p-6 sm:pt-14 md:p-8 md:pt-16 lg:p-10 xl:p-12 bg-white min-w-0 overflow-y-auto">
             <div className="w-full max-w-[420px] mx-auto md:my-auto">
               <div className="mb-5 text-center md:hidden">
                 <p className="text-xl font-black tracking-tight text-[#0a2e2c]">

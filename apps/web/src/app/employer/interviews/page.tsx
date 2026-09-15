@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EmployerInterviewRecord } from '@careerbridge/shared';
 import { employerInterviewAction, listEmployerInterviews } from '@/lib/api';
-import { EmployerShellFallback, EmployerPageHeader } from '@/components/EmployerPortal';
+import { EmployerShellFallback } from '@/components/EmployerPortal';
+import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
+import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 import { Button } from '@/components/ui/Button';
 
 function candidateName(row: EmployerInterviewRecord) {
@@ -99,12 +101,13 @@ export default function EmployerInterviewsPage() {
 
   return (
     <EmployerShellFallback title="Interviews">
-      <div className="ep-desk">
-        <EmployerPageHeader
+      <div className="ep-desk ep-page ep-page--interviews">
+        <EmployerSectionHero
+          tone="interviews"
           title="Interviews"
           subtitle="Schedule, confirm, reschedule, and track recruitment interviews."
           action={
-            <Link href="/employer/interviews/schedule" className="ep-btn-gold inline-flex rounded-xl px-4 py-2 text-sm font-extrabold">
+            <Link href="/employer/interviews/schedule" className="ep-hero__link">
               + Schedule interview
             </Link>
           }
@@ -114,20 +117,27 @@ export default function EmployerInterviewsPage() {
         {loading ? <p className="text-sm text-muted">Loading interviews…</p> : null}
 
         {!loading && items.length === 0 ? (
-          <article className="ep-card">
-            <p className="text-sm text-muted">No interviews scheduled yet.</p>
-            <Link href="/employer/applications" className="ep-link mt-3 inline-block text-sm font-extrabold">
-              Review applications →
-            </Link>
+          <article className="ep-polished-empty">
+            <EmployerEmptyCue cue="calendar" />
+            <div>
+              <p className="ep-polished-empty__title">No interviews scheduled yet</p>
+              <p className="ep-polished-empty__copy">
+                Shortlist an applicant, then book a time — they’ll get a product notification with the details.
+              </p>
+              <Link href="/employer/applications" className="ep-link font-extrabold">
+                Review applications →
+              </Link>
+            </div>
           </article>
         ) : null}
 
         {!loading && upcoming.length > 0 ? (
-          <article className="ep-card ep-list-card">
-            <h2 className="px-5 pt-5 text-lg font-extrabold text-primary">Upcoming ({upcoming.length})</h2>
-            <ul className="mt-2 divide-y divide-primary/10">
-              {upcoming.map((item) => (
-                <li key={item.id} className="px-5 py-4">
+          <div className="ep-iv-rail">
+            <h2 className="text-sm font-extrabold uppercase tracking-wide text-muted">
+              Upcoming ({upcoming.length})
+            </h2>
+            {upcoming.map((item) => (
+              <article key={item.id} className="ep-iv-card px-5 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <p className="text-lg font-extrabold text-primary">{candidateName(item)}</p>
@@ -246,10 +256,9 @@ export default function EmployerInterviewsPage() {
                   >
                     Save notes
                   </Button>
-                </li>
-              ))}
-            </ul>
-          </article>
+              </article>
+            ))}
+          </div>
         ) : null}
 
         {!loading && items.some((item) => ['COMPLETED', 'CANCELLED'].includes(item.status)) ? (

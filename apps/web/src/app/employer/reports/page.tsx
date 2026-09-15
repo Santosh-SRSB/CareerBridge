@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EmployerDashboard, EmployerJobSummary } from '@careerbridge/shared';
 import { getEmployerDashboard, listEmployerJobs } from '@/lib/api';
-import { EmployerShellFallback, EmployerPageHeader } from '@/components/EmployerPortal';
+import { EmployerShellFallback } from '@/components/EmployerPortal';
+import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
+import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 
 export default function EmployerReportsPage() {
   const [dashboard, setDashboard] = useState<EmployerDashboard | null>(null);
@@ -36,11 +38,29 @@ export default function EmployerReportsPage() {
       .slice(0, 5);
   }, [jobs]);
 
+  const isQuiet =
+    dashboard &&
+    dashboard.openJobs === 0 &&
+    dashboard.applications === 0 &&
+    dashboard.shortlisted === 0 &&
+    dashboard.interviews === 0;
+
+  const stats = dashboard
+    ? [
+        { label: 'Active Jobs', value: dashboard.openJobs, hint: 'Live now', tone: 'a' as const },
+        { label: 'Applications', value: dashboard.applications, hint: 'Total received', tone: 'b' as const },
+        { label: 'Shortlisted', value: dashboard.shortlisted, hint: 'In pipeline', tone: 'c' as const },
+        { label: 'Interviews', value: dashboard.interviews, hint: 'Scheduled', tone: 'd' as const },
+      ]
+    : [];
+
   return (
     <EmployerShellFallback title="Reports">
-      <div className="ep-desk">
-        <EmployerPageHeader
-          title="Hiring Reports"
+      <div className="ep-desk ep-page ep-page--analytics">
+        <EmployerSectionHero
+          tone="analytics"
+          compact
+          title="Hiring Analytics"
           subtitle="Track job performance, applications, and shortlist funnel."
         />
 
@@ -49,57 +69,101 @@ export default function EmployerReportsPage() {
 
         {dashboard && funnel ? (
           <>
-            <div className="ep-stats">
-              {[
-                { label: 'Active Jobs', value: dashboard.openJobs, tone: 'ep-stat__icon--teal', hint: 'Live now' },
-                { label: 'Applications', value: dashboard.applications, tone: '', hint: 'Total received' },
-                { label: 'Shortlisted', value: dashboard.shortlisted, tone: 'ep-stat__icon--gold', hint: 'In pipeline' },
-                { label: 'Interviews', value: dashboard.interviews, tone: 'ep-stat__icon--soft', hint: 'Scheduled' },
-              ].map((item) => (
-                <div key={item.label} className="ep-card ep-stat">
-                  <p>{item.label}</p>
-                  <strong>{item.value}</strong>
-                  <em>{item.hint}</em>
+            {isQuiet ? (
+              <div className="ep-polished-empty ep-an-empty">
+                <EmployerEmptyCue cue="chart" />
+                <div>
+                  <p className="ep-polished-empty__title">No hiring activity yet</p>
+                  <p className="ep-polished-empty__copy">
+                    Post a job to start collecting applications — analytics will fill in as candidates apply.
+                  </p>
+                  <Link href="/employer/jobs/new" className="ep-hero__link ep-polished-empty__cta">
+                    + Post a job
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="ep-an-stats">
+              {stats.map((item, i) => (
+                <div
+                  key={item.label}
+                  className={`ep-an-stat ep-an-stat--${item.tone}`}
+                  style={{ animationDelay: `${i * 70}ms` }}
+                >
+                  <span className="ep-an-stat__dot" aria-hidden />
+                  <p className="ep-an-stat__label">{item.label}</p>
+                  <strong className="ep-an-stat__value">{item.value}</strong>
+                  <em className="ep-an-stat__hint">{item.hint}</em>
                 </div>
               ))}
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <article className="ep-card p-6">
-                <h2 className="text-sm font-extrabold uppercase tracking-wide text-muted">Recruitment funnel</h2>
-                <ul className="mt-5 space-y-4 text-sm">
-                  <li className="flex items-center justify-between gap-3 border-b border-primary/5 pb-3">
-                    <span className="text-muted">Applications received</span>
-                    <strong className="text-lg text-primary">{funnel.apps}</strong>
+            <div className="ep-an-grid">
+              <article className="ep-an-funnel">
+                <div className="ep-an-funnel__head">
+                  <h2 className="ep-an-funnel__title">Recruitment funnel</h2>
+                  <p className="ep-an-funnel__sub">From applications to interviews</p>
+                </div>
+                <ul className="ep-an-funnel__list">
+                  <li>
+                    <div className="ep-an-funnel__row">
+                      <span>Applications received</span>
+                      <strong>{funnel.apps}</strong>
+                    </div>
+                    <div className="ep-an-funnel__track" aria-hidden>
+                      <span
+                        className="ep-an-funnel__fill ep-an-funnel__fill--a"
+                        style={{ width: funnel.apps > 0 ? '100%' : '8%' }}
+                      />
+                    </div>
                   </li>
-                  <li className="flex items-center justify-between gap-3 border-b border-primary/5 pb-3">
-                    <span className="text-muted">Shortlist rate</span>
-                    <strong className="text-lg text-primary">{funnel.shortlistRate}%</strong>
+                  <li>
+                    <div className="ep-an-funnel__row">
+                      <span>Shortlist rate</span>
+                      <strong>{funnel.shortlistRate}%</strong>
+                    </div>
+                    <div className="ep-an-funnel__track" aria-hidden>
+                      <span
+                        className="ep-an-funnel__fill ep-an-funnel__fill--b"
+                        style={{ width: `${Math.max(funnel.shortlistRate, 8)}%` }}
+                      />
+                    </div>
                   </li>
-                  <li className="flex items-center justify-between gap-3">
-                    <span className="text-muted">Interview rate</span>
-                    <strong className="text-lg text-primary">{funnel.interviewRate}%</strong>
+                  <li>
+                    <div className="ep-an-funnel__row">
+                      <span>Interview rate</span>
+                      <strong>{funnel.interviewRate}%</strong>
+                    </div>
+                    <div className="ep-an-funnel__track" aria-hidden>
+                      <span
+                        className="ep-an-funnel__fill ep-an-funnel__fill--c"
+                        style={{ width: `${Math.max(funnel.interviewRate, 8)}%` }}
+                      />
+                    </div>
                   </li>
                 </ul>
               </article>
 
-              <article className="ep-card p-6">
-                <h2 className="text-sm font-extrabold uppercase tracking-wide text-muted">Top jobs by applicants</h2>
+              <article className="ep-an-panel">
+                <h2 className="ep-an-panel__title">Top roles by applicants</h2>
                 {topJobs.length === 0 ? (
-                  <p className="mt-4 text-sm text-muted">No jobs posted yet.</p>
+                  <div className="ep-polished-empty ep-polished-empty--inset">
+                    <EmployerEmptyCue cue="jobs" />
+                    <div>
+                      <p className="ep-polished-empty__title">No jobs yet</p>
+                      <p className="ep-polished-empty__copy">Create your first opening to see role rankings here.</p>
+                      <Link href="/employer/jobs/new" className="ep-link font-extrabold">
+                        Create a job →
+                      </Link>
+                    </div>
+                  </div>
                 ) : (
-                  <ul className="mt-5 space-y-3 text-sm">
-                    {topJobs.map((job, index) => (
-                      <li key={job.id} className="flex items-center justify-between gap-3 rounded-xl bg-[#f8faf9] px-3 py-2.5">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-extrabold text-primary">
-                            {index + 1}
-                          </span>
-                          <Link href={`/employer/jobs/${job.id}`} className="truncate font-semibold text-primary hover:text-teal">
-                            {job.title}
-                          </Link>
-                        </div>
-                        <span className="shrink-0 font-bold text-teal">{job.applicantCount || 0}</span>
+                  <ul className="ep-an-panel__list">
+                    {topJobs.map((job, i) => (
+                      <li key={job.id} style={{ animationDelay: `${i * 60}ms` }}>
+                        <Link href={`/employer/jobs/${job.id}`}>{job.title}</Link>
+                        <span>{job.applicantCount || 0}</span>
                       </li>
                     ))}
                   </ul>
