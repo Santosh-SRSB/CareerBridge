@@ -153,7 +153,22 @@ export default function EmployerInterviewsPage() {
                         {item.status.replaceAll('_', ' ')}
                       </span>
                       <div className="flex flex-wrap justify-end gap-2">
-                        {item.status === 'SCHEDULED' || item.status === 'RESCHEDULE_REQUESTED' ? (
+                        {item.status === 'RESCHEDULE_REQUESTED' ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            block={false}
+                            loading={busyId === item.id}
+                            onClick={() =>
+                              void act(item.id, 'confirm', {
+                                scheduledAt: item.preferredRescheduleAt || undefined,
+                              })
+                            }
+                          >
+                            Approve
+                          </Button>
+                        ) : null}
+                        {item.status === 'SCHEDULED' || item.status === 'PROPOSED' ? (
                           <Button
                             type="button"
                             size="sm"
@@ -173,7 +188,9 @@ export default function EmployerInterviewsPage() {
                           loading={busyId === item.id}
                           onClick={() => {
                             setRescheduleId(item.id);
-                            setRescheduleAt(toLocalInputValue(item.scheduledAt));
+                            setRescheduleAt(
+                              toLocalInputValue(item.preferredRescheduleAt || item.scheduledAt),
+                            );
                           }}
                         >
                           Reschedule
@@ -207,6 +224,12 @@ export default function EmployerInterviewsPage() {
                     </div>
                   </div>
 
+                  {item.status === 'RESCHEDULE_REQUESTED' && item.preferredRescheduleAt ? (
+                    <p className="mt-2 text-sm font-semibold text-amber-800">
+                      Candidate preferred: {formatWhen(item.preferredRescheduleAt)}
+                    </p>
+                  ) : null}
+
                   {rescheduleId === item.id ? (
                     <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl bg-fog/70 p-3">
                       <label className="grid gap-1 text-xs font-bold text-muted">
@@ -215,6 +238,7 @@ export default function EmployerInterviewsPage() {
                           type="datetime-local"
                           className="rounded-xl border border-primary/15 bg-white px-3 py-2 text-sm font-semibold text-primary"
                           value={rescheduleAt}
+                          min={toLocalInputValue(new Date().toISOString())}
                           onChange={(e) => setRescheduleAt(e.target.value)}
                         />
                       </label>
@@ -223,11 +247,16 @@ export default function EmployerInterviewsPage() {
                         size="sm"
                         block={false}
                         loading={busyId === item.id}
-                        onClick={() =>
+                        onClick={() => {
+                          const next = new Date(rescheduleAt);
+                          if (Number.isNaN(next.getTime()) || next.getTime() < Date.now() - 60_000) {
+                            setError('Choose a future date and time.');
+                            return;
+                          }
                           void act(item.id, 'reschedule', {
-                            scheduledAt: new Date(rescheduleAt).toISOString(),
-                          })
-                        }
+                            scheduledAt: next.toISOString(),
+                          });
+                        }}
                       >
                         Save new time
                       </Button>

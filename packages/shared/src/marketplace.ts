@@ -942,6 +942,7 @@ export type EmployerKycPayload = {
   cin: string;
   website: string;
   panNumber: string;
+  trademark?: string;
 };
 
 export type EmployerAffiliationPayload = {
@@ -1068,8 +1069,10 @@ export type EmployerInterviewRecord = {
   durationMin: number;
   mode: string;
   location: string | null;
+  meetingUrl?: string | null;
   status: EmployerInterviewStatus;
   notes: string | null;
+  preferredRescheduleAt?: string | null;
   confirmedAt: string | null;
   createdAt: string;
   applicationStatus: string;

@@ -307,8 +307,8 @@
 
 .ep-app--saas .ep-deskbar__logo {
   height: 44px;
-  width: auto;
-  max-width: min(180px, 46vw);
+  width: 44px;
+  max-width: 44px;
   object-fit: contain;
   display: block;
   flex-shrink: 0;

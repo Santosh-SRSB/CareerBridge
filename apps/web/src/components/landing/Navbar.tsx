@@ -66,13 +66,13 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
   return (
     <header className="site-navbar sticky top-0 z-50">
       <nav className="mx-auto flex h-[72px] max-w-[1280px] items-center justify-between gap-6 px-5 sm:h-[84px] sm:px-10">
-        <Link href={signedIn ? homeHref : "/"} className="logo-mark w-[148px] shrink-0 sm:w-[180px]">
+        <Link href={signedIn ? homeHref : "/"} className="logo-mark shrink-0">
           <Image
-            src="/srsb-wordmark.png"
+            src="/srsb-mark.png"
             alt="SRSB"
-            width={408}
-            height={170}
-            className="h-10 w-auto bg-transparent sm:h-11"
+            width={88}
+            height={88}
+            className="h-10 w-10 object-contain bg-transparent sm:h-11 sm:w-11"
             unoptimized
             priority
           />

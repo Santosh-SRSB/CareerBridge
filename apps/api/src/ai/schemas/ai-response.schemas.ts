@@ -35,6 +35,7 @@ export interface InterviewEvaluationResult {
   whatWasMissing?: string[];
   improvementSuggestion?: string;
   score: number;
+  questionType?: string;
 }
 
 export interface InterviewQuestionResult {

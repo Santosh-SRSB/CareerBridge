@@ -120,6 +120,98 @@ export class EmailService {
     }
   }
 
+  async sendEmployerInterviewConfirmation(input: {
+    to: string;
+    candidateName: string;
+    companyName: string;
+    jobTitle: string;
+    whenLabel: string;
+    meetingUrl: string;
+  }) {
+    try {
+      return await this.sendMail(
+        input.to,
+        `Interview confirmed — ${input.jobTitle}`,
+        `Hi ${input.candidateName},\n\nYour interview with ${input.companyName} for ${input.jobTitle} is confirmed for ${input.whenLabel}.\n\nStart / join: ${input.meetingUrl}\n`,
+        `
+          <div style="font-family: Arial, sans-serif; max-width: 560px; color: #0c3340;">
+            <h1 style="font-size: 22px;">CareerBridge</h1>
+            <p>Hi ${input.candidateName},</p>
+            <p>Your interview with <strong>${input.companyName}</strong> for <strong>${input.jobTitle}</strong> is <strong>confirmed</strong> for <strong>${input.whenLabel}</strong>.</p>
+            <p><a href="${input.meetingUrl}" style="display:inline-block;background:#25d366;color:#fff;padding:12px 18px;border-radius:999px;font-weight:700;text-decoration:none;">Start meeting</a></p>
+            <p style="color:#5b6f70;font-size:13px;">You can also copy the link from your CareerBridge interview page.</p>
+          </div>
+        `,
+      );
+    } catch {
+      this.logger.error('Failed to send interview confirmation email');
+      return false;
+    }
+  }
+
+  async sendEmployerInterviewRescheduleRequest(input: {
+    to: string;
+    employerName: string;
+    candidateName: string;
+    jobTitle: string;
+    preferredLabel: string;
+    portalUrl: string;
+  }) {
+    try {
+      return await this.sendMail(
+        input.to,
+        `Reschedule request — ${input.jobTitle}`,
+        `Hi ${input.employerName},\n\n${input.candidateName} requested to reschedule the interview for ${input.jobTitle} to ${input.preferredLabel}.\n\nApprove or propose another time: ${input.portalUrl}\n`,
+        `
+          <div style="font-family: Arial, sans-serif; max-width: 560px; color: #0c3340;">
+            <h1 style="font-size: 22px;">CareerBridge</h1>
+            <p>Hi ${input.employerName},</p>
+            <p><strong>${input.candidateName}</strong> requested to reschedule the interview for <strong>${input.jobTitle}</strong> to <strong>${input.preferredLabel}</strong>.</p>
+            <p><a href="${input.portalUrl}" style="display:inline-block;background:#004043;color:#fff;padding:12px 18px;border-radius:999px;font-weight:700;text-decoration:none;">Review in portal</a></p>
+          </div>
+        `,
+      );
+    } catch {
+      this.logger.error('Failed to send employer reschedule email');
+      return false;
+    }
+  }
+
+  async sendEmployerInterviewRescheduleUpdate(input: {
+    to: string;
+    candidateName: string;
+    companyName: string;
+    jobTitle: string;
+    whenLabel: string;
+    meetingUrl: string;
+    approved: boolean;
+  }) {
+    const subject = input.approved
+      ? `Reschedule approved — ${input.jobTitle}`
+      : `Interview rescheduled — ${input.jobTitle}`;
+    const lead = input.approved
+      ? `Your preferred time was approved. The interview is confirmed for ${input.whenLabel}.`
+      : `${input.companyName} proposed a new time for ${input.jobTitle}: ${input.whenLabel}. Please confirm in CareerBridge.`;
+    try {
+      return await this.sendMail(
+        input.to,
+        subject,
+        `Hi ${input.candidateName},\n\n${lead}\n\nMeeting link: ${input.meetingUrl}\n`,
+        `
+          <div style="font-family: Arial, sans-serif; max-width: 560px; color: #0c3340;">
+            <h1 style="font-size: 22px;">CareerBridge</h1>
+            <p>Hi ${input.candidateName},</p>
+            <p>${lead}</p>
+            <p><a href="${input.meetingUrl}" style="display:inline-block;background:#1ec8c0;color:#0c3340;padding:12px 18px;border-radius:999px;font-weight:700;text-decoration:none;">Open interview</a></p>
+          </div>
+        `,
+      );
+    } catch {
+      this.logger.error('Failed to send candidate reschedule update email');
+      return false;
+    }
+  }
+
   private async sendMail(to: string, subject: string, text: string, html: string) {
     if (!this.isConfigured()) return false;
     const host = this.config.get('SMTP_HOST') || 'smtp.gmail.com';

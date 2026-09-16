@@ -3,6 +3,14 @@ import type { InterviewReport, LiveInterviewQuestion, ResumeContent } from '@car
 import { detectConduct } from './interview-conduct';
 import { evaluableTextAnswer, isAudioPlaceholderAnswer } from './interview-answer.util';
 import { AiGatewayService } from '../ai/ai-gateway.service';
+import {
+  buildCategoryAwareImprovedAnswer,
+  classifyQuestionType,
+  evaluationCriteriaFor,
+  localAnalyzeCategoryAware,
+  needsStrongRewrite,
+  type InterviewQuestionType,
+} from './interview-evaluation.util';
 
 export type InterviewProfile = {
   fullName: string;
@@ -79,7 +87,8 @@ export class InterviewAiService {
       city: profile.city || null,
     };
 
-    const attempts = 3;
+    // One attempt — retries used to stack multi-minute waits on Submit.
+    const attempts = 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       const fromAi = await this.aiGateway.generateInterviewQuestion({
         interviewType,
@@ -160,9 +169,11 @@ export class InterviewAiService {
     }
 
     if (!this.aiGateway.isConfigured()) {
-      return calibrateScore(localAnalyze(question, text, profile), text);
+      return calibrateScore(localAnalyzeCategoryAware(question, text, profile), text);
     }
 
+    const questionType = classifyQuestionType(question);
+    const criteria = evaluationCriteriaFor(questionType);
     const fromAi = await this.aiGateway.evaluateInterviewAnswer(
       {
         fullName: profile.fullName,
@@ -171,45 +182,73 @@ export class InterviewAiService {
         education: profile.education,
         experiences: profile.experiences,
         experienceYears: profile.experienceYears,
-        summary: profile.summary?.slice(0, 400) || '',
+        summary: profile.summary?.slice(0, 500) || '',
       },
       question,
       text,
-      { temperature: 0.2 },
+      {
+        temperature: 0.35,
+        questionTypeHint: questionType,
+        evaluationCriteria: criteria,
+      },
     );
-    const local = localAnalyze(question, text, profile);
-    if (!fromAi) return calibrateScore(local);
-    const wordCount = text.split(/\s+/).filter(Boolean).length;
-    const improvedAnswer =
-      sanitizeImproved(text, fromAi.improvedAnswer || '', profile, wordCount < 8) ||
-      (wordCount < 8 ? buildProperAnswerFromProfile(question, profile) : improveLocal(text, profile));
-    const analysisParts = [
-      fromAi.analysis || local.analysis,
-      fromAi.improvementSuggestion
-        ? `Next step: ${fromAi.improvementSuggestion}`
-        : '',
-    ].filter(Boolean);
-    return calibrateScore({
-      analysis: analysisParts.join(' '),
-      improvedAnswer: improvedAnswer || undefined,
-      strengths: fromAi.strengths?.length
-        ? fromAi.strengths.slice(0, 4)
-        : fromAi.whatWasGood?.length
-          ? fromAi.whatWasGood.slice(0, 4)
-          : local.strengths,
-      weaknesses: fromAi.weaknesses?.length
-        ? fromAi.weaknesses.slice(0, 4)
-        : fromAi.whatWasMissing?.length
-          ? fromAi.whatWasMissing.slice(0, 4)
-          : local.weaknesses,
-      whatWasGood: (fromAi.whatWasGood || fromAi.strengths || local.strengths).slice(0, 4),
-      whatWasMissing: (fromAi.whatWasMissing || fromAi.weaknesses || local.weaknesses).slice(0, 4),
-      improvementSuggestion:
-        fromAi.improvementSuggestion ||
-        local.weaknesses[0] ||
-        'Add specific examples that directly answer each part of the question.',
-      score: clamp(fromAi.score ?? local.score, 0, 100),
-    }, text);
+    const local = localAnalyzeCategoryAware(question, text, profile);
+    if (!fromAi) return calibrateScore(local, text);
+
+    const whatWasMissing = (
+      fromAi.whatWasMissing?.length
+        ? fromAi.whatWasMissing
+        : fromAi.weaknesses?.length
+          ? fromAi.weaknesses
+          : local.whatWasMissing
+    )
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .slice(0, 4);
+
+    const score = clamp(fromAi.score ?? local.score, 0, 100);
+    const resolvedType = normalizeQuestionType(fromAi.questionType) || questionType;
+    let improvedAnswer = sanitizeImprovedAnswer(text, fromAi.improvedAnswer || '', profile);
+
+    if (needsStrongRewrite(score, whatWasMissing, text, improvedAnswer || '')) {
+      improvedAnswer = buildCategoryAwareImprovedAnswer(
+        question,
+        text,
+        profile,
+        resolvedType,
+        whatWasMissing,
+      );
+    }
+    if (!improvedAnswer.trim()) {
+      improvedAnswer =
+        text.split(/\s+/).filter(Boolean).length < 8
+          ? buildProperAnswerFromProfile(question, profile)
+          : buildCategoryAwareImprovedAnswer(question, text, profile, resolvedType, whatWasMissing);
+    }
+
+    const improvementSuggestion =
+      fromAi.improvementSuggestion?.trim() ||
+      local.improvementSuggestion ||
+      'Add specific examples that directly answer each part of the question.';
+
+    return calibrateScore(
+      {
+        analysis: (fromAi.analysis || local.analysis).trim(),
+        improvedAnswer: improvedAnswer || undefined,
+        strengths: (fromAi.strengths?.length
+          ? fromAi.strengths
+          : fromAi.whatWasGood?.length
+            ? fromAi.whatWasGood
+            : local.strengths
+        ).slice(0, 4),
+        weaknesses: (fromAi.weaknesses?.length ? fromAi.weaknesses : whatWasMissing).slice(0, 4),
+        whatWasGood: (fromAi.whatWasGood || fromAi.strengths || local.strengths).slice(0, 4),
+        whatWasMissing,
+        improvementSuggestion,
+        score,
+      },
+      text,
+    );
   }
 
   async report(
@@ -260,8 +299,8 @@ export class InterviewAiService {
       [
         'You are an expert interview evaluator summarizing a completed interview.',
         'Be accurate and fair. Do NOT inflate praise. Do not invent experience.',
-        'overallAnalysis must explain why the overall score is what it is, based on actual answer quality.',
-        'strengths and weaknesses must be specific (not "completed the interview").',
+        'overallAnalysis must explain why the overall score is what it is, based on actual answer quality and question types asked.',
+        'strengths and weaknesses must be specific and actionable (not "completed the interview" or "needs improvement").',
         'postInterviewSuggestions must be personalized to THIS candidate weaknesses: communication[], technical[], answerStructure[], topicsToRevise[], practicePlan[].',
         'recommendation must match score bands: 85-100 Strongly Recommended; 70-84 Recommended; 55-69 Needs Improvement; 40-54 Significant Improvement Needed; 0-39 Not Recommended.',
         'Return JSON { summary, overallAnalysis, strengths, weaknesses, dos, donts, recommendation, postInterviewSuggestions }.',
@@ -571,65 +610,17 @@ function analyzeAudioOnlyAnswer(durationSec = 0) {
 }
 
 function localAnalyze(question: string, answer: string, profile: InterviewProfile) {
-  const words = answer.trim().split(/\s+/).filter(Boolean);
-  const relevant = overlap(answer, `${question} ${profile.skills.join(' ')} ${profile.jobRole}`);
-  // Strict local fallback: short answers stay low; length alone cannot reach “excellent”.
-  let score = 15 + Math.min(25, words.length) + Math.min(20, relevant * 3);
-  if (words.length < 8) score = Math.min(score, 28);
-  else if (words.length < 20) score = Math.min(score, 45);
-  else if (words.length < 40) score = Math.min(score, 62);
-  else score = Math.min(score, 78);
-  score = clamp(score, 0, 78);
-  const improved = improveLocal(answer, profile);
-  const questionHint = question.split(/[.?\n]/).find((line) => line.trim().length > 12)?.trim() || question.slice(0, 80);
-  const whatWasMissing =
-    words.length < 20
-      ? [
-          'Enough detail to cover the question’s key points',
-          'A concrete example from your real experience',
-          'Clear personal contribution / tools used when asked',
-        ]
-      : [
-          'Stronger structure (situation → action → result)',
-          'More specific outcomes or technical detail',
-        ];
-  return {
-    analysis:
-      words.length < 20
-        ? `For "${questionHint}", your answer was too brief and incomplete. You did not cover enough of what the question asked.`
-        : `For "${questionHint}", you made some relevant points but need more depth and structure for a stronger score.`,
-    improvedAnswer: improved || undefined,
-    strengths:
-      words.length >= 20
-        ? ['Attempted a relevant response', relevant ? 'Stayed related to the topic' : 'Stayed professional']
-        : words.length >= 5
-          ? ['Attempted the question']
-          : [],
-    weaknesses: whatWasMissing.slice(0, 3),
-    whatWasGood:
-      words.length >= 20
-        ? ['Provided a related response']
-        : words.length >= 5
-          ? ['Attempted the question']
-          : [],
-    whatWasMissing,
-    improvementSuggestion:
-      words.length < 20
-        ? 'Aim for 4–6 sentences: answer each part of the question, add one real example, and state your contribution or tools when relevant.'
-        : 'Use STAR (Situation → Task → Action → Result) and add one specific technical or project detail.',
-    score,
-  };
+  return localAnalyzeCategoryAware(question, answer, profile);
 }
 
 function improveLocal(answer: string, profile: InterviewProfile) {
-  const clean = answer.replace(/\s+/g, ' ').trim();
-  if (!clean || isAudioPlaceholderAnswer(clean)) return '';
-  // Only polish grammar/structure — do NOT inject unrelated profile skills.
-  let improved = `${clean.charAt(0).toUpperCase()}${clean.slice(1)}${clean.endsWith('.') ? '' : '.'}`;
-  if (improved.length < 40 && profile.jobRole && clean.toLowerCase().includes(profile.jobRole.toLowerCase())) {
-    improved += ` I am preparing carefully for ${profile.jobRole} interviews.`;
-  }
-  return improved.trim();
+  return buildCategoryAwareImprovedAnswer(
+    'Tell me about yourself',
+    answer,
+    profile,
+    classifyQuestionType('Tell me about yourself'),
+    [],
+  );
 }
 
 /** Cap inflated scores for very short answers; never boost. */
@@ -645,49 +636,65 @@ function calibrateScore<T extends { score: number }>(result: T, answerText = '')
 }
 
 function buildProperAnswerFromProfile(question: string, profile: InterviewProfile) {
-  const skill = profile.skills.slice(0, 3).join(', ') || 'my core skills';
-  const experience =
-    profile.experiences.find((item) => !/^Project:/i.test(item)) ||
-    profile.experiences[0] ||
-    '';
-  const project = profile.experiences.find((item) => /^Project:/i.test(item));
-  const role = profile.jobRole || 'this role';
-  const parts = [
-    `For this question, a strong answer would sound like:`,
-    `I am preparing for ${role} opportunities`,
-    profile.experienceYears > 0
-      ? `with about ${profile.experienceYears} year${profile.experienceYears === 1 ? '' : 's'} of relevant exposure`
-      : 'and I have built practical skills through projects and learning',
-    `. My key skills include ${skill}.`,
-  ];
-  if (experience) {
-    parts.push(` From my background, ${experience.split('—')[0].trim()} taught me how to deliver work carefully and communicate clearly.`);
-  } else if (project) {
-    parts.push(` In ${project.replace(/^Project:\s*/i, '').split('—')[0].trim()}, I focused on solving a real problem end to end.`);
+  return buildCategoryAwareImprovedAnswer(
+    question,
+    '',
+    profile,
+    classifyQuestionType(question),
+    evaluationCriteriaFor(classifyQuestionType(question)).slice(0, 3),
+  );
+}
+
+/**
+ * Keep AI improved answers when truthful; strip fabricated digit-heavy claims.
+ * Do NOT fall back to grammar-only polish — that caused identical "improved" answers.
+ */
+function sanitizeImprovedAnswer(
+  original: string,
+  improved: string,
+  profile: InterviewProfile,
+) {
+  const cleaned = (improved || '').trim();
+  if (!cleaned || isAudioPlaceholderAnswer(cleaned)) return '';
+  if (isAudioPlaceholderAnswer(original)) return cleaned;
+
+  const allowed = `${original} ${profile.fullName} ${profile.skills.join(' ')} ${profile.experiences.join(' ')} ${profile.education.join(' ')} ${profile.summary} ${profile.jobRole}`.toLowerCase();
+  // Reject brand-new large numbers that aren't in candidate data (likely fabricated metrics).
+  if (/\b\d{2,}\b/.test(cleaned) && !/\b\d{2,}\b/.test(original) && !/\b\d{2,}\b/.test(allowed)) {
+    return '';
   }
-  parts.push(` Related to the question — "${question.split(/[.?\n]/)[0]?.trim() || question.slice(0, 80)}" — I would explain my approach, the tools I used, and the outcome in simple terms.`);
-  return parts.join('').replace(/\s+/g, ' ').trim();
+  return cleaned;
+}
+
+function normalizeQuestionType(raw?: string): InterviewQuestionType | null {
+  if (!raw) return null;
+  const key = raw.trim().toUpperCase().replace(/\s+/g, '_');
+  const allowed: InterviewQuestionType[] = [
+    'INTRO',
+    'PROJECT',
+    'TECHNICAL',
+    'CODING',
+    'BEHAVIOURAL',
+    'SITUATIONAL',
+    'EXPERIENCE',
+    'SYSTEM_DESIGN',
+    'HR',
+    'FOLLOW_UP',
+    'GENERAL',
+  ];
+  if (allowed.includes(key as InterviewQuestionType)) return key as InterviewQuestionType;
+  if (/TELL_ME|ABOUT_YOURSELF|INTRODUCTION/.test(key)) return 'INTRO';
+  if (/BEHAVIOR/.test(key)) return 'BEHAVIOURAL';
+  return null;
 }
 
 function sanitizeImproved(
   original: string,
   improved: string,
   profile: InterviewProfile,
-  allowProfileSample = false,
+  _allowProfileSample = false,
 ) {
-  if (!improved.trim() || isAudioPlaceholderAnswer(improved)) {
-    return allowProfileSample ? buildProperAnswerFromProfile('', profile) : '';
-  }
-  if (isAudioPlaceholderAnswer(original) && !allowProfileSample) {
-    return '';
-  }
-  const allowed = `${original} ${profile.fullName} ${profile.skills.join(' ')} ${profile.experiences.join(' ')} ${profile.summary} ${profile.jobRole}`.toLowerCase();
-  if (/\d{2,}/.test(improved) && !/\d{2,}/.test(original) && !allowed.match(/\d{2,}/) && !allowProfileSample) {
-    return improveLocal(original, profile);
-  }
-  const cleaned = improved.trim();
-  if (!cleaned || isAudioPlaceholderAnswer(cleaned)) return '';
-  return cleaned;
+  return sanitizeImprovedAnswer(original, improved, profile);
 }
 
 function scoreCommunication(questions: LiveInterviewQuestion[]) {

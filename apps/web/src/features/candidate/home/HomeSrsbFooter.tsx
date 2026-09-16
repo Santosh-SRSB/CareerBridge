@@ -11,11 +11,11 @@ export function HomeSrsbFooter() {
       <div className="cb-home-srsb-footer__inner">
         <div className="cb-home-srsb-footer__brand">
           <Image
-            src="/srsb-wordmark.png"
+            src="/srsb-mark.png"
             alt="SRSB"
-            width={408}
-            height={170}
-            className="cb-home-srsb-footer__logo"
+            width={88}
+            height={88}
+            className="cb-home-srsb-footer__logo h-11 w-11 object-contain"
             unoptimized
           />
           <p>

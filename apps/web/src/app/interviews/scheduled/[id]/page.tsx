@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
@@ -20,6 +20,7 @@ export default function ScheduledInterviewDetailPage() {
   const [interview, setInterview] = useState<ScheduledJobInterview | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchScheduledInterview(params.id).then(setInterview).catch(() => setInterview(null));
@@ -28,22 +29,32 @@ export default function ScheduledInterviewDetailPage() {
   async function handleConfirm() {
     if (!interview) return;
     setBusy(true);
+    setError('');
     try {
       const next = await confirmScheduledInterview(interview.id);
       setInterview(next);
-      setMessage('Interview confirmed.');
+      setMessage('Interview confirmed. WhatsApp and email confirmation were sent when available.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not confirm interview.');
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleReschedule() {
+  async function handleReschedule(payload: {
+    preferredDate: string;
+    preferredTime: string;
+    reason?: string;
+  }) {
     if (!interview) return;
     setBusy(true);
+    setError('');
     try {
-      const next = await rescheduleScheduledInterview(interview.id);
+      const next = await rescheduleScheduledInterview(interview.id, payload);
       setInterview(next);
-      setMessage('Reschedule request sent.');
+      setMessage('Reschedule request sent. Waiting for employer approval.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not request reschedule.');
     } finally {
       setBusy(false);
     }
@@ -76,8 +87,21 @@ export default function ScheduledInterviewDetailPage() {
           </p>
           <p className="text-sm font-bold text-slate-800">{interview.scheduledTime}</p>
           <p className="mt-2 text-sm text-slate-600">{interview.location}</p>
-          <p className="mt-2 text-sm font-semibold text-emerald-700">
-            Status: {interview.status === 'CONFIRMED' ? 'Confirmed ✓' : interview.status.replace(/_/g, ' ')}
+          <p
+            className={`mt-2 text-sm font-semibold ${
+              interview.status === 'CONFIRMED'
+                ? 'text-emerald-700'
+                : interview.status === 'RESCHEDULE_REQUESTED'
+                  ? 'text-amber-700'
+                  : 'text-slate-700'
+            }`}
+          >
+            Status:{' '}
+            {interview.status === 'CONFIRMED'
+              ? 'Confirmed ✓'
+              : interview.status === 'RESCHEDULE_REQUESTED'
+                ? 'Reschedule pending'
+                : 'Awaiting confirmation'}
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -91,10 +115,11 @@ export default function ScheduledInterviewDetailPage() {
           interview={interview}
           busy={busy}
           onConfirm={() => void handleConfirm()}
-          onReschedule={() => void handleReschedule()}
+          onReschedule={(payload) => void handleReschedule(payload)}
         />
 
         {message ? <p className="text-sm font-semibold text-emerald-700">{message}</p> : null}
+        {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}
       </div>
     </CandidateAppShell>
   );

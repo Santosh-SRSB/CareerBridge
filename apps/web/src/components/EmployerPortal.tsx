@@ -194,10 +194,10 @@ function EmployerDeskBar({
 
           <Link href="/employer" className="ep-deskbar__brand">
             <Image
-              src="/srsb-logo.png"
+              src="/srsb-mark.png"
               alt="SRSB"
-              width={148}
-              height={48}
+              width={88}
+              height={88}
               className="ep-deskbar__logo"
               priority
               unoptimized

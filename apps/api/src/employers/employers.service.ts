@@ -21,6 +21,8 @@ import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '@nestjs/config';
 import { ResumesService } from '../resumes/resumes.service';
+import { EmailService } from '../auth/email.service';
+import { JobsService } from '../jobs/jobs.service';
 
 const ACTION_STATUS: Record<string, ApplicationStatus> = {
   REVIEW: 'UNDER_REVIEW',
@@ -30,6 +32,24 @@ const ACTION_STATUS: Record<string, ApplicationStatus> = {
   REJECT: 'REJECTED',
   HIRE: 'HIRED',
 };
+
+const RESCHEDULE_PREF_RE = /\[\[RESCHEDULE_PREF:([^\]]+)\]\]/;
+const RESCHEDULE_REASON_RE = /\[\[RESCHEDULE_REASON:([^\]]*)\]\]/;
+
+function stripRescheduleMarkers(notes: string | null | undefined) {
+  return (notes || '')
+    .replace(RESCHEDULE_PREF_RE, '')
+    .replace(RESCHEDULE_REASON_RE, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function parsePreferredReschedule(notes: string | null | undefined) {
+  const match = (notes || '').match(RESCHEDULE_PREF_RE);
+  if (!match?.[1]) return null;
+  const date = new Date(match[1]);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 @Injectable()
 export class EmployersService {
@@ -41,6 +61,8 @@ export class EmployersService {
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
     private readonly resumes: ResumesService,
+    private readonly email: EmailService,
+    private readonly jobsService: JobsService,
   ) {}
 
   async me(userId: string) {
@@ -260,6 +282,7 @@ export class EmployersService {
     if (dto.publish) {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
       await this.matching.recomputeMatchesForJob(job.id);
+      await this.jobsService.notifyCandidatesForPublishedJob(job.id).catch(() => undefined);
     }
     return job;
   }
@@ -313,6 +336,7 @@ export class EmployersService {
     if (status === 'PUBLISHED') {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
       await this.matching.recomputeMatchesForJob(job.id);
+      await this.jobsService.notifyCandidatesForPublishedJob(job.id).catch(() => undefined);
     }
     return updated;
   }
@@ -799,7 +823,7 @@ export class EmployersService {
       include: {
         application: {
           include: {
-            candidate: { include: { skills: true } },
+            candidate: { include: { user: true, skills: true } },
             job: { select: { id: true, title: true } },
           },
         },
@@ -816,13 +840,28 @@ export class EmployersService {
     let scheduledAt = interview.scheduledAt;
     let confirmedAt = interview.confirmedAt;
     let notes = interview.notes;
+    let notifyCandidate: 'approved' | 'rescheduled' | null = null;
 
     if (action === 'notes') {
       notes = (payload?.notes || '').trim() || null;
     } else if (action === 'confirm') {
+      // Approve candidate reschedule request (preferred slot) or confirm pending interview.
+      const preferred = parsePreferredReschedule(interview.notes);
+      const next = payload?.scheduledAt ? new Date(payload.scheduledAt) : preferred;
+      if (next && !Number.isNaN(next.getTime())) {
+        if (next.getTime() < Date.now() - 60_000) {
+          throw new HttpException(
+            { code: SharedError.VALIDATION_ERROR, message: 'Interview time cannot be in the past.' },
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        scheduledAt = next;
+      }
       status = 'CONFIRMED';
       confirmedAt = new Date();
-      if (payload?.notes !== undefined) notes = payload.notes.trim();
+      notes = stripRescheduleMarkers(notes) || null;
+      if (payload?.notes !== undefined) notes = payload.notes.trim() || notes;
+      notifyCandidate = interview.status === 'RESCHEDULE_REQUESTED' ? 'approved' : null;
     } else if (action === 'reschedule') {
       const next = payload?.scheduledAt ? new Date(payload.scheduledAt) : null;
       if (!next || Number.isNaN(next.getTime())) {
@@ -831,10 +870,19 @@ export class EmployersService {
           HttpStatus.BAD_REQUEST,
         );
       }
+      if (next.getTime() < Date.now() - 60_000) {
+        throw new HttpException(
+          { code: SharedError.VALIDATION_ERROR, message: 'Interview time cannot be in the past.' },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
       scheduledAt = next;
-      status = 'RESCHEDULE_REQUESTED';
+      // Employer-proposed new time — candidate should confirm again.
+      status = 'SCHEDULED';
       confirmedAt = null;
-      if (payload?.notes !== undefined) notes = payload.notes.trim();
+      notes = stripRescheduleMarkers(notes) || null;
+      if (payload?.notes !== undefined) notes = payload.notes.trim() || notes;
+      notifyCandidate = 'rescheduled';
     } else if (action === 'complete') {
       status = 'COMPLETED';
       if (payload?.notes !== undefined) notes = payload.notes.trim();
@@ -848,18 +896,72 @@ export class EmployersService {
       });
     }
 
+    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
+      .split(',')[0]
+      .trim();
+    const meetingUrl = interview.meetingUrl || `${portalBase}/interviews/scheduled/${interview.id}`;
+    const scheduledEnd = new Date(scheduledAt.getTime() + interview.durationMin * 60_000);
+
     const updated = await this.prisma.employerInterview.update({
       where: { id: interview.id },
-      data: { status, scheduledAt, confirmedAt, notes },
+      data: { status, scheduledAt, scheduledEnd, confirmedAt, notes, meetingUrl },
       include: {
         application: {
           include: {
-            candidate: { include: { skills: true } },
+            candidate: { include: { user: true, skills: true } },
             job: { select: { id: true, title: true } },
           },
         },
       },
     });
+
+    if (notifyCandidate) {
+      const candidateUser = updated.application.candidate.user;
+      const candidateName =
+        [updated.application.candidate.firstName, updated.application.candidate.lastName]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || 'there';
+      const whenLabel = new Intl.DateTimeFormat('en-IN', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'Asia/Kolkata',
+      }).format(updated.scheduledAt);
+
+      await this.notifications
+        .create({
+          userId: candidateUser.id,
+          title: notifyCandidate === 'approved' ? 'Reschedule approved' : 'Interview rescheduled',
+          body:
+            notifyCandidate === 'approved'
+              ? `${employer.companyName || 'Employer'} approved your preferred time for ${updated.application.job.title}.`
+              : `${employer.companyName || 'Employer'} proposed a new time for ${updated.application.job.title}. Please confirm.`,
+          type: 'INTERVIEW',
+          link: `/interviews/scheduled/${updated.id}`,
+        })
+        .catch(() => undefined);
+
+      if (candidateUser.email) {
+        await this.email
+          .sendEmployerInterviewRescheduleUpdate({
+            to: candidateUser.email,
+            candidateName,
+            companyName: employer.companyName || 'Employer',
+            jobTitle: updated.application.job.title,
+            whenLabel,
+            meetingUrl,
+            approved: notifyCandidate === 'approved',
+          })
+          .catch(() => undefined);
+      }
+
+      if (notifyCandidate === 'approved') {
+        await this.interviewWhatsApp.sendConfirmationNow(updated.id).catch(() => undefined);
+      } else {
+        await this.interviewWhatsApp.enqueueInvitation(updated.id).catch(() => undefined);
+      }
+    }
+
     return this.toInterview(updated);
   }
 
@@ -872,6 +974,7 @@ export class EmployersService {
     durationMin: number;
     mode: string;
     location: string | null;
+    meetingUrl?: string | null;
     status: EmployerInterviewStatus;
     notes: string | null;
     confirmedAt: Date | null;
@@ -889,6 +992,7 @@ export class EmployersService {
     };
   }) {
     const candidate = row.application.candidate;
+    const preferredRescheduleAt = parsePreferredReschedule(row.notes);
     return {
       id: row.id,
       applicationId: row.applicationId,
@@ -898,8 +1002,10 @@ export class EmployersService {
       durationMin: row.durationMin,
       mode: row.mode,
       location: row.location,
+      meetingUrl: row.meetingUrl || null,
       status: row.status,
-      notes: row.notes,
+      notes: stripRescheduleMarkers(row.notes) || null,
+      preferredRescheduleAt: preferredRescheduleAt?.toISOString() || null,
       confirmedAt: row.confirmedAt?.toISOString() || null,
       createdAt: row.createdAt.toISOString(),
       applicationStatus: row.application.status,

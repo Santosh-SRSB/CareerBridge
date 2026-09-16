@@ -42,6 +42,24 @@ import { getAccessToken, getRefreshToken, saveSession, clearSession } from './se
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
+async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      lastError = err;
+      // Nest --watch briefly drops the port while recompiling; retry a couple times.
+      if (i < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)));
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Cannot reach the CareerBridge API. Make sure it is running on port 3001.');
+}
+
 async function request<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
@@ -54,7 +72,7 @@ async function request<T>(
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetchWithRetry(`${API_URL}${path}`, {
     ...options,
     headers,
   }).catch(() => {
@@ -471,6 +489,9 @@ export type CandidateScheduledInterview = {
   applicationId: string;
   durationMin?: number;
   scheduledAt?: string;
+  meetingUrl?: string | null;
+  preferredRescheduleAt?: string | null;
+  preferredRescheduleReason?: string | null;
 };
 
 export async function listCandidateScheduledInterviews() {
@@ -488,10 +509,18 @@ export async function confirmCandidateScheduledInterview(id: string) {
   });
 }
 
-export async function rescheduleCandidateScheduledInterview(id: string) {
+export async function rescheduleCandidateScheduledInterview(
+  id: string,
+  payload?: {
+    preferredAt?: string;
+    preferredDate?: string;
+    preferredTime?: string;
+    reason?: string;
+  },
+) {
   return request<CandidateScheduledInterview>(
     `/applications/scheduled-interviews/${id}/reschedule`,
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify(payload || {}) },
   );
 }
 

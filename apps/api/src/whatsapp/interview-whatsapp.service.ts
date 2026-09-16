@@ -76,6 +76,69 @@ export class InterviewWhatsAppService {
     return sent;
   }
 
+  /** Portal confirm path — text confirmation (not interactive invite). */
+  async sendConfirmationNow(interviewId: string) {
+    const interview = await this.prisma.employerInterview.findUnique({
+      where: { id: interviewId },
+      include: {
+        application: { include: { candidate: { include: { user: true } }, job: true } },
+      },
+    });
+    if (!interview) return { ok: false as const, reason: 'not_found' };
+
+    const phone = this.webhook.resolveNotifyPhone(interview.application.candidate);
+    if (!phone) return { ok: false as const, reason: 'no_phone' };
+
+    const meetingUrl =
+      interview.meetingUrl ||
+      `${(this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '').split(',')[0].trim()}/interviews/scheduled/${interview.id}`;
+
+    const sent = await this.whatsapp.sendInterviewConfirmation({
+      to: phone,
+      candidateName: interview.application.candidate.firstName || 'there',
+      scheduledAt: interview.scheduledAt,
+      interviewId: interview.id,
+      candidateId: interview.candidateId,
+      timeZone: interview.timezone,
+    });
+
+    if (sent.ok && meetingUrl) {
+      await this.whatsapp
+        .sendText({
+          to: phone,
+          body: `Meeting link: ${meetingUrl}`,
+          candidateId: interview.candidateId,
+          interviewId: interview.id,
+          messageType: 'interview_meeting_link',
+        })
+        .catch(() => undefined);
+    }
+
+    return sent;
+  }
+
+  async notifyEmployerRescheduleRequest(input: {
+    employerUserId: string;
+    employerPhone?: string | null;
+    candidateName: string;
+    jobTitle: string;
+    preferredAt: Date;
+    interviewId: string;
+  }) {
+    if (!input.employerPhone) return { ok: false as const, reason: 'no_phone' };
+    const when = new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }).format(input.preferredAt);
+    return this.whatsapp.sendText({
+      to: input.employerPhone,
+      body: `${input.candidateName} requested to reschedule the interview for ${input.jobTitle} to ${when}. Open CareerBridge to approve or propose another time.`,
+      interviewId: input.interviewId,
+      messageType: 'employer_reschedule_request',
+    });
+  }
+
   async scheduleReminders(interviewId: string, scheduledAt: Date) {
     const kinds: Array<{ kind: ReminderKind; msBefore: number }> = [
       { kind: '24h', msBefore: 24 * 60 * 60 * 1000 },

@@ -56,15 +56,18 @@ export default function InterviewsHubPage() {
     }
   }
 
-  async function handleReschedule(id: string) {
+  async function handleReschedule(
+    id: string,
+    payload: { preferredDate: string; preferredTime: string; reason?: string },
+  ) {
     setBusyId(id);
     setMessage('');
     try {
-      await rescheduleScheduledInterview(id);
+      await rescheduleScheduledInterview(id, payload);
       setUpcoming(await fetchScheduledInterviews());
-      setMessage('Reschedule request sent.');
-    } catch {
-      setMessage('Could not request reschedule right now.');
+      setMessage('Reschedule request sent. Waiting for employer approval.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Could not request reschedule right now.');
     } finally {
       setBusyId('');
     }
@@ -102,11 +105,19 @@ export default function InterviewsHubPage() {
                 <p className="mt-1 text-sm font-semibold text-slate-600">{interview.companyName}</p>
                 <p className="mt-3 text-sm text-slate-700">{formatInterviewDate(interview.scheduledDate)}</p>
                 <p className="text-sm font-bold text-slate-800">{interview.scheduledTime}</p>
-                <p className="mt-2 text-sm font-semibold text-emerald-700">
+                <p className={`mt-2 text-sm font-semibold ${
+                  interview.status === 'CONFIRMED'
+                    ? 'text-emerald-700'
+                    : interview.status === 'RESCHEDULE_REQUESTED'
+                      ? 'text-amber-700'
+                      : 'text-slate-700'
+                }`}>
                   Status:{' '}
                   {interview.status === 'CONFIRMED'
                     ? 'Confirmed ✓'
-                    : interview.status.replace(/_/g, ' ')}
+                    : interview.status === 'RESCHEDULE_REQUESTED'
+                      ? 'Reschedule pending'
+                      : 'Awaiting confirmation'}
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -128,7 +139,7 @@ export default function InterviewsHubPage() {
                     interview={interview}
                     busy={busyId === interview.id}
                     onConfirm={() => void handleConfirm(interview.id)}
-                    onReschedule={() => void handleReschedule(interview.id)}
+                    onReschedule={(payload) => void handleReschedule(interview.id, payload)}
                   />
                 </div>
               </article>

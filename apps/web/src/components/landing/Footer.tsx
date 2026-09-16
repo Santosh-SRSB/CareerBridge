@@ -21,11 +21,11 @@ export function Footer() {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-3">
         <div>
           <Image
-            src="/srsb-wordmark.png"
+            src="/srsb-mark.png"
             alt="SRSB"
-            width={408}
-            height={170}
-            className="h-10 w-auto bg-transparent"
+            width={88}
+            height={88}
+            className="h-10 w-10 object-contain bg-transparent"
             unoptimized
           />
           <p className="mt-4 max-w-xs text-sm leading-6 text-white/60">

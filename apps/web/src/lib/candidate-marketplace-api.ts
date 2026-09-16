@@ -140,9 +140,9 @@ export async function confirmScheduledInterview(id: string): Promise<ScheduledJo
 
 export async function rescheduleScheduledInterview(
   id: string,
-  _payload?: { preferredDate?: string; preferredTime?: string; reason?: string },
+  payload?: { preferredAt?: string; preferredDate?: string; preferredTime?: string; reason?: string },
 ): Promise<ScheduledJobInterview> {
-  return rescheduleCandidateScheduledInterview(id);
+  return rescheduleCandidateScheduledInterview(id, payload);
 }
 
 export async function startMockInterview(payload: {

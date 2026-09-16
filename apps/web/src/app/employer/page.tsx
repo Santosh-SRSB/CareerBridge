@@ -134,7 +134,7 @@ export default function EmployerDashboardPage() {
   }, [router]);
 
   const hiredCount = useMemo(
-    () => applications.filter((a) => a.status === 'HIRE' || a.status === 'HIRED' || a.status === 'SELECT').length,
+    () => applications.filter((a) => a.status === 'HIRED' || a.status === 'SELECTED').length,
     [applications],
   );
 

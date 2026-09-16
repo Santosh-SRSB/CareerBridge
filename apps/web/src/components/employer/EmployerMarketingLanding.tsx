@@ -346,11 +346,11 @@ export function EmployerMarketingLanding() {
             aria-label="CareerBridge for Employers"
           >
             <Image
-              src="/srsb-wordmark.png"
+              src="/srsb-mark.png"
               alt="SRSB CareerBridge"
-              width={408}
-              height={170}
-              className="cb-emkt-nav__logo"
+              width={88}
+              height={88}
+              className="cb-emkt-nav__logo h-10 w-10 object-contain"
               unoptimized
               priority
             />

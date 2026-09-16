@@ -58,6 +58,9 @@ export class JobsService {
       }),
     ]);
     const candidate = userId ? await this.loadCandidate(userId) : null;
+    if (candidate && (query.q?.trim() || query.category?.trim())) {
+      await this.recordSearchInterest(candidate.id, query.q || query.category || '').catch(() => undefined);
+    }
     const savedJobIds = candidate
       ? new Set(
           (
@@ -201,6 +204,12 @@ export class JobsService {
     const ordered = ids.map((id) => byId.get(id)).filter(Boolean) as typeof jobs;
 
     const candidate = userId ? await this.loadCandidate(userId) : null;
+    if (candidate) {
+      const interest = query.q?.trim() || query.category?.trim() || (query.skills || []).slice(0, 2).join(' ');
+      if (interest) {
+        await this.recordSearchInterest(candidate.id, interest).catch(() => undefined);
+      }
+    }
     const savedJobIds = candidate
       ? new Set(
           (
@@ -484,6 +493,104 @@ export class JobsService {
     return candidate;
   }
 
+  /** Remember what a candidate searched so new employer posts can alert them. */
+  async recordSearchInterest(candidateId: string, rawQuery: string) {
+    const query = normalizeSearchQuery(rawQuery);
+    if (!query || query.length < 2) return;
+    await this.prisma.candidateJobSearchInterest.upsert({
+      where: { candidateId_query: { candidateId, query } },
+      create: { candidateId, query, lastSearchedAt: new Date() },
+      update: { lastSearchedAt: new Date() },
+    });
+  }
+
+  /**
+   * When an employer publishes a job, notify candidates who previously searched
+   * for a matching role/keyword (or listed it in career interests).
+   */
+  async notifyCandidatesForPublishedJob(jobId: string) {
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+      include: { employer: { select: { companyName: true } } },
+    });
+    if (!job || job.status !== 'PUBLISHED') return { notified: 0 };
+
+    const haystack = normalizeSearchQuery(`${job.title} ${job.category || ''}`);
+    if (!haystack) return { notified: 0 };
+
+    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const interests = await this.prisma.candidateJobSearchInterest.findMany({
+      where: { lastSearchedAt: { gte: since } },
+      include: { candidate: { select: { id: true, userId: true, careerInterests: true } } },
+      orderBy: { lastSearchedAt: 'desc' },
+      take: 500,
+    });
+
+    const preferenceCandidates = await this.prisma.candidate.findMany({
+      where: {
+        onboardingCompleted: true,
+        NOT: { careerInterests: '[]' },
+      },
+      select: { id: true, userId: true, careerInterests: true },
+      take: 400,
+    });
+
+    const matchedUserIds = new Set<string>();
+    const matchedMeta = new Map<string, { query: string }>();
+
+    for (const row of interests) {
+      if (!row.candidate?.userId) continue;
+      if (searchMatchesJob(row.query, haystack, job.title, job.category)) {
+        matchedUserIds.add(row.candidate.userId);
+        matchedMeta.set(row.candidate.userId, { query: row.query });
+      }
+    }
+
+    for (const candidate of preferenceCandidates) {
+      if (matchedUserIds.has(candidate.userId)) continue;
+      let interestsList: string[] = [];
+      try {
+        interestsList = JSON.parse(candidate.careerInterests || '[]') as string[];
+      } catch {
+        interestsList = [];
+      }
+      const hit = interestsList.find((item) =>
+        searchMatchesJob(normalizeSearchQuery(item), haystack, job.title, job.category),
+      );
+      if (hit) {
+        matchedUserIds.add(candidate.userId);
+        matchedMeta.set(candidate.userId, { query: normalizeSearchQuery(hit) });
+      }
+    }
+
+    let notified = 0;
+    for (const userId of matchedUserIds) {
+      if (notified >= 40) break;
+      const existing = await this.prisma.notification.findFirst({
+        where: { userId, type: 'JOB_MATCH', link: `/jobs/${job.id}` },
+        select: { id: true },
+      });
+      if (existing) continue;
+
+      const meta = matchedMeta.get(userId);
+      const company = job.employer?.companyName || 'An employer';
+      await this.notifications
+        .create({
+          userId,
+          title: 'Found a job match',
+          body: `${company} posted “${job.title}” — matches what you looked for${
+            meta?.query ? ` (${meta.query})` : ''
+          }.`,
+          type: 'JOB_MATCH',
+          link: `/jobs/${job.id}`,
+        })
+        .catch(() => undefined);
+      notified += 1;
+    }
+
+    return { notified };
+  }
+
   private toCard(
     job: {
       id: string;
@@ -578,6 +685,36 @@ export function parseList(raw: string) {
   } catch {
     return [];
   }
+}
+
+function normalizeSearchQuery(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9+#.\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function searchMatchesJob(
+  query: string,
+  haystack: string,
+  title: string,
+  category: string | null | undefined,
+) {
+  const q = normalizeSearchQuery(query);
+  if (!q || q.length < 2) return false;
+  const titleNorm = normalizeSearchQuery(title);
+  const categoryNorm = normalizeSearchQuery(category || '');
+  if (titleNorm.includes(q) || q.includes(titleNorm)) return true;
+  if (categoryNorm && (categoryNorm.includes(q) || q.includes(categoryNorm))) return true;
+  if (haystack.includes(q)) return true;
+  // Token overlap for multi-word searches like "full stack developer"
+  const tokens = q.split(' ').filter((t) => t.length >= 3);
+  if (tokens.length >= 2) {
+    const hits = tokens.filter((t) => haystack.includes(t)).length;
+    return hits >= Math.ceil(tokens.length * 0.6);
+  }
+  return false;
 }
 
 /** Resolve lat/lng for a job city string (employer create/update). */

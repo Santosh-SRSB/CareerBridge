@@ -138,8 +138,25 @@ model Candidate {
   employerInterviews  EmployerInterview[]
   whatsappMessages    WhatsAppMessage[]
   savedJobs           SavedJob[]
+  jobSearchInterests  CandidateJobSearchInterest[]
 
   @@map("candidates")
+}
+
+model CandidateJobSearchInterest {
+  id          String   @id @default(uuid())
+  candidateId String   @map("candidate_id")
+  /** Normalized search text the candidate looked for (role/keyword). */
+  query       String
+  lastSearchedAt DateTime @default(now()) @map("last_searched_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, query])
+  @@index([query])
+  @@index([lastSearchedAt])
+  @@map("candidate_job_search_interests")
 }
 
 model CandidateEducation {
