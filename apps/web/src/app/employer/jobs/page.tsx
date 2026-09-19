@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { EmployerJobSummary } from '@careerbridge/shared';
 import { listEmployerJobs } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
+import { EmployerSectionHero, EmployerQuickLink } from '@/components/employer/EmployerSectionHero';
 import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
 
@@ -20,7 +20,7 @@ function jobStatusLabel(status: string) {
 function jobStatusTone(status: string) {
   if (status === 'PUBLISHED') return 'bg-emerald-100 text-emerald-800';
   if (status === 'CLOSED') return 'bg-slate-200 text-slate-700';
-  if (status === 'PAUSED') return 'bg-amber-100 text-amber-900';
+  if (status === 'PAUSED') return 'bg-slate-200 text-slate-700';
   return 'bg-primary-soft text-primary';
 }
 
@@ -129,9 +129,7 @@ export default function EmployerJobsPage() {
           title="My Jobs"
           subtitle="Create, publish, pause, and close openings from one board."
           action={
-            <Link href="/employer/jobs/new" className="ep-hero__link">
-              + Post New Job
-            </Link>
+            <EmployerQuickLink href="/employer/jobs/new">Post new job</EmployerQuickLink>
           }
         />
 
@@ -165,7 +163,7 @@ export default function EmployerJobsPage() {
               {
                 label: 'Draft / paused',
                 value: stats.drafts,
-                tone: 'ep-stat__icon--gold',
+                tone: 'ep-stat__icon--soft',
                 hint: 'Needs action',
                 icon: (
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden>

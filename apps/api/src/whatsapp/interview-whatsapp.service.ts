@@ -72,6 +72,23 @@ export class InterviewWhatsAppService {
 
     if (sent.ok) {
       await this.scheduleReminders(interview.id, interview.scheduledAt);
+      const meetingUrl =
+        interview.meetingUrl ||
+        (interview.location && /^https?:\/\//i.test(interview.location.trim())
+          ? interview.location.trim()
+          : null) ||
+        `${(this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '').split(',')[0].trim()}/interviews/scheduled/${interview.id}`;
+      if (meetingUrl) {
+        await this.whatsapp
+          .sendText({
+            to: phone,
+            body: `Meeting link: ${meetingUrl}`,
+            candidateId: interview.candidateId,
+            interviewId: interview.id,
+            messageType: 'interview_meeting_link',
+          })
+          .catch(() => undefined);
+      }
     }
     return sent;
   }
@@ -90,6 +107,9 @@ export class InterviewWhatsAppService {
     if (!phone) return { ok: false as const, reason: 'no_phone' };
 
     const meetingUrl =
+      (interview.location && /^https?:\/\//i.test(interview.location.trim())
+        ? interview.location.trim()
+        : null) ||
       interview.meetingUrl ||
       `${(this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '').split(',')[0].trim()}/interviews/scheduled/${interview.id}`;
 

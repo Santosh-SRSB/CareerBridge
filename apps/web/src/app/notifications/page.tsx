@@ -99,7 +99,7 @@ function NotificationsList({
     <div className="ep-page ep-page--messages">
       <EmployerSectionHero
         tone="messages"
-        title="Messages"
+        title="Notifications"
         subtitle="Applications, interviews, and account updates."
         action={
           <Button type="button" variant="outline" onClick={() => void onMarkAll()}>
@@ -112,7 +112,7 @@ function NotificationsList({
 
       <div className="ep-msg-shell">
         {!loading && items.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted">No messages yet.</div>
+          <div className="p-8 text-center text-sm text-muted">No notifications yet.</div>
         ) : null}
         {items.map((item) => (
           <button
@@ -192,7 +192,7 @@ export default function NotificationsPage() {
   );
 
   if (isEmployer) {
-    return <EmployerShellFallback title="Messages">{list}</EmployerShellFallback>;
+    return <EmployerShellFallback title="Notifications">{list}</EmployerShellFallback>;
   }
 
   return (

@@ -483,7 +483,7 @@ export type CandidateScheduledInterview = {
   companyName: string;
   scheduledDate: string;
   scheduledTime: string;
-  status: 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'RESCHEDULE_REQUESTED';
+  status: 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'RESCHEDULE_REQUESTED' | 'COMPLETED' | 'CANCELLED';
   location: string;
   mode: 'IN_PERSON' | 'VIDEO';
   applicationId: string;
@@ -492,6 +492,13 @@ export type CandidateScheduledInterview = {
   meetingUrl?: string | null;
   preferredRescheduleAt?: string | null;
   preferredRescheduleReason?: string | null;
+  candidateFeedback?: {
+    rating: number;
+    text: string | null;
+    submittedAt: string;
+  } | null;
+  feedbackRequestedAt?: string | null;
+  canSubmitFeedback?: boolean;
 };
 
 export async function listCandidateScheduledInterviews() {
@@ -522,6 +529,16 @@ export async function rescheduleCandidateScheduledInterview(
     `/applications/scheduled-interviews/${id}/reschedule`,
     { method: 'POST', body: JSON.stringify(payload || {}) },
   );
+}
+
+export async function submitCandidateInterviewFeedback(
+  id: string,
+  payload: { rating: number; text?: string },
+) {
+  return request<CandidateScheduledInterview>(`/applications/scheduled-interviews/${id}/feedback`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function listResumes() {
@@ -963,6 +980,15 @@ export async function updateEmployerMe(payload: Partial<EmployerProfile>) {
   });
 }
 
+export async function uploadEmployerLogo(file: Blob, fileName = 'logo.jpg') {
+  const form = new FormData();
+  form.append('file', file, fileName);
+  return request<EmployerProfile>('/employers/me/logo', {
+    method: 'POST',
+    body: form,
+  });
+}
+
 export async function saveEmployerKyc(payload: EmployerKycPayload) {
   return request<EmployerProfile>('/employers/me/kyc', {
     method: 'PATCH',
@@ -1184,6 +1210,13 @@ export async function changeApplicationStatus(id: string, action: string) {
   });
 }
 
+export async function notifyMatchedCandidate(candidateId: string, jobId: string) {
+  return request<{ ok: boolean; whatsappSent?: boolean }>(`/employers/candidates/${candidateId}/notify`, {
+    method: 'POST',
+    body: JSON.stringify({ jobId }),
+  });
+}
+
 export async function searchEmployerCandidates(params: {
   q?: string;
   city?: string;
@@ -1251,6 +1284,13 @@ export async function employerInterviewAction(
   return request<EmployerInterviewRecord>(`/employers/interviews/${id}/action`, {
     method: 'POST',
     body: JSON.stringify({ action, ...payload }),
+  });
+}
+
+export async function requestEmployerInterviewFeedback(id: string) {
+  return request<EmployerInterviewRecord>(`/employers/interviews/${id}/request-feedback`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   });
 }
 
@@ -1436,6 +1476,21 @@ export async function getAdminAiUsage() {
 
 export async function verifyEmployer(id: string) {
   return request(`/admin/employers/${id}/verify`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function impersonateAdminEmployer(employerId: string) {
+  return request<
+    AuthSession & {
+      impersonation: {
+        employerId: string;
+        companyName: string;
+        adminUserId: string;
+      };
+    }
+  >(`/admin/employers/${employerId}/impersonate`, {
     method: 'POST',
     body: JSON.stringify({}),
   });

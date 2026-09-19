@@ -1,22 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { EmployerCandidatePassport } from '@careerbridge/shared';
-import { atsMatchBandLabel } from '@careerbridge/shared';
+import { toAtsMatchBreakdown } from '@careerbridge/shared';
 import {
   changeApplicationStatus,
   downloadEmployerCandidateResume,
   getEmployerCandidate,
+  notifyMatchedCandidate,
   saveBase64File,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { EmployerAtsPanel } from '@/components/employer/EmployerAtsPanel';
 import { Button } from '@/components/ui/Button';
 
+function titleCaseName(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function candidateName(row: EmployerCandidatePassport) {
-  return [row.firstName, row.lastName].filter(Boolean).join(' ') || 'Candidate';
+  const raw = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+  return raw ? titleCaseName(raw) : 'Candidate';
 }
 
 function initials(row: EmployerCandidatePassport) {
@@ -25,14 +34,32 @@ function initials(row: EmployerCandidatePassport) {
   return (first + last || 'C').toUpperCase();
 }
 
-function statusLabel(status: string) {
-  if (status === 'SHORTLISTED') return 'Shortlisted';
-  if (status === 'INTERVIEW') return 'Interview';
-  if (status === 'APPLIED') return 'Applied';
-  if (status === 'SELECTED') return 'Selected';
-  if (status === 'HIRED') return 'Hired';
-  if (status === 'REJECTED') return 'Not selected';
-  return status.replaceAll('_', ' ');
+function formatLocation(city?: string | null, state?: string | null) {
+  const parts = [...(city || '').split(/[,|/·]+/), state || '']
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const key = part.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(part);
+  }
+  return unique.join(', ');
+}
+
+function experienceLabel(years: number, months: number) {
+  if (years <= 0 && months <= 0) return '0y';
+  if (years <= 0) return `${months}m`;
+  if (months > 0) return `${years}y ${months}m`;
+  return `${years}y`;
+}
+
+function educationHeadline(profile: EmployerCandidatePassport) {
+  const top = profile.education[0];
+  if (!top) return profile.highestEducation || null;
+  return [top.qualification, top.institution, top.yearCompleted].filter(Boolean).join(' ');
 }
 
 export default function EmployerCandidateProfilePage() {
@@ -45,6 +72,7 @@ export default function EmployerCandidateProfilePage() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [notified, setNotified] = useState(false);
 
   async function load() {
     const next = await getEmployerCandidate(params.id, jobId);
@@ -57,6 +85,13 @@ export default function EmployerCandidateProfilePage() {
       .finally(() => setLoading(false));
   }, [params.id, jobId]);
 
+  const ats = useMemo(
+    () => (profile?.match ? toAtsMatchBreakdown(profile.match) : null),
+    [profile],
+  );
+
+  const resolvedJobId = jobId || profile?.application?.jobId;
+
   async function act(action: 'SHORTLIST' | 'REJECT') {
     if (!profile?.application) return;
     if (action === 'REJECT' && !window.confirm('Reject this candidate for this role?')) {
@@ -67,7 +102,7 @@ export default function EmployerCandidateProfilePage() {
     setMessage('');
     try {
       await changeApplicationStatus(profile.application.id, action);
-      setMessage(action === 'SHORTLIST' ? 'Candidate shortlisted.' : 'Candidate marked as not selected.');
+      setMessage(action === 'SHORTLIST' ? 'Candidate has been shortlisted.' : 'Candidate marked as not selected.');
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed.');
@@ -77,11 +112,14 @@ export default function EmployerCandidateProfilePage() {
   }
 
   async function viewResume() {
-    if (!profile?.application || !profile.hasResume) return;
+    if (!profile?.hasResume) return;
     setBusy('RESUME');
     setError('');
     try {
-      const file = await downloadEmployerCandidateResume(profile.id, profile.application.jobId);
+      const file = await downloadEmployerCandidateResume(
+        profile.id,
+        resolvedJobId || profile.application?.jobId,
+      );
       if (file.pdf) {
         saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
         return;
@@ -98,101 +136,211 @@ export default function EmployerCandidateProfilePage() {
     }
   }
 
+  async function notify() {
+    if (!resolvedJobId || !profile) return;
+    setBusy('NOTIFY');
+    setError('');
+    setMessage('');
+    try {
+      const result = await notifyMatchedCandidate(profile.id, resolvedJobId);
+      setNotified(true);
+      setMessage(
+        result.whatsappSent
+          ? 'WhatsApp message sent to this candidate.'
+          : 'Candidate notified in-app. WhatsApp number was not available.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not notify candidate.');
+    } finally {
+      setBusy('');
+    }
+  }
+
   const backHref = fromApps
     ? `/employer/applications${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`
     : '/employer/candidates';
 
+  const locationLine = profile
+    ? [formatLocation(profile.city, profile.state), educationHeadline(profile)].filter(Boolean).join(' · ')
+    : '';
+
   return (
     <EmployerShellFallback title="Candidate profile">
-      <div className="ep-cprof">
-        <div className="ep-cprof__topbar">
-          <Link href={backHref} className="ep-cprof__back">
+      <div className="ep-pass">
+        <div className="ep-pass__topbar">
+          <Link href={backHref} className="ep-pass__back">
             ← Back to {fromApps ? 'applications' : 'candidates'}
           </Link>
         </div>
 
-        {loading ? <p className="ep-cprof__muted">Loading profile…</p> : null}
-        {error ? <p className="ep-cprof__error">{error}</p> : null}
-        {message ? <p className="ep-cprof__ok">{message}</p> : null}
+        {loading ? <p className="ep-pass__muted">Loading profile…</p> : null}
+        {error ? <p className="ep-pass__alert ep-pass__alert--error">{error}</p> : null}
+        {message ? <p className="ep-pass__alert ep-pass__alert--ok">{message}</p> : null}
 
         {profile ? (
-          <>
-            <header className="ep-cprof__hero">
-              <div className="ep-cprof__hero-main">
-                <span className="ep-cprof__avatar" aria-hidden>
+          <article className="ep-pass__card">
+            <header className="ep-pass__hero">
+              <div className="ep-pass__hero-main">
+                <span className="ep-pass__avatar" aria-hidden>
                   {initials(profile)}
                 </span>
                 <div>
-                  <p className="ep-cprof__eyebrow">Candidate profile</p>
-                  <h1 className="ep-cprof__name">{candidateName(profile)}</h1>
-                  <p className="ep-cprof__meta">
-                    {[
-                      profile.city,
-                      profile.state,
-                      profile.highestEducation,
-                      profile.application ? statusLabel(profile.application.status) : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                  {profile.application ? (
-                    <p className="ep-cprof__role">Applied for {profile.application.jobTitle}</p>
-                  ) : null}
+                  <h1 className="ep-pass__name">{candidateName(profile)}</h1>
+                  {locationLine ? <p className="ep-pass__meta">{locationLine}</p> : null}
                 </div>
               </div>
-              <div className="ep-cprof__hero-stats">
-                {profile.match ? (
-                  <div className="ep-cprof__score-pill">
-                    <strong>{profile.match.score}</strong>
-                    <span>/100 · {atsMatchBandLabel(profile.match.score)}</span>
-                  </div>
-                ) : null}
-                <div className="ep-cprof__mini">
-                  <span>Profile</span>
-                  <strong>{profile.profileCompletion}%</strong>
-                </div>
-                <div className="ep-cprof__mini">
-                  <span>Experience</span>
+              {ats ? (
+                <div className="ep-pass__score">
                   <strong>
-                    {profile.experienceYears}y
-                    {profile.experienceMonths ? ` ${profile.experienceMonths}m` : ''}
+                    {ats.score}
+                    <em>/100</em>
                   </strong>
+                  <span>{ats.bandLabel}</span>
                 </div>
-              </div>
+              ) : null}
             </header>
 
-            <div className="ep-cprof__grid">
-              <div className="ep-cprof__main">
-                {profile.match ? (
-                  <section className="ep-cprof__card ep-cprof__card--ats">
-                    <EmployerAtsPanel match={profile.match} className="ep-cprof__ats" />
-                  </section>
-                ) : null}
-
-                {profile.about ? (
-                  <section className="ep-cprof__card">
-                    <h2>About</h2>
-                    <p className="ep-cprof__copy">{profile.about}</p>
-                  </section>
-                ) : null}
-
-                <section className="ep-cprof__card">
-                  <h2>Skills</h2>
-                  <div className="ep-cprof__chips">
-                    {profile.skills.length ? (
-                      profile.skills.map((skill) => <span key={skill}>{skill}</span>)
-                    ) : (
-                      <p className="ep-cprof__muted">No skills listed.</p>
-                    )}
+            <div className="ep-pass__body">
+              <aside className="ep-pass__side">
+                <section className="ep-pass__block">
+                  <h2>Snapshot</h2>
+                  <div className="ep-pass__badges">
+                    {profile.openToRelocating ? <span>Open to relocate</span> : null}
+                    {profile.hasResume ? <span>Has resume</span> : <span className="is-muted">No resume</span>}
+                  </div>
+                  <div className="ep-pass__meters">
+                    <div>
+                      <div className="ep-pass__meter-row">
+                        <span>Profile complete</span>
+                        <strong>{profile.profileCompletion}%</strong>
+                      </div>
+                      <div className="ep-pass__meter" aria-hidden>
+                        <i style={{ width: `${Math.min(100, Math.max(0, profile.profileCompletion))}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="ep-pass__meter-row">
+                        <span>Experience</span>
+                        <strong>{experienceLabel(profile.experienceYears, profile.experienceMonths)}</strong>
+                      </div>
+                      <div className="ep-pass__meter" aria-hidden>
+                        <i
+                          style={{
+                            width: `${Math.min(100, Math.max(8, (profile.experienceYears / 10) * 100 + profile.experienceMonths))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </section>
 
-                <section className="ep-cprof__card">
+                {profile.about ? (
+                  <section className="ep-pass__block">
+                    <h2>About</h2>
+                    <p className="ep-pass__copy">{profile.about}</p>
+                  </section>
+                ) : null}
+
+                <section className="ep-pass__block">
+                  <h2>Education</h2>
+                  {profile.education.length === 0 ? (
+                    <p className="ep-pass__muted">No education listed yet.</p>
+                  ) : (
+                    <ul className="ep-pass__edu">
+                      {profile.education.map((item) => (
+                        <li key={`${item.qualification}-${item.institution}-${item.yearCompleted}`}>
+                          <strong>
+                            {[item.qualification, item.institution].filter(Boolean).join(' ')}
+                          </strong>
+                          {item.yearCompleted ? <span>{item.yearCompleted}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="ep-pass__block">
+                  <h2>Skills</h2>
+                  <div className="ep-pass__chips">
+                    {profile.skills.length ? (
+                      profile.skills.map((skill) => <span key={skill}>{skill}</span>)
+                    ) : (
+                      <p className="ep-pass__muted">No skills listed.</p>
+                    )}
+                  </div>
+                </section>
+              </aside>
+
+              <div className="ep-pass__main">
+                {ats ? (
+                  <section className="ep-pass__block">
+                    <h2>ATS score breakdown</h2>
+                    <ul className="ep-pass__factors">
+                      {ats.factors.map((factor) => (
+                        <li key={factor.key}>
+                          <div className="ep-pass__factor-row">
+                            <span>{factor.label}</span>
+                            <strong>
+                              {factor.score}/{factor.max}
+                            </strong>
+                          </div>
+                          <div className="ep-pass__factor-bar" aria-hidden>
+                            <i style={{ width: `${Math.min(100, Math.max(0, factor.pct))}%` }} />
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : (
+                  <section className="ep-pass__block">
+                    <h2>ATS score breakdown</h2>
+                    <p className="ep-pass__muted">Select a job match to see ATS scoring for this profile.</p>
+                  </section>
+                )}
+
+                {ats && (ats.reasons.length > 0 || ats.gaps.length > 0) ? (
+                  <section className="ep-pass__block">
+                    <div className="ep-pass__split">
+                      <div>
+                        <h3>Why this matches</h3>
+                        {ats.reasons.length ? (
+                          <ul className="ep-pass__reasons">
+                            {ats.reasons.map((reason) => (
+                              <li key={reason}>
+                                <span aria-hidden>✓</span>
+                                {reason}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="ep-pass__muted">No strengths listed.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h3>Missing / weaker</h3>
+                        {ats.gaps.length ? (
+                          <ul className="ep-pass__gaps">
+                            {ats.gaps.map((gap) => (
+                              <li key={gap}>
+                                <span aria-hidden>!</span>
+                                {gap}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="ep-pass__muted">No major gaps flagged.</p>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
+                <section className="ep-pass__block">
                   <h2>Experience</h2>
                   {profile.experiences.length === 0 ? (
-                    <p className="ep-cprof__muted">No experience listed yet.</p>
+                    <p className="ep-pass__muted">No experience listed yet.</p>
                   ) : (
-                    <ul className="ep-cprof__list">
+                    <ul className="ep-pass__exp">
                       {profile.experiences.map((item) => (
                         <li key={`${item.company}-${item.jobTitle}`}>
                           <strong>{item.jobTitle}</strong>
@@ -206,100 +354,67 @@ export default function EmployerCandidateProfilePage() {
                     </ul>
                   )}
                 </section>
-
-                <section className="ep-cprof__card">
-                  <h2>Education</h2>
-                  {profile.education.length === 0 ? (
-                    <p className="ep-cprof__muted">No education listed yet.</p>
-                  ) : (
-                    <ul className="ep-cprof__list">
-                      {profile.education.map((item) => (
-                        <li key={`${item.qualification}-${item.institution}`}>
-                          <strong>{item.qualification}</strong>
-                          <span>
-                            {[item.institution, item.yearCompleted].filter(Boolean).join(' · ')}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
               </div>
-
-              <aside className="ep-cprof__aside">
-                <section className="ep-cprof__card ep-cprof__card--action">
-                  <h2>Actions</h2>
-                  {profile.application ? (
-                    <div className="ep-cprof__actions">
-                      <Button
-                        type="button"
-                        size="sm"
-                        block
-                        loading={busy === 'SHORTLIST'}
-                        loadingLabel="…"
-                        disabled={profile.application.status === 'SHORTLISTED' || busy !== ''}
-                        onClick={() => void act('SHORTLIST')}
-                        className="ep-cprof__btn-primary"
-                      >
-                        Shortlist
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        block
-                        loading={busy === 'REJECT'}
-                        loadingLabel="…"
-                        disabled={profile.application.status === 'REJECTED' || busy !== ''}
-                        onClick={() => void act('REJECT')}
-                      >
-                        Not selected
-                      </Button>
-                      <Link
-                        href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(profile.application.id)}&jobId=${encodeURIComponent(profile.application.jobId)}`}
-                        className="ep-cprof__btn-link"
-                      >
-                        Schedule interview
-                      </Link>
-                      {profile.hasResume ? (
-                        <button
-                          type="button"
-                          className="ep-cprof__btn-text"
-                          disabled={busy !== ''}
-                          onClick={() => void viewResume()}
-                        >
-                          {busy === 'RESUME' ? 'Opening resume…' : 'View resume'}
-                        </button>
-                      ) : (
-                        <p className="ep-cprof__muted">Resume not uploaded yet.</p>
-                      )}
-                      <Link href={`/employer/jobs/${profile.application.jobId}`} className="ep-cprof__btn-text">
-                        View job posting →
-                      </Link>
-                    </div>
-                  ) : (
-                    <p className="ep-cprof__muted">
-                      This candidate has not applied to your roles yet. Shortlist becomes available after they apply.
-                    </p>
-                  )}
-                </section>
-
-                <section className="ep-cprof__card">
-                  <h2>Summary</h2>
-                  <dl className="ep-cprof__dl">
-                    <div>
-                      <dt>Open to relocate</dt>
-                      <dd>{profile.openToRelocating ? 'Yes' : 'No'}</dd>
-                    </div>
-                    <div>
-                      <dt>Has resume</dt>
-                      <dd>{profile.hasResume ? 'Yes' : 'No'}</dd>
-                    </div>
-                  </dl>
-                </section>
-              </aside>
             </div>
-          </>
+
+            <footer className="ep-pass__foot">
+              <div className="ep-pass__foot-left">
+                {profile.application ? (
+                  <span className="ep-pass__pill">
+                    Applied · {profile.application.jobTitle}
+                  </span>
+                ) : resolvedJobId ? (
+                  <span className="ep-pass__pill">Matched profile</span>
+                ) : null}
+              </div>
+              <div className="ep-pass__foot-actions">
+                {profile.hasResume ? (
+                  <button
+                    type="button"
+                    className="ep-pass__btn ep-pass__btn--ghost"
+                    disabled={busy !== ''}
+                    onClick={() => void viewResume()}
+                  >
+                    {busy === 'RESUME' ? 'Opening…' : 'Download resume'}
+                  </button>
+                ) : null}
+                {profile.application &&
+                profile.application.status !== 'SHORTLISTED' &&
+                profile.application.status !== 'HIRED' ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    block={false}
+                    className="ep-pass__btn ep-pass__btn--solid"
+                    loading={busy === 'SHORTLIST'}
+                    loadingLabel="…"
+                    disabled={busy !== ''}
+                    onClick={() => void act('SHORTLIST')}
+                  >
+                    Shortlist
+                  </Button>
+                ) : null}
+                {resolvedJobId ? (
+                  <button
+                    type="button"
+                    className="ep-pass__btn ep-pass__btn--wa"
+                    disabled={busy !== '' || notified}
+                    onClick={() => void notify()}
+                  >
+                    {busy === 'NOTIFY' ? '…' : notified ? 'WhatsApp sent' : 'Notify via WhatsApp'}
+                  </button>
+                ) : null}
+                {profile.application ? (
+                  <Link
+                    href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(profile.application.id)}&jobId=${encodeURIComponent(profile.application.jobId)}`}
+                    className="ep-pass__btn ep-pass__btn--ghost"
+                  >
+                    Schedule interview
+                  </Link>
+                ) : null}
+              </div>
+            </footer>
+          </article>
         ) : null}
       </div>
     </EmployerShellFallback>

@@ -286,6 +286,7 @@ model Employer {
   panNumber          String?                    @map("pan_number")
   workEmail          String?                    @map("work_email")
   designation        String?
+  logoUrl            String?                    @map("logo_url") @db.Text
   verificationStatus EmployerVerificationStatus @default(UNVERIFIED) @map("verification_status")
   verified           Boolean                    @default(false)
   createdAt          DateTime                   @default(now()) @map("created_at")
@@ -661,6 +662,10 @@ model EmployerInterview {
   notes         String?                 @db.Text
   confirmedAt   DateTime?               @map("confirmed_at")
   whatsappStatus String?                @map("whatsapp_status")
+  candidateFeedbackRating Int?          @map("candidate_feedback_rating")
+  candidateFeedbackText   String?       @map("candidate_feedback_text") @db.Text
+  candidateFeedbackAt     DateTime?     @map("candidate_feedback_at")
+  feedbackRequestedAt     DateTime?     @map("feedback_requested_at")
   createdAt     DateTime                @default(now()) @map("created_at")
   updatedAt     DateTime                @updatedAt @map("updated_at")
 

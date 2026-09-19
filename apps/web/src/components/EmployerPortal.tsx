@@ -6,7 +6,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { EmployerProfile, EmployerVerificationStatus } from '@careerbridge/shared';
 import { getEmployerMe, logout } from '@/lib/api';
-import { getStoredUser } from '@/lib/session';
+import {
+  endEmployerImpersonation,
+  getEmployerImpersonation,
+  getStoredUser,
+} from '@/lib/session';
 
 export type EmployerShellProfile = Pick<
   EmployerProfile,
@@ -19,13 +23,12 @@ const PRIMARY_NAV = [
   { href: '/employer/candidates', label: 'Candidates', key: 'candidates' },
   { href: '/employer/applications', label: 'Applications', key: 'applications' },
   { href: '/employer/interviews', label: 'Interviews', key: 'interviews' },
-  { href: '/notifications', label: 'Messages', key: 'messages' },
+  { href: '/notifications', label: 'Notifications', key: 'notifications' },
   { href: '/employer/reports', label: 'Analytics', key: 'analytics' },
 ] as const;
 
 const ACCOUNT_NAV = [
   { href: '/employer/profile', label: 'Company Profile', key: 'profile' },
-  { href: '/employer/profile', label: 'Settings', key: 'settings' },
 ] as const;
 
 function NavIcon({ name }: { name: string }) {
@@ -71,10 +74,16 @@ function NavIcon({ name }: { name: string }) {
       </svg>
     );
   }
-  if (name === 'messages') {
+  if (name === 'notifications') {
     return (
       <svg {...common}>
-        <path d="M5 6.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H9l-4 3v-3H5A1.5 1.5 0 0 1 3.5 16V8A1.5 1.5 0 0 1 5 6.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+        <path
+          d="M12 3.5a5 5 0 0 1 5 5v2.2c0 .9.3 1.8.9 2.5l1.1 1.3c.7.8.1 2.1-1 2.1H6c-1.1 0-1.7-1.3-1-2.1l1.1-1.3c.6-.7.9-1.6.9-2.5V8.5a5 5 0 0 1 5-5Z"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+        <path d="M10 18.5a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       </svg>
     );
   }
@@ -93,14 +102,6 @@ function NavIcon({ name }: { name: string }) {
       </svg>
     );
   }
-  if (name === 'settings') {
-    return (
-      <svg {...common}>
-        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
-        <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M5.8 5.8l1.6 1.6M16.6 16.6l1.6 1.6M18.2 5.8l-1.6 1.6M7.4 16.6l-1.6 1.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      </svg>
-    );
-  }
   return null;
 }
 
@@ -116,8 +117,8 @@ function isActive(pathname: string, key: string) {
   if (key === 'interviews') return pathname.startsWith('/employer/interviews');
   if (key === 'applications') return pathname.startsWith('/employer/applications');
   if (key === 'analytics') return pathname.startsWith('/employer/reports');
-  if (key === 'messages') return pathname.startsWith('/notifications');
-  if (key === 'profile' || key === 'settings') return pathname.startsWith('/employer/profile');
+  if (key === 'notifications') return pathname.startsWith('/notifications');
+  if (key === 'profile') return pathname.startsWith('/employer/profile');
   return false;
 }
 
@@ -173,7 +174,7 @@ function EmployerDeskBar({
   }, []);
 
   return (
-    <header className="ep-deskbar ep-deskbar--topnav">
+    <header className="ep-deskbar ep-deskbar--leftnav">
       <div className="ep-deskbar__top">
         <div className="ep-deskbar__brand-row">
           <button
@@ -191,22 +192,6 @@ function EmployerDeskBar({
               )}
             </svg>
           </button>
-
-          <Link href="/employer" className="ep-deskbar__brand">
-            <Image
-              src="/srsb-mark.png"
-              alt="SRSB"
-              width={88}
-              height={88}
-              className="ep-deskbar__logo"
-              priority
-              unoptimized
-            />
-            <span className="ep-deskbar__brand-copy">
-              <strong className="ep-deskbar__brand-name">CareerBridge</strong>
-              <em className="ep-deskbar__brand-tag">Employer</em>
-            </span>
-          </Link>
 
           <div className="ep-deskbar__right">
             <div className="ep-deskbar__user" ref={menuRef}>
@@ -241,20 +226,6 @@ function EmployerDeskBar({
         </div>
       </div>
 
-      <nav className="ep-deskbar__nav" aria-label="Primary">
-        <div className="ep-deskbar__nav-inner">
-          {PRIMARY_NAV.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={`ep-deskbar__nav-link ${isActive(pathname, item.key) ? 'is-active' : ''}`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </nav>
-
       {menuOpen ? (
         <nav className="ep-deskbar__drawer" aria-label="Mobile menu">
           {[...PRIMARY_NAV, ...ACCOUNT_NAV].map((item) => (
@@ -273,6 +244,76 @@ function EmployerDeskBar({
         </nav>
       ) : null}
     </header>
+  );
+}
+
+function EmployerRightNav({
+  profile,
+  onSignOut,
+}: {
+  profile: EmployerShellProfile;
+  onSignOut: () => void;
+}) {
+  const pathname = usePathname();
+  const company = profile.companyName?.trim() || 'Company';
+
+  return (
+    <aside className="ep-aside ep-aside--left" aria-label="Employer navigation">
+      <Link href="/employer" className="ep-aside__brand">
+        <Image
+          src="/srsb-mark.png"
+          alt="SRSB"
+          width={72}
+          height={72}
+          className="ep-aside__brand-logo"
+          unoptimized
+        />
+        <span className="ep-aside__brand-text">
+          <strong>CareerBridge</strong>
+          <em>Employer</em>
+        </span>
+      </Link>
+
+      <nav className="ep-aside__nav" aria-label="Primary">
+        {PRIMARY_NAV.map((item) => (
+          <Link
+            key={item.key}
+            href={item.href}
+            className={`ep-aside__link ${isActive(pathname, item.key) ? 'is-active' : ''}`}
+          >
+            <span className="ep-aside__ico">
+              <NavIcon name={item.key} />
+            </span>
+            <span>{item.label}</span>
+          </Link>
+        ))}
+      </nav>
+
+      <div className="ep-aside__foot">
+        <p className="ep-aside__group">Account</p>
+        <nav className="ep-aside__nav ep-aside__nav--account" aria-label="Account">
+          {ACCOUNT_NAV.map((item) => (
+            <Link
+              key={`${item.key}-${item.label}`}
+              href={item.href}
+              className={`ep-aside__link ${isActive(pathname, item.key) ? 'is-active' : ''}`}
+            >
+              <span className="ep-aside__ico">
+                <NavIcon name={item.key} />
+              </span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+        <div className="ep-aside__org">
+          <span className="ep-aside__org-avatar">{company.slice(0, 1).toUpperCase()}</span>
+          <span className="ep-aside__org-name">{company}</span>
+        </div>
+        <button type="button" className="ep-aside__logout" onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
+    </aside>
   );
 }
 
@@ -338,17 +379,43 @@ function EmployerLayout({
   children: ReactNode;
   onSignOut: () => void;
 }) {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [impersonation, setImpersonation] = useState(() => getEmployerImpersonation());
+
+  useEffect(() => {
+    setImpersonation(getEmployerImpersonation());
+  }, []);
+
+  function exitToAdmin() {
+    if (endEmployerImpersonation()) {
+      router.replace('/adminsrsb/dashboard?tab=employers');
+      return;
+    }
+    void onSignOut();
+  }
 
   return (
-    <div className="ep-app ep-app--desk ep-app--saas ep-app--topnav">
+    <div className="ep-app ep-app--desk ep-app--saas ep-app--leftnav">
+      <EmployerRightNav profile={profile} onSignOut={impersonation ? exitToAdmin : onSignOut} />
       <div className="ep-main">
         <EmployerDeskBar
           profile={profile}
-          onSignOut={onSignOut}
+          onSignOut={impersonation ? exitToAdmin : onSignOut}
           menuOpen={menuOpen}
           setMenuOpen={setMenuOpen}
         />
+        {impersonation ? (
+          <div className="ep-impersonation-banner" role="status">
+            <p>
+              Super admin mode · Acting as <strong>{impersonation.companyName}</strong>. Full employer
+              access (jobs, candidates, interviews, profile).
+            </p>
+            <button type="button" onClick={exitToAdmin}>
+              Exit to admin
+            </button>
+          </div>
+        ) : null}
         <div className="ep-content">{children}</div>
       </div>
       <EmployerMobileNav />
@@ -368,6 +435,10 @@ export function EmployerShell({
   const router = useRouter();
 
   async function signOut() {
+    if (getEmployerImpersonation() && endEmployerImpersonation()) {
+      router.replace('/adminsrsb/dashboard?tab=employers');
+      return;
+    }
     await logout();
     router.replace('/');
   }
@@ -422,6 +493,10 @@ export function EmployerShellFallback({
   }, []);
 
   async function signOut() {
+    if (getEmployerImpersonation() && endEmployerImpersonation()) {
+      router.replace('/adminsrsb/dashboard?tab=employers');
+      return;
+    }
     await logout();
     router.replace('/');
   }

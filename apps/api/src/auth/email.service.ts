@@ -149,6 +149,58 @@ export class EmailService {
     }
   }
 
+  async sendEmployerInterviewScheduled(input: {
+    to: string;
+    candidateName: string;
+    companyName: string;
+    jobTitle: string;
+    whenLabel: string;
+    mode: string;
+    portalUrl: string;
+    meetingUrl: string;
+    location?: string | null;
+  }) {
+    const mode = (input.mode || 'VIDEO').toUpperCase();
+    const location = (input.location || '').trim();
+    const joinUrl = /^https?:\/\//i.test(location) ? location : input.meetingUrl;
+    const detailsLines: string[] = [];
+    if (mode === 'IN_PERSON' && location) detailsLines.push(`Venue: ${location}`);
+    if (mode === 'PHONE' && location) detailsLines.push(`Dial-in: ${location}`);
+    if (mode === 'VIDEO' || /^https?:\/\//i.test(location)) {
+      detailsLines.push(`Meeting link: ${joinUrl}`);
+    }
+    detailsLines.push(`View / confirm in CareerBridge: ${input.portalUrl}`);
+
+    const ctaLabel = mode === 'VIDEO' || /^https?:\/\//i.test(location) ? 'Join meeting' : 'Open interview';
+    const locationHtml =
+      mode === 'IN_PERSON' && location
+        ? `<p><strong>Venue:</strong> ${location}</p>`
+        : mode === 'PHONE' && location
+          ? `<p><strong>Dial-in:</strong> ${location}</p>`
+          : '';
+
+    try {
+      return await this.sendMail(
+        input.to,
+        `Interview scheduled — ${input.jobTitle}`,
+        `Hi ${input.candidateName},\n\n${input.companyName} scheduled an interview for ${input.jobTitle} on ${input.whenLabel}.\n\n${detailsLines.join('\n')}\n`,
+        `
+          <div style="font-family: Arial, sans-serif; max-width: 560px; color: #0c3340;">
+            <h1 style="font-size: 22px;">CareerBridge</h1>
+            <p>Hi ${input.candidateName},</p>
+            <p><strong>${input.companyName}</strong> scheduled an interview for <strong>${input.jobTitle}</strong> on <strong>${input.whenLabel}</strong>.</p>
+            ${locationHtml}
+            <p><a href="${joinUrl}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 18px;border-radius:999px;font-weight:700;text-decoration:none;">${ctaLabel}</a></p>
+            <p style="color:#5b6f70;font-size:13px;"><a href="${input.portalUrl}" style="color:#0f766e;">View details and confirm in CareerBridge</a></p>
+          </div>
+        `,
+      );
+    } catch {
+      this.logger.error('Failed to send interview scheduled email');
+      return false;
+    }
+  }
+
   async sendEmployerInterviewRescheduleRequest(input: {
     to: string;
     employerName: string;

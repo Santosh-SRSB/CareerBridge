@@ -3,14 +3,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EmployerInterviewRecord } from '@careerbridge/shared';
-import { employerInterviewAction, listEmployerInterviews } from '@/lib/api';
+import {
+  employerInterviewAction,
+  listEmployerInterviews,
+  requestEmployerInterviewFeedback,
+} from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
-import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 import { Button } from '@/components/ui/Button';
 
+type FilterTab = 'all' | 'upcoming' | 'completed';
+
 function candidateName(row: EmployerInterviewRecord) {
-  return [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
+  const raw = [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ').trim();
+  if (!raw) return 'Candidate';
+  return raw
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
 }
 
 function formatWhen(iso: string) {
@@ -25,35 +34,50 @@ function formatWhen(iso: string) {
   });
 }
 
-function statusTone(status: string) {
-  if (status === 'CONFIRMED') return 'bg-emerald-100 text-emerald-800';
-  if (status === 'COMPLETED') return 'bg-slate-200 text-slate-700';
-  if (status === 'CANCELLED') return 'bg-rose-100 text-rose-800';
-  if (status === 'RESCHEDULE_REQUESTED') return 'bg-amber-100 text-amber-900';
-  return 'bg-primary-soft text-primary';
+function formatMode(mode: string) {
+  const label = mode.replaceAll('_', ' ').toLowerCase();
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function toLocalInputValue(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+function statusLabel(status: string) {
+  if (status === 'RESCHEDULE_REQUESTED') return 'Reschedule requested';
+  if (status === 'SCHEDULED' || status === 'PROPOSED') return 'Scheduled';
+  return status.charAt(0) + status.slice(1).toLowerCase().replaceAll('_', ' ');
+}
+
+function statusTone(status: string) {
+  if (status === 'CONFIRMED') return 'ok';
+  if (status === 'COMPLETED') return 'done';
+  if (status === 'CANCELLED') return 'off';
+  if (status === 'RESCHEDULE_REQUESTED') return 'warn';
+  return 'default';
+}
+
+function isUpcoming(status: string) {
+  return !['COMPLETED', 'CANCELLED'].includes(status);
+}
+
+function isCompletedTab(status: string) {
+  return status === 'COMPLETED' || status === 'CANCELLED';
+}
+
+function canRequestFeedback(row: EmployerInterviewRecord) {
+  return ['CONFIRMED', 'COMPLETED'].includes(row.status) && !row.candidateFeedback;
 }
 
 export default function EmployerInterviewsPage() {
   const [items, setItems] = useState<EmployerInterviewRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [busyId, setBusyId] = useState('');
-  const [rescheduleId, setRescheduleId] = useState('');
-  const [rescheduleAt, setRescheduleAt] = useState('');
-  const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState<FilterTab>('all');
+  const [feedbackRow, setFeedbackRow] = useState<EmployerInterviewRecord | null>(null);
 
   async function load() {
     setError('');
     const rows = await listEmployerInterviews();
     setItems(rows);
-    setNotesDraft(Object.fromEntries(rows.map((row) => [row.id, row.notes || ''])));
   }
 
   useEffect(() => {
@@ -62,22 +86,25 @@ export default function EmployerInterviewsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const upcoming = useMemo(
-    () => items.filter((item) => !['COMPLETED', 'CANCELLED'].includes(item.status)),
-    [items],
-  );
+  const upcomingCount = useMemo(() => items.filter((item) => isUpcoming(item.status)).length, [items]);
+  const completedCount = useMemo(() => items.filter((item) => isCompletedTab(item.status)).length, [items]);
+
+  const visible = useMemo(() => {
+    if (filter === 'upcoming') return items.filter((item) => isUpcoming(item.status));
+    if (filter === 'completed') return items.filter((item) => isCompletedTab(item.status));
+    return items;
+  }, [items, filter]);
 
   async function act(
     id: string,
-    action: 'confirm' | 'complete' | 'cancel' | 'reschedule',
-    payload?: { scheduledAt?: string; notes?: string },
+    action: 'confirm' | 'complete' | 'cancel',
+    payload?: { scheduledAt?: string },
   ) {
     if (action === 'cancel' && !window.confirm('Cancel this interview?')) return;
     setBusyId(id);
     setError('');
     try {
       await employerInterviewAction(id, action, payload);
-      setRescheduleId('');
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed.');
@@ -86,228 +113,260 @@ export default function EmployerInterviewsPage() {
     }
   }
 
-  async function saveNotes(id: string) {
-    setBusyId(id);
+  async function requestFeedback(id: string) {
+    setBusyId(`fb-${id}`);
     setError('');
+    setMessage('');
     try {
-      await employerInterviewAction(id, 'notes', { notes: notesDraft[id] || '' });
-      await load();
+      const updated = await requestEmployerInterviewFeedback(id);
+      setItems((prev) => prev.map((row) => (row.id === id ? updated : row)));
+      setFeedbackRow(updated);
+      setMessage('Feedback request sent to the candidate.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save notes.');
+      setError(err instanceof Error ? err.message : 'Could not request feedback.');
     } finally {
       setBusyId('');
     }
   }
 
+  const tabs: Array<{ id: FilterTab; label: string; count: number }> = [
+    { id: 'all', label: 'All', count: items.length },
+    { id: 'upcoming', label: 'Upcoming', count: upcomingCount },
+    { id: 'completed', label: 'Completed', count: completedCount },
+  ];
+
   return (
     <EmployerShellFallback title="Interviews">
-      <div className="ep-desk ep-page ep-page--interviews">
-        <EmployerSectionHero
-          tone="interviews"
-          title="Interviews"
-          subtitle="Schedule, confirm, reschedule, and track recruitment interviews."
-          action={
-            <Link href="/employer/interviews/schedule" className="ep-hero__link">
-              + Schedule interview
-            </Link>
-          }
-        />
+      <div className="ep-ivdesk ep-page ep-page--interviews">
+        <header className="ep-ivdesk__head">
+          <div className="ep-ivdesk__head-copy">
+            <p className="ep-ivdesk__eyebrow">Scheduling</p>
+            <h1 className="ep-ivdesk__title">Interviews</h1>
+            <p className="ep-ivdesk__sub">Every scheduled conversation, in one operating table.</p>
+          </div>
+          <Link href="/employer/interviews/schedule" className="ep-ivdesk__cta">
+            Schedule interview
+          </Link>
+        </header>
 
-        {error ? <p className="mb-4 text-sm font-semibold text-error">{error}</p> : null}
-        {loading ? <p className="text-sm text-muted">Loading interviews…</p> : null}
+        {error ? <p className="ep-ivdesk__alert">{error}</p> : null}
+        {message ? <p className="ep-ivdesk__alert ep-ivdesk__alert--ok">{message}</p> : null}
 
-        {!loading && items.length === 0 ? (
-          <article className="ep-polished-empty">
-            <EmployerEmptyCue cue="calendar" />
-            <div>
-              <p className="ep-polished-empty__title">No interviews scheduled yet</p>
-              <p className="ep-polished-empty__copy">
-                Shortlist an applicant, then book a time — they’ll get a product notification with the details.
-              </p>
-              <Link href="/employer/applications" className="ep-link font-extrabold">
-                Review applications →
-              </Link>
-            </div>
-          </article>
-        ) : null}
-
-        {!loading && upcoming.length > 0 ? (
-          <div className="ep-iv-rail">
-            <h2 className="text-sm font-extrabold uppercase tracking-wide text-muted">
-              Upcoming ({upcoming.length})
-            </h2>
-            {upcoming.map((item) => (
-              <article key={item.id} className="ep-iv-card px-5 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="text-lg font-extrabold text-primary">{candidateName(item)}</p>
-                      <p className="text-sm text-muted">{item.job.title}</p>
-                      <p className="mt-1 text-sm font-semibold text-primary">{formatWhen(item.scheduledAt)}</p>
-                      <p className="text-xs text-muted">
-                        {item.mode.replaceAll('_', ' ')} · {item.durationMin} min
-                        {item.location ? ` · ${item.location}` : ''}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${statusTone(item.status)}`}>
-                        {item.status.replaceAll('_', ' ')}
-                      </span>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {item.status === 'RESCHEDULE_REQUESTED' ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            block={false}
-                            loading={busyId === item.id}
-                            onClick={() =>
-                              void act(item.id, 'confirm', {
-                                scheduledAt: item.preferredRescheduleAt || undefined,
-                              })
-                            }
-                          >
-                            Approve
-                          </Button>
-                        ) : null}
-                        {item.status === 'SCHEDULED' || item.status === 'PROPOSED' ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            block={false}
-                            variant="secondary"
-                            loading={busyId === item.id}
-                            onClick={() => void act(item.id, 'confirm')}
-                          >
-                            Confirm
-                          </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          size="sm"
-                          block={false}
-                          variant="secondary"
-                          loading={busyId === item.id}
-                          onClick={() => {
-                            setRescheduleId(item.id);
-                            setRescheduleAt(
-                              toLocalInputValue(item.preferredRescheduleAt || item.scheduledAt),
-                            );
-                          }}
-                        >
-                          Reschedule
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          block={false}
-                          loading={busyId === item.id}
-                          onClick={() => void act(item.id, 'complete')}
-                        >
-                          Mark done
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          block={false}
-                          variant="destructive"
-                          loading={busyId === item.id}
-                          onClick={() => void act(item.id, 'cancel')}
-                        >
-                          Cancel
-                        </Button>
-                        <Link
-                          href={`/employer/candidates/${item.candidateId}?jobId=${encodeURIComponent(item.jobId)}`}
-                          className="ep-link text-sm font-extrabold"
-                        >
-                          Profile
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-
-                  {item.status === 'RESCHEDULE_REQUESTED' && item.preferredRescheduleAt ? (
-                    <p className="mt-2 text-sm font-semibold text-amber-800">
-                      Candidate preferred: {formatWhen(item.preferredRescheduleAt)}
-                    </p>
-                  ) : null}
-
-                  {rescheduleId === item.id ? (
-                    <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl bg-fog/70 p-3">
-                      <label className="grid gap-1 text-xs font-bold text-muted">
-                        New date & time
-                        <input
-                          type="datetime-local"
-                          className="rounded-xl border border-primary/15 bg-white px-3 py-2 text-sm font-semibold text-primary"
-                          value={rescheduleAt}
-                          min={toLocalInputValue(new Date().toISOString())}
-                          onChange={(e) => setRescheduleAt(e.target.value)}
-                        />
-                      </label>
-                      <Button
-                        type="button"
-                        size="sm"
-                        block={false}
-                        loading={busyId === item.id}
-                        onClick={() => {
-                          const next = new Date(rescheduleAt);
-                          if (Number.isNaN(next.getTime()) || next.getTime() < Date.now() - 60_000) {
-                            setError('Choose a future date and time.');
-                            return;
-                          }
-                          void act(item.id, 'reschedule', {
-                            scheduledAt: next.toISOString(),
-                          });
-                        }}
-                      >
-                        Save new time
-                      </Button>
-                      <button type="button" className="text-xs font-bold text-muted" onClick={() => setRescheduleId('')}>
-                        Dismiss
-                      </button>
-                    </div>
-                  ) : null}
-
-                  <label className="mt-3 grid gap-1 text-xs font-bold text-muted">
-                    Interview notes
-                    <textarea
-                      className="min-h-[64px] rounded-xl border border-primary/15 bg-white px-3 py-2 text-sm font-semibold text-primary"
-                      value={notesDraft[item.id] || ''}
-                      onChange={(e) => setNotesDraft((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                      placeholder="Outcome notes, feedback…"
-                    />
-                  </label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    block={false}
-                    className="mt-2"
-                    loading={busyId === item.id}
-                    onClick={() => void saveNotes(item.id)}
-                  >
-                    Save notes
-                  </Button>
-              </article>
+        {!loading && items.length > 0 ? (
+          <div className="ep-ivdesk__tabs" role="tablist" aria-label="Interview filters">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={filter === tab.id}
+                className={`ep-ivdesk__tab ${filter === tab.id ? 'is-active' : ''}`}
+                onClick={() => setFilter(tab.id)}
+              >
+                {tab.label} · {tab.count}
+              </button>
             ))}
           </div>
         ) : null}
 
-        {!loading && items.some((item) => ['COMPLETED', 'CANCELLED'].includes(item.status)) ? (
-          <article className="ep-card ep-list-card mt-6">
-            <h2 className="px-5 pt-5 text-lg font-extrabold text-primary">Past</h2>
-            <ul className="mt-2 divide-y divide-primary/10 px-5 pb-3">
-              {items
-                .filter((item) => ['COMPLETED', 'CANCELLED'].includes(item.status))
-                .map((item) => (
-                  <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
-                    <span className="font-bold text-primary">
-                      {candidateName(item)} — {item.job.title}
-                    </span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ${statusTone(item.status)}`}>
-                      {item.status}
-                    </span>
-                  </li>
-                ))}
-            </ul>
-          </article>
+        {loading ? <p className="ep-ivdesk__muted">Loading interviews…</p> : null}
+
+        {!loading && items.length === 0 ? (
+          <section className="ep-ivdesk__empty">
+            <h2>No interviews yet</h2>
+            <p>Shortlist an applicant, then book a time. Candidates get notified with the details.</p>
+            <Link href="/employer/interviews/schedule" className="ep-ivdesk__cta">
+              Schedule interview
+            </Link>
+          </section>
+        ) : null}
+
+        {!loading && items.length > 0 && visible.length === 0 ? (
+          <section className="ep-ivdesk__empty">
+            <h2>No {filter} interviews</h2>
+            <p>Switch filters to see other conversations.</p>
+          </section>
+        ) : null}
+
+        {!loading && visible.length > 0 ? (
+          <div className="ep-ivdesk__table-wrap">
+            <table className="ep-ivdesk__table">
+              <thead>
+                <tr>
+                  <th>Candidate</th>
+                  <th>Role</th>
+                  <th>When</th>
+                  <th>Format</th>
+                  <th>Status</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((item) => {
+                  const upcoming = isUpcoming(item.status);
+                  return (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="ep-ivdesk__who">
+                          <strong>{candidateName(item)}</strong>
+                          <span>{item.job.title}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="ep-ivdesk__cell">{item.job.title}</span>
+                      </td>
+                      <td>
+                        <span className="ep-ivdesk__cell">{formatWhen(item.scheduledAt)}</span>
+                      </td>
+                      <td>
+                        <span className="ep-ivdesk__cell">
+                          {formatMode(item.mode)} · {item.durationMin} min
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`ep-ivdesk__status ep-ivdesk__status--${statusTone(item.status)}`}>
+                          <i aria-hidden />
+                          {statusLabel(item.status)}
+                          {item.candidateFeedback ? ' · Feedback' : null}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="ep-ivdesk__actions">
+                          <Link
+                            href={`/employer/candidates/${item.candidateId}?jobId=${encodeURIComponent(item.jobId)}`}
+                            className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
+                          >
+                            Profile
+                          </Link>
+                          <Button
+                            type="button"
+                            size="sm"
+                            block={false}
+                            className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
+                            onClick={() => {
+                              setMessage('');
+                              setFeedbackRow(item);
+                            }}
+                          >
+                            Feedback
+                          </Button>
+                          {upcoming && item.status === 'RESCHEDULE_REQUESTED' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              block={false}
+                              className="ep-ivdesk__btn ep-ivdesk__btn--solid"
+                              loading={busyId === item.id}
+                              onClick={() =>
+                                void act(item.id, 'confirm', {
+                                  scheduledAt: item.preferredRescheduleAt || undefined,
+                                })
+                              }
+                            >
+                              Approve
+                            </Button>
+                          ) : null}
+                          {upcoming && (item.status === 'SCHEDULED' || item.status === 'PROPOSED') ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              block={false}
+                              className="ep-ivdesk__btn ep-ivdesk__btn--solid"
+                              loading={busyId === item.id}
+                              onClick={() => void act(item.id, 'confirm')}
+                            >
+                              Confirm
+                            </Button>
+                          ) : null}
+                          {upcoming && item.status === 'CONFIRMED' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              block={false}
+                              className="ep-ivdesk__btn ep-ivdesk__btn--solid"
+                              loading={busyId === item.id}
+                              onClick={() => void act(item.id, 'complete')}
+                            >
+                              Mark done
+                            </Button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {feedbackRow ? (
+          <div
+            className="ep-ivdesk__modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ep-feedback-title"
+          >
+            <button
+              type="button"
+              className="ep-ivdesk__modal-backdrop"
+              aria-label="Close feedback"
+              onClick={() => setFeedbackRow(null)}
+            />
+            <div className="ep-ivdesk__modal-card">
+              <header className="ep-ivdesk__modal-head">
+                <div>
+                  <p className="ep-ivdesk__eyebrow">Candidate feedback</p>
+                  <h2 id="ep-feedback-title">{candidateName(feedbackRow)}</h2>
+                  <p>{feedbackRow.job.title}</p>
+                </div>
+                <button type="button" className="ep-ivdesk__modal-close" onClick={() => setFeedbackRow(null)}>
+                  ×
+                </button>
+              </header>
+
+              {feedbackRow.candidateFeedback ? (
+                <div className="ep-ivdesk__feedback">
+                  <p className="ep-ivdesk__feedback-rating">
+                    Rating: <strong>{feedbackRow.candidateFeedback.rating}/5</strong>
+                  </p>
+                  <p className="ep-ivdesk__feedback-text">
+                    {feedbackRow.candidateFeedback.text || 'No written comments.'}
+                  </p>
+                  <p className="ep-ivdesk__muted">
+                    Submitted{' '}
+                    {new Date(feedbackRow.candidateFeedback.submittedAt).toLocaleString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              ) : (
+                <div className="ep-ivdesk__feedback">
+                  <p>
+                    {feedbackRow.feedbackRequestedAt
+                      ? 'Waiting for the candidate to share feedback.'
+                      : 'No feedback yet for this interview.'}
+                  </p>
+                  {canRequestFeedback(feedbackRow) ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      block={false}
+                      className="ep-ivdesk__btn ep-ivdesk__btn--solid"
+                      loading={busyId === `fb-${feedbackRow.id}`}
+                      onClick={() => void requestFeedback(feedbackRow.id)}
+                    >
+                      {feedbackRow.feedbackRequestedAt ? 'Send reminder' : 'Request feedback'}
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </div>
         ) : null}
       </div>
     </EmployerShellFallback>
