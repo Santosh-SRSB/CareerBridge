@@ -345,6 +345,106 @@ export class AiGatewayService {
     return res.data;
   }
 
+  /** Strict schema parse from sanitized resume text (Gemini JSON). */
+  async parseResumeStrictSchema(
+    rawText: string,
+    options?: AiRequestOptions,
+  ): Promise<Record<string, unknown> | null> {
+    const prompt = getPrompt('resume-parse-strict.v1');
+    const res = await this.generate<Record<string, unknown>>({
+      task: 'RESUME_PARSE_STRICT',
+      systemPrompt: prompt.system,
+      userPrompt: `Resume text:\n${rawText.slice(0, 16000)}`,
+      options: {
+        ...options,
+        promptVersion: prompt.version,
+        temperature: 0,
+        maxOutputTokens: 8192,
+      },
+    });
+    return res.data;
+  }
+
+  /** Multimodal strict parse from PDF/image bytes (Gemini). Falls back gracefully if unsupported. */
+  async parseResumeStrictFromFile(
+    buffer: Buffer,
+    mimeType: string,
+    options?: AiRequestOptions,
+  ): Promise<Record<string, unknown> | null> {
+    if (!this.gemini.isConfigured() || typeof this.gemini.generateStructuredMultimodal !== 'function') {
+      return null;
+    }
+    const prompt = getPrompt('resume-parse-strict.v1');
+    const startTime = Date.now();
+    try {
+      const result = await this.gemini.generateStructuredMultimodal<Record<string, unknown>>(
+        prompt.system,
+        [
+          {
+            type: 'text',
+            text: 'Extract the resume into the required JSON schema. Use only facts visible in the document.',
+          },
+          {
+            type: 'inline',
+            mimeType,
+            dataBase64: buffer.toString('base64'),
+          },
+        ],
+        {
+          model: options?.model,
+          temperature: 0,
+          maxOutputTokens: options?.maxOutputTokens ?? 8192,
+        },
+      );
+
+      const latencyMs = Date.now() - startTime;
+      this.logger.log(
+        JSON.stringify({
+          event: 'AI_INTERACTION',
+          task: 'RESUME_PARSE_STRICT',
+          provider: 'gemini',
+          model: result.model,
+          promptVersion: prompt.version,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          latencyMs,
+          success: Boolean(result.data),
+          multimodal: true,
+          userId: options?.userId,
+        }),
+      );
+
+      try {
+        await this.prisma.aiInteraction.create({
+          data: {
+            userId: options?.userId || null,
+            operation: 'RESUME_PARSE_STRICT',
+            provider: 'gemini',
+            model: result.model,
+            promptVersion: prompt.version,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            latencyMs,
+            status: result.data ? 'SUCCESS' : 'FAILED',
+            estimatedCostUsd: this.estimateCost(
+              'gemini',
+              result.model,
+              result.inputTokens,
+              result.outputTokens,
+            ),
+          },
+        });
+      } catch {
+        /* audit best-effort */
+      }
+
+      return result.data;
+    } catch (err) {
+      this.logger.warn(`parseResumeStrictFromFile failed: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
   async rewriteResume(
     content: unknown,
     issues: unknown[],
@@ -433,10 +533,23 @@ export class AiGatewayService {
     profile: unknown,
     question: string,
     answer: string,
-    options?: AiRequestOptions,
+    options?: AiRequestOptions & {
+      questionTypeHint?: string;
+      evaluationCriteria?: string[];
+    },
   ): Promise<InterviewEvaluationResult | null> {
     const prompt = getPrompt('interview-evaluation.v1');
-    const userPayload = JSON.stringify({ profile, question, answer });
+    const userPayload = JSON.stringify({
+      profile,
+      question,
+      answer,
+      questionTypeHint: options?.questionTypeHint || null,
+      evaluationCriteria: options?.evaluationCriteria || null,
+      instructions: [
+        'Follow the system steps in order: classify → evaluate with type criteria → list whatWasMissing → write improvementSuggestion → THEN write improvedAnswer that fixes those gaps.',
+        'improvedAnswer must not be a near-copy of answer when whatWasMissing is non-empty.',
+      ],
+    });
     const res = await this.generate<InterviewEvaluationResult>({
       task: 'INTERVIEW_EVALUATION',
       systemPrompt: prompt.system,
@@ -445,6 +558,7 @@ export class AiGatewayService {
         ...options,
         promptVersion: prompt.version,
         temperature: options?.temperature ?? 0.35,
+        maxOutputTokens: options?.maxOutputTokens ?? 2048,
       },
     });
     return res.data;

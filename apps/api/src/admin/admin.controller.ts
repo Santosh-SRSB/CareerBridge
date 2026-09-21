@@ -163,6 +163,15 @@ export class AdminController {
     return this.admin.verifyEmployer(user.id, id);
   }
 
+  @Post('employers/:id/impersonate')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  impersonateEmployer(
+    @CurrentUser() user: { id: string; role?: string },
+    @Param('id') id: string,
+  ) {
+    return this.admin.impersonateEmployer(user.id, id, user.role);
+  }
+
   @Get('jobs')
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
   jobs(@Query('query') query?: string, @Query('status') status?: string) {

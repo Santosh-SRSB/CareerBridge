@@ -3,11 +3,15 @@ import type { ApplicationRecord, JobCard, JobDetail } from '@careerbridge/shared
 const demoMatch = (score: number) => ({
   score,
   skillScore: score,
-  locationScore: score - 2,
-  categoryScore: score - 1,
-  experienceScore: score - 3,
+  experienceScore: Math.max(0, score - 3),
+  educationScore: Math.max(0, score - 1),
+  locationScore: Math.max(0, score - 2),
+  preferredSkillScore: Math.max(0, score - 4),
+  resumeQualityScore: Math.max(0, score - 5),
+  categoryScore: Math.max(0, score - 1),
   reasons: ['Strong skill overlap', 'Location matches your preference'],
   gaps: [],
+  recommendations: [],
 });
 
 export const DEMO_JOBS: JobDetail[] = [

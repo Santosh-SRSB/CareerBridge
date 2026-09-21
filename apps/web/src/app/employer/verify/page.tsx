@@ -64,15 +64,16 @@ export default function EmployerVerifyPage() {
   }
 
   if (!ready) {
-    return <main className="p-8 text-muted">Loading company verification...</main>;
+    return <main className="ep-onboard-page ep-onboard-page--loading">Loading company verification…</main>;
   }
 
   return (
     <EmployerOnboardingFrame
       step={2}
-      title="Verify Company Affiliation"
+      title="Verify company affiliation"
       subtitle="Confirm that you are authorized to recruit for this company."
       backHref="/employer/kyc"
+      sideTitle="Let's confirm your company!"
     >
       <form onSubmit={onSubmit} className="ep-kyc">
         <Input
@@ -80,32 +81,29 @@ export default function EmployerVerifyPage() {
           name="companyName"
           required
           autoComplete="organization"
-          placeholder="TechNova Solutions Pvt. Ltd."
+          placeholder="Company legal name"
           value={companyName}
           onChange={(event) => setCompanyName(event.target.value)}
         />
         <Input
-          label="Official Work Email"
+          label="Work Email"
           name="workEmail"
           type="email"
           required
           autoComplete="email"
-          placeholder="ananya@technova.com"
+          placeholder="you@company.com"
           value={workEmail}
           onChange={(event) => setWorkEmail(event.target.value)}
         />
         <Input
-          label="Designation"
+          label="Your Designation"
           name="designation"
           required
           autoComplete="organization-title"
-          placeholder="Talent Acquisition Manager"
+          placeholder="HR Manager"
           value={designation}
           onChange={(event) => setDesignation(event.target.value)}
         />
-        <p className="ep-kyc__hint">
-          May use company domain, email OTP, documents, or admin approval.
-        </p>
         {error ? <p className="ep-kyc__error">{error}</p> : null}
         <Button
           type="submit"
@@ -114,7 +112,7 @@ export default function EmployerVerifyPage() {
           loadingLabel="Submitting..."
           className="ep-kyc__cta"
         >
-          Submit Verification
+          Submit for verification
         </Button>
       </form>
     </EmployerOnboardingFrame>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { EmployerApplication } from '@careerbridge/shared';
+import { normalizeHttpUrl } from '@careerbridge/shared';
 import { listEmployerApplications, listEmployerJobs, scheduleEmployerInterview } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { Button } from '@/components/ui/Button';
@@ -112,6 +113,21 @@ export default function EmployerScheduleInterviewPage() {
       return;
     }
 
+    const locationTrimmed = location.trim();
+    if (mode === 'VIDEO') {
+      if (!normalizeHttpUrl(locationTrimmed)) {
+        setError('Enter a valid meeting link (Google Meet, Zoom, etc.) before continuing.');
+        return;
+      }
+    } else if (!locationTrimmed) {
+      setError(
+        mode === 'IN_PERSON'
+          ? 'Enter the venue address before continuing.'
+          : 'Enter the phone / dial-in details before continuing.',
+      );
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
@@ -120,7 +136,7 @@ export default function EmployerScheduleInterviewPage() {
         scheduledAt: scheduledAt.toISOString(),
         durationMin: Number(durationMin) || 30,
         mode,
-        location: location.trim() || undefined,
+        location: mode === 'VIDEO' ? normalizeHttpUrl(locationTrimmed)! : locationTrimmed,
         notes: notes.trim() || undefined,
         notifyWhatsApp,
         notifyEmail,
@@ -135,16 +151,15 @@ export default function EmployerScheduleInterviewPage() {
 
   return (
     <EmployerShellFallback title="Schedule interview">
-      <div className="ep-schedule">
+      <div className="ep-schedule ep-page ep-page--schedule">
         <div className="ep-schedule__shell">
           <header className="ep-schedule__head">
             <Link href="/employer/interviews" className="ep-schedule__back">
               ← Interviews
             </Link>
-            <h1 className="ep-schedule__title">Schedule interview</h1>
-            <p className="ep-schedule__sub">
-              Pick the candidate, select timing, and send the invite. They get a product notification with the details.
-            </p>
+            <div className="ep-schedule__head-main">
+              <h1 className="ep-schedule__title">Schedule interview</h1>
+            </div>
           </header>
 
           <form onSubmit={(e) => void onSubmit(e)} className="ep-schedule__card">

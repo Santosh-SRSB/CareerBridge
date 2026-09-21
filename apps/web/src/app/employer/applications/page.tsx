@@ -4,13 +4,11 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import type { EmployerApplication } from '@careerbridge/shared';
-import {
-  downloadEmployerCandidateResume,
-  listAllEmployerApplications,
-  listEmployerJobs,
-  saveBase64File,
-} from '@/lib/api';
+import { atsMatchBandLabel } from '@careerbridge/shared';
+import { listAllEmployerApplications, listEmployerJobs } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
+import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
+import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 
 function applicationStatusLabel(status: string) {
   if (status === 'SHORTLISTED') return 'Shortlisted';
@@ -38,7 +36,7 @@ function experienceLabel(years: number) {
 }
 
 function matchTone(score: number) {
-  if (score >= 85) return 'high';
+  if (score >= 90) return 'high';
   if (score >= 70) return 'mid';
   return 'low';
 }
@@ -60,11 +58,11 @@ function EmployerApplicationsBody() {
   const [experienceFilter, setExperienceFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [skillFilter, setSkillFilter] = useState('all');
+  const [scoreFilter, setScoreFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'score' | 'newest'>('score');
   const [jobs, setJobs] = useState<Array<{ id: string; title: string }>>([]);
-  const [selectedId, setSelectedId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [resumeBusy, setResumeBusy] = useState(false);
 
   useEffect(() => {
     void Promise.all([listAllEmployerApplications(), listEmployerJobs().catch(() => [])])
@@ -95,7 +93,7 @@ function EmployerApplicationsBody() {
   }, [jobScoped]);
 
   const filtered = useMemo(() => {
-    return jobScoped.filter((item) => {
+    const rows = jobScoped.filter((item) => {
       if (statusFilter !== 'all' && item.status !== statusFilter) return false;
       const years = experienceYears(item);
       if (experienceFilter === 'fresher' && years > 0) return false;
@@ -103,52 +101,41 @@ function EmployerApplicationsBody() {
       if (experienceFilter === '2plus' && years < 2) return false;
       if (locationFilter !== 'all' && item.candidate.city !== locationFilter) return false;
       if (skillFilter !== 'all' && !item.candidate.skills.includes(skillFilter)) return false;
+      const score = item.match?.score ?? -1;
+      if (scoreFilter === '90' && score < 90) return false;
+      if (scoreFilter === '80' && score < 80) return false;
+      if (scoreFilter === '70' && score < 70) return false;
+      if (scoreFilter === '60' && score < 60) return false;
+      if (scoreFilter === 'below60' && (score < 0 || score >= 60)) return false;
       return true;
     });
-  }, [jobScoped, statusFilter, experienceFilter, locationFilter, skillFilter]);
+    return rows.sort((a, b) => {
+      if (sortBy === 'newest') {
+        return +new Date(b.createdAt) - +new Date(a.createdAt);
+      }
+      return (b.match?.score ?? -1) - (a.match?.score ?? -1);
+    });
+  }, [
+    jobScoped,
+    statusFilter,
+    experienceFilter,
+    locationFilter,
+    skillFilter,
+    scoreFilter,
+    sortBy,
+  ]);
 
   const selectedJobTitle =
     jobFilter === 'all' ? null : jobs.find((job) => job.id === jobFilter)?.title || filtered[0]?.job.title || null;
-  const selected = filtered.find((item) => item.id === selectedId) || filtered[0] || null;
-
-  async function viewSelectedResume() {
-    if (!selected) return;
-    setResumeBusy(true);
-    setError('');
-    try {
-      const file = await downloadEmployerCandidateResume(selected.candidate.id, selected.job.id);
-      if (file.pdf) {
-        saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
-      } else if (file.html) {
-        saveBase64File(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
-      } else {
-        setError('Resume file was empty.');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open resume.');
-    } finally {
-      setResumeBusy(false);
-    }
-  }
 
   return (
     <EmployerShellFallback title="Applications">
-      <div className="ep-apps">
-        <p className="ep-dash__eyebrow">Home · Applications</p>
-        <header className="ep-dash__hello">
-          <div>
-            <h1 className="ep-dash__title">
-              Applications
-              {selectedJobTitle ? (
-                <>
-                  {' '}
-                  — <span>{selectedJobTitle}</span>
-                </>
-              ) : null}
-            </h1>
-            <p className="ep-dash__sub">Review inbound candidates, match scores, and status.</p>
-          </div>
-        </header>
+      <div className="ep-apps ep-page ep-page--applications">
+        <EmployerSectionHero
+          tone="applications"
+          title={selectedJobTitle ? `Applications — ${selectedJobTitle}` : 'Applications'}
+          subtitle="Review inbound candidates by ATS score and status. Click View to open the full candidate profile."
+        />
 
         <div className="ep-apps__filters" role="group" aria-label="Filters">
           <span className="ep-apps__filters-label">Filters:</span>
@@ -173,6 +160,24 @@ function EmployerApplicationsBody() {
               <option value="SELECTED">Selected</option>
               <option value="HIRED">Hired</option>
               <option value="REJECTED">Not selected</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">ATS score</span>
+            <select value={scoreFilter} onChange={(e) => setScoreFilter(e.target.value)}>
+              <option value="all">ATS score</option>
+              <option value="90">90+ Excellent</option>
+              <option value="80">80+ Strong</option>
+              <option value="70">70+ Good</option>
+              <option value="60">60+ Potential</option>
+              <option value="below60">Below 60</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Sort</span>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'score' | 'newest')}>
+              <option value="score">Sort: ATS score</option>
+              <option value="newest">Sort: Newest</option>
             </select>
           </label>
           <label>
@@ -209,95 +214,81 @@ function EmployerApplicationsBody() {
         </div>
 
         {error ? <p className="ep-apps__error">{error}</p> : null}
+        {loading ? <p className="ep-apps__empty">Loading applications…</p> : null}
 
-        <article className="ep-apps__card">
-          {loading ? <p className="ep-apps__empty">Loading applications…</p> : null}
-
-          {!loading && filtered.length === 0 ? (
-            <div className="ep-dash__empty-card">
-              <div className="ep-dash__empty-ico" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 2h9l5 5v15H6z" />
-                  <path d="M14 2v5h5" />
-                </svg>
-              </div>
-              <p className="ep-dash__empty-title">No applications yet</p>
-              <p className="ep-dash__empty">Publish a job to start receiving candidates.</p>
+        {!loading && filtered.length === 0 ? (
+          <div className="ep-polished-empty">
+            <EmployerEmptyCue cue="search" />
+            <div>
+              <p className="ep-polished-empty__title">No applications yet</p>
+              <p className="ep-polished-empty__copy">Publish a job to start receiving candidates.</p>
+              <Link href="/employer/jobs/new" className="ep-hero__link ep-polished-empty__cta">
+                + Post a job
+              </Link>
             </div>
-          ) : null}
+          </div>
+        ) : null}
 
-          {!loading && filtered.length > 0 ? (
-            <>
-              <div className="ep-apps__table-wrap">
-                <table className="ep-apps__table">
-                  <thead>
-                    <tr>
-                      <th>Candidate</th>
-                      <th>Experience</th>
-                      <th>Match</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((item) => {
-                      const active = (selected?.id || '') === item.id;
-                      const score = item.match?.score;
-                      return (
-                        <tr
-                          key={item.id}
-                          className={active ? 'is-active' : ''}
-                          onClick={() => setSelectedId(item.id)}
-                        >
-                          <td>
-                            <strong>{candidateName(item)}</strong>
-                            {jobFilter === 'all' ? <em>{item.job.title}</em> : null}
-                          </td>
-                          <td>{experienceLabel(experienceYears(item))}</td>
-                          <td>
-                            {score != null ? (
-                              <span className={`ep-apps__match ep-apps__match--${matchTone(score)}`}>
-                                {score}%
-                              </span>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                          <td>
-                            <span className={`ep-apps__status ep-apps__status--${item.status.toLowerCase()}`}>
-                              {applicationStatusLabel(item.status)}
+        {!loading && filtered.length > 0 ? (
+          <div className="ep-apps__sheet">
+            <div className="ep-apps__table-wrap">
+              <table className="ep-apps__sheet-table">
+                <thead>
+                  <tr>
+                    <th>Candidate</th>
+                    <th>Experience</th>
+                    <th>Location</th>
+                    <th>ATS score</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item) => {
+                    const score = item.match?.score;
+                    const profileHref = `/employer/candidates/${item.candidate.id}?jobId=${encodeURIComponent(item.job.id)}&from=applications`;
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <strong>{candidateName(item)}</strong>
+                          {jobFilter === 'all' ? <em>{item.job.title}</em> : null}
+                        </td>
+                        <td>{experienceLabel(experienceYears(item))}</td>
+                        <td>{item.candidate.city || '—'}</td>
+                        <td>
+                          {score != null ? (
+                            <span
+                              className={`ep-apps__match ep-apps__match--${matchTone(score)}`}
+                              title={atsMatchBandLabel(score)}
+                            >
+                              {score}
+                              <em>{atsMatchBandLabel(score).replace(' Match', '')}</em>
                             </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="ep-apps__foot">
-                {selected ? (
-                  <>
-                    <Link
-                      href={`/employer/candidates/${selected.candidate.id}?jobId=${encodeURIComponent(selected.job.id)}`}
-                      className="ep-apps__view"
-                    >
-                      View Candidate
-                    </Link>
-                    <button
-                      type="button"
-                      className="ep-apps__view"
-                      disabled={resumeBusy}
-                      onClick={() => void viewSelectedResume()}
-                    >
-                      {resumeBusy ? 'Opening resume…' : 'View resume'}
-                    </button>
-                  </>
-                ) : (
-                  <span className="ep-apps__view is-disabled">View Candidate</span>
-                )}
-              </div>
-            </>
-          ) : null}
-        </article>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td>
+                          <span className={`ep-apps__status ep-apps__status--${item.status.toLowerCase()}`}>
+                            {applicationStatusLabel(item.status)}
+                          </span>
+                        </td>
+                        <td>
+                          <Link href={profileHref} className="ep-apps__row-view">
+                            View
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="ep-apps__hint">
+              Click <strong>View</strong> to open the candidate profile on a separate page.
+            </p>
+          </div>
+        ) : null}
       </div>
     </EmployerShellFallback>
   );

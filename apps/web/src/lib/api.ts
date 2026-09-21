@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   AdminDashboard,
   ApiResponse,
   ApplicationRecord,
@@ -42,6 +42,24 @@ import { getAccessToken, getRefreshToken, saveSession, clearSession } from './se
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
+async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      lastError = err;
+      // Nest --watch briefly drops the port while recompiling; retry a couple times.
+      if (i < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)));
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Cannot reach the CareerBridge API. Make sure it is running on port 3001.');
+}
+
 async function request<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
@@ -54,7 +72,7 @@ async function request<T>(
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetchWithRetry(`${API_URL}${path}`, {
     ...options,
     headers,
   }).catch(() => {
@@ -465,12 +483,22 @@ export type CandidateScheduledInterview = {
   companyName: string;
   scheduledDate: string;
   scheduledTime: string;
-  status: 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'RESCHEDULE_REQUESTED';
+  status: 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'RESCHEDULE_REQUESTED' | 'COMPLETED' | 'CANCELLED';
   location: string;
   mode: 'IN_PERSON' | 'VIDEO';
   applicationId: string;
   durationMin?: number;
   scheduledAt?: string;
+  meetingUrl?: string | null;
+  preferredRescheduleAt?: string | null;
+  preferredRescheduleReason?: string | null;
+  candidateFeedback?: {
+    rating: number;
+    text: string | null;
+    submittedAt: string;
+  } | null;
+  feedbackRequestedAt?: string | null;
+  canSubmitFeedback?: boolean;
 };
 
 export async function listCandidateScheduledInterviews() {
@@ -488,11 +516,29 @@ export async function confirmCandidateScheduledInterview(id: string) {
   });
 }
 
-export async function rescheduleCandidateScheduledInterview(id: string) {
+export async function rescheduleCandidateScheduledInterview(
+  id: string,
+  payload?: {
+    preferredAt?: string;
+    preferredDate?: string;
+    preferredTime?: string;
+    reason?: string;
+  },
+) {
   return request<CandidateScheduledInterview>(
     `/applications/scheduled-interviews/${id}/reschedule`,
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify(payload || {}) },
   );
+}
+
+export async function submitCandidateInterviewFeedback(
+  id: string,
+  payload: { rating: number; text?: string },
+) {
+  return request<CandidateScheduledInterview>(`/applications/scheduled-interviews/${id}/feedback`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function listResumes() {
@@ -702,19 +748,23 @@ export async function aiReviewResume(id: string, payload: { targetRole: string }
   );
 }
 
-export async function downloadResume(id: string) {
+export async function downloadResume(id: string, variant?: 'original' | 'formatted') {
+  const q = variant ? `?variant=${variant}` : '';
   return request<{
     html?: string;
     pdf?: string;
     fileName: string;
     mimeType?: string;
+    variant?: 'original' | 'formatted';
+    isPortalRendered?: boolean;
+    note?: string;
     storage?: { pdfStoragePath: string; pdfStorageUri: string; pdfPublicUrl: string } | null;
     storageError?: string | null;
     pdfStoragePath?: string | null;
     pdfStorageUri?: string | null;
     pdfPublicUrl?: string | null;
     pdfUploadedAt?: string | null;
-  }>(`/resumes/${id}/download`);
+  }>(`/resumes/${id}/download${q}`);
 }
 
 export function saveBase64File(content: string, fileName: string, mimeType: string) {
@@ -931,6 +981,15 @@ export async function updateEmployerMe(payload: Partial<EmployerProfile>) {
   return request<EmployerProfile>('/employers/me', {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadEmployerLogo(file: Blob, fileName = 'logo.jpg') {
+  const form = new FormData();
+  form.append('file', file, fileName);
+  return request<EmployerProfile>('/employers/me/logo', {
+    method: 'POST',
+    body: form,
   });
 }
 
@@ -1155,6 +1214,13 @@ export async function changeApplicationStatus(id: string, action: string) {
   });
 }
 
+export async function notifyMatchedCandidate(candidateId: string, jobId: string) {
+  return request<{ ok: boolean; whatsappSent?: boolean }>(`/employers/candidates/${candidateId}/notify`, {
+    method: 'POST',
+    body: JSON.stringify({ jobId }),
+  });
+}
+
 export async function searchEmployerCandidates(params: {
   q?: string;
   city?: string;
@@ -1222,6 +1288,13 @@ export async function employerInterviewAction(
   return request<EmployerInterviewRecord>(`/employers/interviews/${id}/action`, {
     method: 'POST',
     body: JSON.stringify({ action, ...payload }),
+  });
+}
+
+export async function requestEmployerInterviewFeedback(id: string) {
+  return request<EmployerInterviewRecord>(`/employers/interviews/${id}/request-feedback`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   });
 }
 
@@ -1407,6 +1480,21 @@ export async function getAdminAiUsage() {
 
 export async function verifyEmployer(id: string) {
   return request(`/admin/employers/${id}/verify`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function impersonateAdminEmployer(employerId: string) {
+  return request<
+    AuthSession & {
+      impersonation: {
+        employerId: string;
+        companyName: string;
+        adminUserId: string;
+      };
+    }
+  >(`/admin/employers/${employerId}/impersonate`, {
     method: 'POST',
     body: JSON.stringify({}),
   });

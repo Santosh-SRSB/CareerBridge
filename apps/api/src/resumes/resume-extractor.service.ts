@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { reconstructReadingOrder, stripInternalPageMarkers } from './pdf-reading-order';
+import { sanitizeExtractedResumeText } from './layout-sanitize';
 
 export type ResumeExtractionResult = {
   text: string;
@@ -9,7 +11,23 @@ export type ResumeExtractionResult = {
   pageCount?: number;
   confidence?: number;
   notes: string[];
+  /** True when OCR was used (lower confidence downstream). */
+  usedOcr?: boolean;
+  layoutNotes?: string[];
 };
+
+function isUsableResumeText(text: string): boolean {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (t.length < 40) return false;
+  // Scanned PDFs sometimes yield garbage glyphs with almost no letters.
+  const letters = (t.match(/[A-Za-z]/g) || []).length;
+  if (letters < 30) return false;
+  const hasContactHint =
+    /@/.test(t) ||
+    /\b(education|experience|skills|project|summary|objective|qualification)\b/i.test(t) ||
+    /\b\d{10}\b/.test(t.replace(/\D/g, ' '));
+  return hasContactHint || t.length >= 120;
+}
 
 @Injectable()
 export class ResumeExtractorService {
@@ -34,25 +52,58 @@ export class ResumeExtractorService {
       name.endsWith('.jpg') ||
       name.endsWith('.jpeg');
 
+    // Filename is metadata only — never used as parse evidence for content.
+    void name;
+
+    const finalize = (result: ResumeExtractionResult): ResumeExtractionResult => {
+      if (!result.text?.trim()) return result;
+      const cleaned = sanitizeExtractedResumeText(result.text);
+      return {
+        ...result,
+        text: cleaned || result.text,
+        notes: cleaned && cleaned !== result.text
+          ? [...result.notes, 'Applied layout sanitation (bullets/artifacts/orphaned roles)']
+          : result.notes,
+      };
+    };
+
     if (isPdf) {
       const pdfResult = await this.extractPdf(buffer);
-      if (pdfResult.text.trim().length >= 20) {
-        return { ...pdfResult, mimeType, fileName, notes };
+      if (isUsableResumeText(pdfResult.text)) {
+        return finalize({ ...pdfResult, mimeType, fileName, notes: [...notes, ...pdfResult.notes] });
       }
       notes.push(
-        pdfResult.notes.join('; ') || 'PDF text layer empty or short',
-        'Skipping Tesseract OCR for PDF (it cannot read PDF bytes and crashes the Node process)',
+        ...(pdfResult.notes.length ? pdfResult.notes : ['PDF text layer empty or unusable']),
+        'Attempting OCR via page screenshots (Tesseract cannot read PDF bytes directly)',
       );
+      const ocrPdf = await this.extractPdfViaOcrScreenshots(buffer);
+      if (isUsableResumeText(ocrPdf.text)) {
+        return finalize({
+          ...ocrPdf,
+          mimeType,
+          fileName,
+          usedOcr: true,
+          confidence: Math.min(ocrPdf.confidence ?? 0.55, 0.7),
+          notes: [...notes, ...ocrPdf.notes],
+        });
+      }
+      notes.push(...ocrPdf.notes);
     } else if (isDocx) {
       const doc = await this.extractDocx(buffer);
-      if (doc.text.trim().length >= 40) {
-        return { ...doc, mimeType, fileName, notes };
+      if (isUsableResumeText(doc.text) || doc.text.trim().length >= 40) {
+        return finalize({ ...doc, mimeType, fileName, notes });
       }
       notes.push('DOC/DOCX extraction returned little text');
     } else if (isImage) {
       const ocr = await this.extractOcr(buffer);
-      if (ocr.text.trim().length >= 40) {
-        return { ...ocr, mimeType, fileName, notes: [...notes, ...ocr.notes] };
+      if (isUsableResumeText(ocr.text) || ocr.text.trim().length >= 40) {
+        return finalize({
+          ...ocr,
+          mimeType,
+          fileName,
+          usedOcr: true,
+          notes: [...notes, ...ocr.notes],
+        });
       }
       notes.push(...ocr.notes);
     } else {
@@ -61,7 +112,7 @@ export class ResumeExtractorService {
 
     const docAi = await this.extractDocumentAi(buffer, mimeType);
     if (docAi.text.trim().length > 0) {
-      return { ...docAi, mimeType, fileName, notes: [...notes, ...docAi.notes] };
+      return finalize({ ...docAi, mimeType, fileName, notes: [...notes, ...docAi.notes] });
     }
 
     notes.push('All extractors failed or returned empty text');
@@ -80,18 +131,35 @@ export class ResumeExtractorService {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const mod = require('pdf-parse') as {
         PDFParse: new (opts: { data: Uint8Array }) => {
-          getText: () => Promise<{ text?: string; total?: number }>;
+          getText: (params?: object) => Promise<{
+            text?: string;
+            total?: number;
+            pages?: Array<{ num: number; text: string }>;
+          }>;
           destroy: () => Promise<void>;
         };
       };
       const parser = new mod.PDFParse({ data: new Uint8Array(buffer) });
       try {
-        const parsed = await parser.getText();
+        const parsed = await parser.getText({
+          lineEnforce: true,
+          cellSeparator: '\t',
+          cellThreshold: 12,
+          lineThreshold: 4.6,
+          // Disable default page joiner noise; we rebuild order ourselves.
+          pageJoiner: '',
+        });
+        const pages = Array.isArray(parsed.pages) && parsed.pages.length
+          ? parsed.pages
+          : [{ num: 1, text: parsed.text || '' }];
+        const ordered = reconstructReadingOrder(pages);
+        const text = stripInternalPageMarkers(ordered.text);
         return {
-          text: (parsed.text || '').trim(),
+          text,
           extractor: 'pdf-parse',
-          pageCount: parsed.total,
-          notes: ['Extracted with pdf-parse'],
+          pageCount: parsed.total || pages.length,
+          notes: ['Extracted with pdf-parse (layout-aware reading order)', ...ordered.notes],
+          layoutNotes: ordered.notes,
         };
       } finally {
         await parser.destroy().catch(() => undefined);
@@ -99,6 +167,69 @@ export class ResumeExtractorService {
     } catch (err) {
       this.logger.warn(`pdf-parse failed: ${(err as Error).message}`);
       return { text: '', extractor: 'pdf-parse', notes: [`pdf-parse failed: ${(err as Error).message}`] };
+    }
+  }
+
+  /** Render PDF pages to images, then OCR — used only when text layer is unusable. */
+  private async extractPdfViaOcrScreenshots(
+    buffer: Buffer,
+  ): Promise<Omit<ResumeExtractionResult, 'mimeType' | 'fileName'>> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require('pdf-parse') as {
+        PDFParse: new (opts: { data: Uint8Array }) => {
+          getScreenshot: (params?: object) => Promise<{
+            pages?: Array<{ data?: Buffer; pageNumber?: number; num?: number }>;
+          }>;
+          destroy: () => Promise<void>;
+        };
+      };
+      const parser = new mod.PDFParse({ data: new Uint8Array(buffer) });
+      try {
+        const shot = await parser.getScreenshot({
+          scale: 1.5,
+          imageBuffer: true,
+          imageDataUrl: false,
+          first: 4, // cap cost on long scanned docs
+        });
+        const pages = shot.pages || [];
+        if (!pages.length) {
+          return { text: '', extractor: 'tesseract', notes: ['PDF screenshot OCR: no pages rendered'] };
+        }
+        const chunks: string[] = [];
+        let confSum = 0;
+        let confN = 0;
+        for (let i = 0; i < pages.length; i += 1) {
+          const data = pages[i]?.data;
+          if (!data || !Buffer.isBuffer(data)) continue;
+          const ocr = await this.extractOcr(data);
+          if (ocr.text.trim()) {
+            chunks.push(`-- page ${pages[i].pageNumber || pages[i].num || i + 1} --\n${ocr.text.trim()}`);
+          }
+          if (typeof ocr.confidence === 'number') {
+            confSum += ocr.confidence;
+            confN += 1;
+          }
+        }
+        const text = stripInternalPageMarkers(chunks.join('\n\n'));
+        return {
+          text,
+          extractor: 'tesseract',
+          pageCount: pages.length,
+          confidence: confN ? confSum / confN / 100 : 0.5,
+          notes: [`OCR via pdf-parse screenshots + tesseract (${pages.length} page(s))`],
+          usedOcr: true,
+        };
+      } finally {
+        await parser.destroy().catch(() => undefined);
+      }
+    } catch (err) {
+      this.logger.warn(`PDF screenshot OCR failed: ${(err as Error).message}`);
+      return {
+        text: '',
+        extractor: 'tesseract',
+        notes: [`PDF screenshot OCR failed: ${(err as Error).message}`],
+      };
     }
   }
 
@@ -126,6 +257,7 @@ export class ResumeExtractorService {
         extractor: 'tesseract',
         confidence: result.data.confidence,
         notes: ['Extracted with tesseract OCR'],
+        usedOcr: true,
       };
     } catch (err) {
       this.logger.warn(`tesseract failed: ${(err as Error).message}`);

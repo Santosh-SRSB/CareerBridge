@@ -14,6 +14,7 @@ export function SearchableCreatableSelect({
   allowCustom = true,
   required = false,
   id,
+  emptyLimit = 24,
 }: {
   label: string;
   value: string;
@@ -23,6 +24,8 @@ export function SearchableCreatableSelect({
   allowCustom?: boolean;
   required?: boolean;
   id?: string;
+  /** How many options to show when the query is empty (default 24). */
+  emptyLimit?: number;
 }) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
@@ -37,9 +40,9 @@ export function SearchableCreatableSelect({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options.slice(0, 20);
-    return options.filter((item) => item.toLowerCase().includes(q)).slice(0, 20);
-  }, [options, query]);
+    if (!q) return options.slice(0, emptyLimit);
+    return options.filter((item) => item.toLowerCase().includes(q)).slice(0, emptyLimit);
+  }, [options, query, emptyLimit]);
 
   const trimmed = query.trim();
   const canAddCustom =

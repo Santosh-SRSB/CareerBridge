@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { EmployerOnboardingFrame } from '@/components/EmployerOnboardingFrame';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { getEmployerMe, saveEmployerKyc, verifyGstin } from '@/lib/api';
 
 export default function EmployerKycPage() {
@@ -63,10 +62,7 @@ export default function EmployerKycPage() {
           setError('GSTIN is active, but no trade name was returned. Enter the trademark manually.');
         }
       } else if (result.status === 'NOT_ACTIVE') {
-        setError(
-          result.message ||
-            'This GSTIN is not active. Enter an active GSTIN to continue.',
-        );
+        setError(result.message || 'This GSTIN is not active. Enter an active GSTIN to continue.');
         setGstVerified(false);
       } else {
         setError(result.message || 'Could not verify GSTIN. Check the number or try again.');
@@ -83,8 +79,8 @@ export default function EmployerKycPage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError('');
-    if (![gstNumber, trademark, cin, website, panNumber].every((value) => value.trim().length > 0)) {
-      setError('Fill in all fields to continue.');
+    if (![gstNumber, trademark, website, panNumber].every((value) => value.trim().length > 0)) {
+      setError('GSTIN, trademark, PAN, and website are required. CIN is optional.');
       return;
     }
 
@@ -106,7 +102,7 @@ export default function EmployerKycPage() {
       if (mark) setTrademark(mark);
       await saveEmployerKyc({
         gstNumber: gstNumber.trim().toUpperCase(),
-        cin: cin.trim().toUpperCase(),
+        ...(cin.trim() ? { cin: cin.trim().toUpperCase() } : {}),
         website: website.trim(),
         panNumber: panNumber.trim().toUpperCase(),
         trademark: (mark || trademark).trim(),
@@ -120,32 +116,45 @@ export default function EmployerKycPage() {
   }
 
   if (!ready) {
-    return <main className="p-8 text-muted">Loading company KYC...</main>;
+    return <main className="ep-onboard-page ep-onboard-page--loading">Loading company KYC…</main>;
   }
+
+  const gstLabelStatus = gstVerified ? (
+    <span className="ep-kyc__status ep-kyc__status--ok">Verified</span>
+  ) : gstStatus === 'NOT_ACTIVE' ? (
+    <span className="ep-kyc__status ep-kyc__status--bad">Not active</span>
+  ) : (
+    <span className="ep-kyc__status">Not verified</span>
+  );
 
   return (
     <EmployerOnboardingFrame
       step={1}
-      title="Company KYC Details"
-      subtitle="Verify GSTIN, then confirm trademark and company IDs."
+      title="Verify your business identity"
+      subtitle="Confirm your GSTIN, then your registration and tax IDs."
+      sideTitle="Let's verify your GSTIN!"
     >
       <form onSubmit={onSubmit} className="ep-kyc">
-        <div className="ep-kyc__gst-row">
-          <Input
-            label="GSTIN"
-            name="gstNumber"
-            required
-            autoComplete="off"
-            placeholder="29ABCDE1234F1Z5"
-            value={gstNumber}
-            onChange={(event) => {
-              setGstNumber(event.target.value.toUpperCase());
-              setGstVerified(false);
-              setGstStatus('');
-              setTrademark('');
-            }}
-          />
-          <div className="ep-kyc__verify-col">
+        <div className="ep-kyc__gst-block">
+          <div className="ep-kyc__label-row">
+            <span>GSTIN</span>
+            {gstLabelStatus}
+          </div>
+          <div className="ep-kyc__gst-row">
+            <input
+              name="gstNumber"
+              required
+              autoComplete="off"
+              placeholder="29ABCDE1234F1Z5"
+              value={gstNumber}
+              onChange={(event) => {
+                setGstNumber(event.target.value.toUpperCase());
+                setGstVerified(false);
+                setGstStatus('');
+                setTrademark('');
+              }}
+              className="ep-kyc__input"
+            />
             <Button
               type="button"
               variant="secondary"
@@ -158,71 +167,68 @@ export default function EmployerKycPage() {
             >
               Verify GSTIN
             </Button>
-            {gstVerified ? (
-              <p className="ep-kyc__verified" role="status">
-                ✓ Active
-              </p>
-            ) : gstStatus === 'NOT_ACTIVE' ? (
-              <p className="ep-kyc__error" role="status">
-                Not active
-              </p>
-            ) : null}
           </div>
         </div>
 
-        <Input
-          label="Trademark / Trade name"
-          name="trademark"
-          required
-          autoComplete="organization"
-          placeholder="Auto-filled after verify"
-          value={trademark}
-          onChange={(event) => setTrademark(event.target.value)}
-          className={gstVerified && trademark ? 'ep-kyc__field-ok' : undefined}
-        />
+        <label className="ep-kyc__field">
+          <span>Trademark / trade name</span>
+          <input
+            name="trademark"
+            required
+            autoComplete="organization"
+            placeholder="Auto-filled after verify"
+            value={trademark}
+            onChange={(event) => setTrademark(event.target.value)}
+            className={`ep-kyc__input${gstVerified && trademark ? ' ep-kyc__input--ok' : ''}`}
+          />
+        </label>
 
         <div className="ep-kyc__grid">
-          <Input
-            label="CIN"
-            name="cin"
-            required
-            autoComplete="off"
-            placeholder="U72900MH2015PTC123456"
-            value={cin}
-            onChange={(event) => setCin(event.target.value.toUpperCase())}
-          />
-          <Input
-            label="PAN"
-            name="panNumber"
-            required
-            autoComplete="off"
-            placeholder="ABCDE1234F"
-            value={panNumber}
-            onChange={(event) => setPanNumber(event.target.value.toUpperCase())}
-          />
+          <label className="ep-kyc__field">
+            <span>CIN <em className="ep-kyc__optional">(optional)</em></span>
+            <input
+              name="cin"
+              autoComplete="off"
+              placeholder="U72900MH2015PTC12345"
+              value={cin}
+              onChange={(event) => setCin(event.target.value.toUpperCase())}
+              className="ep-kyc__input"
+            />
+            <em>Corporate identification number</em>
+          </label>
+          <label className="ep-kyc__field">
+            <span>PAN</span>
+            <input
+              name="panNumber"
+              required
+              autoComplete="off"
+              placeholder="ABCDE1234F"
+              value={panNumber}
+              onChange={(event) => setPanNumber(event.target.value.toUpperCase())}
+              className="ep-kyc__input"
+            />
+            <em>Permanent account number (required)</em>
+          </label>
         </div>
 
-        <Input
-          label="Company Website"
-          name="website"
-          type="text"
-          required
-          autoComplete="url"
-          placeholder="www.technova.com"
-          value={website}
-          onChange={(event) => setWebsite(event.target.value)}
-        />
+        <label className="ep-kyc__field">
+          <span>Company website</span>
+          <input
+            name="website"
+            type="text"
+            required
+            autoComplete="url"
+            placeholder="www.technova.com"
+            value={website}
+            onChange={(event) => setWebsite(event.target.value)}
+            className="ep-kyc__input"
+          />
+        </label>
 
         {error ? <p className="ep-kyc__error">{error}</p> : null}
 
-        <Button
-          type="submit"
-          variant="primary"
-          loading={loading}
-          loadingLabel="Saving..."
-          className="ep-kyc__cta"
-        >
-          Save &amp; Continue
+        <Button type="submit" loading={loading} loadingLabel="Saving..." className="ep-kyc__cta">
+          Save and continue
         </Button>
       </form>
     </EmployerOnboardingFrame>

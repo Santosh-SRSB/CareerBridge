@@ -9,11 +9,11 @@ export function BrandSplash() {
       <div className="app-loader-row">
         <div className="app-loader-logo">
           <Image
-            src="/srsb-wordmark.png"
+            src="/srsb-mark.png"
             alt="SRSB"
-            width={408}
-            height={170}
-            className="app-loader-wordmark"
+            width={88}
+            height={88}
+            className="app-loader-wordmark h-14 w-14 object-contain"
             unoptimized
             priority
           />

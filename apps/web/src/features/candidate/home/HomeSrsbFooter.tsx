@@ -11,11 +11,11 @@ export function HomeSrsbFooter() {
       <div className="cb-home-srsb-footer__inner">
         <div className="cb-home-srsb-footer__brand">
           <Image
-            src="/srsb-wordmark.png"
+            src="/srsb-mark.png"
             alt="SRSB"
-            width={408}
-            height={170}
-            className="cb-home-srsb-footer__logo"
+            width={88}
+            height={88}
+            className="cb-home-srsb-footer__logo h-11 w-11 object-contain"
             unoptimized
           />
           <p>
@@ -53,6 +53,21 @@ export function HomeSrsbFooter() {
             </li>
             <li>
               <Link href="/interviews">Mock interviews</Link>
+            </li>
+          </ul>
+        </div>
+
+        <div className="cb-home-srsb-footer__col">
+          <p className="cb-home-srsb-footer__label">Legal</p>
+          <ul>
+            <li>
+              <Link href="/privacy">Privacy Policy</Link>
+            </li>
+            <li>
+              <Link href="/terms">Candidate Terms</Link>
+            </li>
+            <li>
+              <Link href="/employer/terms">Employer Terms</Link>
             </li>
           </ul>
         </div>

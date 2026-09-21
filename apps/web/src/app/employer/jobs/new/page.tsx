@@ -1,12 +1,14 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   JOB_DEPARTMENTS,
   JOB_EDUCATION_LEVELS,
   JOB_EXPERIENCE_RANGES,
   JOB_SKILL_SUGGESTIONS,
+  JOB_TITLE_SUGGESTIONS,
   JOB_TYPES,
   PREFERRED_LANGUAGES,
   WORK_MODES,
@@ -170,8 +172,7 @@ export default function NewJobPage() {
   const [skillsBusy, setSkillsBusy] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const draftJobIdRef = useRef<string | null>(null);
-  const [educationMin, setEducationMin] =
-    useState<(typeof JOB_EDUCATION_LEVELS)[number]>("Bachelor's Degree");
+  const [educationMin, setEducationMin] = useState("Bachelor's Degree");
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<ScreeningQuestion[]>([
     {
@@ -216,8 +217,8 @@ export default function NewJobPage() {
         if (job.experience && (JOB_EXPERIENCE_RANGES as readonly string[]).includes(String(job.experience))) {
           setExperience(job.experience as (typeof JOB_EXPERIENCE_RANGES)[number]);
         }
-        if (job.educationMin && (JOB_EDUCATION_LEVELS as readonly string[]).includes(String(job.educationMin))) {
-          setEducationMin(job.educationMin as (typeof JOB_EDUCATION_LEVELS)[number]);
+        if (job.educationMin) {
+          setEducationMin(String(job.educationMin));
         }
         const annualMin = Number(job.salaryMin) || 0;
         const annualMax = Number(job.salaryMax) || 0;
@@ -524,75 +525,65 @@ export default function NewJobPage() {
 
   return (
     <EmployerShellFallback title={isEditing ? 'Edit Job' : 'Submit Job'}>
-      <div className="ep-create">
-        <p className="ep-dash__eyebrow">Home · Jobs · {isEditing ? 'Edit' : 'Create'}</p>
-        <header className="ep-dash__hello">
+      <div className="ep-create ep-page ep-page--create">
+        <header className="ep-create-prohead">
           <div>
-            <h1 className="ep-dash__title">
-              {isEditing ? (
-                <>
-                  Edit <span>job</span>
-                </>
-              ) : (
-                <>
-                  Create <span>job</span>
-                </>
-              )}
+            <p className="ep-create-prohead__eyebrow">Hiring</p>
+            <h1 className="ep-create-prohead__title">
+              {isEditing ? 'Edit job' : 'Create job'}
             </h1>
-            <p className="ep-dash__sub">
-              {isEditing
-                ? 'Update basics, requirements, and details — then save.'
-                : 'Job title, department, employment type, and location.'}
+            <p className="ep-create-prohead__sub">
+              Define the role clearly so the right candidates can find and apply.
             </p>
           </div>
+          <Link href="/employer/jobs" className="ep-create-prohead__back">
+            ← Back to jobs
+          </Link>
         </header>
 
-        <nav className="ep-flow-steps" aria-label="Job posting steps">
-          {STEPS.map((item, index) => {
-            const active = item.id === step;
-            const done = item.id < step;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (item.id < step) {
-                    setError('');
-                    setStep(item.id);
-                  }
-                }}
-                className={`ep-flow-steps__item ${active ? 'is-active' : ''} ${done ? 'is-done' : ''}`}
-              >
-                <span className="ep-flow-steps__icon" aria-hidden>
-                  {done ? '✓' : index + 1}
+        <article className="ep-card ep-flow-card ep-create-panel">
+          <div className="ep-create-panel__rail">
+            <nav className="ep-flow-steps ep-flow-steps--rail" aria-label="Job posting steps">
+              {STEPS.map((item, index) => {
+                const active = item.id === step;
+                const done = item.id < step;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (item.id < step) {
+                        setError('');
+                        setStep(item.id);
+                      }
+                    }}
+                    className={`ep-flow-steps__item ${active ? 'is-active' : ''} ${done ? 'is-done' : ''}`}
+                  >
+                    <span className="ep-flow-steps__icon" aria-hidden>
+                      {done ? '✓' : index + 1}
+                    </span>
+                    <span className="ep-flow-steps__label">{item.short}</span>
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="ep-flow-progress">
+              <div className="ep-flow-progress__meta">
+                <span>
+                  Step {step} of {STEPS.length}
                 </span>
-                <span className="ep-flow-steps__label">{item.short}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="ep-flow-progress">
-          <div className="ep-flow-progress__meta">
-            <span>
-              Step {step} of {STEPS.length} · {current.short}
-            </span>
-            <strong>{progressPct}%</strong>
+                <strong>{progressPct}%</strong>
+              </div>
+              <div className="ep-flow-progress__bar">
+                <span style={{ width: `${progressPct}%` }} />
+              </div>
+            </div>
           </div>
-          <div className="ep-flow-progress__bar">
-            <span style={{ width: `${progressPct}%` }} />
-          </div>
-        </div>
 
-        <article className="ep-card ep-flow-card">
           <div className="ep-flow-card__head">
             <div>
-              <h2>{current.title}</h2>
+              <h2>{current.short}</h2>
               <p>{current.subtitle}</p>
-            </div>
-            <div className="ep-flow-card__tip">
-              <span>Tip</span>
-              Clear titles and skills improve match quality.
             </div>
           </div>
 
@@ -608,13 +599,16 @@ export default function NewJobPage() {
             {step === 1 ? (
               <div className="ep-flow-block grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <Input
+                  <SearchableCreatableSelect
                     label="Job Title"
-                    name="title"
+                    id="job-title"
                     required
-                    placeholder="Customer Service Executive"
                     value={title}
-                    onChange={(event) => setTitle(event.target.value)}
+                    onChange={setTitle}
+                    options={JOB_TITLE_SUGGESTIONS}
+                    placeholder="Search title or type your own…"
+                    allowCustom
+                    emptyLimit={30}
                   />
                 </div>
                 <SearchableCreatableSelect
@@ -661,12 +655,15 @@ export default function NewJobPage() {
                     placeholder="Search skills or type to add…"
                   />
                 </div>
-                <SelectField
+                <SearchableCreatableSelect
                   label="Education"
+                  id="education-min"
                   required
                   value={educationMin}
-                  onChange={(value) => setEducationMin(value as (typeof JOB_EDUCATION_LEVELS)[number])}
-                  options={JOB_EDUCATION_LEVELS.map((item) => ({ value: item, label: item }))}
+                  onChange={setEducationMin}
+                  options={JOB_EDUCATION_LEVELS}
+                  placeholder="Search degree or type your own…"
+                  allowCustom
                 />
                 <div>
                   <p className="mb-2 text-sm font-semibold text-primary">Languages</p>
@@ -811,7 +808,7 @@ export default function NewJobPage() {
                     Back
                   </Button>
                 ) : (
-                  <span className="ep-flow-foot__hint">Ready when you are.</span>
+                  <span className="ep-flow-foot__hint" aria-hidden />
                 )}
                 <Button
                   type="submit"

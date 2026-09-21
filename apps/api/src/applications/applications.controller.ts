@@ -45,8 +45,21 @@ export class ApplicationsController {
   }
 
   @Post('scheduled-interviews/:id/reschedule')
-  rescheduleScheduled(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.applications.requestRescheduleInterview(user.id, id);
+  rescheduleScheduled(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() body: { preferredAt?: string; preferredDate?: string; preferredTime?: string; reason?: string },
+  ) {
+    return this.applications.requestRescheduleInterview(user.id, id, body || {});
+  }
+
+  @Post('scheduled-interviews/:id/feedback')
+  submitFeedback(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() body: { rating?: number; text?: string },
+  ) {
+    return this.applications.submitScheduledInterviewFeedback(user.id, id, body || {});
   }
 
   @Get(':id')

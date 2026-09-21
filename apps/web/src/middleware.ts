@@ -10,11 +10,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Public employer entry points
+  // Public employer entry points (no login required)
   if (pathname === '/employer/register' || pathname.startsWith('/employer/register/')) {
     return NextResponse.next();
   }
   if (pathname === '/employer/welcome' || pathname.startsWith('/employer/welcome/')) {
+    return NextResponse.next();
+  }
+  if (pathname === '/employer/terms' || pathname.startsWith('/employer/terms/')) {
     return NextResponse.next();
   }
 

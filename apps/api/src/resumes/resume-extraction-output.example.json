@@ -1,0 +1,142 @@
+{
+  "_meta": {
+    "description": "CareerBridge resume parser extraction output (ResumeContent). Produced by parseExtractedResumeText() in apps/api/src/resumes/parse-extracted-resume.ts after PDF/DOCX text extraction.",
+    "pipeline": [
+      "upload file",
+      "resume-extractor (pdf-parse / mammoth / tesseract)",
+      "parseExtractedResumeText (heuristic sections)",
+      "optional AI structureResumeText merge",
+      "map to wizard / ATS"
+    ],
+    "note": "Example values below are illustrative only — not hardcoded from any real resume."
+  },
+  "sectionHeadingAliases": {
+    "personal": ["Contact", "Personal Details", "Personal Information", "Contact Information"],
+    "summary": ["Summary", "Professional Summary", "Career Objective", "Objective", "About Me", "Profile"],
+    "experience": ["Experience", "Work Experience", "Professional Experience", "Employment History", "Career History", "Work History"],
+    "education": ["Education", "Academic Qualification", "Academic Background", "Qualifications", "Academics"],
+    "skills": ["Skills", "Technical Skills", "Skills & Tools", "Technologies", "Tools", "Programming Languages", "Frameworks", "Databases"],
+    "projects": ["Projects", "Project Details", "Key Projects", "Academic Projects", "Personal Projects"],
+    "achievements": ["Achievements", "Accomplishments", "Awards", "Honors", "Recognition"],
+    "certifications": ["Certifications", "Certificates", "Professional Certifications"],
+    "languages": ["Languages", "Language Proficiency", "Known Languages"],
+    "responsibilities": ["Responsibilities", "Role & Responsibilities", "Duties", "Key Responsibilities"],
+    "skipped": ["Declaration", "References", "Hobbies", "Interests"]
+  },
+  "extracted": {
+    "fullName": "Alex Candidate",
+    "city": "Bengaluru, Karnataka",
+    "phone": "9876543210",
+    "email": "alex@example.com",
+    "summary": "Experienced engineer focused on delivery and product ownership.",
+    "skills": [
+      "Java",
+      "SQL",
+      "React",
+      "AWS",
+      "MongoDB",
+      "Power BI",
+      "Excel"
+    ],
+    "education": [
+      {
+        "qualification": "MCA",
+        "institution": "Example University",
+        "yearCompleted": 2022
+      },
+      {
+        "qualification": "BCA",
+        "institution": "Example College",
+        "yearCompleted": 2019
+      }
+    ],
+    "experiences": [
+      {
+        "jobTitle": "Founder and CEO",
+        "company": "Nesting Probe Pvt. Ltd.",
+        "description": "Built product roadmap\nLed client delivery",
+        "isInternship": false,
+        "startDate": "Jul 2024",
+        "endDate": "Present",
+        "isCurrent": true
+      },
+      {
+        "jobTitle": "Senior Developer",
+        "company": "InEight India",
+        "description": "Delivered modules",
+        "isInternship": false,
+        "startDate": "Feb 2016",
+        "endDate": "Jan 2017",
+        "isCurrent": false
+      }
+    ],
+    "languages": [
+      "English",
+      "Hindi"
+    ],
+    "certifications": [
+      {
+        "name": "AWS Cloud Practitioner",
+        "issuer": "Amazon",
+        "date": "2023",
+        "url": null
+      }
+    ],
+    "achievements": [
+      {
+        "title": "Employee of the Year 2022",
+        "organization": null,
+        "description": null,
+        "date": null
+      },
+      {
+        "title": "Reduced processing time by 30%",
+        "organization": null,
+        "description": null,
+        "date": null
+      }
+    ],
+    "projects": [
+      {
+        "name": "KGP Mall",
+        "description": "Shopping platform",
+        "url": null,
+        "bullets": [
+          "Built catalog and checkout flows"
+        ],
+        "technologies": [
+          "React",
+          "Node"
+        ]
+      }
+    ],
+    "includePhoto": false,
+    "links": {
+      "linkedin": "https://linkedin.com/in/example",
+      "github": "https://github.com/example",
+      "portfolio": "https://example.dev"
+    }
+  },
+  "fieldSources": {
+    "fullName": "Header / Personal Details (first non-contact short line)",
+    "city": "Header contact line, City/State patterns, or Personal Details Address/Location labels → stored as city string",
+    "phone": "Header / Personal / full text regex",
+    "email": "Header / Personal / full text regex",
+    "summary": "SUMMARY / OBJECTIVE / PROFILE section body",
+    "skills": "SKILLS / TOOLS / TECHNOLOGIES sections + programming tokens misfiled under Languages + high-confidence tech mentions in experience/projects",
+    "education": "EDUCATION / ACADEMIC* section; one object per degree (MCA, BCA, B.Tech, etc.)",
+    "experiences": "EXPERIENCE* section; one object per employer; Role & Responsibilities appended into description when present",
+    "languages": "LANGUAGES section — human languages only (English, Hindi, …)",
+    "certifications": "CERTIFICATIONS section",
+    "achievements": "ACHIEVEMENTS / AWARDS section — stops at next major heading",
+    "projects": "PROJECTS section — stops at Achievements / Experience / Personal Details / etc.",
+    "links": "URLs found anywhere in raw text (LinkedIn, GitHub, portfolio)"
+  },
+  "notExtractedAsSeparateTopLevelFields": {
+    "state": "Kept inside city string when found (e.g. \"Patna, Bihar\") — schema uses city only",
+    "country": "Not a separate ResumeContent field today",
+    "address": "Mapped into city / personal location text when present",
+    "responsibilities": "No top-level array; merged into experiences[].description",
+    "programmingLanguages": "Stored inside skills[], never languages[]"
+  }
+}

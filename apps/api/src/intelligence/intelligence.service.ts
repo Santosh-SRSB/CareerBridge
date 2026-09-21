@@ -88,6 +88,10 @@ export class IntelligenceService {
         ? Math.min(100, 55 + Math.round((preferredOverlap.length / preferred.length) * 45))
         : 70;
 
+    const preferredSkillScore = preferred.length
+      ? Math.round((preferredOverlap.length / preferred.length) * 100)
+      : 70;
+
     const cityMatch =
       Boolean(candidate.city) &&
       Boolean(job.city) &&
@@ -132,28 +136,42 @@ export class IntelligenceService {
       resumeQualityScore = resumeScore > 0 ? Math.max(40, Math.min(100, resumeScore)) : 55;
     }
 
+    // PDF hybrid weights: skills 35, experience 20, education 10, location 10,
+    // preferred/job-specific 15, resume quality 10.
     const score = Math.min(
       100,
       Math.round(
         skillScore * 0.35 +
           experienceScore * 0.2 +
-          educationScore * 0.15 +
-          locationScore * 0.15 +
-          resumeQualityScore * 0.15,
+          educationScore * 0.1 +
+          locationScore * 0.1 +
+          preferredSkillScore * 0.15 +
+          resumeQualityScore * 0.1,
       ),
     );
 
     const gaps = required.filter((skill) => !overlap.includes(skill)).map(titleCase);
+    const preferredGaps = preferred
+      .filter((skill) => !preferredOverlap.includes(skill))
+      .map(titleCase)
+      .slice(0, 3);
     const reasons = [
+      overlap.length
+        ? `${overlap.length} of ${required.length || overlap.length} required skills`
+        : '',
       overlap.length ? overlap.slice(0, 3).map(titleCase).join(', ') : '',
-      locationScore === 100 ? 'Location' : '',
+      locationScore === 100 ? 'Location matches the job' : '',
       categoryScore === 100 ? job.category : '',
-      educationScore === 100 ? 'Education' : '',
+      educationScore === 100 ? 'Education on file' : '',
+      hasExp && experienceScore >= 80 ? 'Relevant experience' : '',
       hasResume && resumeQualityScore >= 70 ? 'Resume quality' : '',
+      preferredOverlap.length
+        ? preferredOverlap.slice(0, 2).map(titleCase).join(', ')
+        : '',
     ].filter(Boolean);
 
     const recommendations = buildMatchRecommendations({
-      gaps,
+      gaps: [...gaps, ...preferredGaps.filter((g) => !gaps.includes(g))],
       jobTitle: job.title || job.category,
       hasExperience: hasExp,
       jobNeedsExp,
@@ -170,10 +188,11 @@ export class IntelligenceService {
       experienceScore,
       educationScore,
       locationScore,
+      preferredSkillScore,
       resumeQualityScore,
       categoryScore,
       reasons,
-      gaps,
+      gaps: [...gaps, ...preferredGaps.filter((g) => !gaps.includes(g))],
       recommendations,
     };
   }

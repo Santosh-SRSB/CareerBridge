@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ErrorCode,
   type InterviewReport,
@@ -23,6 +23,10 @@ import { countAnsweredQuestions, isAnsweredQuestion, isAudioPlaceholderAnswer } 
 
 @Injectable()
 export class InterviewsService {
+  private readonly logger = new Logger(InterviewsService.name);
+  /** Chains deferred Gemini scoring so endLive waits and concurrent writes don't clobber. */
+  private readonly pendingScores = new Map<string, Promise<void>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
@@ -221,22 +225,22 @@ export class InterviewsService {
     const profile = this.profileOf(interview);
     const isAudioOnly = isAudioOnlyEarly;
     const textAnswer = isAudioOnly ? '' : trimmed;
-    const analysis = await this.ai.analyzeAnswer(profile, current.text, textAnswer, {
-      answerMode: isAudioOnly ? 'AUDIO' : 'TEXT',
-      durationSec,
-    });
+    // Persist answer immediately; Gemini scoring runs in the background so Submit
+    // only waits on next-question generation (not evaluate + next question).
     current.answer = textAnswer;
     current.answerMode = isAudioOnly ? 'AUDIO' : 'TEXT';
     current.answeredAt = new Date().toISOString();
     current.answerDurationSec = durationSec;
-    current.analysis = analysis.analysis;
-    current.improvedAnswer = analysis.improvedAnswer || undefined;
-    current.score = analysis.score;
-    current.strengths = analysis.strengths;
-    current.weaknesses = analysis.weaknesses;
-    current.whatWasGood = analysis.whatWasGood;
-    current.whatWasMissing = analysis.whatWasMissing;
-    current.improvementSuggestion = analysis.improvementSuggestion;
+    current.analysis = 'Scoring in progress…';
+    current.improvedAnswer = undefined;
+    current.score = undefined;
+    current.strengths = [];
+    current.weaknesses = [];
+    current.whatWasGood = [];
+    current.whatWasMissing = [];
+    current.improvementSuggestion = undefined;
+    const questionId = current.id;
+    const questionText = current.text;
     const transcript = parseTurns(interview.transcriptJson);
     transcript.push({
       role: 'candidate',
@@ -287,8 +291,81 @@ export class InterviewsService {
         questionIndex: nextQuestion ? questions.length - 1 : interview.questionIndex,
       },
     });
+
+    this.scheduleAnswerScore(interview.id, questionId, profile, questionText, textAnswer, {
+      answerMode: isAudioOnly ? 'AUDIO' : 'TEXT',
+      durationSec,
+    });
+
     if (!nextQuestion) return this.endLive(userId, id);
     return this.toSession(updated);
+  }
+
+  /** Queue Gemini evaluation without blocking the submit response. */
+  private scheduleAnswerScore(
+    interviewId: string,
+    questionId: string,
+    profile: InterviewProfile,
+    questionText: string,
+    textAnswer: string,
+    options: { answerMode: 'TEXT' | 'AUDIO'; durationSec: number },
+  ) {
+    const prev = this.pendingScores.get(interviewId) || Promise.resolve();
+    const next = prev
+      .then(() =>
+        this.applyAnswerScoreInBackground(interviewId, questionId, profile, questionText, textAnswer, options),
+      )
+      .catch((err: unknown) => {
+        this.logger.warn(
+          `Deferred answer score failed for interview ${interviewId} question ${questionId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
+    this.pendingScores.set(interviewId, next);
+    void next.finally(() => {
+      if (this.pendingScores.get(interviewId) === next) {
+        this.pendingScores.delete(interviewId);
+      }
+    });
+  }
+
+  private async awaitPendingScores(interviewId: string) {
+    const pending = this.pendingScores.get(interviewId);
+    if (pending) await pending;
+  }
+
+  private async applyAnswerScoreInBackground(
+    interviewId: string,
+    questionId: string,
+    profile: InterviewProfile,
+    questionText: string,
+    textAnswer: string,
+    options: { answerMode: 'TEXT' | 'AUDIO'; durationSec: number },
+  ) {
+    const analysis = await this.ai.analyzeAnswer(profile, questionText, textAnswer, options);
+    const row = await this.prisma.interview.findUnique({ where: { id: interviewId } });
+    if (!row) return;
+    // Don't overwrite a finished report's question payload after completion.
+    if (row.status === 'COMPLETED' && row.reportJson) return;
+
+    const questions = parseQuestions(row.questionsJson);
+    const target = questions.find((item) => item.id === questionId);
+    if (!target) return;
+
+    target.analysis = analysis.analysis;
+    target.improvedAnswer = analysis.improvedAnswer || undefined;
+    target.score = analysis.score;
+    target.strengths = analysis.strengths;
+    target.weaknesses = analysis.weaknesses;
+    target.whatWasGood = analysis.whatWasGood;
+    target.whatWasMissing = analysis.whatWasMissing;
+    target.improvementSuggestion = analysis.improvementSuggestion;
+
+    await this.prisma.interview.update({
+      where: { id: interviewId },
+      data: { questionsJson: JSON.stringify(questions) },
+    });
   }
 
   async addWarning(userId: string, id: string, warning: Omit<InterviewWarning, 'at'> & { at?: string }) {
@@ -313,12 +390,19 @@ export class InterviewsService {
       throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'This interview is not an AI live session.' });
     }
     if (interview.status === 'COMPLETED' && interview.reportJson) return this.toSession(interview);
+    // Finish any deferred per-answer scores before building the final report.
+    await this.awaitPendingScores(interview.id);
+    const fresh = await this.prisma.interview.findUnique({ where: { id: interview.id } });
+    const latest = fresh || interview;
+    if (latest.status === 'COMPLETED' && latest.reportJson) return this.toSession(latest);
+
     const endAt = new Date();
-    const startAt = interview.startAt || interview.createdAt;
+    const startAt = latest.startAt || latest.createdAt;
     const durationSec = Math.max(1, Math.round((endAt.getTime() - startAt.getTime()) / 1000));
-    const questions = parseQuestions(interview.questionsJson);
-    const warnings = parseWarnings(interview.warningsJson);
-    const profile = this.profileOf(interview);
+    const questions = parseQuestions(latest.questionsJson);
+    const warnings = parseWarnings(latest.warningsJson);
+    const profile = this.profileOf(latest);
+    await this.ensureQuestionsScored(latest.id, questions, profile);
     const integrity = {
       tabSwitches: warnings.filter((item) => item.type === 'TAB_SWITCH').length,
       faceMissing: warnings.filter((item) => item.type === 'FACE_MISSING').length,
@@ -332,10 +416,10 @@ export class InterviewsService {
       questions,
       durationSec,
       integrity,
-      readQuestionLimit(interview.profileJson),
+      readQuestionLimit(latest.profileJson),
     );
     const updated = await this.prisma.interview.update({
-      where: { id: interview.id },
+      where: { id: latest.id },
       data: {
         status: 'COMPLETED',
         endAt,
@@ -358,6 +442,43 @@ export class InterviewsService {
       },
     });
     return this.toSession(updated);
+  }
+
+  /** Score any answered questions still pending (background miss / process restart). */
+  private async ensureQuestionsScored(
+    interviewId: string,
+    questions: LiveInterviewQuestion[],
+    profile: InterviewProfile,
+  ) {
+    let changed = false;
+    for (const item of questions) {
+      if (!isAnsweredQuestion(item)) continue;
+      const pending =
+        item.score == null ||
+        !item.analysis ||
+        item.analysis === 'Scoring in progress…';
+      if (!pending) continue;
+      const textAnswer = item.answerMode === 'AUDIO' ? '' : (item.answer || '').trim();
+      const analysis = await this.ai.analyzeAnswer(profile, item.text, textAnswer, {
+        answerMode: item.answerMode === 'AUDIO' ? 'AUDIO' : 'TEXT',
+        durationSec: item.answerDurationSec || 0,
+      });
+      item.analysis = analysis.analysis;
+      item.improvedAnswer = analysis.improvedAnswer || undefined;
+      item.score = analysis.score;
+      item.strengths = analysis.strengths;
+      item.weaknesses = analysis.weaknesses;
+      item.whatWasGood = analysis.whatWasGood;
+      item.whatWasMissing = analysis.whatWasMissing;
+      item.improvementSuggestion = analysis.improvementSuggestion;
+      changed = true;
+    }
+    if (changed) {
+      await this.prisma.interview.update({
+        where: { id: interviewId },
+        data: { questionsJson: JSON.stringify(questions) },
+      });
+    }
   }
 
   async downloadReport(userId: string, id: string) {

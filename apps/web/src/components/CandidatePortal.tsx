@@ -55,11 +55,11 @@ export function CandidateTopBar({
         <BackButton fallback="/dashboard" light />
         <Link href="/dashboard" className="logo-mark hidden shrink-0 sm:inline-flex">
           <Image
-            src="/srsb-wordmark.png"
+            src="/srsb-mark.png"
             alt="SRSB"
-            width={408}
-            height={170}
-            className="h-10 w-auto bg-transparent sm:h-11"
+            width={88}
+            height={88}
+            className="h-10 w-10 object-contain bg-transparent sm:h-11 sm:w-11"
             unoptimized
             priority
           />

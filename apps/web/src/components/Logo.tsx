@@ -1,15 +1,26 @@
 import Image from "next/image";
 import Link from "next/link";
 
-export function Logo({ inverted = false }: { inverted?: boolean }) {
+/** Canonical SRSB mark used across CareerBridge (candidate dashboard logo). */
+export const SRSB_LOGO_SRC = "/srsb-mark.png";
+
+export function Logo({
+  inverted = false,
+  href = "/",
+  className = "",
+}: {
+  inverted?: boolean;
+  href?: string;
+  className?: string;
+}) {
   return (
-    <Link href="/" className="inline-flex items-center gap-2">
+    <Link href={href} className={`inline-flex items-center gap-2 ${className}`.trim()}>
       <Image
-        src="/srsb-wordmark.png"
+        src={SRSB_LOGO_SRC}
         alt="SRSB CareerBridge"
-        width={408}
-        height={170}
-        className={`h-9 w-auto ${inverted ? "brightness-0 invert" : ""}`}
+        width={88}
+        height={88}
+        className={`h-10 w-10 object-contain sm:h-11 sm:w-11 ${inverted ? "brightness-0 invert" : ""}`}
         unoptimized
         priority
       />

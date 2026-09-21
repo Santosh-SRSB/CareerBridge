@@ -41,6 +41,36 @@ export const JOB_DEPARTMENTS = [
   'Retail',
 ] as const;
 
+/** Common role titles for searchable + creatable job title field */
+export const JOB_TITLE_SUGGESTIONS = [
+  'Accountant',
+  'Backend Developer',
+  'Business Analyst',
+  'Business Development Executive',
+  'Content Writer',
+  'Customer Service Executive',
+  'Data Analyst',
+  'Data Entry Operator',
+  'Delivery Executive',
+  'DevOps Engineer',
+  'Frontend Developer',
+  'Full Stack Developer',
+  'Graphic Designer',
+  'HR Executive',
+  'Marketing Executive',
+  'Operations Executive',
+  'Operations Manager',
+  'Product Manager',
+  'Project Manager',
+  'QA Engineer',
+  'Sales Executive',
+  'Software Developer',
+  'Software Engineer',
+  'Store Manager',
+  'Telecaller',
+  'UI/UX Designer',
+] as const;
+
 export const SCREENING_QUESTION_TYPES = ['YES_NO', 'SHORT_TEXT', 'SINGLE_CHOICE'] as const;
 
 export const JOB_SKILL_SUGGESTIONS = [
@@ -188,6 +218,36 @@ export const INDIAN_CITIES = [
   'Warangal',
 ] as const;
 
+/** Primary hiring hubs — shown first in location pickers */
+export const MAIN_INDIAN_CITIES = [
+  'Bengaluru',
+  'Mumbai',
+  'Delhi',
+  'Hyderabad',
+  'Chennai',
+  'Pune',
+  'Kolkata',
+  'Ahmedabad',
+  'Gurugram',
+  'Noida',
+  'Jaipur',
+  'Chandigarh',
+  'Kochi',
+  'Coimbatore',
+  'Indore',
+] as const;
+
+/** Main hubs first, then remaining cities A–Z (for job location dropdown). */
+export function orderedIndianCitiesForJobForm(): string[] {
+  const main = MAIN_INDIAN_CITIES as readonly string[];
+  const mainSet = new Set(main.map((c) => c.toLowerCase()));
+  const rest = (INDIAN_CITIES as readonly string[])
+    .filter((city) => !mainSet.has(city.toLowerCase()))
+    .slice()
+    .sort((a, b) => a.localeCompare(b, 'en'));
+  return [...main, ...rest];
+}
+
 export type IndianCity = (typeof INDIAN_CITIES)[number];
 
 export function isListedIndianCity(city: string) {
@@ -271,13 +331,15 @@ export type ResumeTemplate = (typeof RESUME_TEMPLATES)[number];
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 export type JobMatch = {
-  /** Overall ATS match for this job (0–100). */
+  /** Overall ATS match for this job (0–100). Job-specific — not a permanent candidate score. */
   score: number;
-  /** Factor scores as 0–100 percentages for the Candidate ATS UI. */
+  /** Factor scores as 0–100 percentages. */
   skillScore: number;
   experienceScore: number;
   educationScore: number;
   locationScore: number;
+  /** Preferred / job-specific skills (0–100). */
+  preferredSkillScore: number;
   resumeQualityScore: number;
   /** Career-interest / category fit (0–100). Kept for list ranking compatibility. */
   categoryScore: number;
@@ -286,6 +348,123 @@ export type JobMatch = {
   /** Actionable tips shown under “Improve your match”. */
   recommendations: string[];
 };
+
+/** PDF ATS bands for employer + candidate match UI. */
+export type AtsMatchBand = 'EXCELLENT' | 'STRONG' | 'GOOD' | 'POTENTIAL' | 'LOW';
+
+export const ATS_MATCH_BANDS: Array<{
+  band: AtsMatchBand;
+  min: number;
+  label: string;
+}> = [
+  { band: 'EXCELLENT', min: 90, label: 'Excellent Match' },
+  { band: 'STRONG', min: 80, label: 'Strong Match' },
+  { band: 'GOOD', min: 70, label: 'Good Match' },
+  { band: 'POTENTIAL', min: 60, label: 'Potential Match' },
+  { band: 'LOW', min: 0, label: 'Low Match' },
+];
+
+/** PDF factor weights (points toward 100). */
+export const ATS_JOB_MATCH_WEIGHTS = {
+  skills: 35,
+  experience: 20,
+  education: 10,
+  location: 10,
+  preferred: 15,
+  resumeQuality: 10,
+} as const;
+
+export function atsMatchBand(score: number): AtsMatchBand {
+  const n = Math.max(0, Math.min(100, Math.round(score)));
+  if (n >= 90) return 'EXCELLENT';
+  if (n >= 80) return 'STRONG';
+  if (n >= 70) return 'GOOD';
+  if (n >= 60) return 'POTENTIAL';
+  return 'LOW';
+}
+
+export function atsMatchBandLabel(score: number): string {
+  const band = atsMatchBand(score);
+  return ATS_MATCH_BANDS.find((item) => item.band === band)?.label || 'Low Match';
+}
+
+export type AtsMatchFactor = {
+  key: keyof typeof ATS_JOB_MATCH_WEIGHTS;
+  label: string;
+  /** Points earned toward the factor max. */
+  score: number;
+  max: number;
+  /** 0–100 percentage for bars. */
+  pct: number;
+};
+
+export type AtsMatchBreakdown = {
+  score: number;
+  band: AtsMatchBand;
+  bandLabel: string;
+  factors: AtsMatchFactor[];
+  reasons: string[];
+  gaps: string[];
+  recommendations: string[];
+};
+
+export function toAtsMatchBreakdown(match: JobMatch): AtsMatchBreakdown {
+  const w = ATS_JOB_MATCH_WEIGHTS;
+  const preferredPct = match.preferredSkillScore ?? match.categoryScore ?? 0;
+  const factors: AtsMatchFactor[] = [
+    {
+      key: 'skills',
+      label: 'Required Skills',
+      pct: match.skillScore,
+      max: w.skills,
+      score: Math.round((match.skillScore / 100) * w.skills),
+    },
+    {
+      key: 'experience',
+      label: 'Experience',
+      pct: match.experienceScore,
+      max: w.experience,
+      score: Math.round((match.experienceScore / 100) * w.experience),
+    },
+    {
+      key: 'education',
+      label: 'Education',
+      pct: match.educationScore,
+      max: w.education,
+      score: Math.round((match.educationScore / 100) * w.education),
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      pct: match.locationScore,
+      max: w.location,
+      score: Math.round((match.locationScore / 100) * w.location),
+    },
+    {
+      key: 'preferred',
+      label: 'Job-specific skills',
+      pct: preferredPct,
+      max: w.preferred,
+      score: Math.round((preferredPct / 100) * w.preferred),
+    },
+    {
+      key: 'resumeQuality',
+      label: 'Resume quality',
+      pct: match.resumeQualityScore,
+      max: w.resumeQuality,
+      score: Math.round((match.resumeQualityScore / 100) * w.resumeQuality),
+    },
+  ];
+  return {
+    score: match.score,
+    band: atsMatchBand(match.score),
+    bandLabel: atsMatchBandLabel(match.score),
+    factors,
+    reasons: match.reasons || [],
+    gaps: match.gaps || [],
+    recommendations: match.recommendations || [],
+  };
+}
 
 export type JobCard = {
   id: string;
@@ -358,7 +537,18 @@ export type ResumeContent = {
   email?: string | null;
   summary: string;
   skills: string[];
-  education: Array<{ qualification: string; institution: string | null; yearCompleted: number | null }>;
+  /** Programming / technical languages (never human languages). Additive; empty for legacy. */
+  programmingLanguages?: string[];
+  education: Array<{
+    qualification: string;
+    institution: string | null;
+    yearCompleted: number | null;
+    fieldOfStudy?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    location?: string | null;
+    isCurrent?: boolean;
+  }>;
   experiences: Array<{
     company: string;
     jobTitle: string;
@@ -368,6 +558,10 @@ export type ResumeContent = {
     startDate?: string | null;
     endDate?: string | null;
     isCurrent?: boolean;
+    location?: string | null;
+    responsibilities?: string[];
+    achievements?: string[];
+    technologies?: string[];
   }>;
   languages: string[];
   /**
@@ -397,6 +591,33 @@ export type ResumeContent = {
     bullets?: string[];
     /** Tech stack tokens — required for ATS project feedback to clear after edits. */
     technologies?: string[];
+    responsibilities?: string[];
+    startDate?: string | null;
+    endDate?: string | null;
+  }>;
+  /**
+   * Structured personal/contact — additive mirror of top-level contact fields.
+   * Legacy readers continue to use fullName/city/phone/email/links.
+   */
+  personal?: {
+    fullName?: string;
+    email?: string | null;
+    phone?: string | null;
+    city?: string | null;
+    state?: string | null;
+    country?: string | null;
+    address?: string | null;
+    postalCode?: string | null;
+    linkedin?: string;
+    github?: string;
+    portfolio?: string;
+  };
+  /** Optional extraction confidence hints for review UI (not required for ATS). */
+  fieldConfidence?: Array<{
+    field: string;
+    value: string;
+    confidence: number;
+    source?: string;
   }>;
   includePhoto?: boolean;
   /** Profile / resume links — also mirrored under resumeData.links. */
@@ -749,6 +970,7 @@ export type EmployerProfile = {
   panNumber: string | null;
   workEmail: string | null;
   designation: string | null;
+  logoUrl: string | null;
   verificationStatus: EmployerVerificationStatus;
   verified: boolean;
 };
@@ -820,9 +1042,10 @@ export type EmployerPaymentRecord = {
 
 export type EmployerKycPayload = {
   gstNumber: string;
-  cin: string;
+  cin?: string;
   website: string;
   panNumber: string;
+  trademark?: string;
 };
 
 export type EmployerAffiliationPayload = {
@@ -836,6 +1059,13 @@ export type EmployerDashboard = {
   applications: number;
   shortlisted: number;
   interviews: number;
+  /** Applications received per month for the last 6 calendar months (oldest → newest). */
+  applicationsByMonth: Array<{
+    year: number;
+    month: number;
+    label: string;
+    count: number;
+  }>;
   recent: Array<{
     candidateName: string;
     jobTitle: string;
@@ -856,6 +1086,7 @@ export type EmployerApplication = {
     city: string | null;
     skills: string[];
     highestEducation: string | null;
+    experienceYears?: number;
   };
   job: { id: string; title: string };
   match?: JobMatch;
@@ -867,14 +1098,23 @@ export type EmployerCandidateSearchResult = {
   firstName: string | null;
   lastName: string | null;
   city: string | null;
+  state: string | null;
   highestEducation: string | null;
   experienceYears: number;
+  experienceMonths: number;
+  stillInCollege: boolean;
+  openToRelocating: boolean;
+  currentlyEmployed: boolean;
+  availabilityLabel: string;
+  availabilityTone: 'immediate' | 'notice' | 'neutral';
   profileCompletion: number;
   skills: string[];
+  skillsTotal: number;
   latestRole: { title: string; company: string } | null;
   matchScore: number | null;
   appliedToEmployer: boolean;
   applicationId?: string | null;
+  applicationStatus?: string | null;
 };
 
 /** Job posting fee in paise (₹999). Each paid unit unlocks a batch of matched profiles. */
@@ -927,7 +1167,7 @@ export type EmployerCandidatePassport = {
     jobId: string;
     jobTitle: string;
   } | null;
-  match: { score: number; reasons: string[]; gaps: string[] } | null;
+  match: JobMatch | null;
   view: 'CONTROLLED_PASSPORT';
 };
 
@@ -948,11 +1188,19 @@ export type EmployerInterviewRecord = {
   durationMin: number;
   mode: string;
   location: string | null;
+  meetingUrl?: string | null;
   status: EmployerInterviewStatus;
   notes: string | null;
+  preferredRescheduleAt?: string | null;
   confirmedAt: string | null;
   createdAt: string;
   applicationStatus: string;
+  candidateFeedback?: {
+    rating: number;
+    text: string | null;
+    submittedAt: string;
+  } | null;
+  feedbackRequestedAt?: string | null;
   candidate: {
     id: string;
     firstName: string | null;

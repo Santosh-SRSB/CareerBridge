@@ -1,8 +1,7 @@
+import { atsMatchBandLabel } from '@careerbridge/shared';
+
 export function matchLabel(score: number) {
-  if (score >= 80) return 'Strong Match';
-  if (score >= 60) return 'Good Match';
-  if (score >= 40) return 'Potential Match';
-  return 'Limited Match';
+  return atsMatchBandLabel(score);
 }
 
 export function formatSalary(min?: number | null, max?: number | null) {

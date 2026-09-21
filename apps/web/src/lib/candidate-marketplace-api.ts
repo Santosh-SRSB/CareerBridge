@@ -10,6 +10,7 @@ import {
   listJobs,
   listNearbyJobs,
   rescheduleCandidateScheduledInterview,
+  submitCandidateInterviewFeedback,
   type CandidateScheduledInterview,
 } from '@/lib/api';
 import {
@@ -140,9 +141,16 @@ export async function confirmScheduledInterview(id: string): Promise<ScheduledJo
 
 export async function rescheduleScheduledInterview(
   id: string,
-  _payload?: { preferredDate?: string; preferredTime?: string; reason?: string },
+  payload?: { preferredAt?: string; preferredDate?: string; preferredTime?: string; reason?: string },
 ): Promise<ScheduledJobInterview> {
-  return rescheduleCandidateScheduledInterview(id);
+  return rescheduleCandidateScheduledInterview(id, payload);
+}
+
+export async function submitScheduledInterviewFeedback(
+  id: string,
+  payload: { rating: number; text?: string },
+): Promise<ScheduledJobInterview> {
+  return submitCandidateInterviewFeedback(id, payload);
 }
 
 export async function startMockInterview(payload: {

@@ -1,9 +1,15 @@
+import {
+  formatResumeDate,
+  formatResumeDateRange,
+  toMonthInputValue,
+} from '@careerbridge/shared';
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-/** Format YYYY-MM from <input type="month"> to "January 2025" */
+/** Format YYYY-MM from <input type="month"> to "January 2025" (form labels). */
 export function formatMonthLabel(value: string): string {
   if (!value) return '';
   const [year, month] = value.split('-');
@@ -12,10 +18,13 @@ export function formatMonthLabel(value: string): string {
   return `${MONTH_NAMES[idx]} ${year}`;
 }
 
+/** @deprecated Prefer formatResumeDateRange — kept for existing form previews. */
 export function formatMonthRange(start: string, end: string, isCurrent: boolean): string {
+  const range = formatResumeDateRange(start, end, isCurrent);
+  if (range) return range;
   const parts: string[] = [];
   if (start) parts.push(formatMonthLabel(start));
-  if (isCurrent) parts.push('Present');
+  if (isCurrent) parts.push('PRESENT');
   else if (end) parts.push(formatMonthLabel(end));
   return parts.join(' – ');
 }
@@ -28,7 +37,7 @@ export function formatEducationYearRange(start: string, end: string): string {
 }
 
 export function formatDateForResume(value: string): string {
-  if (!value) return '';
-  if (/^\d{4}-\d{2}$/.test(value)) return formatMonthLabel(value);
-  return value;
+  return formatResumeDate(value) || value || '';
 }
+
+export { formatResumeDate, formatResumeDateRange, toMonthInputValue };

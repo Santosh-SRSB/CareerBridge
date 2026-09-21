@@ -1,36 +1,102 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { EmployerDashboard, EmployerProfile } from '@careerbridge/shared';
-import { getEmployerDashboard, getEmployerMe } from '@/lib/api';
-import { EmployerShell } from '@/components/EmployerPortal';
+import type {
+  EmployerApplication,
+  EmployerDashboard,
+  EmployerInterviewRecord,
+  EmployerProfile,
+} from '@careerbridge/shared';
+import {
+  getEmployerDashboard,
+  getEmployerMe,
+  listAllEmployerApplications,
+  listEmployerInterviews,
+} from '@/lib/api';
+import { EmployerShell, TinyEagleIcon } from '@/components/EmployerPortal';
 
-function applicationStatusLabel(status: string) {
-  if (status === 'SHORTLISTED') return 'Shortlisted';
-  if (status === 'INTERVIEW') return 'Interview';
-  if (status === 'APPLIED') return 'Applied';
-  if (status === 'REVIEW') return 'In review';
-  if (status === 'SELECT') return 'Selected';
-  if (status === 'HIRE') return 'Hired';
-  if (status === 'REJECT') return 'Not selected';
-  return status.replaceAll('_', ' ');
+function greetingLabel(date = new Date()) {
+  const h = date.getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function formatInterviewWhen(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return { day: '—', time: '—' };
+  return {
+    day: date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }),
+    time: date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }),
+  };
+}
+
+function PerformanceChart({
+  series,
+}: {
+  series: Array<{ label: string; count: number }>;
+}) {
+  const bars = useMemo(() => {
+    const rows =
+      series.length > 0
+        ? series
+        : Array.from({ length: 6 }, () => ({ label: '—', count: 0 }));
+    const max = Math.max(...rows.map((row) => row.count), 0);
+    return rows.map((row) => ({
+      ...row,
+      heightPct: max > 0 ? Math.max(8, Math.round((row.count / max) * 100)) : 8,
+    }));
+  }, [series]);
+
+  const total = bars.reduce((sum, row) => sum + row.count, 0);
+
+  return (
+    <div className="ep-saas-bars-wrap">
+      <div
+        className="ep-saas-bars"
+        role="img"
+        aria-label={
+          total > 0
+            ? `Applications over the last six months: ${bars.map((b) => `${b.label} ${b.count}`).join(', ')}`
+            : 'No applications in the last six months'
+        }
+      >
+        {bars.map((bar) => (
+          <div key={`${bar.label}-${bar.count}`} className="ep-saas-bars__col" title={`${bar.label}: ${bar.count}`}>
+            <span className="ep-saas-bars__value">{bar.count}</span>
+            <div className="ep-saas-bars__plot">
+              <div className="ep-saas-bars__bar" style={{ height: `${bar.heightPct}%` }} />
+            </div>
+            <span className="ep-saas-bars__label">{bar.label}</span>
+          </div>
+        ))}
+      </div>
+      <p className="ep-saas-bars__caption">
+        {total > 0
+          ? `${total} application${total === 1 ? '' : 's'} in the last 6 months`
+          : 'Applications will appear here as candidates apply'}
+      </p>
+    </div>
+  );
 }
 
 function DashboardSkeleton() {
   return (
-    <div className="ep-app ep-app--desk">
+    <div className="ep-app ep-app--desk ep-app--saas ep-app--leftnav">
       <div className="ep-main">
         <div className="ep-content">
-          <div className="ep-dash ep-dash--loading">
-            <div className="ep-skel ep-skel--title" />
-            <div className="ep-skel ep-skel--sub" />
-            <div className="ep-dash__metrics">
-              <div className="ep-skel ep-skel--card" />
-              <div className="ep-skel ep-skel--card" />
-              <div className="ep-skel ep-skel--card" />
-              <div className="ep-skel ep-skel--card" />
+          <div className="ep-saas-dash ep-saas-dash--loading" aria-busy="true">
+            <div className="ep-saas-skel ep-saas-skel--lg" />
+            <div className="ep-saas-skel-row">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="ep-saas-skel ep-saas-skel--card" />
+              ))}
+            </div>
+            <div className="ep-saas-skel-grid">
+              <div className="ep-saas-skel ep-saas-skel--panel" />
+              <div className="ep-saas-skel ep-saas-skel--panel" />
             </div>
           </div>
         </div>
@@ -40,85 +106,38 @@ function DashboardSkeleton() {
 }
 
 const QUICK_ACTIONS = [
-  { href: '/employer/jobs/new', title: 'Create job', copy: 'Post a new opening', tone: 'teal', icon: 'plus' },
-  { href: '/employer/candidates', title: 'Search candidates', copy: 'Find ranked matches', tone: 'green', icon: 'search' },
-  { href: '/employer/applications', title: 'Applications', copy: 'Review inbound talent', tone: 'amber', icon: 'file' },
-  { href: '/employer/interviews', title: 'Interviews', copy: 'Schedule & track', tone: 'blue', icon: 'cal' },
-  { href: '/employer/jobs', title: 'Manage jobs', copy: 'Pause, edit, close', tone: 'forest', icon: 'edit' },
-  { href: '/employer/reports', title: 'Reports', copy: 'Hiring insights', tone: 'slate', icon: 'chart' },
-  { href: '/employer/profile', title: 'Company profile', copy: 'Update company details', tone: 'mint', icon: 'user' },
+  {
+    href: '/employer/jobs/new',
+    title: 'Post a Job',
+    copy: 'Publish a new opening',
+    key: 'post',
+  },
+  {
+    href: '/employer/candidates',
+    title: 'Find Candidates',
+    copy: 'Browse matched talent',
+    key: 'find',
+  },
+  {
+    href: '/employer/interviews/schedule',
+    title: 'Schedule Interview',
+    copy: 'Book time with talent',
+    key: 'schedule',
+  },
+  {
+    href: '/employer/applications',
+    title: 'View Applications',
+    copy: 'Review your pipeline',
+    key: 'apps',
+  },
 ] as const;
-
-function WorkspaceIcon({ name }: { name: string }) {
-  if (name === 'plus') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-    );
-  }
-  if (name === 'search') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-        <circle cx="11" cy="11" r="7" />
-        <path d="M21 21l-4-4" />
-      </svg>
-    );
-  }
-  if (name === 'file') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-        <path d="M6 2h9l5 5v15H6z" />
-        <path d="M14 2v5h5" />
-      </svg>
-    );
-  }
-  if (name === 'cal') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-        <rect x="3" y="4" width="18" height="17" rx="2" />
-        <path d="M3 9h18" />
-      </svg>
-    );
-  }
-  if (name === 'edit') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-        <path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4" />
-        <path d="M18 2l4 4-11 11H7v-4z" />
-      </svg>
-    );
-  }
-  if (name === 'chart') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-        <path d="M3 3v18h18" />
-        <path d="M7 15l4-5 3 3 5-7" />
-      </svg>
-    );
-  }
-  if (name === 'card') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-        <rect x="2" y="5" width="20" height="14" rx="2" />
-        <path d="M2 10h20" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21v-1a8 8 0 0 1 16 0v1" />
-    </svg>
-  );
-}
-
-type MetricTone = 'teal' | 'green' | 'amber' | 'blue';
 
 export default function EmployerDashboardPage() {
   const router = useRouter();
   const [data, setData] = useState<EmployerDashboard | null>(null);
   const [profile, setProfile] = useState<EmployerProfile | null>(null);
+  const [applications, setApplications] = useState<EmployerApplication[]>([]);
+  const [interviews, setInterviews] = useState<EmployerInterviewRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -133,161 +152,217 @@ export default function EmployerDashboardPage() {
           return;
         }
         setProfile(employer);
-        setData(await getEmployerDashboard());
+        const [dash, appRows, interviewRows] = await Promise.all([
+          getEmployerDashboard(),
+          listAllEmployerApplications().catch(() => [] as EmployerApplication[]),
+          listEmployerInterviews().catch(() => [] as EmployerInterviewRecord[]),
+        ]);
+        setData(dash);
+        setApplications(appRows);
+        setInterviews(interviewRows);
       })
       .catch(() => router.replace('/login?role=employer'))
       .finally(() => setLoading(false));
   }, [router]);
+
+  const hiredCount = useMemo(
+    () => applications.filter((a) => a.status === 'HIRED' || a.status === 'SELECTED').length,
+    [applications],
+  );
+
+  const upcomingInterviews = useMemo(
+    () =>
+      interviews
+        .filter((item) => !['COMPLETED', 'CANCELLED'].includes(item.status))
+        .sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt))
+        .slice(0, 4),
+    [interviews],
+  );
 
   if (loading || !data || !profile) {
     return <DashboardSkeleton />;
   }
 
   const companyLabel = profile.companyName?.trim() || 'your company';
-  const greetName = profile.contactName?.trim() || companyLabel;
 
-  const metrics: Array<{ label: string; value: number; href: string; tone: MetricTone }> = [
-    { label: 'Active jobs', value: data.openJobs, href: '/employer/jobs', tone: 'teal' },
-    { label: 'Applications', value: data.applications, href: '/employer/applications', tone: 'green' },
-    { label: 'Shortlisted', value: data.shortlisted, href: '/employer/applications', tone: 'amber' },
-    { label: 'Interviews', value: data.interviews, href: '/employer/interviews', tone: 'blue' },
-  ];
+  const metrics = [
+    { label: 'Active Jobs', value: data.openJobs, href: '/employer/jobs' },
+    { label: 'Total Applicants', value: data.applications, href: '/employer/applications' },
+    { label: 'Shortlisted', value: data.shortlisted, href: '/employer/applications' },
+    { label: 'Interviews Scheduled', value: data.interviews, href: '/employer/interviews' },
+    { label: 'Hired Candidates', value: hiredCount, href: '/employer/applications' },
+  ] as const;
 
   return (
     <EmployerShell profile={profile}>
-      <div className="ep-dash">
-        <header className="ep-dash__hello">
-          <div>
-            <p className="ep-dash__eyebrow">Home · Dashboard</p>
-            <h1 className="ep-dash__title">
-              Hello, <span className="ep-dash__type">{greetName}</span>
-            </h1>
-            <p className="ep-dash__sub">Here&apos;s what&apos;s happening for {companyLabel} today.</p>
-          </div>
-          <Link href="/employer/jobs/new" className="ep-dash__create">
-            + Create job
-          </Link>
-        </header>
-
-        <section className="ep-dash__metrics" aria-label="Key metrics">
-          {metrics.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`ep-dash__metric ep-dash__metric--${item.tone}`}
-            >
-              <div className="ep-dash__metric-ico" aria-hidden>
-                {item.tone === 'teal' ? (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                    <rect x="3" y="7" width="18" height="13" rx="2" />
-                    <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                ) : null}
-                {item.tone === 'green' ? (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                    <path d="M6 2h9l5 5v15H6z" />
-                    <path d="M14 2v5h5" />
-                  </svg>
-                ) : null}
-                {item.tone === 'amber' ? (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                    <path d="M12 2l3 6 6 .9-4.5 4.3 1 6-5.5-3-5.5 3 1-6L3 8.9 9 8z" />
-                  </svg>
-                ) : null}
-                {item.tone === 'blue' ? (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                    <rect x="3" y="4" width="18" height="17" rx="2" />
-                    <path d="M3 9h18" />
-                  </svg>
-                ) : null}
+      <div className="ep-saas-dash">
+        <div className="ep-saas-dash__stage">
+          <aside className="ep-saas-hinge" aria-label="Welcome">
+            <span className="ep-saas-hinge__nail" aria-hidden />
+            <div className="ep-saas-hinge__swing">
+              <div className="ep-saas-hinge__board">
+                <TinyEagleIcon className="ep-saas-hinge__eagle" size={12} />
+                <strong>Welcome to Employer Dashboard</strong>
               </div>
-              <p className="ep-dash__metric-value">{item.value}</p>
-              <p className="ep-dash__metric-label">{item.label}</p>
+            </div>
+          </aside>
+
+          <header className="ep-saas-dash__welcome">
+            <div className="ep-saas-dash__welcome-copy">
+              <p className="ep-saas-dash__eyebrow" aria-hidden>
+                Employer workspace
+              </p>
+              <h1 className="ep-saas-dash__title">
+                <span className="ep-saas-dash__write ep-saas-dash__write--greet">
+                  {greetingLabel()},
+                </span>{' '}
+                <span className="ep-saas-dash__write ep-saas-dash__write--name">{companyLabel}</span>
+                <span className="ep-saas-dash__caret" aria-hidden />
+              </h1>
+              <p className="ep-saas-dash__sub ep-saas-dash__sub--process" aria-label="Hiring process">
+                <span className="ep-saas-dash__process-label">Hiring process</span>
+                <span className="ep-saas-dash__write ep-saas-dash__write--flow">
+                  Post job → See candidates → Check ATS → Select candidates → Interview → Hired
+                </span>
+              </p>
+            </div>
+          </header>
+
+          <div className="ep-saas-dash__cluster ep-saas-dash__cluster--right">
+            <Link href="/employer/jobs/new" className="ep-saas-btn ep-saas-btn--primary ep-saas-btn--sm">
+              + Post a job
+            </Link>
+            <aside className="ep-saas-guide" aria-label="Hiring steps guide">
+              <div className="ep-saas-guide__tips" aria-live="polite">
+                <p className="ep-saas-guide__tip ep-saas-guide__tip--1">1. Post your job</p>
+                <p className="ep-saas-guide__tip ep-saas-guide__tip--2">2. See candidates</p>
+                <p className="ep-saas-guide__tip ep-saas-guide__tip--3">3. Check ATS & select</p>
+                <p className="ep-saas-guide__tip ep-saas-guide__tip--4">4. Interview → Hire</p>
+              </div>
+              <div className="ep-saas-guide__girl" aria-hidden>
+                <svg viewBox="0 0 128 168" fill="none">
+                  {/* raised pointing arm */}
+                  <path
+                    className="ep-saas-guide__arm"
+                    d="M82 78c16-16 26-30 28-44"
+                    stroke="#f0c4a8"
+                    strokeWidth="6.5"
+                    strokeLinecap="round"
+                  />
+                  <circle
+                    className="ep-saas-guide__hand"
+                    cx="110"
+                    cy="32"
+                    r="6.5"
+                    fill="#f0c4a8"
+                    stroke="#0c332c"
+                    strokeWidth="1.4"
+                  />
+                  {/* neat bun + professional hair */}
+                  <circle cx="58" cy="22" r="9" fill="#2a1a12" />
+                  <ellipse cx="58" cy="40" rx="20" ry="22" fill="#2a1a12" />
+                  {/* face */}
+                  <circle cx="58" cy="44" r="15" fill="#f0c4a8" stroke="#0c332c" strokeWidth="1.5" />
+                  <circle cx="52" cy="42" r="1.5" fill="#0c332c" />
+                  <circle cx="64" cy="42" r="1.5" fill="#0c332c" />
+                  <path d="M53 50c2 2.2 8 2.2 10 0" stroke="#0c332c" strokeWidth="1.3" strokeLinecap="round" />
+                  {/* blazer + blouse */}
+                  <path
+                    d="M40 70c1 26 6 42 18 42s17-16 18-42c-5 4-11 6-18 6s-13-2-18-6Z"
+                    fill="#0c332c"
+                    stroke="#0c332c"
+                    strokeWidth="1.4"
+                  />
+                  <path d="M50 72c2.5 10 5 16 8 16s5.5-6 8-16c-2.5 2-5.5 3-8 3s-5.5-1-8-3Z" fill="#f6f4ef" />
+                  <path d="M58 72v16" stroke="#1f9d8a" strokeWidth="1.2" />
+                  {/* lapels */}
+                  <path d="M42 72l10 8-4-10" fill="#144039" stroke="#0c332c" strokeWidth="1" />
+                  <path d="M74 72l-10 8 4-10" fill="#144039" stroke="#0c332c" strokeWidth="1" />
+                  {/* resting arm */}
+                  <path d="M40 78c-11 12-13 24-11 32" stroke="#f0c4a8" strokeWidth="5.5" strokeLinecap="round" />
+                  {/* pencil skirt */}
+                  <path
+                    d="M42 110h32l5 34H37l5-34Z"
+                    fill="#1a3d36"
+                    stroke="#0c332c"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M48 112h20" stroke="#1f9d8a" strokeWidth="1.2" opacity="0.7" />
+                  {/* legs + heels */}
+                  <path d="M50 144v12M66 144v12" stroke="#f0c4a8" strokeWidth="3.2" strokeLinecap="round" />
+                  <path d="M46 156h10l-1 4H45l1-4Z" fill="#0c332c" />
+                  <path d="M62 156h10l-1 4H61l1-4Z" fill="#0c332c" />
+                </svg>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <section className="ep-saas-metrics" aria-label="Overview statistics">
+          {metrics.map((item) => (
+            <Link key={item.label} href={item.href} className="ep-saas-metric">
+              <span className="ep-saas-metric__label">{item.label}</span>
+              <p className="ep-saas-metric__value">{item.value}</p>
             </Link>
           ))}
         </section>
 
-        <section className="ep-dash__block" aria-labelledby="hiring-tools-title">
-          <div className="ep-dash__block-head">
-            <h2 id="hiring-tools-title">Hiring workspace</h2>
-            <p>Jump into the tools you use most</p>
-          </div>
-          <div className="ep-dash__tiles">
-            {QUICK_ACTIONS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`ep-dash__tile ep-dash__tile--${item.tone}`}
-              >
-                <span className="ep-dash__tile-ico" aria-hidden>
-                  <WorkspaceIcon name={item.icon} />
-                </span>
-                <span className="ep-dash__tile-body">
-                  <strong>{item.title}</strong>
-                  <em>{item.copy}</em>
-                </span>
-              </Link>
-            ))}
-          </div>
+        <section className="ep-saas-quick" aria-label="Quick actions">
+          {QUICK_ACTIONS.map((item) => (
+            <Link key={item.key} href={item.href} className="ep-saas-quick__card">
+              <strong>
+                <TinyEagleIcon className="ep-saas-quick__eagle" size={11} />
+                {item.title}
+              </strong>
+              <span>{item.copy}</span>
+            </Link>
+          ))}
         </section>
 
-        <section className="ep-dash__block" aria-labelledby="recent-applications-title">
-          <div className="ep-dash__block-head">
-            <h2 id="recent-applications-title">Recent applications</h2>
-            <Link href="/employer/applications" className="ep-dash__underline">
-              View all
-            </Link>
-          </div>
+        <div className="ep-saas-grid">
+          <section className="ep-saas-panel" aria-labelledby="perf-title">
+            <div className="ep-saas-panel__head">
+              <div>
+                <h2 id="perf-title">Recruitment performance</h2>
+              </div>
+            </div>
+            <PerformanceChart series={data.applicationsByMonth || []} />
+          </section>
 
-          {data.recent.length === 0 ? (
-              <div className="ep-dash__empty-card">
-                <div className="ep-dash__empty-ico" aria-hidden>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 2h9l5 5v15H6z" />
-                    <path d="M14 2v5h5" />
-                  </svg>
-                </div>
-                <p className="ep-dash__empty-title">No applications yet</p>
-                <p className="ep-dash__empty">Publish a job to start receiving candidates.</p>
+          <section className="ep-saas-panel" aria-labelledby="interviews-title">
+            <div className="ep-saas-panel__head">
+              <div>
+                <h2 id="interviews-title">Upcoming interviews</h2>
+              </div>
+            </div>
+            {upcomingInterviews.length === 0 ? (
+              <div className="ep-saas-empty">
+                <p>No interviews scheduled</p>
               </div>
             ) : (
-              <div className="ep-dash__panel">
-                <div className="overflow-x-auto">
-                <table className="ep-dash-table min-w-[520px]">
-                  <thead>
-                    <tr>
-                      <th>Candidate</th>
-                      <th>Job</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.recent.map((item) => (
-                      <tr key={item.applicationId}>
-                        <td>
-                          {item.candidateId && item.jobId ? (
-                            <Link
-                              href={`/employer/candidates/${item.candidateId}?jobId=${encodeURIComponent(item.jobId)}`}
-                              className="ep-dash__underline"
-                            >
-                              {item.candidateName}
-                            </Link>
-                          ) : (
-                            item.candidateName
-                          )}
-                        </td>
-                        <td>{item.jobTitle}</td>
-                        <td>
-                          <span className="ep-dash__badge">{applicationStatusLabel(item.status)}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                </div>
-              </div>
+              <ul className="ep-saas-interview-list">
+                {upcomingInterviews.map((row) => {
+                  const when = formatInterviewWhen(row.scheduledAt);
+                  const name =
+                    [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
+                  return (
+                    <li key={row.id}>
+                      <div className="ep-saas-interview__when">
+                        <strong>{when.day}</strong>
+                        <em>{when.time}</em>
+                      </div>
+                      <div className="ep-saas-interview__body">
+                        <strong>{name}</strong>
+                        <span>{row.job.title}</span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-        </section>
+          </section>
+        </div>
       </div>
     </EmployerShell>
   );

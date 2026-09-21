@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EmployerJobSummary } from '@careerbridge/shared';
 import { listEmployerJobs } from '@/lib/api';
-import { EmployerShellFallback, EmployerPageHeader } from '@/components/EmployerPortal';
+import { EmployerShellFallback } from '@/components/EmployerPortal';
+import { EmployerSectionHero, EmployerQuickLink } from '@/components/employer/EmployerSectionHero';
+import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
 
 function jobStatusLabel(status: string) {
@@ -18,7 +20,7 @@ function jobStatusLabel(status: string) {
 function jobStatusTone(status: string) {
   if (status === 'PUBLISHED') return 'bg-emerald-100 text-emerald-800';
   if (status === 'CLOSED') return 'bg-slate-200 text-slate-700';
-  if (status === 'PAUSED') return 'bg-amber-100 text-amber-900';
+  if (status === 'PAUSED') return 'bg-slate-200 text-slate-700';
   return 'bg-primary-soft text-primary';
 }
 
@@ -121,14 +123,13 @@ export default function EmployerJobsPage() {
 
   return (
     <EmployerShellFallback title="My Jobs">
-      <div className="ep-desk">
-        <EmployerPageHeader
+      <div className="ep-desk ep-page ep-page--jobs">
+        <EmployerSectionHero
+          tone="jobs"
           title="My Jobs"
-          subtitle="Create, publish, pause, and close job postings."
+          subtitle="Create, publish, pause, and close openings from one board."
           action={
-            <Link href="/employer/jobs/new" className="ep-btn-gold">
-              + Post New Job
-            </Link>
+            <EmployerQuickLink href="/employer/jobs/new">Post new job</EmployerQuickLink>
           }
         />
 
@@ -162,7 +163,7 @@ export default function EmployerJobsPage() {
               {
                 label: 'Draft / paused',
                 value: stats.drafts,
-                tone: 'ep-stat__icon--gold',
+                tone: 'ep-stat__icon--soft',
                 hint: 'Needs action',
                 icon: (
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -200,12 +201,15 @@ export default function EmployerJobsPage() {
           {error ? <p className="p-4 text-sm text-error">{error}</p> : null}
 
           {!loading && !error && !jobs.length ? (
-            <div className="ep-empty px-5 py-10">
-              <p>No jobs yet</p>
-              <p className="ep-empty__sub">Create your first job posting.</p>
-              <Link href="/employer/jobs/new" className="ep-btn-gold mt-3 inline-flex rounded-xl px-4 py-2 text-sm font-extrabold">
-                + Create Job
-              </Link>
+            <div className="ep-polished-empty">
+              <EmployerEmptyCue cue="jobs" />
+              <div>
+                <p className="ep-polished-empty__title">No jobs yet</p>
+                <p className="ep-polished-empty__copy">Create your first job posting to start hiring.</p>
+                <Link href="/employer/jobs/new" className="ep-hero__link ep-polished-empty__cta">
+                  + Create Job
+                </Link>
+              </div>
             </div>
           ) : null}
 
