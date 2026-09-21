@@ -251,6 +251,10 @@ export class ExperienceDto {
   @IsOptional()
   @IsBoolean()
   isInternship?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  stillInCompany?: boolean;
 }
 
 export class UpdateExperienceDto {
@@ -279,6 +283,10 @@ export class UpdateExperienceDto {
   @IsOptional()
   @IsBoolean()
   isInternship?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  stillInCompany?: boolean;
 }
 
 export class PassportEducationDto {

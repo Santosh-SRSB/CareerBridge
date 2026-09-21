@@ -36,8 +36,14 @@ export function resolvePassportSummary(
   if (fromProfile) {
     const band = resolveCandidateExperienceBand(profile);
     if (band === 'fresher' && /\d+(\.\d+)?\+?\s*years?\s+of\s+experience/i.test(fromProfile)) {
-      // Strip false years-of-experience claims for freshers.
-      return fromProfile.replace(/\d+(\.\d+)?\+?\s*years?\s+of\s+experience[,.]?\s*/gi, '').trim() || fromProfile;
+      // Strip false years-of-experience claims for freshers; soften if empty.
+      const cleaned = fromProfile
+        .replace(/\d+(\.\d+)?\+?\s*years?\s+of\s+experience[,.]?\s*/gi, '')
+        .trim();
+      if (cleaned) return cleaned;
+      const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
+      const title = profile.careerInterests?.[0] || profile.experiences?.[0]?.jobTitle || '';
+      return fallbackSummary(profile, fullName, title);
     }
     return fromProfile;
   }
@@ -46,7 +52,13 @@ export function resolvePassportSummary(
   if (fromResume) {
     const band = resolveCandidateExperienceBand(profile);
     if (band === 'fresher' && /\d+(\.\d+)?\+?\s*years?\s+of\s+experience/i.test(fromResume)) {
-      return fromResume.replace(/\d+(\.\d+)?\+?\s*years?\s+of\s+experience[,.]?\s*/gi, '').trim() || fromResume;
+      const cleaned = fromResume
+        .replace(/\d+(\.\d+)?\+?\s*years?\s+of\s+experience[,.]?\s*/gi, '')
+        .trim();
+      if (cleaned) return cleaned;
+      const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
+      const title = profile.careerInterests?.[0] || profile.experiences?.[0]?.jobTitle || '';
+      return fallbackSummary(profile, fullName, title);
     }
     return fromResume;
   }

@@ -205,7 +205,7 @@ export default function MockInterviewSetupPage() {
                     name="interviewType"
                     checked={interviewType === 'GENERIC'}
                     onChange={() => setInterviewType('GENERIC')}
-                    className="mt-1 h-4 w-4 accent-[#2f8fad]"
+                    className="mt-1 h-4 w-4 accent-[#0a2e2c]"
                   />
                   <span>
                     <span className="block text-sm font-semibold text-[#0a2e2c]">Generic</span>
@@ -220,7 +220,7 @@ export default function MockInterviewSetupPage() {
                     name="interviewType"
                     checked={interviewType === 'ROLE'}
                     onChange={() => setInterviewType('ROLE')}
-                    className="mt-1 h-4 w-4 accent-[#2f8fad]"
+                    className="mt-1 h-4 w-4 accent-[#0a2e2c]"
                   />
                   <span>
                     <span className="block text-sm font-semibold text-[#0a2e2c]">Role-Based</span>
@@ -240,7 +240,7 @@ export default function MockInterviewSetupPage() {
                 id="questionCount"
                 value={questionCount}
                 onChange={(event) => setQuestionCount(Number(event.target.value))}
-                className="w-full rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm font-semibold text-[#0a2e2c] outline-none transition focus:border-[#5bb8d4] focus:ring-2 focus:ring-[#9fd9ec]/60"
+                className="w-full rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm font-semibold text-[#0a2e2c] outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/20"
               >
                 {QUESTION_COUNTS.map((count) => (
                   <option key={count} value={count}>
@@ -255,7 +255,7 @@ export default function MockInterviewSetupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center rounded-2xl bg-[#9fd4ea] px-4 py-3.5 text-[15px] font-extrabold text-[#0a2e2c] shadow-[0_8px_18px_rgba(95,184,212,0.35)] transition hover:bg-[#8ecae6] hover:shadow-[0_10px_22px_rgba(95,184,212,0.42)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center rounded-2xl bg-[#0a2e2c] px-4 py-3.5 text-[15px] font-extrabold text-white shadow-[0_8px_18px_rgba(10,46,44,0.28)] transition hover:bg-[#072422] hover:shadow-[0_10px_22px_rgba(10,46,44,0.34)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? 'Starting...' : 'Start Mock Interview'}
             </button>

@@ -230,6 +230,7 @@ export type CreateExperiencePayload = {
   endDate?: string;
   description?: string;
   isInternship?: boolean;
+  stillInCompany?: boolean;
 };
 
 export type CreateCertificationPayload = {

@@ -8,6 +8,7 @@ import {
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
+import { DocumentIndexService } from '../ai/document-index.service';
 import { StorageService } from '../common/storage/storage.service';
 import { ResumeExtractorService } from './resume-extractor.service';
 import { parseResumeTextWithLlm } from './structure-resume-content';
@@ -21,6 +22,7 @@ export class ResumeProcessorService {
     private readonly prisma: PrismaService,
     private readonly extractor: ResumeExtractorService,
     private readonly aiGateway: AiGatewayService,
+    private readonly documentIndex: DocumentIndexService,
     private readonly storage: StorageService,
   ) {}
 
@@ -77,22 +79,13 @@ export class ResumeProcessorService {
       const parsed = await parseResumeTextWithLlm(
         extraction.text,
         (text) => this.aiGateway.structureResumeText(text, { userId }),
-        { attempts: 3, delayMs: 1000 },
+        // Keep retries short so candidates are not stuck on "Reading your resume".
+        { attempts: 2, delayMs: 400 },
       );
 
       const content = withNormalizedResumeData(parsed);
       const rawText = extraction.text.slice(0, 80000);
       const analysis = analyzeResumeContent(content, rawText);
-
-      let aiReview: unknown = null;
-      try {
-        aiReview = await this.aiGateway.reviewResume(content, resume.targetJobTitle || undefined, {
-          userId,
-        });
-      } catch (err) {
-        this.logger.warn(`AI review failed for ${resumeId}: ${(err as Error).message}`);
-      }
-
       const atsScore = analysis.score;
       const extractionMeta = {
         extractor: extraction.extractor,
@@ -101,30 +94,12 @@ export class ResumeProcessorService {
         pageCount: extraction.pageCount,
         confidence: extraction.confidence,
         notes: extraction.notes,
-        textPreview: extraction.text.slice(0, 500),
-        aiReview,
+        textChars: extraction.text.length,
         processedAt: new Date().toISOString(),
       };
 
-      // VERIFY BEFORE DB: print full Document AI text + LLM structured payload.
-      this.logger.log(
-        [
-          '',
-          '========== RESUME PARSE VERIFY (BEFORE DB WRITE) ==========',
-          `resumeId: ${resumeId}`,
-          `file: ${extraction.fileName} | mime: ${extraction.mimeType} | pages: ${extraction.pageCount ?? 'n/a'}`,
-          `extractor: ${extraction.extractor}`,
-          `notes: ${extraction.notes.join(' | ')}`,
-          '---------- Document AI raw text ----------',
-          extraction.text,
-          '---------- LLM structured ResumeContent (JSON) ----------',
-          JSON.stringify(content, null, 2),
-          `---------- ATS score (preview): ${atsScore} ----------`,
-          '==========================================================',
-          '',
-        ].join('\n'),
-      );
-
+      // Mark COMPLETED as soon as parse + profile sync finish. AI review + RAG
+      // indexing are slower and must not block the candidate upload UX.
       await this.prisma.resume.update({
         where: { id: resumeId },
         data: {
@@ -138,34 +113,28 @@ export class ResumeProcessorService {
         },
       });
 
-      await this.persistAnalysis(resumeId, content, rawText, atsScore, aiReview);
+      await this.persistAnalysis(resumeId, content, rawText, atsScore, null);
       await this.syncCandidateProfile(resume.candidateId, content);
 
-      try {
-        await this.aiGateway.upsertEmbedding({
-          entityType: 'RESUME',
-          entityId: resumeId,
-          text: [content.summary || '', content.skills?.join(', ') || '', rawText.slice(0, 4000)]
-            .filter(Boolean)
-            .join('\n'),
-          userId,
-        });
-        await this.aiGateway.upsertEmbedding({
-          entityType: 'CANDIDATE',
-          entityId: resume.candidateId,
-          text: this.aiGateway.buildCandidateEmbedText({
-            city: content.city,
-            skills: content.skills || [],
-            about: content.summary,
-            experienceSummary: rawText.slice(0, 2000),
-          }),
-          userId,
-        });
-      } catch (err) {
-        this.logger.warn(`Embedding after resume process failed: ${(err as Error).message}`);
-      }
+      this.logger.log(
+        `Resume ${resumeId} processing completed via Document AI + LLM (post-work deferred)`,
+      );
 
-      this.logger.log(`Resume ${resumeId} processing completed via Document AI + LLM`);
+      void this.runPostParseWork({
+        resumeId,
+        candidateId: resume.candidateId,
+        userId,
+        content,
+        rawText,
+        atsScore,
+        targetJobTitle: resume.targetJobTitle,
+        extractionMeta,
+      }).catch((err) => {
+        this.logger.warn(
+          `Resume ${resumeId} post-parse work failed: ${(err as Error).message}`,
+        );
+      });
+
       return { ok: true, extractor: extraction.extractor };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -179,6 +148,79 @@ export class ResumeProcessorService {
       });
       return { ok: false, error: message };
     }
+  }
+
+  /** AI review + embeddings after COMPLETED — must not block upload UX. */
+  private async runPostParseWork(input: {
+    resumeId: string;
+    candidateId: string;
+    userId: string;
+    content: ResumeContent;
+    rawText: string;
+    atsScore: number;
+    targetJobTitle: string | null;
+    extractionMeta: Record<string, unknown>;
+  }) {
+    let aiReview: unknown = null;
+    try {
+      aiReview = await this.aiGateway.reviewResume(
+        input.content,
+        input.targetJobTitle || undefined,
+        { userId: input.userId },
+      );
+    } catch (err) {
+      this.logger.warn(`AI review failed for ${input.resumeId}: ${(err as Error).message}`);
+    }
+
+    const indexed = await this.documentIndex.indexResume({
+      resumeId: input.resumeId,
+      candidateId: input.candidateId,
+      content: input.content,
+      userId: input.userId,
+      city: input.content.city,
+      about: input.content.summary,
+      skills: input.content.skills || [],
+      experienceSummary: [
+        ...(input.content.experiences || []).map((row) =>
+          [row.jobTitle, row.company, row.description].filter(Boolean).join(' '),
+        ),
+      ]
+        .join('\n')
+        .slice(0, 2000),
+    });
+
+    if (!indexed.ok) {
+      this.logger.warn(
+        `Resume ${input.resumeId} indexed with warnings: ${indexed.error || 'Embedding failed'}`,
+      );
+    }
+
+    await this.prisma.resume.update({
+      where: { id: input.resumeId },
+      data: {
+        extractionMetaJson: JSON.stringify({
+          ...input.extractionMeta,
+          aiReview,
+          indexing: indexed.ok
+            ? { ok: true, chunkCount: indexed.chunkCount }
+            : { ok: false, error: indexed.error || 'Embedding failed' },
+        }),
+      },
+    });
+
+    if (aiReview) {
+      await this.persistAnalysis(
+        input.resumeId,
+        input.content,
+        input.rawText,
+        input.atsScore,
+        aiReview,
+      );
+    }
+
+    this.logger.log(
+      `Resume ${input.resumeId} post-parse done (chunks=${indexed.chunkCount ?? 0})`,
+    );
   }
 
   /** Push structured resume fields into the candidate profile after successful parse. */
@@ -227,6 +269,25 @@ export class ResumeProcessorService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.candidate.findUnique({
+        where: { id: candidateId },
+        select: { totalExperienceYears: true, totalExperienceMonths: true },
+      });
+      const paidJobs = (content.experiences || []).filter((row) => !row.isInternship);
+      let inferredYears = 0;
+      const now = new Date();
+      for (const row of paidJobs) {
+        if (!row.startDate) continue;
+        const start = new Date(row.startDate);
+        if (Number.isNaN(start.getTime())) continue;
+        const end = row.isCurrent || !row.endDate ? now : new Date(row.endDate);
+        if (Number.isNaN(end.getTime()) || end < start) continue;
+        inferredYears +=
+          (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+      }
+      inferredYears = Math.floor(Math.max(0, inferredYears) / 12);
+      const keptYears = Math.max(existing?.totalExperienceYears || 0, inferredYears);
+
       await tx.candidate.update({
         where: { id: candidateId },
         data: {
@@ -244,7 +305,17 @@ export class ResumeProcessorService {
           ...(links && (links.linkedin || links.github || links.portfolio || links.website)
             ? { profileLinks: JSON.stringify(links) }
             : {}),
-          ...((content.experiences?.length || 0) > 0 ? { hasExperience: 'yes' } : {}),
+          ...((content.experiences?.length || 0) > 0
+            ? {
+                hasExperience: content.experiences!.some((row) => !row.isInternship)
+                  ? 'YES'
+                  : 'INTERNSHIP',
+                experienceLevel: content.experiences!.some((row) => !row.isInternship)
+                  ? 'experienced'
+                  : 'fresher',
+                ...(keptYears > 0 ? { totalExperienceYears: keptYears } : {}),
+              }
+            : {}),
           source: 'resume',
         },
       });

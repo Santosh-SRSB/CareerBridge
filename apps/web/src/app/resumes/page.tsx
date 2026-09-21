@@ -195,15 +195,15 @@ export default function ViewResumesPage() {
   }
 
   async function waitForProcessing(resumeId: string) {
-    for (let i = 0; i < 40; i += 1) {
+    for (let i = 0; i < 180; i += 1) {
       const result = await getResumeProcessingStatus(resumeId);
       if (result.processingStatus === 'COMPLETED') return;
       if (result.processingStatus === 'FAILED') {
         setFailedResumeId(resumeId);
         throw new Error(result.processingError || 'Resume processing failed.');
       }
-      setUploadStatus(i < 2 ? 'Uploading to cloud…' : 'Document AI + AI parser…');
-      await new Promise((r) => setTimeout(r, 1500));
+      setUploadStatus('Uploaded successfully, reading your resume…');
+      await new Promise((r) => setTimeout(r, 1000));
     }
     setFailedResumeId(resumeId);
     throw new Error('Processing is taking too long. Please retry.');
@@ -214,16 +214,38 @@ export default function ViewResumesPage() {
     setError('');
     setToast('');
     setFailedResumeId(null);
-    setUploadStatus('Uploading to cloud…');
+    setUploadStatus('Your resume is uploading…');
     try {
       const uploaded = await uploadResumeFile(file);
-      setUploadStatus('Document AI + AI parser…');
-      await waitForProcessing(uploaded.id);
-      setUploadStatus('Almost there…');
-      await refresh();
-      setHighlightId(uploaded.id);
-      setToast(`“${uploaded.title || file.name}” added to your resumes.`);
+      // Do not block the UI on Document AI + Gemini — return as soon as the file is stored.
       setUploadStatus('');
+      setHighlightId(uploaded.id);
+      setToast(
+        `“${uploaded.title || file.name}” uploaded. Reading details in the background…`,
+      );
+      await refresh();
+      // Soft-poll in background so the list flips to ready without locking the modal.
+      void (async () => {
+        try {
+          for (let i = 0; i < 120; i += 1) {
+            const result = await getResumeProcessingStatus(uploaded.id);
+            if (result.processingStatus === 'COMPLETED') {
+              await refresh();
+              setToast(`“${uploaded.title || file.name}” is ready.`);
+              return;
+            }
+            if (result.processingStatus === 'FAILED') {
+              setFailedResumeId(uploaded.id);
+              setError(result.processingError || 'Resume processing failed.');
+              await refresh().catch(() => undefined);
+              return;
+            }
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+        } catch {
+          /* list already shows the uploaded row */
+        }
+      })();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add resume.');
       setUploadStatus('');
@@ -476,12 +498,25 @@ export default function ViewResumesPage() {
       {uploading ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white px-6 py-8 text-center shadow-xl">
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-[#0a2e2c]" />
+            <div className="cb-bounce-dots mx-auto" aria-hidden>
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
             <h2 className="mt-5 text-lg font-extrabold text-slate-900">
-              {uploadStatus || 'Processing resume…'}
+              {uploadStatus?.startsWith('Your resume is uploading')
+                ? 'Your resume is uploading'
+                : uploadStatus?.startsWith('Uploaded successfully')
+                  ? 'Uploaded successfully'
+                  : uploadStatus || 'Processing resume…'}
             </h2>
             <p className="mt-2 text-sm text-slate-500">
-              Cloud Storage → Document AI → AI parser. Hang tight.
+              {uploadStatus?.startsWith('Your resume is uploading')
+                ? 'Please wait a moment…'
+                : uploadStatus?.startsWith('Uploaded successfully')
+                  ? 'Reading your resume'
+                  : 'Hang tight — this usually takes a few seconds.'}
             </p>
           </div>
         </div>

@@ -3,6 +3,7 @@ import type { InterviewReport, LiveInterviewQuestion, ResumeContent } from '@car
 import { detectConduct } from './interview-conduct';
 import { evaluableTextAnswer, isAudioPlaceholderAnswer } from './interview-answer.util';
 import { AiGatewayService } from '../ai/ai-gateway.service';
+import { RagRetrievalService } from '../ai/rag-retrieval.service';
 import {
   buildCategoryAwareImprovedAnswer,
   classifyQuestionType,
@@ -23,6 +24,7 @@ export type InterviewProfile = {
   focusStacks: string[];
   experienceYears: number;
   questionLimit?: number;
+  candidateId?: string;
 };
 
 type BuiltQuestion = {
@@ -34,7 +36,10 @@ type BuiltQuestion = {
 
 @Injectable()
 export class InterviewAiService {
-  constructor(private readonly aiGateway: AiGatewayService) {}
+  constructor(
+    private readonly aiGateway: AiGatewayService,
+    private readonly rag: RagRetrievalService,
+  ) {}
 
   async firstQuestion(profile: InterviewProfile, interviewType = 'MIXED') {
     if (usesFixedIntro(interviewType)) {
@@ -74,6 +79,18 @@ export class InterviewAiService {
             : 'YEAR_4_PLUS';
 
     const questionNumber = asked.length + 1;
+    const coverageFocus = coverageFocusForQuestion(questionNumber, interviewType, profile);
+    let retrievedChunks: string[] = [];
+    if (profile.candidateId) {
+      const hits = await this.rag
+        .retrieve({
+          query: `${profile.jobRole}. ${coverageFocus}. ${last?.answer || ''}`.slice(0, 1000),
+          candidateId: profile.candidateId,
+          limit: 4,
+        })
+        .catch(() => []);
+      retrievedChunks = hits.map((hit) => hit.content.slice(0, 500));
+    }
     const profilePayload = {
       fullName: profile.fullName,
       jobRole: profile.jobRole,
@@ -99,7 +116,8 @@ export class InterviewAiService {
           attempt === 0
             ? profilePayload
             : { ...profilePayload, avoidQuestions: asked.slice(-10), retryAttempt: attempt + 1 },
-        coverageFocus: coverageFocusForQuestion(questionNumber + attempt, interviewType, profile),
+        coverageFocus,
+        retrievedChunks,
       });
 
       let text = (fromAi?.question || '').trim();

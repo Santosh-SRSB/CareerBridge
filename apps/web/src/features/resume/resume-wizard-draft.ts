@@ -145,6 +145,7 @@ export function clearResumeFromBuild() {
 export function markResumeAutofillSeed(input: {
   seed: Omit<ResumeWizardDraft, 'savedAt' | 'version' | 'flowPhase' | 'wizardIndex'>;
   resumeId?: string;
+  pendingParse?: boolean;
 }) {
   if (typeof window === 'undefined') return;
   clearResumeWizardDraft();
@@ -155,10 +156,49 @@ export function markResumeAutofillSeed(input: {
       ...input.seed,
       resumeId: input.resumeId || null,
       highlightMissing: true,
+      pendingParse: Boolean(input.pendingParse),
     }),
   );
   sessionStorage.setItem(AUTOFILL_FLAG_KEY, '1');
   sessionStorage.setItem('cb.resumeStartWizard', '1');
+}
+
+/**
+ * Fast upload path: open wizard immediately while Document AI + Gemini finish
+ * in the background. Wizard polls and hydrates when processing completes.
+ */
+export function markResumePendingParse(input: {
+  resumeId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+}) {
+  markResumeAutofillSeed({
+    resumeId: input.resumeId,
+    pendingParse: true,
+    seed: {
+      fullName: input.fullName || '',
+      location: '',
+      email: input.email || '',
+      phone: input.phone || '',
+      summary: '',
+      skills: [],
+      educationList: [],
+      experienceList: [],
+      projectList: [],
+      certificationList: [],
+      achievementList: [],
+      linkedin: '',
+      github: '',
+      portfolio: '',
+      gapReason: '',
+      languages: [],
+      availableLanguages: [],
+      preferredRole: '',
+      preferredLocation: '',
+      expectedSalary: '',
+    },
+  });
 }
 
 export function peekResumeFromAutofill() {
@@ -170,6 +210,7 @@ export function peekResumeAutofillSeed():
   | (Omit<ResumeWizardDraft, 'savedAt' | 'version' | 'flowPhase' | 'wizardIndex'> & {
       resumeId?: string | null;
       highlightMissing?: boolean;
+      pendingParse?: boolean;
     })
   | null {
   if (typeof window === 'undefined') return null;

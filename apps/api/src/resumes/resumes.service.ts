@@ -401,9 +401,9 @@ export class ResumesService {
           : status === 'FAILED'
             ? resume.processingError || 'Processing failed.'
             : status === 'PROCESSING'
-              ? 'Extracting text with Document AI and structuring with AI…'
+              ? 'Uploaded successfully, reading your resume…'
               : status === 'PENDING'
-                ? 'Queued for processing…'
+                ? 'Your resume is uploading…'
                 : 'Ready',
     };
   }

@@ -82,7 +82,7 @@ export default function OnboardingExperiencePage() {
           hasExperience === 'YES' ? 'experienced' : 'fresher',
         ...(showJobForm
           ? {
-              totalExperienceYears: experienceYears.trim(),
+              totalExperienceYears: experienceYears.trim() || '0',
               totalExperienceMonths: '0',
             }
           : {}),
@@ -97,7 +97,26 @@ export default function OnboardingExperiencePage() {
           stillInCompany: currentlyWorking,
           isInternship: false,
         });
-        profile = await updateCandidateMe({ onboardingCompleted: true });
+        // Re-assert years after experience create (recompute must not drop onboarding years).
+        profile = await updateCandidateMe({
+          onboardingCompleted: true,
+          hasExperience: 'YES',
+          experienceLevel: 'experienced',
+          totalExperienceYears: experienceYears.trim() || '0',
+          totalExperienceMonths: '0',
+        });
+      } else if (hasExperience === 'INTERNSHIP' && (company.trim() || jobTitle.trim())) {
+        profile = await addExperience({
+          company: company.trim() || 'Internship',
+          jobTitle: jobTitle.trim() || 'Intern',
+          stillInCompany: false,
+          isInternship: true,
+        });
+        profile = await updateCandidateMe({
+          onboardingCompleted: true,
+          hasExperience: 'INTERNSHIP',
+          experienceLevel: 'fresher',
+        });
       }
       patchStoredUser({
         firstName: profile.firstName,
@@ -140,6 +159,9 @@ export default function OnboardingExperiencePage() {
 
         {showJobForm ? (
           <div className="space-y-4">
+            <p className="text-sm font-semibold" style={{ color: OB.ink }}>
+              Also fill below
+            </p>
             <OnboardingQuestion title="Current or most recent role">
               <input
                 name="jobTitle"
@@ -215,6 +237,9 @@ export default function OnboardingExperiencePage() {
           </div>
         ) : hasExperience === 'INTERNSHIP' ? (
           <div className="space-y-4">
+            <p className="text-sm font-semibold" style={{ color: OB.ink }}>
+              Also fill below
+            </p>
             <OnboardingQuestion title="Company / Organisation">
               <input
                 name="company"

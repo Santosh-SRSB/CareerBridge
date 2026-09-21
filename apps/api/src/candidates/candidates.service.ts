@@ -66,21 +66,21 @@ export class CandidatesService {
     }
 
     const candidate = await this.loadCandidate(userId);
+    const previousPath = this.gcsPathFromPhotoUrl(candidate.photoUrl);
     const ext = mime.includes('png') ? '.png' : '.jpg';
     let storedUrl: string;
 
     if (this.storage.isConfigured()) {
       try {
-        const path = this.storage.imageObjectPath(
-          `photo-${Date.now()}${ext}`,
-          candidate.id.slice(0, 8),
-        );
+        // Stable key per candidate so replace overwrites instead of leaving orphans.
+        const path = this.storage.imageObjectPath(`profile-photo${ext}`, candidate.id.slice(0, 8));
         const uploaded = await this.storage.uploadFile(path, file.buffer, {
           contentType: mime.includes('png') ? 'image/png' : 'image/jpeg',
           isPublic: true,
           metadata: { candidateId: candidate.id, source: 'profile-photo' },
         });
         storedUrl = uploaded.publicUrl;
+        await this.deleteReplacedProfilePhotos(candidate.id, previousPath, path);
       } catch (err) {
         this.logger.error(
           `Profile photo multipart GCS upload failed for ${candidate.id}: ${(err as Error).message}`,
@@ -512,14 +512,20 @@ export class CandidatesService {
         endDate: dto.endDate ? new Date(dto.endDate) : null,
         description: dto.description?.trim() || null,
         isInternship: Boolean(dto.isInternship),
+        stillInCompany: Boolean(dto.stillInCompany),
       },
     });
-    if (!candidate.hasExperience) {
-      await this.prisma.candidate.update({
-        where: { userId },
-        data: { hasExperience: dto.isInternship ? 'INTERNSHIP' : 'YES' },
-      });
-    }
+    await this.prisma.candidate.update({
+      where: { userId },
+      data: {
+        hasExperience: dto.isInternship
+          ? candidate.hasExperience === 'YES'
+            ? 'YES'
+            : 'INTERNSHIP'
+          : 'YES',
+        experienceLevel: dto.isInternship ? candidate.experienceLevel || 'fresher' : 'experienced',
+      },
+    });
     return this.recompute(userId);
   }
 
@@ -543,6 +549,7 @@ export class CandidatesService {
         ...(dto.endDate !== undefined ? { endDate: dto.endDate ? new Date(dto.endDate) : null } : {}),
         ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
         ...(dto.isInternship !== undefined ? { isInternship: dto.isInternship } : {}),
+        ...(dto.stillInCompany !== undefined ? { stillInCompany: dto.stillInCompany } : {}),
       },
     });
     return this.recompute(userId);
@@ -617,7 +624,7 @@ export class CandidatesService {
     return this.recompute(userId);
   }
 
-  /** Store profile photos flat under Images/ in GCS (e.g. Images/photo-abc123.jpg). */
+  /** Store profile photos flat under Images/ in GCS (overwrite stable key per candidate). */
   private async persistProfilePhoto(candidateId: string, photoUrl: string): Promise<string> {
     const dataUrl = photoUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+)(?:;[^,]*)?;base64,([\s\S]+)$/i);
     if (!dataUrl) {
@@ -632,14 +639,18 @@ export class CandidatesService {
       const ext =
         mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : mime.includes('gif') ? '.gif' : '.jpg';
       const buffer = Buffer.from(dataUrl[2], 'base64');
-      const path = this.storage.imageObjectPath(
-        `photo-${Date.now()}${ext}`,
-        candidateId.slice(0, 8),
-      );      const uploaded = await this.storage.uploadFile(path, buffer, {
+      const previous = await this.prisma.candidate.findUnique({
+        where: { id: candidateId },
+        select: { photoUrl: true },
+      });
+      const previousPath = this.gcsPathFromPhotoUrl(previous?.photoUrl);
+      const path = this.storage.imageObjectPath(`profile-photo${ext}`, candidateId.slice(0, 8));
+      const uploaded = await this.storage.uploadFile(path, buffer, {
         contentType: mime,
         isPublic: true,
         metadata: { candidateId, source: 'profile-photo' },
       });
+      await this.deleteReplacedProfilePhotos(candidateId, previousPath, path);
       return uploaded.publicUrl;
     } catch (err) {
       this.logger.error(
@@ -650,22 +661,78 @@ export class CandidatesService {
     }
   }
 
-  /** Turn private GCS object URLs into short-lived signed URLs for the browser. */
+  private gcsPathFromPhotoUrl(photoUrl: string | null | undefined): string | null {
+    if (!photoUrl) return null;
+    const match = photoUrl.match(/^https?:\/\/storage\.googleapis\.com\/[^/]+\/(.+?)(?:\?|$)/i);
+    if (!match?.[1]) return null;
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+
+  /** Remove the previous object (and jpg/png twin) when a new profile photo replaces it. */
+  private async deleteReplacedProfilePhotos(
+    candidateId: string,
+    previousPath: string | null,
+    nextPath: string,
+  ) {
+    if (!this.storage.isConfigured()) return;
+    const prefix = candidateId.slice(0, 8);
+    const candidates = new Set<string>();
+    if (previousPath && previousPath !== nextPath) candidates.add(previousPath);
+    // Drop the other extension on the stable key (jpg ↔ png).
+    for (const ext of ['.jpg', '.jpeg', '.png', '.webp', '.gif'] as const) {
+      const twin = this.storage.imageObjectPath(`profile-photo${ext === '.jpeg' ? '.jpg' : ext}`, prefix);
+      if (twin !== nextPath) candidates.add(twin);
+    }
+    // Legacy timestamped keys: Images/photo-{ts}-{id}.ext
+    if (previousPath && /\/photo-\d+-/.test(previousPath) && previousPath !== nextPath) {
+      candidates.add(previousPath);
+    }
+    for (const path of candidates) {
+      await this.storage.deleteFile(path);
+    }
+  }
+
+  /** Turn private GCS object URLs into browser-readable URLs (signed, or data URL fallback). */
   private async resolvePhotoUrl(photoUrl: string | null | undefined): Promise<string | null> {
     if (!photoUrl) return null;
-    if (photoUrl.startsWith('data:') || !this.storage.isConfigured()) return photoUrl;
+    if (photoUrl.startsWith('data:') || photoUrl.startsWith('blob:')) return photoUrl;
+    if (!this.storage.isConfigured()) return photoUrl;
+
     const match = photoUrl.match(
       /^https?:\/\/storage\.googleapis\.com\/[^/]+\/(.+?)(?:\?|$)/i,
     );
     if (!match?.[1]) return photoUrl;
+
+    const objectPath = decodeURIComponent(match[1]);
+
     try {
-      const objectPath = decodeURIComponent(match[1]);
       return await this.storage.getSignedUrl(objectPath, {
         action: 'read',
         expiresInMinutes: 60 * 24 * 7,
       });
     } catch (err) {
       this.logger.warn(`Could not sign photo URL: ${(err as Error).message}`);
+    }
+
+    // Uniform bucket ACL + missing client_email → public URL 403s in the browser.
+    // Download via the same credentials that uploaded and return a data URL.
+    try {
+      const buffer = await this.storage.downloadFile(objectPath);
+      const lower = objectPath.toLowerCase();
+      const mime = lower.endsWith('.png')
+        ? 'image/png'
+        : lower.endsWith('.webp')
+          ? 'image/webp'
+          : lower.endsWith('.gif')
+            ? 'image/gif'
+            : 'image/jpeg';
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    } catch (err) {
+      this.logger.warn(`Could not download photo for display: ${(err as Error).message}`);
       return photoUrl;
     }
   }

@@ -457,9 +457,19 @@ export default function MockInterviewQuestionPage() {
     phase === 'RECORDING_ACTIVE' ||
     phase === 'TYPING_ACTIVE';
 
+  const thinkPct = Math.max(0, Math.min(100, thinkProgress * 100));
+  const thinkRing = 2 * Math.PI * 42;
+
   return (
     <CandidateAppShell activeTab="interviews" maxWidth="max-w-3xl">
       <style dangerouslySetInnerHTML={{ __html: guidedStyles }} />
+      <div
+        className="-mx-3 overflow-hidden rounded-[28px] px-3 py-5 sm:-mx-4 sm:px-5 sm:py-6"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 55% at 15% 0%, rgba(159, 217, 236, 0.5), transparent 55%), radial-gradient(ellipse 60% 45% at 95% 8%, rgba(200, 236, 246, 0.65), transparent 50%), linear-gradient(180deg, #e8f6fb 0%, #f5fbfc 50%, #eef8fb 100%)',
+        }}
+      >
       <div className="mx-auto w-full max-w-2xl space-y-4 pb-24 sm:pb-8">
         <div className="flex items-center justify-between gap-3">
           <Link
@@ -469,23 +479,23 @@ export default function MockInterviewQuestionPage() {
             <span aria-hidden>←</span>
             <span>Setup</span>
           </Link>
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 sm:text-xs">
+          <p className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#0a2e2c] shadow-sm sm:text-xs">
             {GUIDED_PHASE_LABELS[phase]}
           </p>
         </div>
 
         {/* Pipeline indicator */}
         <nav aria-label="Interview progress" className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <ol className="flex w-max min-w-full items-center gap-1 sm:gap-2">
+          <ol className="flex w-max min-w-full items-center gap-1.5 sm:gap-2">
             {steps.map((step) => (
               <li
                 key={step.id}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-bold sm:text-xs ${
+                className={`rounded-full px-2.5 py-1.5 text-[10px] font-bold shadow-sm sm:text-xs ${
                   step.active
-                    ? 'bg-[#0a2e2c] text-white'
+                    ? 'bg-[#0a2e2c] text-white shadow-[0_6px_14px_rgba(10,46,44,0.25)]'
                     : step.done
                       ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-slate-100 text-slate-400'
+                      : 'bg-white/70 text-slate-400'
                 }`}
               >
                 {step.label}
@@ -495,11 +505,11 @@ export default function MockInterviewQuestionPage() {
         </nav>
 
         {/* Question counter */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">AI Mock Interview</p>
-            <h1 className="text-sm font-extrabold text-[#0a2e2c] sm:text-lg">{session.jobRole}</h1>
-            <p className="text-[11px] text-slate-600 sm:text-sm">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#d7eef6] bg-white/85 px-4 py-3 shadow-[0_8px_22px_rgba(47,143,173,0.08)] backdrop-blur-sm">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#5a7a82]">AI Mock Interview</p>
+            <h1 className="truncate text-sm font-extrabold text-[#0a2e2c] sm:text-lg">{session.jobRole}</h1>
+            <p className="text-[11px] text-[#5a7a82] sm:text-sm">
               {interviewTypeLabel(session.interviewType)} · Question {questionNumber} of {totalQuestions}
             </p>
           </div>
@@ -555,59 +565,103 @@ export default function MockInterviewQuestionPage() {
 
         {/* Question + think + record workspace */}
         {showQuestionWorkspace ? (
-          <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(10,46,44,0.08)]">
-            <div className="border-b border-slate-100 bg-[#f4faf9] px-4 py-4 sm:px-5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0a2e2c]/70">
-                Question {questionNumber}
-              </p>
-              <blockquote className="mt-2 text-[15px] font-bold leading-snug text-slate-900 sm:text-lg">
-                {questionText}
-              </blockquote>
-              {phase === 'QUESTION_DISPLAY' && aiSpeaking ? (
-                <div className="mt-3 flex items-center gap-2">
-                  <VoiceWave />
-                  <span className="text-xs font-semibold text-slate-500">AI is reading the question…</span>
+          <article className="overflow-hidden rounded-[22px] border border-[#d7eef6] bg-white/95 shadow-[0_12px_32px_rgba(47,143,173,0.12)] backdrop-blur-sm">
+            <div className="border-b border-[#e5f4f8] bg-gradient-to-br from-[#f3fbfe] via-white to-[#eef8fb] px-4 py-4 sm:px-5">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <InterviewBotFace
+                  size="md"
+                  speaking={phase === 'QUESTION_DISPLAY' && aiSpeaking}
+                  className="mt-0.5 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0a2e2c]/70">
+                    Question {questionNumber}
+                  </p>
+                  <blockquote className="mt-2 text-[15px] font-bold leading-snug text-[#0a2e2c] sm:text-lg">
+                    {questionText}
+                  </blockquote>
+                  {phase === 'QUESTION_DISPLAY' && aiSpeaking ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <VoiceWave />
+                      <span className="text-xs font-semibold text-[#5a7a82]">AI is reading the question…</span>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
+              </div>
             </div>
 
             <div className="space-y-4 p-4 sm:p-5">
               {phase === 'QUESTION_THINKING' ? (
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-[#f8faf9] p-5 text-center" role="timer">
-                    <p className="text-sm font-bold text-[#0a2e2c]">Think Time</p>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-600">{buildThinkLine()}</p>
-                    <div className="mx-auto mt-4 h-2.5 w-full max-w-sm overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="relative overflow-hidden rounded-[20px] border border-[#d7eef6] bg-gradient-to-b from-[#f7fcfe] to-white p-5 text-center sm:p-6"
+                    role="timer"
+                  >
+                    <div
+                      className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-[#9fd9ec]/25 blur-2xl"
+                      aria-hidden
+                    />
+                    <p className="text-sm font-extrabold text-[#0a2e2c]">Think Time</p>
+                    <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-[#5a7a82]">
+                      {buildThinkLine()}
+                    </p>
+
+                    <div className="relative mx-auto mt-5 h-[108px] w-[108px]">
+                      <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden>
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#e2eef2" strokeWidth="8" />
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="42"
+                          fill="none"
+                          stroke="#0a2e2c"
+                          strokeWidth="8"
+                          strokeLinecap="round"
+                          strokeDasharray={thinkRing}
+                          strokeDashoffset={thinkRing * (1 - thinkPct / 100)}
+                          style={{ transition: 'none' }}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <p className="text-3xl font-black tabular-nums leading-none text-[#0a2e2c]">
+                          {thinkRemaining}
+                        </p>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-[#7a9aa3]">
+                          sec
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mx-auto mt-4 h-2 w-full max-w-xs overflow-hidden rounded-full bg-[#e2eef2]">
                       <div
-                        className="h-full rounded-full bg-[#0a2e2c]"
+                        className="h-full rounded-full bg-gradient-to-r from-[#0a2e2c] to-[#1a5c58]"
                         style={{
-                          width: `${Math.max(0, Math.min(100, thinkProgress * 100))}%`,
+                          width: `${thinkPct}%`,
                           transition: 'none',
                         }}
                       />
                     </div>
-                    <p className="mt-3 text-3xl font-black tabular-nums text-[#0a2e2c]">{thinkRemaining}</p>
-                    <p className="text-xs font-semibold text-slate-500">
+                    <p className="mt-2 text-xs font-semibold text-[#5a7a82]">
                       {thinkRemaining > 0 ? 'seconds remaining' : 'Choose how you want to answer'}
                     </p>
                   </div>
 
                   <div>
-                    <p className="mb-2 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                    <p className="mb-2.5 text-center text-xs font-bold uppercase tracking-[0.12em] text-[#5a7a82]">
                       Choose way of answering
                     </p>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <button
                         type="button"
                         onClick={() => chooseAnswerMethod('recording')}
-                        className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                        className="group flex items-start gap-3 rounded-2xl border border-[#d7eef6] bg-white px-4 py-4 text-left shadow-[0_6px_16px_rgba(47,143,173,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-[#0a2e2c] hover:shadow-[0_12px_24px_rgba(10,46,44,0.14)]"
                       >
-                        <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[#0a2e2c]">
+                        <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#0a2e2c] text-white shadow-sm transition group-hover:scale-105">
                           <MicIcon className="h-5 w-5" />
                         </span>
                         <span className="min-w-0">
                           <span className="block text-base font-extrabold text-[#0a2e2c]">With recording</span>
-                          <span className="mt-1 block text-xs font-medium text-slate-500">
+                          <span className="mt-1 block text-xs font-medium leading-relaxed text-[#5a7a82]">
                             3–2–1 countdown, then speak your answer
                           </span>
                         </span>
@@ -615,14 +669,14 @@ export default function MockInterviewQuestionPage() {
                       <button
                         type="button"
                         onClick={() => chooseAnswerMethod('typing')}
-                        className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                        className="group flex items-start gap-3 rounded-2xl border border-[#d7eef6] bg-white px-4 py-4 text-left shadow-[0_6px_16px_rgba(47,143,173,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-[#0a2e2c] hover:shadow-[0_12px_24px_rgba(10,46,44,0.14)]"
                       >
-                        <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[#0a2e2c]">
+                        <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#e8f6fb] text-[#0a2e2c] transition group-hover:scale-105 group-hover:bg-[#0a2e2c] group-hover:text-white">
                           <KeyboardIcon className="h-5 w-5" />
                         </span>
                         <span className="min-w-0">
                           <span className="block text-base font-extrabold text-[#0a2e2c]">With typing</span>
-                          <span className="mt-1 block text-xs font-medium text-slate-500">
+                          <span className="mt-1 block text-xs font-medium leading-relaxed text-[#5a7a82]">
                             Type your answer — mic available if you want
                           </span>
                         </span>
@@ -834,6 +888,7 @@ export default function MockInterviewQuestionPage() {
             </div>
           </article>
         ) : null}
+      </div>
       </div>
     </CandidateAppShell>
   );

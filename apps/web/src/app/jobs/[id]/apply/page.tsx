@@ -51,6 +51,27 @@ export default function ApplyPage() {
     );
   }
 
+  if (job.applied) {
+    return (
+      <CandidateAppShell activeTab="jobs" maxWidth="max-w-3xl">
+        <Link href={`/jobs/${job.id}`} className="text-sm font-bold text-teal hover:underline">
+          ← Job details
+        </Link>
+        <h1 className="mt-4 break-words text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">
+          Applied
+        </h1>
+        <p className="mt-2 text-muted">
+          You already applied for {job.title} at {job.companyName}.
+        </p>
+        <div className="mt-6">
+          <Link href="/applications">
+            <Button type="button">View applications</Button>
+          </Link>
+        </div>
+      </CandidateAppShell>
+    );
+  }
+
   return (
     <CandidateAppShell activeTab="jobs" maxWidth="max-w-3xl">
       <Link href={`/jobs/${job.id}`} className="text-sm font-bold text-teal hover:underline">

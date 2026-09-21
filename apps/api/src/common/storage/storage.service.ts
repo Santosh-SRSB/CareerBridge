@@ -185,11 +185,11 @@ export class StorageService implements OnModuleInit {
     if (!this.storageClient) return false;
     try {
       const bucket = this.storageClient.bucket(this.bucketName);
-      await bucket.file(filePath).delete();
-      this.logger.log(`Deleted ${filePath} from GCS`);
+      await bucket.file(filePath).delete({ ignoreNotFound: true });
+      this.logger.log(`Deleted ${filePath} from GCS (or already absent)`);
       return true;
     } catch (err) {
-      this.logger.error(`Failed to delete file from GCS (${filePath}): ${(err as Error).message}`);
+      this.logger.warn(`Failed to delete file from GCS (${filePath}): ${(err as Error).message}`);
       return false;
     }
   }

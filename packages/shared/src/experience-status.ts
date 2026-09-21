@@ -2,9 +2,14 @@
 
 export type ExperienceBand = 'fresher' | 'experienced';
 
+/** Boarding-pass LEVEL chip keys. */
+export type ExperienceLevelChip = 'fresher' | '0-1' | '1-3' | '3-5' | '5+';
+
+/** @deprecated Prefer ExperienceLevelChip; kept for STATUS label helpers. */
 export type ExperienceChip = {
   band: ExperienceBand;
   label: 'FRESHER' | 'EXPERIENCED';
+  level: ExperienceLevelChip;
 };
 
 export type ExperienceBandInput = {
@@ -35,27 +40,56 @@ function hasInternshipOnly(
   return anyIntern && !anyPaid;
 }
 
+function totalYears(input: ExperienceBandInput) {
+  const years = Number(input.totalExperienceYears) || 0;
+  const months = Number(input.totalExperienceMonths) || 0;
+  return years + months / 12;
+}
+
 /** Prefer onboarding hasExperience → paid vs internship rows → years → stored level. */
 export function resolveCandidateExperienceBand(input: ExperienceBandInput): ExperienceBand {
   const flag = (input.hasExperience || '').trim().toUpperCase();
   if (flag === 'YES') return 'experienced';
-  if (flag === 'NONE' || flag === 'INTERNSHIP') return 'fresher';
+  if (flag === 'NONE') return 'fresher';
+  // Internship: fresher unless paid jobs or ≥1 year.
+  if (flag === 'INTERNSHIP') {
+    if (hasPaidRole(input.experiences) || totalYears(input) >= 1) return 'experienced';
+    return 'fresher';
+  }
 
   if (hasPaidRole(input.experiences)) return 'experienced';
   if (hasInternshipOnly(input.experiences)) return 'fresher';
 
-  const years = Number(input.totalExperienceYears) || 0;
-  const months = Number(input.totalExperienceMonths) || 0;
-  if (years > 0 || months > 0) return 'experienced';
+  if (totalYears(input) > 0) return 'experienced';
 
   const level = (input.experienceLevel || '').trim().toLowerCase();
   if (level === 'experienced') return 'experienced';
   return 'fresher';
 }
 
+/** LEVEL chip: fresher | 0-1 | 1-3 | 3-5 | 5+ */
+export function resolveExperienceLevelChip(input: ExperienceBandInput): ExperienceLevelChip {
+  const band = resolveCandidateExperienceBand(input);
+  if (band === 'fresher') return 'fresher';
+  const total = totalYears(input);
+  if (total < 1.5) return '0-1';
+  if (total < 3.5) return '1-3';
+  if (total < 5.5) return '3-5';
+  return '5+';
+}
+
+/**
+ * STATUS + LEVEL together.
+ * - label → boarding STATUS (FRESHER / EXPERIENCED)
+ * - level → boarding LEVEL chip key
+ */
 export function resolveExperienceChip(input: ExperienceBandInput): ExperienceChip {
   const band = resolveCandidateExperienceBand(input);
-  return { band, label: band === 'experienced' ? 'EXPERIENCED' : 'FRESHER' };
+  return {
+    band,
+    label: band === 'experienced' ? 'EXPERIENCED' : 'FRESHER',
+    level: resolveExperienceLevelChip(input),
+  };
 }
 
 /** Deduplicate location display tokens (e.g. "Karnataka, Karnataka"). */

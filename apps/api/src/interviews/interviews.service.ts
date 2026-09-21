@@ -102,7 +102,7 @@ export class InterviewsService {
         source: dto.source,
         difficulty: dto.difficulty || band,
         durationLimitMin: dto.durationLimitMin,
-        profileJson: JSON.stringify({ ...content, experienceYears: years, questionLimit }),
+        profileJson: JSON.stringify({ ...content, experienceYears: years, questionLimit, candidateId: candidate.id }),
         transcriptJson: '[]',
         warningsJson: '[]',
       },
@@ -518,10 +518,9 @@ export class InterviewsService {
   }
 
   private profileOf(interview: { profileJson: string | null; jobRole: string }): InterviewProfile {
-    const content = parseJson<Partial<ResumeContent> & { experienceYears?: number; questionLimit?: number }>(
-      interview.profileJson,
-      {},
-    );
+    const content = parseJson<
+      Partial<ResumeContent> & { experienceYears?: number; questionLimit?: number; candidateId?: string }
+    >(interview.profileJson, {});
     const profile = profileFromResume(
       {
         fullName: content.fullName || 'Candidate',
@@ -538,7 +537,11 @@ export class InterviewsService {
       } as ResumeContent & { experienceYears?: number },
       interview.jobRole,
     );
-    return { ...profile, questionLimit: content.questionLimit };
+    return {
+      ...profile,
+      questionLimit: content.questionLimit,
+      candidateId: (content as { candidateId?: string }).candidateId,
+    };
   }
 
   private async requireCandidate(userId: string) {

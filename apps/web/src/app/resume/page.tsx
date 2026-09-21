@@ -50,6 +50,8 @@ import { goToReturnTo, peekReturnTo, clearReturnStack } from '@/lib/nav-return';
 import {
   getCandidateMe,
   getResume,
+  getResumeProcessingStatus,
+  retryResumeProcessing,
   listResumes,
   createResume,
   updateResume,
@@ -57,6 +59,7 @@ import {
   updateCandidateMe,
   analyzeCareerGap,
 } from '@/lib/api';
+import { mapResumeRecordToWizardSeed } from '@/features/resume/resume-record-to-wizard';
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
 import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
 import type { CandidateProfile } from '@careerbridge/shared';
@@ -315,6 +318,9 @@ function ResumePageInner() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [draftReady, setDraftReady] = useState(false);
+  const [pendingParseId, setPendingParseId] = useState<string | null>(null);
+  const [parseBusy, setParseBusy] = useState(false);
+  const [parseError, setParseError] = useState('');
 
   const [languages, setLanguages] = useState<string[]>([]);
   const [availableLanguages, setAvailableLanguages] = useState<string[]>([...LANGUAGE_POOL]);
@@ -421,9 +427,14 @@ function ResumePageInner() {
       const fromAutofill = Boolean(autofillSeed || peekResumeFromAutofill() || fromAutofillQuery);
       if (fromAutofill) {
         if (autofillSeed) {
-          const { resumeId, highlightMissing, ...seedFields } = autofillSeed;
+          const { resumeId, highlightMissing, pendingParse, ...seedFields } = autofillSeed;
           applySeed(seedFields);
           if (resumeId) setSavedResumeId(resumeId);
+          if (pendingParse && resumeId) {
+            setPendingParseId(resumeId);
+            setParseBusy(true);
+            setParseError('');
+          }
           setHighlightMissingPersonal(Boolean(highlightMissing ?? true));
           saveResumeWizardDraft({
             flowPhase: 'wizard',
@@ -578,6 +589,79 @@ function ResumePageInner() {
       active = false;
     };
   }, [fromAutofillQuery, fromBuildQuery]);
+
+  // Background parse: hydrate wizard when Document AI + Gemini finish (upload already navigated).
+  useEffect(() => {
+    if (!pendingParseId) return;
+    let cancelled = false;
+
+    async function hydrateFromParsedResume(resumeId: string) {
+      const record = await getResume(resumeId);
+      if (cancelled) return;
+      const seed = mapResumeRecordToWizardSeed(record);
+      applyProfileSeed(seed, {
+        setFullName,
+        setLocation,
+        setEmail,
+        setPhone,
+        setSummary,
+        setSkills,
+        setEducationList: setEducationList as (value: EducationItem[]) => void,
+        setExperienceList: setExperienceList as (value: ExperienceItem[]) => void,
+        setProjectList: setProjectList as (value: ProjectItem[]) => void,
+        setCertificationList: setCertificationList as (value: CertificationItem[]) => void,
+        setAchievementList: setAchievementList as (value: AchievementItem[]) => void,
+        setLinkedin,
+        setGithub,
+        setPortfolio,
+        setGapReason,
+        setLanguages,
+        setAvailableLanguages,
+        setPreferredRole,
+        setPreferredLocation,
+        setExpectedSalary,
+      });
+      setSavedResumeId(resumeId);
+      setHighlightMissingPersonal(true);
+      setParseBusy(false);
+      setParseError('');
+      setPendingParseId(null);
+    }
+
+    async function poll() {
+      setParseBusy(true);
+      for (let i = 0; i < 180; i += 1) {
+        if (cancelled) return;
+        try {
+          const result = await getResumeProcessingStatus(pendingParseId);
+          if (result.processingStatus === 'COMPLETED') {
+            await hydrateFromParsedResume(pendingParseId);
+            return;
+          }
+          if (result.processingStatus === 'FAILED') {
+            setParseBusy(false);
+            setParseError(result.processingError || 'Could not read this resume. Please retry.');
+            return;
+          }
+        } catch (err) {
+          if (cancelled) return;
+          setParseBusy(false);
+          setParseError(err instanceof Error ? err.message : 'Could not check resume status.');
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      if (!cancelled) {
+        setParseBusy(false);
+        setParseError('Reading is taking longer than usual. You can keep editing or retry.');
+      }
+    }
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingParseId]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -1719,6 +1803,64 @@ function ResumePageInner() {
           />
       ) : (
       <div className="cb-wizard-shell">
+        {(parseBusy || parseError) ? (
+          <div
+            className="mb-4 rounded-2xl border px-4 py-3"
+            style={{
+              borderColor: parseError ? '#f3c2c2' : '#cfe3dc',
+              background: parseError ? '#fff5f5' : '#f3faf7',
+            }}
+          >
+            {parseBusy ? (
+              <div className="flex items-center gap-3">
+                <div className="cb-bounce-dots" aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <div>
+                  <p className="m-0 text-sm font-semibold" style={{ color: '#0a2e2c' }}>
+                    Reading your resume
+                  </p>
+                  <p className="m-0 mt-0.5 text-xs" style={{ color: '#6b7789' }}>
+                    You can keep editing — details will fill in automatically.
+                  </p>
+                </div>
+              </div>
+            ) : parseError ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="m-0 text-sm font-medium text-red-700">{parseError}</p>
+                {pendingParseId ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-[#0a2e2c] px-3 py-1.5 text-xs font-semibold text-[#0a2e2c]"
+                    onClick={() => {
+                      void (async () => {
+                        setParseError('');
+                        setParseBusy(true);
+                        try {
+                          await retryResumeProcessing(pendingParseId);
+                          // Re-trigger poll by resetting id
+                          const id = pendingParseId;
+                          setPendingParseId(null);
+                          setTimeout(() => setPendingParseId(id), 0);
+                        } catch (err) {
+                          setParseBusy(false);
+                          setParseError(
+                            err instanceof Error ? err.message : 'Retry failed. Please try again.',
+                          );
+                        }
+                      })();
+                    }}
+                  >
+                    Retry reading
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className="cb-main-head">
           <div className="cb-main-head-row">
             <h1>

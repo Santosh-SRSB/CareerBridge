@@ -10,7 +10,7 @@ import { buildResumeFromResumeContent } from '@/features/resume/build-resume-fro
 import { masterResumeToAtsData } from '@/features/resume/master-to-ats-data';
 import type { MasterResumeDocument } from '@/features/resume/master-resume.types';
 import { getCandidateMe, getResume, listResumes } from '@/lib/api';
-import { formatCandidateExperienceLine } from '@/lib/format-candidate-experience';
+import { formatCandidateExperienceLine, resolveTotalExperienceYears } from '@/lib/format-candidate-experience';
 import { rememberReturnTo } from '@/lib/nav-return';
 import { getStoredUser } from '@/lib/session';
 import '@/components/resume-templates/resume-template-01.css';
@@ -167,6 +167,7 @@ export default function ProfileDetailsPage() {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join('') || 'C';
+  const experienceYears = resolveTotalExperienceYears(profile);
   const experienceLine = formatCandidateExperienceLine(profile) || 'Fresher';
   const roleHint =
     profile.experiences.find((e) => e.stillInCompany)?.jobTitle ||
@@ -175,8 +176,16 @@ export default function ProfileDetailsPage() {
     'Candidate';
   const location = [pretty(profile.city), pretty(profile.state)].filter(Boolean).join(', ') || '—';
   const headline = `${pretty(roleHint)} · ${pretty(profile.city) || 'India'}`;
+  const yearsLabel =
+    experienceYears >= 1
+      ? `${Math.floor(experienceYears)}+ year${Math.floor(experienceYears) === 1 ? '' : 's'} of experience`
+      : experienceLine.includes('Internship')
+        ? 'Internship'
+        : experienceLine.includes('Fresher')
+          ? 'Fresher'
+          : null;
   const tags = [
-    experienceLine.includes('Fresher') ? 'Fresher' : experienceLine,
+    yearsLabel || (experienceLine.includes('Fresher') ? 'Fresher' : experienceLine),
     profile.openToRelocating ? 'Open to relocate' : null,
   ].filter(Boolean) as string[];
 
@@ -308,6 +317,17 @@ export default function ProfileDetailsPage() {
 
           <div className="cb-cand-details__section">
             <SectionHead title="Experience" onEdit={() => goEdit('/passport/experience')} />
+            {experienceYears >= 1 ? (
+              <p className="cb-cand-details__exp-years">
+                <strong>
+                  {Math.floor(experienceYears)}+ year
+                  {Math.floor(experienceYears) === 1 ? '' : 's'}
+                </strong>{' '}
+                of experience
+              </p>
+            ) : yearsLabel ? (
+              <p className="cb-cand-details__exp-years">{yearsLabel}</p>
+            ) : null}
             {profile.experiences.length ? (
               profile.experiences.map((exp, index) => (
                 <div key={exp.id} className="cb-cand-details__timeline">
@@ -724,6 +744,15 @@ export default function ProfileDetailsPage() {
           margin: 0;
           font-family: var(--font-lora-details), Georgia, serif;
           font-size: 15.5px;
+          font-weight: 700;
+        }
+        .cb-cand-details__exp-years {
+          margin: 0 0 14px;
+          font-size: 14px;
+          color: #43526b;
+        }
+        .cb-cand-details__exp-years strong {
+          color: #0c2822;
           font-weight: 700;
         }
         .cb-cand-details__kv {

@@ -24,7 +24,9 @@ import {
   downloadResume,
   enhanceResume,
   getResume,
+  updateCandidateMe,
 } from '@/lib/api';
+import { patchStoredUser } from '@/lib/session';
 import { downloadMasterResumePdf } from '@/lib/master-resume-pdf';
 import { useResumePageFit } from '@/components/resume-templates/pageFit.js';
 import '@/components/resume-templates/ats-template.css';
@@ -532,6 +534,12 @@ export function ResumePreviewScreen({
       await onSyncProfile?.();
     } catch {
       /* still navigate */
+    }
+    try {
+      await updateCandidateMe({ dashboardReached: true, onboardingCompleted: true });
+      patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
+    } catch {
+      patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
     }
     router.push('/dashboard');
   }
