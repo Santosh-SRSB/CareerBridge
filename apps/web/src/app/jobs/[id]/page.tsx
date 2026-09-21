@@ -91,9 +91,15 @@ export default function JobDetailPage() {
     setError('');
     try {
       const application = await submitApplication(job.id);
+      setJob({ ...job, applied: true });
       router.replace(`/applications/${application.id}/confirmation`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'We could not send your application right now.');
+      const message =
+        err instanceof Error ? err.message : 'We could not send your application right now.';
+      if (/already applied/i.test(message)) {
+        setJob({ ...job, applied: true });
+      }
+      setError(message);
       setApplying(false);
     }
   }
@@ -311,11 +317,13 @@ export default function JobDetailPage() {
 
             <div className="cb-job-detail__apply cb-job-detail__fx" style={{ animationDelay: '0.22s' }}>
               <p>
-                Ready to apply for <b>{job.title}</b>?
+                {job.applied
+                  ? 'You have already applied for this role.'
+                  : <>Ready to apply for <b>{job.title}</b>?</>}
               </p>
               {job.applied ? (
-                <Link href="/applications" className="cb-job-detail__btn-apply">
-                  Track Application
+                <Link href="/applications" className="cb-job-detail__btn-apply is-applied">
+                  Applied
                 </Link>
               ) : (
                 <button

@@ -184,7 +184,13 @@ export default function OnboardingCompletePage() {
         }}
       />
 
-      <OnboardingFrame step={4} showProgress={false} showBack={false} hideHeader>
+      <OnboardingFrame
+        step={4}
+        showProgress={false}
+        showBack
+        hideHeader
+        backHref="/onboarding/experience"
+      >
         <div className="cb-ob-complete cb-ob-hide-scrollbar flex min-h-0 flex-1 flex-col justify-center py-2">
           <h2
             className="cb-ob-complete-fx cb-ob-complete-title m-0 text-[1.5rem] leading-[1.28] tracking-[-0.2px] sm:text-[1.7rem]"
@@ -263,7 +269,7 @@ export default function OnboardingCompletePage() {
             className={`cb-ob-complete-primary ${onboardingPrimaryButtonClass} mt-8 w-full py-3.5 text-[15px] hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(10,46,44,0.28)] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:mt-10 sm:py-4 sm:text-base`}
             style={{ background: OB.moss }}
           >
-            Auto fill with resume
+            Upload resume
           </button>
 
           <p

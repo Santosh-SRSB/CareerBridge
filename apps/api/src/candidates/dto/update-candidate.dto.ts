@@ -117,6 +117,11 @@ export class UpdateCandidateDto {
   @IsIn(EXPERIENCE_OPTIONS.map((item) => item.value))
   hasExperience?: string;
 
+  @ApiPropertyOptional({ enum: ['fresher', 'experienced'] })
+  @IsOptional()
+  @IsIn(['fresher', 'experienced'])
+  experienceLevel?: 'fresher' | 'experienced';
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -246,6 +251,10 @@ export class ExperienceDto {
   @IsOptional()
   @IsBoolean()
   isInternship?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  stillInCompany?: boolean;
 }
 
 export class UpdateExperienceDto {
@@ -274,6 +283,10 @@ export class UpdateExperienceDto {
   @IsOptional()
   @IsBoolean()
   isInternship?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  stillInCompany?: boolean;
 }
 
 export class PassportEducationDto {

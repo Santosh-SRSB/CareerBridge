@@ -7,7 +7,9 @@ export function mapResumeContentToPassportPayload(content: ResumeContent): SaveP
   const lastName = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
 
   const experiences = content.experiences || [];
-  const hasJobs = experiences.some((row) => Boolean(row.company?.trim() || row.jobTitle?.trim()));
+  const hasPaidJobs = experiences.some(
+    (row) => !row.isInternship && Boolean(row.company?.trim() || row.jobTitle?.trim()),
+  );
 
   return {
     firstName,
@@ -15,7 +17,8 @@ export function mapResumeContentToPassportPayload(content: ResumeContent): SaveP
     city: content.city?.trim() || undefined,
     about: content.summary?.trim() || undefined,
     source: 'resume',
-    experienceLevel: hasJobs ? 'experienced' : 'fresher',
+    // Paid roles → experienced; internship-only / none → fresher (matches 4-step onboarding).
+    experienceLevel: hasPaidJobs ? 'experienced' : 'fresher',
     skills: (content.skills || []).map((s) => s.trim()).filter(Boolean),
     education: (content.education || [])
       .filter((row) => row.qualification?.trim())

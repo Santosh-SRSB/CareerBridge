@@ -46,7 +46,7 @@ import { validateWizardStep } from '@/features/resume/resume-wizard-validation';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { OB } from '@/components/OnboardingFrame';
-import { goToReturnTo, peekReturnTo, clearReturnStack } from '@/lib/nav-return';
+import { goToReturnTo, peekReturnTo, clearReturnStack, rememberReturnTo } from '@/lib/nav-return';
 import {
   getCandidateMe,
   getResume,
@@ -420,7 +420,11 @@ function ResumePageInner() {
       const autofillSeed = peekResumeAutofillSeed();
       const fromAutofill = Boolean(autofillSeed || peekResumeFromAutofill() || fromAutofillQuery);
       if (fromAutofill) {
-        if (autofillSeed) {
+        const replaceDraft =
+          typeof window !== 'undefined' && sessionStorage.getItem('cb.resumeReplaceDraft') === '1';
+        const existingDraft = loadResumeWizardDraft();
+        if (autofillSeed && replaceDraft) {
+          if (typeof window !== 'undefined') sessionStorage.removeItem('cb.resumeReplaceDraft');
           const { resumeId, highlightMissing, ...seedFields } = autofillSeed;
           applySeed(seedFields);
           if (resumeId) setSavedResumeId(resumeId);
@@ -454,12 +458,22 @@ function ResumePageInner() {
           setFlowPhase('wizard');
           setWizardIndex(0);
         } else {
-          const draft = loadResumeWizardDraft();
-          if (draft) {
+          // Returning via Back — keep existing filled draft (do not wipe).
+          clearResumeAutofillSeed();
+          if (typeof window !== 'undefined') sessionStorage.removeItem('cb.resumeReplaceDraft');
+          if (existingDraft) {
             restoreFromDraft({
-              ...draft,
-              flowPhase: draft.flowPhase === 'choose' ? 'wizard' : draft.flowPhase,
+              ...existingDraft,
+              flowPhase: existingDraft.flowPhase === 'choose' ? 'wizard' : existingDraft.flowPhase,
             });
+          } else if (autofillSeed) {
+            const { resumeId, highlightMissing, ...seedFields } = autofillSeed;
+            applySeed(seedFields);
+            if (resumeId) setSavedResumeId(resumeId);
+            setHighlightMissingPersonal(Boolean(highlightMissing ?? true));
+            setFlowPhase('wizard');
+            setWizardIndex(0);
+            clearResumeAutofillSeed();
           } else {
             setFlowPhase('wizard');
             setWizardIndex(0);
@@ -683,8 +697,8 @@ function ResumePageInner() {
         experience: experienceList.map((exp) => ({
           startDate: exp.startDate,
           endDate: exp.endDate,
-          stillInCompany: exp.isCurrent,
-          isCurrent: exp.isCurrent,
+          stillInCompany: Boolean(exp.isCurrent || (exp.startDate?.trim() && !exp.endDate?.trim())),
+          isCurrent: Boolean(exp.isCurrent || (exp.startDate?.trim() && !exp.endDate?.trim())),
         })),
       }),
     [educationList, experienceList],
@@ -837,8 +851,8 @@ function ResumePageInner() {
         experience: experienceList.map((exp) => ({
           startDate: exp.startDate,
           endDate: exp.endDate,
-          stillInCompany: exp.isCurrent,
-          isCurrent: exp.isCurrent,
+          stillInCompany: Boolean(exp.isCurrent || (exp.startDate?.trim() && !exp.endDate?.trim())),
+          isCurrent: Boolean(exp.isCurrent || (exp.startDate?.trim() && !exp.endDate?.trim())),
         })),
         gapReason: gapReason.trim() || undefined,
         persist,
@@ -1087,7 +1101,8 @@ function ResumePageInner() {
   async function goToDashboard() {
     clearResumeFromAutofill();
     clearResumeFromBuild();
-    clearResumeWizardDraft();
+    // Keep wizard draft so Back / return still shows uploaded resume data
+    // until the user starts a new upload or clears it themselves.
     clearResumeUpdateMode();
     clearReturnStack();
     try {
@@ -1152,8 +1167,8 @@ function ResumePageInner() {
         experience: experienceList.map((exp) => ({
           startDate: exp.startDate,
           endDate: exp.endDate,
-          stillInCompany: exp.isCurrent,
-          isCurrent: exp.isCurrent,
+          stillInCompany: Boolean(exp.isCurrent || (exp.startDate?.trim() && !exp.endDate?.trim())),
+          isCurrent: Boolean(exp.isCurrent || (exp.startDate?.trim() && !exp.endDate?.trim())),
         })),
         gapReason: gapReason.trim(),
         persist: true,
@@ -1205,13 +1220,13 @@ function ResumePageInner() {
       return;
     }
     if (flowPhase === 'finish') {
-      setFlowPhase('wizard');
-      setWizardIndex(REVIEW_INDEX);
+      // Leave to upload / onboarding complete but keep draft so data is still here on return.
+      rememberReturnTo('/resume?from=autofill');
+      router.replace('/onboarding/complete');
       return;
     }
     if (flowPhase === 'preview') {
-      setFlowPhase('wizard');
-      setWizardIndex(REVIEW_INDEX);
+      setFlowPhase('finish');
       return;
     }
     if (wizardIndex > 0) {
@@ -1219,7 +1234,7 @@ function ResumePageInner() {
       return;
     }
     if (highlightMissingPersonal) {
-      clearResumeFromAutofill();
+      // Do not clear draft or autofill data — user can return with everything intact.
       leaveResumeFlow('/onboarding/complete');
       return;
     }
@@ -1367,35 +1382,112 @@ function ResumePageInner() {
         }
         .cb-stepper-row {
           display: flex;
-          gap: 4px;
+          align-items: flex-start;
+          gap: 0;
           width: 100%;
         }
         .cb-stepper-desktop .cb-step-h .lab {
-          font-size: 11px;
+          font-size: 10px;
         }
         .cb-step-h {
           flex: 1;
           min-width: 0;
           display: flex;
           flex-direction: column;
-          gap: 7px;
+          align-items: center;
+          gap: 8px;
           cursor: pointer;
+          position: relative;
         }
-        .cb-step-h .track {
-          height: 3px;
-          border-radius: 2px;
+        .cb-step-h .dot-wrap {
+          display: flex;
+          align-items: center;
+          width: 100%;
+          justify-content: center;
+          position: relative;
+        }
+        .cb-step-h .dot-wrap::before,
+        .cb-step-h .dot-wrap::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          height: 2px;
           background: var(--line);
+          transform: translateY(-50%);
+          z-index: 0;
         }
-        .cb-step-h .track.done { background: var(--teal); }
-        .cb-step-h .track.current { background: var(--marigold); }
+        .cb-step-h .dot-wrap::before {
+          left: 0;
+          right: 50%;
+          margin-right: 14px;
+        }
+        .cb-step-h .dot-wrap::after {
+          left: 50%;
+          right: 0;
+          margin-left: 14px;
+        }
+        .cb-step-h:first-child .dot-wrap::before { display: none; }
+        .cb-step-h:last-child .dot-wrap::after { display: none; }
+        .cb-step-h.is-done .dot-wrap::before,
+        .cb-step-h.is-done .dot-wrap::after,
+        .cb-step-h.is-current .dot-wrap::before {
+          background: var(--teal);
+        }
+        .cb-step-h .dot {
+          position: relative;
+          z-index: 1;
+          width: 26px;
+          height: 26px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fff;
+          border: 2px solid var(--line);
+          color: var(--ink-50);
+          flex-shrink: 0;
+          transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .cb-step-h.is-done .dot {
+          background: var(--teal);
+          border-color: var(--teal);
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(20, 184, 166, 0.28);
+        }
+        .cb-step-h.is-current .dot {
+          background: var(--marigold);
+          border-color: var(--marigold);
+          color: #fff;
+          box-shadow: 0 4px 14px rgba(240, 160, 48, 0.35);
+        }
+        .cb-step-h .dot svg {
+          width: 13px;
+          height: 13px;
+          display: block;
+        }
+        .cb-step-h .dot .num {
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1;
+        }
         .cb-step-h .lab {
-          font-size: 12px;
+          font-size: 11px;
           color: var(--ink-50);
           text-align: center;
           line-height: 1.2;
           white-space: nowrap;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
-        .cb-step-h .lab.current { color: var(--ink); font-weight: 700; }
+        .cb-step-h.is-current .lab {
+          color: var(--ink);
+          font-weight: 700;
+        }
+        .cb-step-h.is-done .lab {
+          color: var(--ink-70);
+          font-weight: 600;
+        }
 
         .cb-btn {
           display: inline-flex;
@@ -1752,23 +1844,37 @@ function ResumePageInner() {
         {!isReviewStep && !atsEditStep && (
           <div className="cb-stepper-wrap cb-stepper-desktop">
             <div className="cb-stepper-row">
-              {WIZARD_STEPS.filter((label) => label !== 'Career Gap' || localGap.hasGap).map((label) => {
+              {WIZARD_STEPS.filter((label) => label !== 'Career Gap' || localGap.hasGap).map((label, visibleIndex) => {
                 const i = WIZARD_STEPS.indexOf(label);
+                const isDone = i < wizardIndex;
+                const isCurrent = i === wizardIndex;
                 return (
                 <div
                   key={label}
-                  className="cb-step-h"
+                  className={`cb-step-h ${isDone ? 'is-done' : ''} ${isCurrent ? 'is-current' : ''}`}
                   onClick={() => {
                     setValidationErrors([]);
                     setWizardIndex(i);
                   }}
                 >
-                  <div
-                    className={`track ${
-                      i < wizardIndex ? 'done' : i === wizardIndex ? 'current' : ''
-                    }`}
-                  />
-                  <div className={`lab ${i === wizardIndex ? 'current' : ''}`}>{label}</div>
+                  <div className="dot-wrap">
+                    <div className="dot" aria-hidden>
+                      {isDone ? (
+                        <svg viewBox="0 0 12 12" fill="none">
+                          <path
+                            d="M2.5 6.2 L5 8.7 L9.5 3.5"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <span className="num">{visibleIndex + 1}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="lab">{label}</div>
                 </div>
                 );
               })}
@@ -2355,15 +2461,23 @@ function ResumePageInner() {
                     </p>
                     {localGap.highestEducation ? (
                       <p className="mt-2 text-xs text-[#6b7789]">
-                        Calculated after your highest education
+                        We only count breaks between jobs after your highest education
                         {localGap.highestEducation.qualification
                           ? ` (${localGap.highestEducation.qualification})`
                           : ''}
                         {localGap.highestEducation.endDate
-                          ? ` ending ${localGap.highestEducation.endDate}`
+                          ? `, completed ${localGap.highestEducation.endDate}`
                           : ''}
-                        . Only gaps longer than 30 days are shown. Gaps between school and college are
-                        not counted.
+                        . Time from graduation until your first job is not a career gap. Mark current
+                        roles with &quot;I am working currently&quot; and keep From / To dates filled.
+                        Only breaks longer than 30 days are shown.
+                      </p>
+                    ) : null}
+                    {experienceList.some((exp) => exp.company || exp.role) &&
+                    !experienceList.some((exp) => exp.startDate?.trim()) ? (
+                      <p className="mt-2 text-xs font-semibold text-[#b45309]">
+                        Your Experience entries are missing start dates. Go back to Experience and add
+                        From / To dates so this gap can be calculated correctly.
                       </p>
                     ) : null}
                   </div>

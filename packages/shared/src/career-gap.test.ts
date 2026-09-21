@@ -29,39 +29,29 @@ describe('career-gap after highest education', () => {
     assert.equal(formatCareerGapLabel(2), '2 months');
   });
 
-  it('flags gap only when more than 30 days', () => {
+  it('does not flag fresher period before first job as a career gap', () => {
     const now = new Date(2024, 6, 15); // Jul 15
-    const short = computeCareerGapAfterHighestEducation({
-      education: [{ qualification: 'B.Tech', endDate: '2024-06' }], // ends Jun 30
+    const fresher = computeCareerGapAfterHighestEducation({
+      education: [{ qualification: 'B.Tech', endDate: '2024-05' }],
       experience: [],
       now,
     });
-    // Jun 30 → Jul 15 = 15 days → no gap
-    assert.equal(short.hasGap, false);
-
-    const long = computeCareerGapAfterHighestEducation({
-      education: [{ qualification: 'B.Tech', endDate: '2024-05' }], // ends May 31
-      experience: [],
-      now,
-    });
-    // May 31 → Jul 15 > 30 days
-    assert.equal(long.hasGap, true);
-    assert.ok(long.gapLabel.includes('month'));
+    assert.equal(fresher.hasGap, false);
+    assert.equal(fresher.gapMonths, 0);
   });
 
-  it('ignores gap between 12th and college when highest is degree', () => {
-    const now = new Date(2024, 7, 1); // Aug 2024
+  it('ignores school→college and fresher time when continuously employed later', () => {
+    const now = new Date(2025, 5, 1); // Jun 2025
     const result = computeCareerGapAfterHighestEducation({
       education: [
         { qualification: '12th', endDate: '2019-05' },
-        { qualification: 'B.Com', endDate: '2024-06' },
+        { qualification: 'B.Com', endDate: '2022-06' },
       ],
-      experience: [],
+      experience: [{ startDate: '2023-01', isCurrent: true }],
       now,
     });
-    // ~1 month after B.Com (June 30 → Aug 1), not the 2019–2024 school gap
-    assert.equal(result.hasGap, true);
-    assert.ok(result.gapMonths >= 1 && result.gapMonths <= 3, `got ${result.gapMonths}`);
+    // First job Jan 2023 → now, continuous → no employment break
+    assert.equal(result.hasGap, false);
     assert.equal(result.highestEducation?.qualification, 'B.Com');
   });
 
@@ -75,17 +65,20 @@ describe('career-gap after highest education', () => {
     assert.equal(result.gapMonths, 0);
   });
 
-  it('subtracts employment after highest education', () => {
+  it('flags break between jobs after first employment', () => {
     const now = new Date(2025, 5, 1); // Jun 2025
     const result = computeCareerGapAfterHighestEducation({
       education: [
         { qualification: '12th', endDate: '2018-05' },
         { qualification: 'B.Tech', endDate: '2022-06' },
       ],
-      experience: [{ startDate: '2022-07', endDate: '2025-04-01', stillInCompany: false }],
+      experience: [
+        { startDate: '2022-07', endDate: '2023-06', stillInCompany: false },
+        { startDate: '2024-08', endDate: '2025-04-01', stillInCompany: false },
+      ],
       now,
     });
-    // Apr 1 → Jun 1 > 30 days
+    // Gap mid 2023 → Aug 2024, plus Apr→Jun 2025 after last job
     assert.equal(result.hasGap, true);
     assert.ok(result.gapMonths >= 1, `got ${result.gapMonths}`);
   });
@@ -99,5 +92,44 @@ describe('career-gap after highest education', () => {
     });
     assert.equal(result.hasGap, false);
     assert.equal(result.gapMonths, 0);
+  });
+
+  it('treats open-ended job and ISO datetimes as covering the gap', () => {
+    const now = new Date(2026, 8, 19);
+    const result = computeCareerGapAfterHighestEducation({
+      education: [{ qualification: 'B.Tech', endDate: '2021-06-30' }],
+      experience: [
+        {
+          startDate: '2021-07-01T00:00:00.000Z',
+          endDate: '',
+          stillInCompany: true,
+        },
+      ],
+      now,
+    });
+    assert.equal(result.hasGap, false);
+    assert.equal(result.gapMonths, 0);
+  });
+
+  it('no gap for late first job if still continuously employed', () => {
+    const now = new Date(2026, 8, 19);
+    const result = computeCareerGapAfterHighestEducation({
+      education: [
+        { qualification: '10th', endDate: '2016-06-01' },
+        { qualification: 'Maharana Pratap Engineering College, Kanpur', endDate: '2021-06-30' },
+      ],
+      experience: [{ startDate: '2023-01-15', isCurrent: true }],
+      now,
+    });
+    assert.equal(result.hasGap, false);
+    assert.equal(result.gapMonths, 0);
+  });
+
+  it('ranks school names below engineering college free-text', () => {
+    assert.ok(
+      educationQualificationRank('Sarvoday High School Bhagwanpur') <
+        educationQualificationRank('Maharana Pratap Engineering College, Kanpur'),
+    );
+    assert.equal(educationQualificationRank('Other (specify)'), 5);
   });
 });

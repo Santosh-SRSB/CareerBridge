@@ -1,23 +1,16 @@
 export const INDIA_STATES = [
-  'Andaman and Nicobar Islands',
   'Andhra Pradesh',
   'Arunachal Pradesh',
   'Assam',
   'Bihar',
-  'Chandigarh',
   'Chhattisgarh',
-  'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi',
   'Goa',
   'Gujarat',
   'Haryana',
   'Himachal Pradesh',
-  'Jammu and Kashmir',
   'Jharkhand',
   'Karnataka',
   'Kerala',
-  'Ladakh',
-  'Lakshadweep',
   'Madhya Pradesh',
   'Maharashtra',
   'Manipur',
@@ -25,7 +18,6 @@ export const INDIA_STATES = [
   'Mizoram',
   'Nagaland',
   'Odisha',
-  'Puducherry',
   'Punjab',
   'Rajasthan',
   'Sikkim',
@@ -40,7 +32,6 @@ export const INDIA_STATES = [
 export type IndiaState = (typeof INDIA_STATES)[number];
 
 export const CITIES_BY_STATE: Record<IndiaState, string[]> = {
-  'Andaman and Nicobar Islands': ['Port Blair', 'Diglipur', 'Mayabunder', 'Rangat', 'Car Nicobar'],
   'Andhra Pradesh': [
     'Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Kurnool', 'Tirupati', 'Kakinada',
     'Rajahmundry', 'Kadapa', 'Anantapur', 'Vizianagaram', 'Eluru', 'Ongole', 'Nandyal',
@@ -63,17 +54,10 @@ export const CITIES_BY_STATE: Record<IndiaState, string[]> = {
     'Motihari', 'Nawada', 'Bagaha', 'Buxar', 'Kishanganj', 'Sitamarhi', 'Jamalpur',
     'Jehanabad', 'Aurangabad', 'Bettiah', 'Samastipur', 'Madhubani', 'Bhabua',
   ],
-  Chandigarh: ['Chandigarh'],
   Chhattisgarh: [
     'Raipur', 'Bhilai', 'Bilaspur', 'Korba', 'Durg', 'Rajnandgaon', 'Jagdalpur', 'Raigarh',
     'Ambikapur', 'Mahasamund', 'Dhamtari', 'Chirmiri', 'Janjgir', 'Kanker', 'Kawardha',
     'Koriya', 'Mungeli', 'Narayanpur', 'Sukma', 'Balod', 'Bemetara', 'Gariaband',
-  ],
-  'Dadra and Nagar Haveli and Daman and Diu': ['Daman', 'Diu', 'Silvassa'],
-  Delhi: [
-    'New Delhi', 'Delhi', 'North Delhi', 'South Delhi', 'East Delhi', 'West Delhi',
-    'Central Delhi', 'North East Delhi', 'North West Delhi', 'South East Delhi', 'South West Delhi',
-    'Shahdara',
   ],
   Goa: [
     'Panaji', 'Margao', 'Vasco da Gama', 'Mapusa', 'Ponda', 'Bicholim', 'Curchorem',
@@ -94,11 +78,6 @@ export const CITIES_BY_STATE: Record<IndiaState, string[]> = {
     'Shimla', 'Dharamshala', 'Solan', 'Mandi', 'Palampur', 'Baddi', 'Nahan', 'Kullu',
     'Chamba', 'Una', 'Hamirpur', 'Bilaspur', 'Nurpur', 'Kangra', 'Manali', 'Dalhousie',
   ],
-  'Jammu and Kashmir': [
-    'Srinagar', 'Jammu', 'Anantnag', 'Baramulla', 'Sopore', 'Kathua', 'Udhampur', 'Poonch',
-    'Rajouri', 'Kupwara', 'Pulwama', 'Budgam', 'Bandipore', 'Ganderbal', 'Kulgam', 'Shopian',
-    'Reasi', 'Ramban', 'Doda', 'Kishtwar', 'Samba',
-  ],
   Jharkhand: [
     'Ranchi', 'Jamshedpur', 'Dhanbad', 'Bokaro', 'Deoghar', 'Phusro', 'Hazaribagh', 'Giridih',
     'Ramgarh', 'Medininagar', 'Chirkunda', 'Dumka', 'Chaibasa', 'Gumla', 'Lohardaga',
@@ -117,8 +96,6 @@ export const CITIES_BY_STATE: Record<IndiaState, string[]> = {
     'Ernakulam', 'Thalassery', 'Ponnani', 'Vatakara', 'Kanhangad', 'Taliparamba', 'Neyyattinkara',
     'Changanassery', 'Punalur', 'Mattannur', 'Perinthalmanna', 'Manjeri', 'Cherthala',
   ],
-  Ladakh: ['Leh', 'Kargil', 'Nubra', 'Drass', 'Zanskar'],
-  Lakshadweep: ['Kavaratti', 'Agatti', 'Minicoy', 'Amini', 'Andrott'],
   'Madhya Pradesh': [
     'Indore', 'Bhopal', 'Jabalpur', 'Gwalior', 'Ujjain', 'Sagar', 'Dewas', 'Satna', 'Ratlam',
     'Rewa', 'Murwara', 'Singrauli', 'Burhanpur', 'Khandwa', 'Bhind', 'Chhindwara', 'Guna',
@@ -154,7 +131,6 @@ export const CITIES_BY_STATE: Record<IndiaState, string[]> = {
     'Dhenkanal', 'Barbil', 'Kendujhar', 'Sunabeda', 'Rayagada', 'Angul', 'Talcher',
     'Nabarangpur', 'Koraput', 'Jagatsinghpur', 'Kendrapara', 'Phulbani', 'Boudh',
   ],
-  Puducherry: ['Puducherry', 'Karaikal', 'Mahe', 'Yanam', 'Oulgaret', 'Villianur'],
   Punjab: [
     'Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala', 'Bathinda', 'Mohali', 'Pathankot',
     'Hoshiarpur', 'Batala', 'Moga', 'Abohar', 'Malerkotla', 'Khanna', 'Phagwara', 'Muktsar',

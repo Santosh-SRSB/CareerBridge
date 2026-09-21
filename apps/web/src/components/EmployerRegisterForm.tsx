@@ -30,7 +30,7 @@ export function EmployerRegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
-  const [otpChannel, setOtpChannel] = useState<'MOBILE' | 'EMAIL'>('MOBILE');
+  const [otpChannel, setOtpChannel] = useState<'MOBILE' | 'EMAIL' | null>(null);
 
   // Touched state for real-time validation
   const [touched, setTouched] = useState({
@@ -67,7 +67,7 @@ export function EmployerRegisterForm() {
   })();
 
   const workEmailError = (() => {
-    if (!touched.workEmail && otpChannel === 'MOBILE') return '';
+    if (!touched.workEmail && otpChannel !== 'EMAIL') return '';
     if (otpChannel === 'EMAIL' && !workEmail.trim()) {
       return 'Work email is required for Email OTP verification.';
     }
@@ -127,6 +127,23 @@ export function EmployerRegisterForm() {
       setError('Enter your company name.');
       return;
     }
+    if (!isValidNational(country.maxLength, national)) {
+      setError('Enter a valid mobile number.');
+      return;
+    }
+    const passwordProblem = registrationPasswordError(password);
+    if (passwordProblem) {
+      setError(passwordProblem);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Password and confirm password do not match.');
+      return;
+    }
+    if (!otpChannel) {
+      setError('Select Mobile OTP or Email OTP.');
+      return;
+    }
     if (otpChannel === 'EMAIL') {
       if (!workEmail.trim()) {
         setError('Please enter your work email to receive the OTP.');
@@ -143,19 +160,6 @@ export function EmployerRegisterForm() {
         setError(emailProblem);
         return;
       }
-    }
-    if (!isValidNational(country.maxLength, national)) {
-      setError('Enter a valid mobile number.');
-      return;
-    }
-    const passwordProblem = registrationPasswordError(password);
-    if (passwordProblem) {
-      setError(passwordProblem);
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Password and confirm password do not match.');
-      return;
     }
     if (!agreeTerms) {
       setError('You must agree to Terms & Privacy Policy to continue.');
@@ -272,49 +276,6 @@ export function EmployerRegisterForm() {
       />
 
       <div className="pt-1">
-        <label className="mb-1.5 block text-xs font-bold text-primary">Verify via OTP on</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setOtpChannel('MOBILE')}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 px-3 text-xs font-bold transition-all ${
-              otpChannel === 'MOBILE'
-                ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white shadow-sm'
-                : 'border-slate-200 bg-[#f8faf9] text-slate-600 hover:border-slate-300 hover:bg-white'
-            }`}
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-            <span>Mobile OTP</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOtpChannel('EMAIL');
-              if (!workEmail) markTouched('workEmail');
-            }}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 px-3 text-xs font-bold transition-all ${
-              otpChannel === 'EMAIL'
-                ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white shadow-sm'
-                : 'border-slate-200 bg-[#f8faf9] text-slate-600 hover:border-slate-300 hover:bg-white'
-            }`}
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            <span>Email OTP</span>
-          </button>
-        </div>
-        <p className="mt-1.5 text-[11px] font-medium text-slate-500">
-          {otpChannel === 'EMAIL'
-            ? 'A 6-digit OTP will be sent to your work email.'
-            : 'A 6-digit OTP will be sent to your mobile number.'}
-        </p>
-      </div>
-
-      {/* 5. Password */}
-      <div>
         <label className="mb-1.5 block text-xs font-bold text-primary" htmlFor="emp-password">
           Password
         </label>
@@ -406,6 +367,50 @@ export function EmployerRegisterForm() {
         {confirmPasswordError ? (
           <span className="mt-1 block text-[11px] font-medium text-error">{confirmPasswordError}</span>
         ) : null}
+      </div>
+
+      <div className="pt-1">
+        <label className="mb-1.5 block text-xs font-bold text-primary">Verify via OTP on</label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setOtpChannel('MOBILE')}
+            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 px-3 text-xs font-bold transition-all ${
+              otpChannel === 'MOBILE'
+                ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            <span>Mobile OTP</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOtpChannel('EMAIL');
+              if (!workEmail) markTouched('workEmail');
+            }}
+            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 px-3 text-xs font-bold transition-all ${
+              otpChannel === 'EMAIL'
+                ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span>Email OTP</span>
+          </button>
+        </div>
+        <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+          {otpChannel === 'EMAIL'
+            ? 'A 6-digit OTP will be sent to your work email.'
+            : otpChannel === 'MOBILE'
+              ? 'A 6-digit OTP will be sent to your mobile number.'
+              : 'Choose Mobile OTP or Email OTP.'}
+        </p>
       </div>
 
       {/* 6. Checkbox: I agree to Terms & Privacy Policy */}

@@ -94,7 +94,10 @@ export default function PassportExperiencePage() {
     setError('');
     setLoading(true);
     try {
-      await updateCandidateMe({ hasExperience });
+      await updateCandidateMe({
+        hasExperience,
+        experienceLevel: hasExperience === 'YES' ? 'experienced' : 'fresher',
+      });
       await saveCurrentJob();
     } catch {
       setError('We could not save that job right now. Please try again.');
@@ -111,7 +114,10 @@ export default function PassportExperiencePage() {
     setError('');
     setLoading(true);
     try {
-      let profile = await updateCandidateMe({ hasExperience });
+      let profile = await updateCandidateMe({
+        hasExperience,
+        experienceLevel: hasExperience === 'YES' ? 'experienced' : 'fresher',
+      });
       if (hasExperience !== 'NONE') {
         if (company.trim() || jobTitle.trim()) {
           const saved = await saveCurrentJob();

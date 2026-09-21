@@ -72,7 +72,12 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
         location: '',
         startDate: exp.startDate || fromData?.startDate || '',
         endDate: exp.endDate || fromData?.endDate || '',
-        isCurrent: Boolean(exp.isCurrent ?? fromData?.isCurrent),
+        isCurrent: Boolean(
+          exp.isCurrent ??
+            fromData?.isCurrent ??
+            (Boolean(exp.startDate || fromData?.startDate) &&
+              !(exp.endDate || fromData?.endDate)),
+        ),
         isInternship: Boolean(exp.isInternship) || /\bintern(?:ship|s)?\b/i.test(exp.jobTitle || ''),
         responsibilities: splitLines(exp.description),
       };

@@ -76,7 +76,10 @@ export class AuthService {
       const existing =
         channel === 'EMAIL'
           ? await this.prisma.user.findFirst({
-              where: { email: email || '', userType: { in: userTypes } },
+              where: {
+                email: { equals: email || '', mode: 'insensitive' },
+                userType: { in: userTypes },
+              },
             })
           : await this.prisma.user.findFirst({
               where: { phone, userType: { in: userTypes } },
@@ -221,14 +224,28 @@ export class AuthService {
       },
     });
 
-    if (channel === 'EMAIL' && otpCode && !this.isDevOtp()) {
-      await this.email.sendOtp(email || '', otpCode);
+    if (channel === 'EMAIL' && otpCode) {
+      if (!this.isDevOtp() && this.email.isConfigured()) {
+        await this.email.sendOtp(email || '', otpCode);
+      } else if (!this.isDevOtp() && !this.email.isConfigured() && this.config.get('NODE_ENV') === 'production') {
+        throw new HttpException(
+          {
+            code: ErrorCode.INTERNAL_ERROR,
+            message: 'Email OTP is not configured. Set SMTP_USER and SMTP_PASS in apps/api/.env.',
+          },
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
     }
+
+    const revealOtp =
+      this.isDevOtp() ||
+      (channel === 'EMAIL' && !this.email.isConfigured() && this.config.get('NODE_ENV') !== 'production');
 
     return {
       requestId: request.id,
       expiresIn: OTP_TTL_SECONDS,
-      ...(this.isDevOtp() ? { devOtp: DEV_OTP } : {}),
+      ...(revealOtp && otpCode ? { devOtp: otpCode } : {}),
     };
   }
 
@@ -518,7 +535,9 @@ export class AuthService {
     const userTypes = userTypesForAccount(accountType);
     const user = await this.prisma.user.findFirst({
       where: {
-        ...(email ? { email } : { phone: phone || value }),
+        ...(email
+          ? { email: { equals: email, mode: 'insensitive' } }
+          : { phone: phone || value }),
         userType: { in: userTypes },
       },
       include: { candidate: true, employer: true },
@@ -689,7 +708,7 @@ export class AuthService {
       where: {
         userType: { in: userTypes },
         ...(request.email
-          ? { email: request.email }
+          ? { email: { equals: request.email, mode: 'insensitive' } }
           : { phone: request.phone }),
       },
     });
@@ -909,8 +928,8 @@ export class AuthService {
       role: user.userType,
       phone: user.phone,
     };
-    const accessExpires = this.config.get('JWT_ACCESS_EXPIRES') || '15m';
-    const refreshExpires = this.config.get('JWT_REFRESH_EXPIRES') || '7d';
+    const accessExpires = this.config.get('JWT_ACCESS_EXPIRES') || '7d';
+    const refreshExpires = this.config.get('JWT_REFRESH_EXPIRES') || '30d';
     const jti = randomUUID();
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.config.get('JWT_ACCESS_SECRET') || 'dev-access-secret',

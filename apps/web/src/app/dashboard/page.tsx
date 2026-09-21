@@ -16,6 +16,12 @@ import {
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import type { CandidateProfile, JobCard } from '@careerbridge/shared';
+import {
+  experienceYearsTotal,
+  formatLocationLabel,
+  resolveCandidateExperienceBand,
+  resolveExperienceChip,
+} from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { formatCandidateExperienceLine } from '@/lib/format-candidate-experience';
 import { resolvePassportSummary } from '@/lib/passport-to-friend-resume';
@@ -36,38 +42,28 @@ function formatPersonName(value: string) {
     .join(' ');
 }
 
-function formatSalaryShort(min?: number | null, max?: number | null) {
-  if (!min && !max) return 'Salary not listed';
-  const fmt = (value: number) => {
-    if (value >= 1000) return `₹${Math.round(value / 1000)}K`;
-    return `₹${value.toLocaleString('en-IN')}`;
-  };
-  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
-  if (min) return `From ${fmt(min)}`;
-  return `Up to ${fmt(max!)}`;
-}
-
 function formatExperienceField(profile: CandidateProfile | null) {
   if (!profile) return '—';
-  const years = profile.totalExperienceYears ?? 0;
-  const months = profile.totalExperienceMonths ?? 0;
-  const total = years + months / 12;
-  if (!profile.hasExperience || profile.hasExperience === 'no' || total < 1) {
-    if (profile.experienceLevel === 'fresher' || !profile.experiences?.length) return 'Fresher';
+  const band = resolveCandidateExperienceBand(profile);
+  if (band === 'fresher') {
+    const internship = profile.experiences?.find((item) => item.isInternship);
+    if (internship?.company) return `Internship · ${internship.company}`;
+    if (profile.hasExperience === 'INTERNSHIP' && profile.experiences?.[0]?.company) {
+      return `Internship · ${profile.experiences[0].company}`;
+    }
+    return 'Fresher';
   }
+  const total = experienceYearsTotal(profile);
   if (total >= 1) {
     const rounded = Math.floor(total);
     return rounded <= 1 ? '1+ Year' : `${rounded}+ Years`;
   }
-  return formatCandidateExperienceLine(profile) || 'Fresher';
+  return formatCandidateExperienceLine(profile) || 'Experienced';
 }
 
 function statusLabel(profile: CandidateProfile | null) {
   if (!profile) return 'CANDIDATE';
-  const years = profile.totalExperienceYears ?? 0;
-  const months = profile.totalExperienceMonths ?? 0;
-  if ((years + months / 12) < 1 || profile.experienceLevel === 'fresher') return 'FRESHER';
-  return 'EXPERIENCED';
+  return resolveCandidateExperienceBand(profile) === 'fresher' ? 'FRESHER' : 'EXPERIENCED';
 }
 
 function targetRole(profile: CandidateProfile | null) {
@@ -81,10 +77,19 @@ function targetRole(profile: CandidateProfile | null) {
 }
 
 function currentCompany(profile: CandidateProfile | null) {
-  if (!profile?.experiences?.length) return '—';
+  if (!profile) return '—';
+  const band = resolveCandidateExperienceBand(profile);
+  if (band === 'fresher') {
+    const internship =
+      profile.experiences?.find((item) => item.isInternship) ||
+      (profile.hasExperience === 'INTERNSHIP' ? profile.experiences?.[0] : undefined);
+    return internship?.company || '—';
+  }
+  if (!profile.experiences?.length) return '—';
   const current =
+    profile.experiences.find((item) => item.stillInCompany && !item.isInternship) ||
+    profile.experiences.find((item) => !item.isInternship) ||
     profile.experiences.find((item) => item.stillInCompany) ||
-    profile.experiences.find((item) => !item.endDate) ||
     profile.experiences[0];
   return current?.company || '—';
 }
@@ -185,14 +190,7 @@ const EXPERIENCE_LEVEL_CHIPS = [
 
 function activeExperienceChip(profile: CandidateProfile | null) {
   if (!profile) return 'fresher';
-  const years = profile.totalExperienceYears ?? 0;
-  const months = profile.totalExperienceMonths ?? 0;
-  const total = years + months / 12;
-  if (profile.experienceLevel === 'fresher' || total < 1) return 'fresher';
-  if (total < 1.5) return '0-1';
-  if (total < 3.5) return '1-3';
-  if (total < 5.5) return '3-5';
-  return '5+';
+  return resolveExperienceChip(profile);
 }
 
 export default function DashboardPage() {
@@ -283,7 +281,9 @@ export default function DashboardPage() {
             patchStoredUser({ photoUrl: candidateProfile.photoUrl });
           }
           setName(formatPersonName(candidateProfile.firstName || me.firstName || stored.firstName || 'there'));
-          setCity(candidateProfile.city || candidateProfile.preferredWorkCity || '');
+          setCity(
+            formatLocationLabel(candidateProfile.city || candidateProfile.preferredWorkCity || ''),
+          );
           const percent = completion?.percentage ?? candidateProfile.profileCompletion ?? 0;
           setCompletionPercent(percent);
           setBio(resolvePassportSummary(candidateProfile, resumeSummary || undefined));
@@ -614,37 +614,112 @@ export default function DashboardPage() {
             </button>
           </div>
         ) : (
-          <div className="cb-boarding__jobs">
-            {jobs.map((job) => (
-              <article key={job.id} className="cb-boarding__job">
-                <h3>{job.title}</h3>
-                <div className="cb-boarding__job-co">
-                  {job.companyName} · {job.city || city || 'India'}
-                </div>
-                <div className="cb-boarding__job-pay">
-                  {formatSalaryShort(job.salaryMin, job.salaryMax)}
-                </div>
-                <div className="cb-boarding__job-match">
-                  {typeof job.match?.score === 'number' ? `${job.match.score}% MATCH` : 'RECOMMENDED'}
-                </div>
-                <div className="cb-boarding__job-actions">
-                  <button
-                    type="button"
-                    className="cb-boarding__job-view"
-                    onClick={() => router.push(`/jobs/${job.id}`)}
-                  >
-                    View
-                  </button>
-                  <button
-                    type="button"
-                    className="cb-boarding__job-apply"
-                    onClick={() => router.push(`/jobs/${job.id}/apply`)}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </article>
-            ))}
+          <div className="cb-rec-jobs">
+            {jobs.map((job) => {
+              const mark = (job.companyName || 'CB')
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part[0]?.toUpperCase() || '')
+                .join('');
+              const skills = [...(job.requiredSkills || []), ...(job.preferredSkills || [])]
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .filter((s, i, arr) => arr.findIndex((x) => x.toLowerCase() === s.toLowerCase()) === i)
+                .slice(0, 5);
+              const experienceLabel = job.experience?.trim() || null;
+              return (
+                <article key={job.id} className="cb-rec-job">
+                  <div className="cb-rec-job__head">
+                    <div className="cb-rec-job__brand">
+                      <span className="cb-rec-job__logo" aria-hidden>
+                        {mark || 'CB'}
+                      </span>
+                      <span className="cb-rec-job__company">{job.companyName}</span>
+                    </div>
+                    <span className="cb-rec-job__match">
+                      {typeof job.match?.score === 'number'
+                        ? `${job.match.score}% match`
+                        : 'Recommended'}
+                    </span>
+                  </div>
+
+                  <div className="cb-rec-job__body">
+                    <h3 className="cb-rec-job__title">{job.title}</h3>
+                    <p className="cb-rec-job__meta">
+                      <span className="cb-rec-job__meta-icon" aria-hidden>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M12 21s7-5.2 7-11a7 7 0 10-14 0c0 5.8 7 11 7 11z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                          />
+                          <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+                        </svg>
+                      </span>
+                      {job.city || city || 'India'}
+                    </p>
+                    {experienceLabel ? (
+                      <p className="cb-rec-job__meta">
+                        <span className="cb-rec-job__meta-icon" aria-hidden>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                            <path
+                              d="M8 7V5.5A1.5 1.5 0 019.5 4h5A1.5 1.5 0 0116 5.5V7"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                            />
+                            <rect
+                              x="3.5"
+                              y="7"
+                              width="17"
+                              height="12.5"
+                              rx="2"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                            />
+                            <path d="M3.5 12h17" stroke="currentColor" strokeWidth="1.8" />
+                          </svg>
+                        </span>
+                        Experience required: <strong>{experienceLabel}</strong>
+                      </p>
+                    ) : null}
+                    {skills.length ? (
+                      <div className="cb-rec-job__skills">
+                        {skills.map((skill) => (
+                          <span key={skill} className="cb-rec-job__skill">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="cb-rec-job__actions">
+                    <button
+                      type="button"
+                      className="cb-rec-job__view"
+                      onClick={() => router.push(`/jobs/${job.id}`)}
+                    >
+                      View
+                    </button>
+                    {job.applied ? (
+                      <button type="button" className="cb-rec-job__apply is-applied" disabled>
+                        Applied
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="cb-rec-job__apply"
+                        onClick={() => router.push(`/jobs/${job.id}/apply`)}
+                      >
+                        Apply
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
 

@@ -31,10 +31,28 @@ export interface ResumeWizardDraft {
   savedAt: number;
 }
 
+function readDraftRaw(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    // Prefer localStorage so Back / reload keeps the resume until the user clears it.
+    const local = localStorage.getItem(RESUME_WIZARD_DRAFT_KEY);
+    if (local) return local;
+    const session = sessionStorage.getItem(RESUME_WIZARD_DRAFT_KEY);
+    if (session) {
+      localStorage.setItem(RESUME_WIZARD_DRAFT_KEY, session);
+      sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
+      return session;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function loadResumeWizardDraft(): ResumeWizardDraft | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = sessionStorage.getItem(RESUME_WIZARD_DRAFT_KEY);
+    const raw = readDraftRaw();
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ResumeWizardDraft;
     if (!parsed || typeof parsed !== 'object') return null;
@@ -53,15 +71,24 @@ export function saveResumeWizardDraft(draft: Omit<ResumeWizardDraft, 'savedAt' |
       version: RESUME_WIZARD_DRAFT_VERSION,
       savedAt: Date.now(),
     };
-    sessionStorage.setItem(RESUME_WIZARD_DRAFT_KEY, JSON.stringify(payload));
+    const raw = JSON.stringify(payload);
+    localStorage.setItem(RESUME_WIZARD_DRAFT_KEY, raw);
+    // Keep session copy in sync for older code paths.
+    sessionStorage.setItem(RESUME_WIZARD_DRAFT_KEY, raw);
   } catch {
     // Ignore quota errors
   }
 }
 
+/** Explicit clear only — e.g. user starts a brand-new upload that replaces everything. */
 export function clearResumeWizardDraft() {
   if (typeof window === 'undefined') return;
-  sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
+  try {
+    localStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
+    sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 const AUTOFILL_SEED_KEY = 'cb.resumeAutofillSeed';
@@ -83,7 +110,6 @@ export function consumeResumeSeedFromProfile() {
   const flagged = sessionStorage.getItem('cb.resumeFromProfile') === '1';
   if (flagged) {
     sessionStorage.removeItem('cb.resumeFromProfile');
-    clearResumeWizardDraft();
   }
   return flagged;
 }
@@ -132,14 +158,18 @@ export function clearResumeFromBuild() {
   sessionStorage.removeItem('cb.resumeFromProfile');
 }
 
-/** Store wizard seed from uploaded resume and open /resume wizard. */
+/**
+ * Store wizard seed from uploaded resume and open /resume wizard.
+ * Does NOT wipe an existing draft until the seed is applied on /resume —
+ * so Back from the finish screen keeps filled data when returning.
+ */
 export function markResumeAutofillSeed(input: {
   seed: Omit<ResumeWizardDraft, 'savedAt' | 'version' | 'flowPhase' | 'wizardIndex'>;
   resumeId?: string;
 }) {
   if (typeof window === 'undefined') return;
-  clearResumeWizardDraft();
   sessionStorage.removeItem(BUILD_FLAG_KEY);
+  sessionStorage.setItem('cb.resumeReplaceDraft', '1');
   sessionStorage.setItem(
     AUTOFILL_SEED_KEY,
     JSON.stringify({

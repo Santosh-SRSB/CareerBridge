@@ -28,7 +28,12 @@ export function CandidateResumeSheet({ profile, title = 'Your resume draft', not
   const contact = [profile.city, profile.phone, profile.email].filter(Boolean).join(' · ');
   const missing: string[] = [];
   if (!profile.firstName) missing.push('Name');
-  if (!profile.education.length && !profile.highestEducation) missing.push('Education');
+  if (
+    !profile.highestEducation?.trim() &&
+    !profile.education.some((row) => row.qualification?.trim() || row.institution?.trim())
+  ) {
+    missing.push('Education');
+  }
   if (!profile.skills.length) missing.push('Skills');
   if (!profile.experiences.length && profile.hasExperience !== 'NONE') missing.push('Experience details');
   if (!profile.careerInterests.length) missing.push('Career preferences');

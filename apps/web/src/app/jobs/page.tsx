@@ -782,9 +782,13 @@ function JobsSearchContent() {
 
                         <Link
                           href={`/jobs/${job.id}`}
-                          className="mt-4 block w-full rounded-[10px] bg-[var(--jobs-dark)] py-3 text-center text-sm font-bold text-white transition hover:-translate-y-px hover:bg-[var(--jobs-dark-2)] hover:shadow-[0_8px_18px_rgba(12,40,34,.25)]"
+                          className={`mt-4 block w-full rounded-[10px] py-3 text-center text-sm font-bold transition hover:-translate-y-px ${
+                            job.applied
+                              ? 'border border-[var(--jobs-hair)] bg-[#eef3f1] text-[var(--jobs-dark)] hover:bg-[#e4ebe8] hover:shadow-none'
+                              : 'bg-[var(--jobs-dark)] text-white hover:bg-[var(--jobs-dark-2)] hover:shadow-[0_8px_18px_rgba(12,40,34,.25)]'
+                          }`}
                         >
-                          Get Details
+                          {job.applied ? 'Applied' : 'Get Details'}
                         </Link>
                       </div>
                     );

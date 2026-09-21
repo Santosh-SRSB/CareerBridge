@@ -45,16 +45,7 @@ function LoginBody() {
         <RegisteredNotice />
         <PasswordLoginForm key={mode} accountType={mode} />
       </div>
-      <div className="mt-5 space-y-2 text-center text-sm text-[#4e6864]">
-        <p>
-          Prefer passwordless?{' '}
-          <Link
-            href={`/login/otp?role=${mode === 'EMPLOYER' ? 'employer' : 'candidate'}`}
-            className="font-bold text-[#0d9488] transition hover:underline"
-          >
-            Sign in with OTP
-          </Link>
-        </p>
+      <div className="mt-5 text-center text-sm text-[#4e6864]">
         <p>
           Don&apos;t have an account?{' '}
           <Link href={registerHref} className="font-bold text-[#0d9488] transition hover:underline">

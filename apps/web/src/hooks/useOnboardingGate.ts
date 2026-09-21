@@ -24,12 +24,10 @@ export function useOnboardingGate(step: OnboardingStep) {
           onboardingCompleted: me.onboardingCompleted ?? stored.onboardingCompleted,
           dashboardReached: me.dashboardReached ?? stored.dashboardReached,
         });
+        // Once the candidate has opened the dashboard, keep them there.
+        // Until then, allow revisiting the 4 profile steps (e.g. Back from autofill).
         if (me.dashboardReached) {
           router.replace('/dashboard');
-          return;
-        }
-        if (me.onboardingCompleted) {
-          router.replace('/onboarding/complete');
           return;
         }
         setReady(true);
@@ -37,10 +35,6 @@ export function useOnboardingGate(step: OnboardingStep) {
       .catch(() => {
         if (stored.dashboardReached) {
           router.replace('/dashboard');
-          return;
-        }
-        if (stored.onboardingCompleted) {
-          router.replace('/onboarding/complete');
           return;
         }
         setReady(true);

@@ -485,6 +485,8 @@ export type JobCard = {
   distanceKm?: number | null;
   match?: JobMatch;
   saved?: boolean;
+  /** True when the signed-in candidate already applied to this job. */
+  applied?: boolean;
 };
 
 export type JobDetail = JobCard & {

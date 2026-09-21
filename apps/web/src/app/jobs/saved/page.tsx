@@ -77,7 +77,7 @@ export default function SavedJobsPage() {
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button type="button" onClick={() => router.push(`/jobs/${job.id}`)}>
-                  View
+                  {job.applied ? 'Applied' : 'View'}
                 </Button>
                 <Button
                   type="button"

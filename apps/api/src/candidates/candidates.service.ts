@@ -10,6 +10,7 @@ import {
   optionalUrlError,
   yearNumberError,
   computeCareerGapAfterHighestEducation,
+  resolveCandidateExperienceBand,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
@@ -42,7 +43,8 @@ export class CandidatesService {
   ) {}
 
   async me(userId: string) {
-    return this.withReadablePhoto(this.toProfile(await this.loadCandidate(userId)));
+    // Sync Fresher/Experienced from onboarding + jobs so dashboard STATUS stays accurate.
+    return this.recompute(userId);
   }
 
   /** Multipart profile photo upload — avoids large JSON data-URL payloads. */
@@ -239,11 +241,25 @@ export class CandidatesService {
         ...(dto.highestEducation !== undefined ? { highestEducation: dto.highestEducation } : {}),
         ...(careerInterests !== undefined ? { careerInterests } : {}),
         ...(dto.hasExperience !== undefined ? { hasExperience: dto.hasExperience } : {}),
-        ...(dto.totalExperienceYears !== undefined
-          ? { totalExperienceYears: Number.parseInt(dto.totalExperienceYears, 10) || 0 }
-          : {}),
-        ...(dto.totalExperienceMonths !== undefined
-          ? { totalExperienceMonths: Number.parseInt(dto.totalExperienceMonths, 10) || 0 }
+        ...(dto.experienceLevel !== undefined
+          ? { experienceLevel: dto.experienceLevel }
+          : dto.hasExperience !== undefined
+            ? {
+                experienceLevel:
+                  dto.hasExperience === 'YES' ? 'experienced' : 'fresher',
+              }
+            : {}),
+        ...(dto.totalExperienceYears !== undefined || dto.totalExperienceMonths !== undefined
+          ? (() => {
+              const split = splitExperienceDuration(
+                dto.totalExperienceYears,
+                dto.totalExperienceMonths,
+              );
+              return {
+                totalExperienceYears: split.years,
+                totalExperienceMonths: split.months,
+              };
+            })()
           : {}),
         ...(dto.photoUrl !== undefined ? { photoUrl: photoUrl || null } : {}),
         ...(dto.links !== undefined ? { profileLinks: JSON.stringify(cleanLinks(dto.links)) } : {}),
@@ -273,14 +289,13 @@ export class CandidatesService {
     const candidate = await this.loadCandidate(userId);
     const education = (dto.education ?? []).filter((row) => row.qualification?.trim());
     const skills = [...new Set((dto.skills ?? []).map((item) => item.trim()).filter(Boolean))];
-    const jobs =
-      dto.experienceLevel === 'fresher'
-        ? []
-        : (dto.experience ?? []).filter(
-            (row) => row.company?.trim() || row.jobTitle?.trim() || row.description?.trim(),
-          );
-    const years = Number.parseInt(dto.totalExperienceYears || '0', 10) || 0;
-    const months = Number.parseInt(dto.totalExperienceMonths || '0', 10) || 0;
+    const jobs = (dto.experience ?? []).filter(
+      (row) => row.company?.trim() || row.jobTitle?.trim() || row.description?.trim(),
+    );
+    const hasPaidJob = jobs.some((row) => !row.isInternship);
+    const yearsSplit = splitExperienceDuration(dto.totalExperienceYears, dto.totalExperienceMonths);
+    const years = yearsSplit.years;
+    const months = yearsSplit.months;
     const firstEdu = education[0];
     const careerInterests = [...new Set((dto.careerInterests ?? []).map((item) => item.trim()).filter(Boolean))].slice(
       0,
@@ -325,7 +340,7 @@ export class CandidatesService {
           stillInCollege: Boolean(dto.stillInCollege),
           educationStart: dto.educationStart?.trim() || null,
           educationEnd: dto.stillInCollege ? null : dto.educationEnd?.trim() || null,
-          experienceLevel: dto.experienceLevel || 'fresher',
+          experienceLevel: hasPaidJob || dto.experienceLevel === 'experienced' ? 'experienced' : 'fresher',
           totalExperienceYears: years,
           totalExperienceMonths: months,
           gapReason: dto.gapReason?.trim() || null,
@@ -334,11 +349,10 @@ export class CandidatesService {
               ? Math.max(0, Math.floor(dto.gapMonths))
               : null,
           source: dto.source === 'resume' ? 'resume' : 'manual',
-          hasExperience:
-            dto.experienceLevel === 'experienced'
-              ? jobs.some((row) => row.isInternship) && !jobs.some((row) => !row.isInternship)
-                ? 'INTERNSHIP'
-                : 'YES'
+          hasExperience: hasPaidJob
+            ? 'YES'
+            : jobs.some((row) => row.isInternship)
+              ? 'INTERNSHIP'
               : 'NONE',
           ...(projectSeed ? { projects: projectSeed } : {}),
         },
@@ -489,23 +503,36 @@ export class CandidatesService {
 
   async addExperience(userId: string, dto: ExperienceDto) {
     const candidate = await this.loadCandidate(userId);
+    const stillInCompany = Boolean(dto.stillInCompany);
     await this.prisma.candidateExperience.create({
       data: {
         candidateId: candidate.id,
         company: dto.company.trim(),
         jobTitle: dto.jobTitle.trim(),
         startDate: dto.startDate ? new Date(dto.startDate) : null,
-        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        endDate: stillInCompany ? null : dto.endDate ? new Date(dto.endDate) : null,
         description: dto.description?.trim() || null,
         isInternship: Boolean(dto.isInternship),
+        stillInCompany,
       },
     });
-    if (!candidate.hasExperience) {
-      await this.prisma.candidate.update({
-        where: { userId },
-        data: { hasExperience: dto.isInternship ? 'INTERNSHIP' : 'YES' },
-      });
-    }
+    const isInternship = Boolean(dto.isInternship);
+    await this.prisma.candidate.update({
+      where: { userId },
+      data: {
+        hasExperience: isInternship
+          ? candidate.hasExperience === 'YES'
+            ? 'YES'
+            : 'INTERNSHIP'
+          : 'YES',
+        experienceLevel:
+          !isInternship ||
+          candidate.hasExperience === 'YES' ||
+          candidate.experienceLevel === 'experienced'
+            ? 'experienced'
+            : 'fresher',
+      },
+    });
     return this.recompute(userId);
   }
 
@@ -520,15 +547,28 @@ export class CandidatesService {
         message: 'Experience record was not found',
       });
     }
+    const stillInCompany =
+      dto.stillInCompany !== undefined ? Boolean(dto.stillInCompany) : existing.stillInCompany;
     await this.prisma.candidateExperience.update({
       where: { id: experienceId },
       data: {
         ...(dto.company !== undefined ? { company: dto.company.trim() } : {}),
         ...(dto.jobTitle !== undefined ? { jobTitle: dto.jobTitle.trim() } : {}),
         ...(dto.startDate !== undefined ? { startDate: dto.startDate ? new Date(dto.startDate) : null } : {}),
-        ...(dto.endDate !== undefined ? { endDate: dto.endDate ? new Date(dto.endDate) : null } : {}),
+        ...(dto.endDate !== undefined || dto.stillInCompany !== undefined
+          ? {
+              endDate: stillInCompany
+                ? null
+                : dto.endDate !== undefined
+                  ? dto.endDate
+                    ? new Date(dto.endDate)
+                    : null
+                  : existing.endDate,
+            }
+          : {}),
         ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
         ...(dto.isInternship !== undefined ? { isInternship: dto.isInternship } : {}),
+        ...(dto.stillInCompany !== undefined ? { stillInCompany } : {}),
       },
     });
     return this.recompute(userId);
@@ -680,9 +720,36 @@ export class CandidatesService {
   private async recompute(userId: string) {
     const candidate = await this.loadCandidate(userId);
     const profileCompletion = computeCompletion(candidate);
+    const band = resolveCandidateExperienceBand({
+      experienceLevel: candidate.experienceLevel,
+      hasExperience: candidate.hasExperience,
+      totalExperienceYears: candidate.totalExperienceYears,
+      totalExperienceMonths: candidate.totalExperienceMonths,
+      experiences: candidate.experiences,
+    });
+    const hasPaid = candidate.experiences.some((row) => !row.isInternship);
+    const hasIntern = candidate.experiences.some((row) => row.isInternship);
+    const nextHasExperience = hasPaid
+      ? 'YES'
+      : hasIntern
+        ? candidate.hasExperience === 'YES'
+          ? 'YES'
+          : 'INTERNSHIP'
+        : candidate.hasExperience === 'YES'
+          ? 'YES'
+          : candidate.hasExperience || 'NONE';
+    const nextLevel = band;
+    const syncExperience =
+      candidate.hasExperience !== nextHasExperience || candidate.experienceLevel !== nextLevel;
+
     const updated = await this.prisma.candidate.update({
       where: { userId },
-      data: { profileCompletion },
+      data: {
+        profileCompletion,
+        ...(syncExperience
+          ? { hasExperience: nextHasExperience, experienceLevel: nextLevel }
+          : {}),
+      },
       include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
     return this.withReadablePhoto(this.toProfile(updated));
@@ -770,6 +837,31 @@ function yearFrom(value: string) {
   return year >= 1970 && year <= 2100 ? year : null;
 }
 
+/** Accept whole or decimal years (e.g. "2.5") and optional months. */
+function splitExperienceDuration(
+  yearsRaw?: string | number | null,
+  monthsRaw?: string | number | null,
+) {
+  const yearsStr = yearsRaw == null ? '' : String(yearsRaw).trim().replace(',', '.');
+  const monthsStr = monthsRaw == null ? '' : String(monthsRaw).trim();
+  if (yearsStr.includes('.') || (yearsStr && !monthsStr)) {
+    const decimal = Number.parseFloat(yearsStr);
+    if (Number.isFinite(decimal) && decimal >= 0) {
+      const totalMonths = Math.round(Math.min(50, decimal) * 12);
+      return {
+        years: Math.floor(totalMonths / 12),
+        months: totalMonths % 12,
+      };
+    }
+  }
+  const years = Number.parseInt(yearsStr || '0', 10) || 0;
+  const months = Number.parseInt(monthsStr || '0', 10) || 0;
+  return {
+    years: Math.max(0, Math.min(50, years)),
+    months: Math.max(0, Math.min(11, months)),
+  };
+}
+
 function parseOptionalDate(value?: string) {
   const raw = value?.trim();
   if (!raw) return null;
@@ -791,8 +883,11 @@ function sectionDone(candidate: NonNullable<CandidateRecord>, key: PassportSecti
     return Boolean(candidate.firstName?.trim() && candidate.city?.trim() && candidate.dateOfBirth);
   }
   if (key === 'education') {
+    // Onboarding may save highestEducation / qualification without institution;
+    // resume import can put the school name in qualification only.
+    if (candidate.highestEducation?.trim()) return true;
     return candidate.education.some(
-      (row) => row.qualification?.trim() && row.institution?.trim(),
+      (row) => Boolean(row.qualification?.trim() || row.institution?.trim()),
     );
   }
   if (key === 'skills') return candidate.skills.length >= 3;

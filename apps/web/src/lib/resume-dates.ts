@@ -3,7 +3,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-/** Format YYYY-MM from <input type="month"> to "January 2025" */
+/** Format YYYY-MM or YYYY-MM-DD to "January 2025" */
 export function formatMonthLabel(value: string): string {
   if (!value) return '';
   const [year, month] = value.split('-');
@@ -29,6 +29,6 @@ export function formatEducationYearRange(start: string, end: string): string {
 
 export function formatDateForResume(value: string): string {
   if (!value) return '';
-  if (/^\d{4}-\d{2}$/.test(value)) return formatMonthLabel(value);
+  if (/^\d{4}-\d{2}(-\d{2})?$/.test(value)) return formatMonthLabel(value);
   return value;
 }

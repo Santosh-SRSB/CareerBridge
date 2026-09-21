@@ -202,6 +202,7 @@ export type UpdateCandidatePayload = {
   highestEducation?: string;
   careerInterests?: string[];
   hasExperience?: string;
+  experienceLevel?: 'fresher' | 'experienced';
   totalExperienceYears?: string;
   totalExperienceMonths?: string;
   photoUrl?: string | null;
@@ -230,6 +231,7 @@ export type CreateExperiencePayload = {
   endDate?: string;
   description?: string;
   isInternship?: boolean;
+  stillInCompany?: boolean;
 };
 
 export type CreateCertificationPayload = {

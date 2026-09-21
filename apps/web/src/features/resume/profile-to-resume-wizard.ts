@@ -27,10 +27,12 @@ function newId(prefix: string) {
 function toMonthValue(value: string | null | undefined) {
   if (!value?.trim()) return '';
   const iso = value.trim();
+  const dayMatch = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dayMatch) return `${dayMatch[1]}-${dayMatch[2]}-${dayMatch[3]}`;
   const monthMatch = iso.match(/^(\d{4})-(\d{2})/);
-  if (monthMatch) return `${monthMatch[1]}-${monthMatch[2]}`;
+  if (monthMatch) return `${monthMatch[1]}-${monthMatch[2]}-01`;
   const yearMatch = iso.match(/^(\d{4})/);
-  if (yearMatch) return `${yearMatch[1]}-01`;
+  if (yearMatch) return `${yearMatch[1]}-01-01`;
   return '';
 }
 

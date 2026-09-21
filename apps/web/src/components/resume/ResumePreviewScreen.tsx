@@ -24,8 +24,10 @@ import {
   downloadResume,
   enhanceResume,
   getResume,
+  updateCandidateMe,
 } from '@/lib/api';
 import { downloadMasterResumePdf } from '@/lib/master-resume-pdf';
+import { patchStoredUser } from '@/lib/session';
 import { useResumePageFit } from '@/components/resume-templates/pageFit.js';
 import '@/components/resume-templates/ats-template.css';
 import '@/components/resume-templates/resume-template-01.css';
@@ -241,6 +243,7 @@ export function ResumePreviewScreen({
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  const [goingToDashboard, setGoingToDashboard] = useState(false);
   const resumeRef = useRef(resume);
   resumeRef.current = resume;
   const previewSheetRef = useRef<HTMLDivElement | null>(null);
@@ -526,14 +529,18 @@ export function ResumePreviewScreen({
   }
 
   async function goToDashboard() {
+    if (goingToDashboard) return;
+    setGoingToDashboard(true);
     clearResumeFromBuild();
     clearResumeFromAutofill();
-    try {
-      await onSyncProfile?.();
-    } catch {
-      /* still navigate */
-    }
-    router.push('/dashboard');
+    // Unlock dashboard navigation before leaving (otherwise /dashboard bounces back).
+    patchStoredUser({ onboardingCompleted: true, dashboardReached: true });
+    void updateCandidateMe({ onboardingCompleted: true, dashboardReached: true }).catch(
+      () => undefined,
+    );
+    // Profile sync in background — do not block the click.
+    void onSyncProfile?.().catch(() => undefined);
+    router.replace('/dashboard');
   }
 
   async function handleDownload() {
@@ -897,29 +904,34 @@ export function ResumePreviewScreen({
       ) : null}
 
       {phase === 'done' ? (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-28">
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
             Saved as “{savedVersionTitle}” (new version). Download is optional.
           </div>
           {fittedPreview}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={downloading || downloadSuccess}
-              onClick={() => void handleDownload()}
-              className="flex-1 rounded-xl bg-[#0a2e2c] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
-            >
-              {downloading ? 'Generating…' : downloadSuccess ? 'Downloaded' : 'Download (optional)'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void goToDashboard()}
-              className="flex-1 rounded-xl bg-[#e68a39] px-4 py-3 text-sm font-bold text-[#0a2e2c]"
-            >
-              Candidate Dashboard
-            </button>
+          <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-slate-200 bg-[#f7f6f2]/95 px-4 py-3 backdrop-blur sm:px-6">
+            <div className="mx-auto flex max-w-3xl flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={downloading || downloadSuccess || goingToDashboard}
+                onClick={() => void handleDownload()}
+                className="flex-1 rounded-xl bg-[#0a2e2c] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#072422] active:scale-[0.98] disabled:opacity-60"
+              >
+                {downloading ? 'Generating…' : downloadSuccess ? 'Downloaded' : 'Download (optional)'}
+              </button>
+              <button
+                type="button"
+                disabled={goingToDashboard}
+                onClick={() => void goToDashboard()}
+                className="flex-1 rounded-xl bg-[#e68a39] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#f0a04e] active:scale-[0.98] disabled:opacity-70"
+              >
+                {goingToDashboard ? 'Opening…' : 'Candidate Dashboard'}
+              </button>
+            </div>
+            {downloadError ? (
+              <p className="mx-auto mt-2 max-w-3xl text-sm font-semibold text-red-600">{downloadError}</p>
+            ) : null}
           </div>
-          {downloadError ? <p className="text-sm font-semibold text-red-600">{downloadError}</p> : null}
         </div>
       ) : null}
 

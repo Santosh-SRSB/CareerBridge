@@ -71,8 +71,14 @@ export class JobsService {
           ).map((row) => row.jobId),
         )
       : new Set<string>();
+    const appliedJobIds = await this.appliedJobIdSet(
+      candidate?.id,
+      rows.map((row) => row.id),
+    );
     return {
-      items: rows.map((job) => this.toCard(job, candidate, savedJobIds.has(job.id))),
+      items: rows.map((job) =>
+        this.toCard(job, candidate, savedJobIds.has(job.id), null, appliedJobIds.has(job.id)),
+      ),
       page,
       pageSize,
       total,
@@ -220,9 +226,16 @@ export class JobsService {
           ).map((row) => row.jobId),
         )
       : new Set<string>();
+    const appliedJobIds = await this.appliedJobIdSet(candidate?.id, ids);
 
     const items = ordered.map((job) =>
-      this.toCard(job, candidate, savedJobIds.has(job.id), distanceById.get(job.id) ?? null),
+      this.toCard(
+        job,
+        candidate,
+        savedJobIds.has(job.id),
+        distanceById.get(job.id) ?? null,
+        appliedJobIds.has(job.id),
+      ),
     );
 
     const hasMoreInBucket = page * pageSize < totalInBucket;
@@ -288,10 +301,16 @@ export class JobsService {
           ).map((row) => row.jobId),
         )
       : new Set<string>();
+    const appliedJobIds = await this.appliedJobIdSet(
+      candidate?.id,
+      rows.map((r) => r.id),
+    );
 
     const hasMoreInBucket = page * pageSize < totalInBucket;
     return {
-      items: rows.map((job) => this.toCard(job, candidate, savedJobIds.has(job.id), null)),
+      items: rows.map((job) =>
+        this.toCard(job, candidate, savedJobIds.has(job.id), null, appliedJobIds.has(job.id)),
+      ),
       distanceBucket: { minKm: 0, maxKm: 0 },
       hasMoreInBucket,
       nextPage: hasMoreInBucket ? page + 1 : null,
@@ -337,7 +356,7 @@ export class JobsService {
         )
       : false;
     return {
-      ...this.toCard(job, candidate, saved),
+      ...this.toCard(job, candidate, saved, null, applied),
       description: job.description,
       experience: job.experience,
       benefits: job.benefits,
@@ -421,10 +440,15 @@ export class JobsService {
       include: { job: { include: { employer: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    const published = rows.filter((row) => row.job.status === 'PUBLISHED');
+    const appliedJobIds = await this.appliedJobIdSet(
+      candidate.id,
+      published.map((row) => row.jobId),
+    );
     return {
-      items: rows
-        .filter((row) => row.job.status === 'PUBLISHED')
-        .map((row) => this.toCard(row.job, candidate, true)),
+      items: published.map((row) =>
+        this.toCard(row.job, candidate, true, null, appliedJobIds.has(row.jobId)),
+      ),
     };
   }
 
@@ -464,7 +488,7 @@ export class JobsService {
       createdAt: application.createdAt.toISOString(),
       resumeId: application.resumeId,
       resumeVersion: application.resumeVersion,
-      job: this.toCard(application.job),
+      job: this.toCard(application.job, null, false, null, true),
     };
   }
 
@@ -591,6 +615,15 @@ export class JobsService {
     return { notified };
   }
 
+  private async appliedJobIdSet(candidateId: string | undefined, jobIds: string[]) {
+    if (!candidateId || jobIds.length === 0) return new Set<string>();
+    const rows = await this.prisma.application.findMany({
+      where: { candidateId, jobId: { in: jobIds } },
+      select: { jobId: true },
+    });
+    return new Set(rows.map((row) => row.jobId));
+  }
+
   private toCard(
     job: {
       id: string;
@@ -622,6 +655,7 @@ export class JobsService {
     } | null,
     saved = false,
     distanceKm: number | null = null,
+    applied = false,
   ) {
     const requiredSkills = parseList(job.requiredSkills);
     const preferredSkills = parseList(job.preferredSkills);
@@ -674,6 +708,7 @@ export class JobsService {
           : Math.round(distanceKm * 10) / 10,
       match,
       saved,
+      applied,
     };
   }
 }
