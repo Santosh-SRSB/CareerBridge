@@ -361,8 +361,18 @@ export class ResumesController {
     return this.resumes.download(user.id, id);
   }
 
+  @Get(':id/view-url')
+  viewUrl(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.getViewUrl(user.id, id);
+  }
+
   @Get(':id/processing')
   processing(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.resumes.processingStatus(user.id, id);
+  }
+
+  @Post(':id/processing/retry')
+  retryProcessing(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.resumes.retryProcessing(user.id, id);
   }
 }

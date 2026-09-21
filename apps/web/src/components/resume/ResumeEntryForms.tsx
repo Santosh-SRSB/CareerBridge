@@ -186,6 +186,7 @@ export function EducationInlineForm({
             onStartChange={setStartDate}
             onEndChange={setEndDate}
             onCurrentChange={setIsCurrent}
+            presentLabel="Currently studying here"
           />
         </div>
         <div className="cb-field">
@@ -280,6 +281,7 @@ export function ExperienceInlineForm({
             onStartChange={setStartDate}
             onEndChange={setEndDate}
             onCurrentChange={setIsCurrent}
+            presentLabel="Currently working here"
           />
         </div>
         <div className="cb-field full">

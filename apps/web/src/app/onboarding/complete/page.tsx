@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { OB, OnboardingFrame, onboardingPrimaryButtonClass } from '@/components/OnboardingFrame';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
-import { getCandidateMe, getResume, getResumeProcessingStatus, uploadResumeFile } from '@/lib/api';
+import { getCandidateMe, getResume, getResumeProcessingStatus, retryResumeProcessing, uploadResumeFile } from '@/lib/api';
 import {
   markResumeAutofillSeed,
   markResumeBuildPath,
@@ -64,6 +64,7 @@ export default function OnboardingCompletePage() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [failedResumeId, setFailedResumeId] = useState<string | null>(null);
   const [uploadCelebration, setUploadCelebration] = useState<'idle' | 'loading' | 'success'>('idle');
 
   const statViews = useCountUp(ready, 3.2, 'x', 1, 900, 550);
@@ -114,12 +115,27 @@ export default function OnboardingCompletePage() {
       const result = await getResumeProcessingStatus(resumeId);
       if (result.processingStatus === 'COMPLETED') return;
       if (result.processingStatus === 'FAILED') {
+        setFailedResumeId(resumeId);
         throw new Error(result.processingError || 'Resume processing failed.');
       }
-      setStatus(i < 2 ? 'Extracting details…' : 'Almost done…');
+      setStatus(i < 2 ? 'Document AI extracting…' : 'AI structuring resume…');
       await new Promise((r) => setTimeout(r, 1500));
     }
-    throw new Error('Processing is taking too long. Please try again.');
+    setFailedResumeId(resumeId);
+    throw new Error('Processing is taking too long. Please retry.');
+  }
+
+  async function processUploadedResume(resumeId: string) {
+    setStatus('Document AI extracting…');
+    await waitForProcessing(resumeId);
+    const record = await getResume(resumeId);
+    const seed = mapResumeRecordToWizardSeed(record);
+    markResumeAutofillSeed({ seed, resumeId: record.id });
+    setStatus('');
+    setUploadCelebration('success');
+    await new Promise((r) => setTimeout(r, 1700));
+    rememberReturnTo('/onboarding/complete');
+    router.push('/resume?from=autofill');
   }
 
   async function onAddResume() {
@@ -128,27 +144,41 @@ export default function OnboardingCompletePage() {
       return;
     }
     setError('');
+    setFailedResumeId(null);
     setBusy(true);
     setUploadCelebration('loading');
-    setStatus('Uploading resume…');
+    setStatus('Uploading to Cloud Storage…');
     try {
       const uploaded = await uploadResumeFile(file);
-      setStatus('Extracting details…');
-      await waitForProcessing(uploaded.id);
-      const record = await getResume(uploaded.id);
-      const seed = mapResumeRecordToWizardSeed(record);
-      markResumeAutofillSeed({ seed, resumeId: record.id });
-      setStatus('');
-      setUploadCelebration('success');
-      await new Promise((r) => setTimeout(r, 1700));
-      rememberReturnTo('/onboarding/complete');
-      router.push('/resume?from=autofill');
+      await processUploadedResume(uploaded.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed. Please try again.';
       if (message.includes('sign in') || (err as { code?: string })?.code === 'UNAUTHORIZED') {
         router.replace('/login');
         return;
       }
+      setError(message);
+      setBusy(false);
+      setStatus('');
+      setUploadCelebration('idle');
+    }
+  }
+
+  async function onRetryProcessing() {
+    if (!failedResumeId) {
+      void onAddResume();
+      return;
+    }
+    setError('');
+    setBusy(true);
+    setUploadCelebration('loading');
+    setStatus('Retrying…');
+    try {
+      await retryResumeProcessing(failedResumeId);
+      setFailedResumeId(null);
+      await processUploadedResume(failedResumeId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Retry failed. Please try again.';
       setError(message);
       setBusy(false);
       setStatus('');
@@ -263,7 +293,7 @@ export default function OnboardingCompletePage() {
             className={`cb-ob-complete-primary ${onboardingPrimaryButtonClass} mt-8 w-full py-3.5 text-[15px] hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(10,46,44,0.28)] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:mt-10 sm:py-4 sm:text-base`}
             style={{ background: OB.moss }}
           >
-            Auto fill with resume
+            Upload resume
           </button>
 
           <p
@@ -362,7 +392,20 @@ export default function OnboardingCompletePage() {
                 {status}
               </p>
             ) : null}
-            {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+            {error ? (
+              <div className="mt-2">
+                <p className="text-sm text-red-600">{error}</p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onRetryProcessing()}
+                  className="mt-3 w-full rounded-full border py-2.5 text-sm font-semibold transition hover:bg-[#f6f5ee] disabled:opacity-60"
+                  style={{ borderColor: OB.moss, color: OB.ink }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
 
             <div className="mt-5 flex gap-2">
               <button

@@ -115,10 +115,6 @@ export default function OnboardingEducationPage() {
     }
   }
 
-  function onSkip() {
-    router.push(nextOnboardingStepPath(3));
-  }
-
   if (!ready) {
     return (
       <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
@@ -193,7 +189,7 @@ export default function OnboardingEducationPage() {
           {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
         </div>
 
-        <OnboardingActions onSkip={onSkip}>
+        <OnboardingActions>
           <Button
             type="submit"
             size="sm"

@@ -1,4 +1,5 @@
 import type { CandidateProfile } from '@careerbridge/shared';
+import { resolveCandidateExperienceBand } from '@careerbridge/shared';
 
 function splitLines(text?: string | null) {
   if (!text) return [] as string[];
@@ -11,9 +12,16 @@ function splitLines(text?: string | null) {
 function fallbackSummary(profile: CandidateProfile, fullName: string, title: string) {
   if (profile.about?.trim()) return profile.about.trim();
   const skill = profile.skills?.[0]?.name;
+  const band = resolveCandidateExperienceBand(profile);
   const bits = [
     fullName || 'Candidate',
-    title ? `aspiring ${title}` : 'building a career',
+    band === 'fresher'
+      ? title
+        ? `an aspiring ${title}`
+        : 'building a career as a fresher'
+      : title
+        ? `aspiring ${title}`
+        : 'building a career',
     profile.city ? `based in ${profile.city}` : '',
     skill ? `with strengths in ${skill}` : '',
   ].filter(Boolean);
@@ -25,16 +33,28 @@ export function resolvePassportSummary(
   resumeSummary?: string | null,
 ) {
   const fromProfile = profile.about?.trim();
-  if (fromProfile) return fromProfile;
+  if (fromProfile) {
+    const band = resolveCandidateExperienceBand(profile);
+    if (band === 'fresher' && /\d+(\.\d+)?\+?\s*years?\s+of\s+experience/i.test(fromProfile)) {
+      // Strip false years-of-experience claims for freshers.
+      return fromProfile.replace(/\d+(\.\d+)?\+?\s*years?\s+of\s+experience[,.]?\s*/gi, '').trim() || fromProfile;
+    }
+    return fromProfile;
+  }
 
   const fromResume = resumeSummary?.trim();
-  if (fromResume) return fromResume;
+  if (fromResume) {
+    const band = resolveCandidateExperienceBand(profile);
+    if (band === 'fresher' && /\d+(\.\d+)?\+?\s*years?\s+of\s+experience/i.test(fromResume)) {
+      return fromResume.replace(/\d+(\.\d+)?\+?\s*years?\s+of\s+experience[,.]?\s*/gi, '').trim() || fromResume;
+    }
+    return fromResume;
+  }
 
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
   const title =
     profile.careerInterests?.[0] ||
     profile.experiences?.[0]?.jobTitle ||
-    profile.experienceLevel ||
     '';
 
   return fallbackSummary(profile, fullName, title);

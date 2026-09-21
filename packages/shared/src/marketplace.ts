@@ -425,6 +425,8 @@ export type JobCard = {
   distanceKm?: number | null;
   match?: JobMatch;
   saved?: boolean;
+  /** True when the current candidate has already applied to this job. */
+  applied?: boolean;
 };
 
 export type JobDetail = JobCard & {
@@ -473,6 +475,7 @@ export type NearbyJobsResponse = {
 export type ResumeContent = {
   fullName: string;
   city: string | null;
+  state?: string | null;
   phone: string | null;
   email?: string | null;
   summary: string;
@@ -518,6 +521,15 @@ export type ResumeContent = {
     technologies?: string[];
   }>;
   includePhoto?: boolean;
+  /** Extra personal facts from uploaded resume (optional). */
+  personalDetails?: {
+    dateOfBirth?: string | null;
+    fatherName?: string | null;
+    maritalStatus?: string | null;
+    gender?: string | null;
+    permanentAddress?: string | null;
+    place?: string | null;
+  };
   /** Profile / resume links — also mirrored under resumeData.links. */
   links?: {
     linkedin?: string;
@@ -536,7 +548,7 @@ export type ResumeRecord = {
   template: string;
   summary: string | null;
   content: ResumeContent;
-  /** Extracted plain text when available (upload / OCR). Used for file size hints. */
+  /** Extracted plain text when available (upload / Document AI). Used for file size hints. */
   rawText?: string | null;
   score: number;
   version: number;
@@ -549,6 +561,12 @@ export type ResumeRecord = {
   pdfStorageUri?: string | null;
   pdfPublicUrl?: string | null;
   pdfUploadedAt?: string | null;
+  processingStatus?: string | null;
+  processingError?: string | null;
+  sourceStoragePath?: string | null;
+  sourceStorageUri?: string | null;
+  sourceFileName?: string | null;
+  sourceMimeType?: string | null;
   analysis?: import('./ats').ResumeAnalysis;
   plans?: Array<{ id: string; label: string; minScore: number; maxScore: number; amount: number }>;
 };

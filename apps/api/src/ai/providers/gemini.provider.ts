@@ -50,53 +50,73 @@ export class GeminiProvider implements AiProvider {
     options?: ProviderGenerateOptions,
   ): Promise<ProviderGenerateResult<T>> {
     const client = this.getClient();
-    const model = options?.model || this.getDefaultModel();
+    const primary = options?.model || this.getDefaultModel();
+    const fallback =
+      this.config.get<string>('GEMINI_FALLBACK_MODEL')?.trim() || 'gemini-2.5-flash';
+    const models = primary === fallback ? [primary] : [primary, fallback];
 
-    try {
-      const response = await client.models.generateContent({
-        model,
-        contents: userPrompt,
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: options?.temperature ?? 0.2,
-          maxOutputTokens: options?.maxOutputTokens,
-          responseMimeType: 'application/json',
-        },
-      });
-
-      const rawText = response.text || '';
-      let data: T | null = null;
-      if (rawText) {
+    let lastError: unknown;
+    for (const model of models) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          data = JSON.parse(rawText) as T;
-        } catch {
-          const match = rawText.match(/\{[\s\S]*\}/);
-          if (match) {
+          const response = await client.models.generateContent({
+            model,
+            contents: userPrompt,
+            config: {
+              systemInstruction: systemPrompt,
+              temperature: options?.temperature ?? 0.2,
+              maxOutputTokens: options?.maxOutputTokens,
+              responseMimeType: 'application/json',
+            },
+          });
+
+          const rawText = response.text || '';
+          let data: T | null = null;
+          if (rawText) {
             try {
-              data = JSON.parse(match[0]) as T;
-            } catch (e) {
-              this.logger.warn(`Failed to parse Gemini JSON output: ${(e as Error).message}`);
+              data = JSON.parse(rawText) as T;
+            } catch {
+              const match = rawText.match(/\{[\s\S]*\}/);
+              if (match) {
+                try {
+                  data = JSON.parse(match[0]) as T;
+                } catch (e) {
+                  this.logger.warn(`Failed to parse Gemini JSON output: ${(e as Error).message}`);
+                }
+              } else {
+                this.logger.warn('Failed to parse Gemini JSON output: no JSON object found');
+              }
             }
-          } else {
-            this.logger.warn('Failed to parse Gemini JSON output: no JSON object found');
           }
+
+          const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
+          const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+
+          return {
+            data,
+            rawText,
+            model,
+            inputTokens,
+            outputTokens,
+          };
+        } catch (err) {
+          lastError = err;
+          const msg = err instanceof Error ? err.message : String(err);
+          const retryable = /503|UNAVAILABLE|high demand|temporarily|resource.?exhausted|429/i.test(
+            msg,
+          );
+          this.logger.error(`Gemini generation error (${model} attempt ${attempt + 1}): ${msg}`);
+          if (retryable && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+            continue;
+          }
+          // Try next model if available
+          break;
         }
       }
-
-      const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
-      const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
-
-      return {
-        data,
-        rawText,
-        model,
-        inputTokens,
-        outputTokens,
-      };
-    } catch (err) {
-      this.logger.error(`Gemini generation error: ${(err as Error).message}`);
-      throw err;
     }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   async embed(text: string, options?: { model?: string; dimensions?: number }): Promise<{

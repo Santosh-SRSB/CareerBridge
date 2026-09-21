@@ -890,8 +890,8 @@ export class AuthService {
       role: user.userType,
       phone: user.phone,
     };
-    const accessExpires = this.config.get('JWT_ACCESS_EXPIRES') || '15m';
-    const refreshExpires = this.config.get('JWT_REFRESH_EXPIRES') || '7d';
+    const accessExpires = this.config.get('JWT_ACCESS_EXPIRES') || '7d';
+    const refreshExpires = this.config.get('JWT_REFRESH_EXPIRES') || '30d';
     const jti = randomUUID();
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.config.get('JWT_ACCESS_SECRET') || 'dev-access-secret',

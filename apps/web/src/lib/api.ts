@@ -590,6 +590,26 @@ export async function getResumeProcessingStatus(id: string) {
   }>(`/resumes/${id}/processing`);
 }
 
+export async function retryResumeProcessing(id: string) {
+  return request<{
+    id: string;
+    processingStatus: string | null;
+    processingError: string | null;
+    message?: string;
+  }>(`/resumes/${id}/processing/retry`, { method: 'POST' });
+}
+
+export async function getResumeViewUrl(id: string) {
+  return request<{
+    id: string;
+    url: string;
+    fileName: string;
+    mimeType: string;
+    storagePath: string;
+    expiresInMinutes: number;
+  }>(`/resumes/${id}/view-url`);
+}
+
 export async function savePrimaryResume(payload: {
   resumeId?: string;
   title?: string;

@@ -34,11 +34,18 @@ export interface ResumeWizardDraft {
 export function loadResumeWizardDraft(): ResumeWizardDraft | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = sessionStorage.getItem(RESUME_WIZARD_DRAFT_KEY);
+    const raw =
+      localStorage.getItem(RESUME_WIZARD_DRAFT_KEY) ||
+      sessionStorage.getItem(RESUME_WIZARD_DRAFT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ResumeWizardDraft;
     if (!parsed || typeof parsed !== 'object') return null;
     if ((parsed.version ?? 0) < RESUME_WIZARD_DRAFT_VERSION) return null;
+    // Migrate older session drafts into localStorage so Back survives reloads.
+    if (!localStorage.getItem(RESUME_WIZARD_DRAFT_KEY)) {
+      localStorage.setItem(RESUME_WIZARD_DRAFT_KEY, raw);
+    }
+    sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
     return parsed;
   } catch {
     return null;
@@ -53,7 +60,8 @@ export function saveResumeWizardDraft(draft: Omit<ResumeWizardDraft, 'savedAt' |
       version: RESUME_WIZARD_DRAFT_VERSION,
       savedAt: Date.now(),
     };
-    sessionStorage.setItem(RESUME_WIZARD_DRAFT_KEY, JSON.stringify(payload));
+    localStorage.setItem(RESUME_WIZARD_DRAFT_KEY, JSON.stringify(payload));
+    sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
   } catch {
     // Ignore quota errors
   }
@@ -61,6 +69,7 @@ export function saveResumeWizardDraft(draft: Omit<ResumeWizardDraft, 'savedAt' |
 
 export function clearResumeWizardDraft() {
   if (typeof window === 'undefined') return;
+  localStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
   sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
 }
 

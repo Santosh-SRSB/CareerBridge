@@ -10,6 +10,7 @@ import {
   optionalUrlError,
   yearNumberError,
   computeCareerGapAfterHighestEducation,
+  deriveExperienceFlags,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
@@ -239,6 +240,7 @@ export class CandidatesService {
         ...(dto.highestEducation !== undefined ? { highestEducation: dto.highestEducation } : {}),
         ...(careerInterests !== undefined ? { careerInterests } : {}),
         ...(dto.hasExperience !== undefined ? { hasExperience: dto.hasExperience } : {}),
+        ...(dto.experienceLevel !== undefined ? { experienceLevel: dto.experienceLevel } : {}),
         ...(dto.totalExperienceYears !== undefined
           ? { totalExperienceYears: Number.parseInt(dto.totalExperienceYears, 10) || 0 }
           : {}),
@@ -271,17 +273,31 @@ export class CandidatesService {
 
   async savePassport(userId: string, dto: SavePassportDto) {
     const candidate = await this.loadCandidate(userId);
-    const education = (dto.education ?? []).filter((row) => row.qualification?.trim());
+    const education = (dto.education ?? []).filter(
+      (row) => row.qualification?.trim() || row.institution?.trim(),
+    );
     const skills = [...new Set((dto.skills ?? []).map((item) => item.trim()).filter(Boolean))];
+    const incomingExperience = (dto.experience ?? []).filter(
+      (row) => row.company?.trim() || row.jobTitle?.trim() || row.description?.trim(),
+    );
+    const paidJobs = incomingExperience.filter((row) => !row.isInternship);
+    const internshipJobs = incomingExperience.filter((row) => Boolean(row.isInternship));
+    // Fresher / internship-only: keep internship rows; do not wipe them on fresher save.
     const jobs =
       dto.experienceLevel === 'fresher'
-        ? []
-        : (dto.experience ?? []).filter(
-            (row) => row.company?.trim() || row.jobTitle?.trim() || row.description?.trim(),
-          );
+        ? internshipJobs
+        : paidJobs.length
+          ? incomingExperience
+          : internshipJobs;
     const years = Number.parseInt(dto.totalExperienceYears || '0', 10) || 0;
     const months = Number.parseInt(dto.totalExperienceMonths || '0', 10) || 0;
     const firstEdu = education[0];
+    const resolvedLevel =
+      paidJobs.length > 0 ? 'experienced' : dto.experienceLevel === 'experienced' && paidJobs.length === 0
+        ? 'fresher'
+        : dto.experienceLevel || (paidJobs.length ? 'experienced' : 'fresher');
+    const hasExperienceFlag =
+      paidJobs.length > 0 ? 'YES' : internshipJobs.length > 0 || jobs.some((r) => r.isInternship) ? 'INTERNSHIP' : 'NONE';
     const careerInterests = [...new Set((dto.careerInterests ?? []).map((item) => item.trim()).filter(Boolean))].slice(
       0,
       8,
@@ -321,11 +337,14 @@ export class CandidatesService {
           ...(careerInterests.length
             ? { careerInterests: JSON.stringify(careerInterests) }
             : {}),
-          highestEducation: firstEdu?.qualification.trim() || candidate.highestEducation,
+          highestEducation:
+            firstEdu?.qualification?.trim() ||
+            firstEdu?.institution?.trim() ||
+            candidate.highestEducation,
           stillInCollege: Boolean(dto.stillInCollege),
           educationStart: dto.educationStart?.trim() || null,
           educationEnd: dto.stillInCollege ? null : dto.educationEnd?.trim() || null,
-          experienceLevel: dto.experienceLevel || 'fresher',
+          experienceLevel: resolvedLevel,
           totalExperienceYears: years,
           totalExperienceMonths: months,
           gapReason: dto.gapReason?.trim() || null,
@@ -334,12 +353,7 @@ export class CandidatesService {
               ? Math.max(0, Math.floor(dto.gapMonths))
               : null,
           source: dto.source === 'resume' ? 'resume' : 'manual',
-          hasExperience:
-            dto.experienceLevel === 'experienced'
-              ? jobs.some((row) => row.isInternship) && !jobs.some((row) => !row.isInternship)
-                ? 'INTERNSHIP'
-                : 'YES'
-              : 'NONE',
+          hasExperience: hasExperienceFlag,
           ...(projectSeed ? { projects: projectSeed } : {}),
         },
       });
@@ -350,7 +364,7 @@ export class CandidatesService {
         await tx.candidateEducation.createMany({
           data: education.map((row) => ({
             candidateId: candidate.id,
-            qualification: row.qualification.trim(),
+            qualification: row.qualification?.trim() || row.institution?.trim() || 'Education',
             institution: row.institution?.trim() || null,
             fieldOfStudy: row.fieldOfStudy?.trim() || null,
             yearCompleted: yearFrom(row.yearCompleted || row.endDate || ''),
@@ -680,9 +694,18 @@ export class CandidatesService {
   private async recompute(userId: string) {
     const candidate = await this.loadCandidate(userId);
     const profileCompletion = computeCompletion(candidate);
+    const flags = deriveExperienceFlags({
+      hasExperience: candidate.hasExperience,
+      experienceLevel: candidate.experienceLevel,
+      experiences: candidate.experiences,
+    });
     const updated = await this.prisma.candidate.update({
       where: { userId },
-      data: { profileCompletion },
+      data: {
+        profileCompletion,
+        hasExperience: flags.hasExperience,
+        experienceLevel: flags.experienceLevel,
+      },
       include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
     return this.withReadablePhoto(this.toProfile(updated));
@@ -791,8 +814,9 @@ function sectionDone(candidate: NonNullable<CandidateRecord>, key: PassportSecti
     return Boolean(candidate.firstName?.trim() && candidate.city?.trim() && candidate.dateOfBirth);
   }
   if (key === 'education') {
+    if (candidate.highestEducation?.trim()) return true;
     return candidate.education.some(
-      (row) => row.qualification?.trim() && row.institution?.trim(),
+      (row) => Boolean(row.qualification?.trim()) || Boolean(row.institution?.trim()),
     );
   }
   if (key === 'skills') return candidate.skills.length >= 3;

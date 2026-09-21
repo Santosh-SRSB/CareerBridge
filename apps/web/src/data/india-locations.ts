@@ -1,23 +1,16 @@
 export const INDIA_STATES = [
-  'Andaman and Nicobar Islands',
   'Andhra Pradesh',
   'Arunachal Pradesh',
   'Assam',
   'Bihar',
-  'Chandigarh',
   'Chhattisgarh',
-  'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi',
   'Goa',
   'Gujarat',
   'Haryana',
   'Himachal Pradesh',
-  'Jammu and Kashmir',
   'Jharkhand',
   'Karnataka',
   'Kerala',
-  'Ladakh',
-  'Lakshadweep',
   'Madhya Pradesh',
   'Maharashtra',
   'Manipur',
@@ -25,7 +18,6 @@ export const INDIA_STATES = [
   'Mizoram',
   'Nagaland',
   'Odisha',
-  'Puducherry',
   'Punjab',
   'Rajasthan',
   'Sikkim',
@@ -39,7 +31,7 @@ export const INDIA_STATES = [
 
 export type IndiaState = (typeof INDIA_STATES)[number];
 
-export const CITIES_BY_STATE: Record<IndiaState, string[]> = {
+export const CITIES_BY_STATE: Record<string, string[]> = {
   'Andaman and Nicobar Islands': ['Port Blair', 'Diglipur', 'Mayabunder', 'Rangat', 'Car Nicobar'],
   'Andhra Pradesh': [
     'Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Kurnool', 'Tirupati', 'Kakinada',
@@ -216,6 +208,55 @@ export function getCitiesForState(state: string): string[] {
   return CITIES_BY_STATE[state as IndiaState] ?? [];
 }
 
+/** Common alternate spellings → canonical city name in CITIES_BY_STATE. */
+const CITY_ALIASES: Record<string, string> = {
+  bangalore: 'Bengaluru',
+  bengalooru: 'Bengaluru',
+  bengaluru: 'Bengaluru',
+  mysore: 'Mysuru',
+  mysuru: 'Mysuru',
+  mangalore: 'Mangaluru',
+  mangaluru: 'Mangaluru',
+  belgaum: 'Belagavi',
+  belagavi: 'Belagavi',
+  hubli: 'Hubballi',
+  hubballi: 'Hubballi',
+  tumkur: 'Tumakuru',
+  trivandrum: 'Thiruvananthapuram',
+  calicut: 'Kozhikode',
+  bombay: 'Mumbai',
+  poona: 'Pune',
+  madras: 'Chennai',
+  calcutta: 'Kolkata',
+  gurgaon: 'Gurugram',
+  baroda: 'Vadodara',
+};
+
+export function normalizeCityName(city: string): string {
+  const trimmed = city.trim();
+  if (!trimmed) return '';
+  const alias = CITY_ALIASES[trimmed.toLowerCase()];
+  return alias || trimmed;
+}
+
+/** Infer Indian state from a city name (uses aliases + city lists). */
+export function findStateForCity(city: string): IndiaState | '' {
+  const normalized = normalizeCityName(city);
+  if (!normalized) return '';
+  const needle = normalized.toLowerCase();
+  for (const state of INDIA_STATES) {
+    const cities = CITIES_BY_STATE[state];
+    if (cities.some((c) => c.toLowerCase() === needle)) return state;
+  }
+  for (const state of INDIA_STATES) {
+    const cities = CITIES_BY_STATE[state];
+    if (cities.some((c) => c.toLowerCase().includes(needle) || needle.includes(c.toLowerCase()))) {
+      return state;
+    }
+  }
+  return '';
+}
+
 export function formatCityState(city: string, state: string): string {
   if (city && state) return `${city}, ${state}`;
   return city || state || '';
@@ -225,18 +266,23 @@ export function parseCityState(location: string): { city: string; state: string 
   if (!location.trim()) return { city: '', state: '' };
   const parts = location.split(',').map((p) => p.trim()).filter(Boolean);
   if (parts.length >= 2) {
-    const state = parts[parts.length - 1];
-    const city = parts.slice(0, -1).join(', ');
-    if ((INDIA_STATES as readonly string[]).includes(state)) {
-      return { city, state };
+    const statePart = parts[parts.length - 1];
+    const cityPart = parts.slice(0, -1).join(', ');
+    if ((INDIA_STATES as readonly string[]).includes(statePart)) {
+      return { city: normalizeCityName(cityPart) || cityPart, state: statePart };
     }
   }
   for (const state of INDIA_STATES) {
     if (location.includes(state)) {
-      return { city: location.replace(state, '').replace(/,\s*$/, '').trim(), state };
+      const city = normalizeCityName(
+        location.replace(state, '').replace(/,\s*$/, '').trim(),
+      );
+      return { city, state };
     }
   }
-  return { city: location, state: '' };
+  const cityOnly = normalizeCityName(location) || location.trim();
+  const inferred = findStateForCity(cityOnly);
+  return { city: cityOnly, state: inferred };
 }
 
 export const REGISTRATION_CITIES = [

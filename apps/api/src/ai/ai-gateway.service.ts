@@ -340,9 +340,14 @@ export class AiGatewayService {
         ...options,
         promptVersion: prompt.version,
         temperature: 0,
+        maxOutputTokens: 8192,
       },
     });
-    return res.data;
+    if (res.data) return res.data;
+    if (res.error) {
+      throw new Error(`LLM resume structure failed: ${res.error}`);
+    }
+    throw new Error('LLM resume parser returned empty result.');
   }
 
   async rewriteResume(

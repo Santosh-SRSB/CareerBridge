@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { gcpClientOptions } from '../gcp/gcp-credentials';
 
 @Injectable()
 export class CloudTasksService {
@@ -13,10 +14,7 @@ export class CloudTasksService {
   private async init() {
     try {
       const { CloudTasksClient } = await import('@google-cloud/tasks');
-      this.tasksClient = new CloudTasksClient({
-        projectId: this.config.get<string>('GCP_PROJECT_ID') || undefined,
-        keyFilename: this.config.get<string>('GOOGLE_APPLICATION_CREDENTIALS') || undefined,
-      });
+      this.tasksClient = new CloudTasksClient(gcpClientOptions(this.config));
       this.logger.log('Cloud Tasks client initialized');
     } catch (err) {
       this.logger.warn(

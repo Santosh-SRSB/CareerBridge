@@ -19,16 +19,19 @@ export function useOnboardingGate(step: OnboardingStep) {
 
     fetchMe()
       .then((me) => {
+        const onboardingCompleted = me.onboardingCompleted ?? stored.onboardingCompleted;
+        const dashboardReached = me.dashboardReached ?? stored.dashboardReached;
         patchStoredUser({
           firstName: me.firstName ?? stored.firstName,
-          onboardingCompleted: me.onboardingCompleted ?? stored.onboardingCompleted,
-          dashboardReached: me.dashboardReached ?? stored.dashboardReached,
+          onboardingCompleted,
+          dashboardReached,
         });
-        if (me.dashboardReached) {
+        // Completed users must not bounce on step pages when dashboardReached is still false.
+        if (dashboardReached) {
           router.replace('/dashboard');
           return;
         }
-        if (me.onboardingCompleted) {
+        if (onboardingCompleted) {
           router.replace('/onboarding/complete');
           return;
         }

@@ -61,18 +61,31 @@ export class JobsService {
     if (candidate && (query.q?.trim() || query.category?.trim())) {
       await this.recordSearchInterest(candidate.id, query.q || query.category || '').catch(() => undefined);
     }
+    const jobIds = rows.map((row) => row.id);
     const savedJobIds = candidate
       ? new Set(
           (
             await this.prisma.savedJob.findMany({
-              where: { candidateId: candidate.id, jobId: { in: rows.map((row) => row.id) } },
+              where: { candidateId: candidate.id, jobId: { in: jobIds } },
+              select: { jobId: true },
+            })
+          ).map((row) => row.jobId),
+        )
+      : new Set<string>();
+    const appliedJobIds = candidate
+      ? new Set(
+          (
+            await this.prisma.application.findMany({
+              where: { candidateId: candidate.id, jobId: { in: jobIds } },
               select: { jobId: true },
             })
           ).map((row) => row.jobId),
         )
       : new Set<string>();
     return {
-      items: rows.map((job) => this.toCard(job, candidate, savedJobIds.has(job.id))),
+      items: rows.map((job) =>
+        this.toCard(job, candidate, savedJobIds.has(job.id), null, appliedJobIds.has(job.id)),
+      ),
       page,
       pageSize,
       total,
@@ -220,9 +233,25 @@ export class JobsService {
           ).map((row) => row.jobId),
         )
       : new Set<string>();
+    const appliedJobIds = candidate
+      ? new Set(
+          (
+            await this.prisma.application.findMany({
+              where: { candidateId: candidate.id, jobId: { in: ids } },
+              select: { jobId: true },
+            })
+          ).map((row) => row.jobId),
+        )
+      : new Set<string>();
 
     const items = ordered.map((job) =>
-      this.toCard(job, candidate, savedJobIds.has(job.id), distanceById.get(job.id) ?? null),
+      this.toCard(
+        job,
+        candidate,
+        savedJobIds.has(job.id),
+        distanceById.get(job.id) ?? null,
+        appliedJobIds.has(job.id),
+      ),
     );
 
     const hasMoreInBucket = page * pageSize < totalInBucket;
@@ -278,11 +307,22 @@ export class JobsService {
     ]);
 
     const candidate = userId ? await this.loadCandidate(userId) : null;
+    const jobIds = rows.map((r) => r.id);
     const savedJobIds = candidate
       ? new Set(
           (
             await this.prisma.savedJob.findMany({
-              where: { candidateId: candidate.id, jobId: { in: rows.map((r) => r.id) } },
+              where: { candidateId: candidate.id, jobId: { in: jobIds } },
+              select: { jobId: true },
+            })
+          ).map((row) => row.jobId),
+        )
+      : new Set<string>();
+    const appliedJobIds = candidate
+      ? new Set(
+          (
+            await this.prisma.application.findMany({
+              where: { candidateId: candidate.id, jobId: { in: jobIds } },
               select: { jobId: true },
             })
           ).map((row) => row.jobId),
@@ -291,7 +331,9 @@ export class JobsService {
 
     const hasMoreInBucket = page * pageSize < totalInBucket;
     return {
-      items: rows.map((job) => this.toCard(job, candidate, savedJobIds.has(job.id), null)),
+      items: rows.map((job) =>
+        this.toCard(job, candidate, savedJobIds.has(job.id), null, appliedJobIds.has(job.id)),
+      ),
       distanceBucket: { minKm: 0, maxKm: 0 },
       hasMoreInBucket,
       nextPage: hasMoreInBucket ? page + 1 : null,
@@ -337,7 +379,7 @@ export class JobsService {
         )
       : false;
     return {
-      ...this.toCard(job, candidate, saved),
+      ...this.toCard(job, candidate, saved, null, applied),
       description: job.description,
       experience: job.experience,
       benefits: job.benefits,
@@ -421,10 +463,20 @@ export class JobsService {
       include: { job: { include: { employer: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    const published = rows.filter((row) => row.job.status === 'PUBLISHED');
+    const jobIds = published.map((row) => row.job.id);
+    const appliedJobIds = new Set(
+      (
+        await this.prisma.application.findMany({
+          where: { candidateId: candidate.id, jobId: { in: jobIds } },
+          select: { jobId: true },
+        })
+      ).map((row) => row.jobId),
+    );
     return {
-      items: rows
-        .filter((row) => row.job.status === 'PUBLISHED')
-        .map((row) => this.toCard(row.job, candidate, true)),
+      items: published.map((row) =>
+        this.toCard(row.job, candidate, true, null, appliedJobIds.has(row.job.id)),
+      ),
     };
   }
 
@@ -622,6 +674,7 @@ export class JobsService {
     } | null,
     saved = false,
     distanceKm: number | null = null,
+    applied = false,
   ) {
     const requiredSkills = parseList(job.requiredSkills);
     const preferredSkills = parseList(job.preferredSkills);
@@ -674,6 +727,7 @@ export class JobsService {
           : Math.round(distanceKm * 10) / 10,
       match,
       saved,
+      applied,
     };
   }
 }

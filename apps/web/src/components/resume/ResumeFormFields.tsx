@@ -70,6 +70,7 @@ export function MonthRangeFields({
   onEndChange,
   onCurrentChange,
   showPresent = true,
+  presentLabel = 'Currently working / studying here',
 }: {
   startLabel?: string;
   endLabel?: string;
@@ -80,6 +81,7 @@ export function MonthRangeFields({
   onEndChange: (v: string) => void;
   onCurrentChange: (v: boolean) => void;
   showPresent?: boolean;
+  presentLabel?: string;
 }) {
   return (
     <div className="cb-date-range cb-date-field">
@@ -95,7 +97,7 @@ export function MonthRangeFields({
       {showPresent && (
         <label className="cb-present-row">
           <input type="checkbox" checked={isCurrent} onChange={(e) => onCurrentChange(e.target.checked)} />
-          Currently working / studying here
+          {presentLabel}
         </label>
       )}
     </div>

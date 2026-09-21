@@ -117,6 +117,11 @@ export class UpdateCandidateDto {
   @IsIn(EXPERIENCE_OPTIONS.map((item) => item.value))
   hasExperience?: string;
 
+  @ApiPropertyOptional({ enum: ['fresher', 'experienced'] })
+  @IsOptional()
+  @IsIn(['fresher', 'experienced'])
+  experienceLevel?: 'fresher' | 'experienced';
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

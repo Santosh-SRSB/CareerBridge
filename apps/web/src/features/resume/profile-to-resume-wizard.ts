@@ -1,5 +1,6 @@
 import type { CandidateProfile, ResumeRecord } from '@careerbridge/shared';
 import { parseLanguageSkills } from '@careerbridge/shared';
+import { formatCityState, parseCityState } from '@/data/india-locations';
 import type { ResumeWizardDraft } from './resume-wizard-draft';
 import { mapResumeRecordToWizardSeed } from './resume-record-to-wizard';
 import { splitProjectFields } from './project-fields';
@@ -43,11 +44,13 @@ function splitBullets(text: string | null | undefined) {
 }
 
 function locationFromProfile(profile: CandidateProfile) {
-  return (
+  const raw =
     [profile.city, profile.state].filter(Boolean).join(', ').trim() ||
     profile.preferredWorkCity?.trim() ||
-    ''
-  );
+    '';
+  if (!raw) return '';
+  const parsed = parseCityState(raw);
+  return formatCityState(parsed.city, parsed.state) || raw;
 }
 
 export function mapCandidateProfileToResumeWizard(

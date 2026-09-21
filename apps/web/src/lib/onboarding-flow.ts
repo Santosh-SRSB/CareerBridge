@@ -44,7 +44,13 @@ export function resolveCandidateResumePath(profile: OnboardingResumeProfile): st
   }
 
   const hasEducation =
-    Boolean(profile.highestEducation?.trim()) || (profile.education?.length ?? 0) > 0;
+    Boolean(profile.highestEducation?.trim()) ||
+    (Array.isArray(profile.education) &&
+      profile.education.some((row) => {
+        if (!row || typeof row !== 'object') return false;
+        const item = row as { qualification?: string | null; institution?: string | null };
+        return Boolean(item.qualification?.trim() || item.institution?.trim());
+      }));
   if (!hasEducation) return ONBOARDING_STEP_PATHS[2];
 
   return ONBOARDING_STEP_PATHS[3];

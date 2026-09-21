@@ -56,7 +56,7 @@ export function RegistrationForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [otpChannel, setOtpChannel] = useState<'MOBILE' | 'EMAIL'>('MOBILE');
+  const [otpChannel, setOtpChannel] = useState<'MOBILE' | 'EMAIL' | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [error, setError] = useState('');
@@ -92,6 +92,10 @@ export function RegistrationForm() {
     }
     if (password !== confirmPassword) {
       setError('Password and confirm password do not match.');
+      return;
+    }
+    if (!otpChannel) {
+      setError('Select Mobile OTP or Email OTP.');
       return;
     }
 
@@ -174,39 +178,6 @@ export function RegistrationForm() {
       />
 
       <div>
-        <label className="mb-1.5 block text-xs font-bold text-primary">Verify via OTP on</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setOtpChannel('MOBILE')}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 px-3 text-xs font-bold transition-all ${
-              otpChannel === 'MOBILE'
-                ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white shadow-sm'
-                : 'border-slate-200 bg-[#f8faf9] text-slate-600 hover:border-slate-300 hover:bg-white'
-            }`}
-          >
-            Mobile OTP
-          </button>
-          <button
-            type="button"
-            onClick={() => setOtpChannel('EMAIL')}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 px-3 text-xs font-bold transition-all ${
-              otpChannel === 'EMAIL'
-                ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white shadow-sm'
-                : 'border-slate-200 bg-[#f8faf9] text-slate-600 hover:border-slate-300 hover:bg-white'
-            }`}
-          >
-            Email OTP
-          </button>
-        </div>
-        <p className="mt-1.5 text-[11px] font-medium text-slate-500">
-          {otpChannel === 'EMAIL'
-            ? 'A 6-digit OTP will be sent to your email.'
-            : 'A 6-digit OTP will be sent to your mobile number.'}
-        </p>
-      </div>
-
-      <div>
         <label className="mb-1.5 block text-xs font-bold text-primary" htmlFor="cand-password">
           Password
         </label>
@@ -259,6 +230,41 @@ export function RegistrationForm() {
             <EyeIcon open={showConfirmPassword} />
           </button>
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-xs font-bold text-primary">Verify via OTP on</label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setOtpChannel('MOBILE')}
+            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 px-3 text-xs font-bold transition-all ${
+              otpChannel === 'MOBILE'
+                ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            Mobile OTP
+          </button>
+          <button
+            type="button"
+            onClick={() => setOtpChannel('EMAIL')}
+            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 px-3 text-xs font-bold transition-all ${
+              otpChannel === 'EMAIL'
+                ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            Email OTP
+          </button>
+        </div>
+        <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+          {!otpChannel
+            ? 'Choose Mobile OTP or Email OTP.'
+            : otpChannel === 'EMAIL'
+              ? 'A 6-digit OTP will be sent to your email.'
+              : 'A 6-digit OTP will be sent to your mobile number.'}
+        </p>
       </div>
 
       <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-primary/10 bg-[#f8faf9] p-3">

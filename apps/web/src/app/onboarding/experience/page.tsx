@@ -25,6 +25,7 @@ export default function OnboardingExperiencePage() {
   const [experienceYears, setExperienceYears] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [currentlyWorking, setCurrentlyWorking] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const gateReady = useOnboardingGate(4);
@@ -67,7 +68,7 @@ export default function OnboardingExperiencePage() {
         setError('Enter how many years of experience you have.');
         return;
       }
-      if (!startDate || !endDate) {
+      if (!startDate || (!currentlyWorking && !endDate)) {
         setError('Select from and to dates for your experience.');
         return;
       }
@@ -77,6 +78,8 @@ export default function OnboardingExperiencePage() {
     try {
       let profile = await updateCandidateMe({
         hasExperience,
+        experienceLevel:
+          hasExperience === 'YES' ? 'experienced' : 'fresher',
         ...(showJobForm
           ? {
               totalExperienceYears: experienceYears.trim(),
@@ -90,7 +93,8 @@ export default function OnboardingExperiencePage() {
           company: company.trim(),
           jobTitle: jobTitle.trim(),
           startDate: `${startDate}-01`,
-          endDate: `${endDate}-01`,
+          endDate: currentlyWorking ? undefined : `${endDate}-01`,
+          stillInCompany: currentlyWorking,
           isInternship: false,
         });
         profile = await updateCandidateMe({ onboardingCompleted: true });
@@ -104,19 +108,6 @@ export default function OnboardingExperiencePage() {
       setError('We could not save your experience right now. Please try again.');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function onSkip() {
-    setLoading(true);
-    try {
-      const profile = await updateCandidateMe({ onboardingCompleted: true });
-      patchStoredUser({ onboardingCompleted: profile.onboardingCompleted });
-    } catch {
-      // ignored
-    } finally {
-      setLoading(false);
-      router.replace('/onboarding/complete');
     }
   }
 
@@ -201,25 +192,27 @@ export default function OnboardingExperiencePage() {
                 </span>
                 <input
                   type="month"
-                  required
-                  value={endDate}
+                  required={!currentlyWorking}
+                  disabled={currentlyWorking}
+                  value={currentlyWorking ? '' : endDate}
                   onChange={(event) => setEndDate(event.target.value)}
                   className={onboardingInputClass}
                 />
               </label>
             </div>
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-semibold" style={{ color: OB.ink }}>
+              <input
+                type="checkbox"
+                checked={currentlyWorking}
+                onChange={(event) => {
+                  setCurrentlyWorking(event.target.checked);
+                  if (event.target.checked) setEndDate('');
+                }}
+                className="h-4 w-4 rounded border-primary/20 text-[#0a2e2c]"
+              />
+              Currently working
+            </label>
           </div>
-        ) : hasExperience === 'NONE' ? (
-          <p
-            className="rounded-lg border px-4 py-3 text-sm"
-            style={{
-              borderColor: 'rgba(217, 164, 65, 0.35)',
-              color: OB.ink,
-              background: 'linear-gradient(135deg, #FBF7EC 0%, #F3F8F2 100%)',
-            }}
-          >
-            ✨ That&apos;s okay. You can add experience later in your Career Passport.
-          </p>
         ) : hasExperience === 'INTERNSHIP' ? (
           <div className="space-y-4">
             <OnboardingQuestion title="Company / Organisation">
@@ -244,7 +237,7 @@ export default function OnboardingExperiencePage() {
         {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
         </div>
 
-        <OnboardingActions onSkip={() => void onSkip()} skipLabel="Skip for now">
+        <OnboardingActions>
           <Button
             type="submit"
             size="sm"
