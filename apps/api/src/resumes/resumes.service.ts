@@ -321,8 +321,8 @@ export class ResumesService {
       },
     });
 
-    // Flat path only: resumes/harsh.pdf (no candidate/upload subfolders)
-    const storagePath = this.storage.resumeObjectPath(name, created.id.slice(0, 8));
+    // Flat path: resumes/{file}-{fullResumeId}.ext — never truncate id (collision risk).
+    const storagePath = this.storage.resumeObjectPath(name, created.id);
     let storageUri: string | null = null;
     try {
       const uploaded = await this.storage.uploadFile(storagePath, file.buffer, {
@@ -688,8 +688,37 @@ export class ResumesService {
     return this.toRecord(copy);
   }
 
-  async download(userId: string, id: string) {
+  async download(userId: string, id: string, variant?: 'original' | 'formatted') {
     const resume = await this.requireResume(userId, id);
+    const preferOriginal =
+      variant === 'original' ||
+      (variant !== 'formatted' && Boolean(resume.sourceStoragePath));
+
+    // A: prefer original uploaded bytes when available — portal-rendered PDF is lossy.
+    if (preferOriginal && resume.sourceStoragePath) {
+      try {
+        const buf = await this.storage.downloadFile(resume.sourceStoragePath);
+        return {
+          pdf: buf.toString('base64'),
+          fileName: resume.sourceFileName || `${resume.title.replace(/\s+/g, '-')}-original.pdf`,
+          mimeType: resume.sourceMimeType || 'application/pdf',
+          variant: 'original' as const,
+          isPortalRendered: false,
+          note: 'Original uploaded file (not CareerBridge-formatted).',
+          storage: null,
+          storageError: null,
+          pdfStoragePath: resume.pdfStoragePath,
+          pdfStorageUri: resume.pdfStorageUri,
+          pdfPublicUrl: resume.pdfPublicUrl,
+          pdfUploadedAt: resume.pdfUploadedAt?.toISOString() || null,
+        };
+      } catch (err) {
+        this.logger.warn(
+          `Original source download failed for ${resume.id}, falling back to formatted PDF: ${(err as Error).message}`,
+        );
+      }
+    }
+
     let storage: {
       pdfStoragePath: string;
       pdfStorageUri: string;
@@ -709,6 +738,9 @@ export class ResumesService {
       pdf: pdf.toString('base64'),
       fileName: `${resume.title.replace(/\s+/g, '-')}.pdf`,
       mimeType: 'application/pdf',
+      variant: 'formatted' as const,
+      isPortalRendered: true,
+      note: 'CareerBridge-formatted PDF regenerated from stored contentJson — not the original upload.',
       storage,
       storageError,
       pdfStoragePath: fresh.pdfStoragePath,
@@ -969,7 +1001,7 @@ export class ResumesService {
     );
     const path = this.storage.resumeObjectPath(
       `${content.fullName || 'resume'}.pdf`,
-      resume.id.slice(0, 8),
+      resume.id,
     );
     const uploaded = await this.storage.uploadFile(path, pdf, {
       contentType: 'application/pdf',

@@ -8,9 +8,12 @@ import {
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
-import { ResumeExtractorService } from './resume-extractor.service';
-import { parseExtractedResumeText } from './parse-extracted-resume';
-import { parseResumeTextWithOptionalAi } from './structure-resume-content';
+import { applyContentGroundingGate } from './content-grounding-gate';
+import { attachComputedExperienceYears } from './experience-years';
+import { ParseResumePipeline } from './parse-resume.pipeline';
+import { sanitizeExtractedResumeText } from './layout-sanitize';
+import { parsedSchemaToResumeContent } from './parsed-resume-map';
+import { isParsedResumeSchemaMostlyEmpty } from './parsed-resume.schema';
 
 @Injectable()
 export class ResumeProcessorService {
@@ -19,8 +22,8 @@ export class ResumeProcessorService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly extractor: ResumeExtractorService,
     private readonly aiGateway: AiGatewayService,
+    private readonly parsePipeline: ParseResumePipeline,
   ) {}
 
   async processUploadedResume(resumeId: string, userId: string, fileBuffer?: Buffer) {
@@ -55,25 +58,60 @@ export class ResumeProcessorService {
         throw new Error('Resume source file buffer is missing');
       }
 
-      const extraction = await this.extractor.extract(
+      const pipelineResult = await this.parsePipeline.parse({
         buffer,
-        resume.sourceMimeType || 'application/octet-stream',
-        resume.sourceFileName || 'resume',
-      );
+        mimeType: resume.sourceMimeType || 'application/octet-stream',
+        fileName: resume.sourceFileName || 'resume',
+        userId,
+      });
 
-      if (!extraction.text.trim()) {
-        throw new Error(`Text extraction failed (${extraction.extractor}): ${extraction.notes.join('; ')}`);
+      if (!pipelineResult.ok && isParsedResumeSchemaMostlyEmpty(pipelineResult.data)) {
+        throw new Error(
+          pipelineResult.error ||
+            `Text extraction failed (${pipelineResult.meta.extractor}): ${pipelineResult.meta.warnings.join('; ')}`,
+        );
       }
 
-      const parsed = await parseResumeTextWithOptionalAi(extraction.text, (text) =>
-        this.aiGateway.isConfigured()
-          ? this.aiGateway.structureResumeText(text, { userId })
-          : Promise.resolve(null),
-      );
-      // ADDITIVE: keep legacy ResumeContent fields; also attach normalized resumeData JSON.
-      const content = withNormalizedResumeData(parsed);
-      const rawText = extraction.text.slice(0, 80000);
+      const candidate = await this.prisma.candidate.findUnique({
+        where: { id: resume.candidateId },
+        select: { firstName: true, lastName: true, totalExperienceYears: true, totalExperienceMonths: true },
+      });
+      const profileName = [candidate?.firstName, candidate?.lastName].filter(Boolean).join(' ').trim();
+
+      const rawTextSource =
+        sanitizeExtractedResumeText(pipelineResult.rawText || '') || pipelineResult.rawText || '';
+      const contentBase = parsedSchemaToResumeContent(pipelineResult.data);
+      const gated = applyContentGroundingGate(contentBase, rawTextSource, { profileName });
+      if (gated.rejected.length) {
+        this.logger.warn(
+          `Resume ${resumeId} grounding gate rejected ${gated.rejected.length} field(s): ${gated.rejected
+            .slice(0, 8)
+            .map((r) => `${r.field}=${r.value.slice(0, 40)}`)
+            .join('; ')}`,
+        );
+      }
+
+      // D: experience years from dated jobs (not a free-text "2+ years" claim)
+      let content = attachComputedExperienceYears(withNormalizedResumeData(gated.content));
+      const rawText = rawTextSource.slice(0, 80000);
       const analysis = analyzeResumeContent(content, rawText);
+
+      const computedYears = content.fieldConfidence?.find((f) => f.field === 'totalExperienceYears');
+      if (computedYears && candidate && (Number(computedYears.value) || 0) > 0) {
+        const years = Number.parseInt(computedYears.value, 10) || 0;
+        const monthsEntry = content.fieldConfidence?.find((f) => f.field === 'totalExperienceMonths');
+        const months = monthsEntry ? Number.parseInt(monthsEntry.value, 10) || 0 : 0;
+        // Only fill candidate totals when unset — never overwrite a larger manual value with a thin parse.
+        const existing =
+          (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
+        const computed = years + months / 12;
+        if (existing < 0.5 && computed >= 0.5) {
+          await this.prisma.candidate.update({
+            where: { id: resume.candidateId },
+            data: { totalExperienceYears: years, totalExperienceMonths: months },
+          });
+        }
+      }
 
       let aiReview: unknown = null;
       if (this.aiGateway.isConfigured()) {
@@ -92,13 +130,15 @@ export class ResumeProcessorService {
       const atsScore = analysis.score;
 
       const extractionMeta = {
-        extractor: extraction.extractor,
-        mimeType: extraction.mimeType,
-        fileName: extraction.fileName,
-        pageCount: extraction.pageCount,
-        confidence: extraction.confidence,
-        notes: extraction.notes,
-        textPreview: extraction.text.slice(0, 500),
+        extractor: pipelineResult.meta.extractor,
+        mimeType: resume.sourceMimeType,
+        fileName: resume.sourceFileName,
+        layoutMode: pipelineResult.meta.layoutMode,
+        notes: pipelineResult.meta.warnings,
+        textPreview: (pipelineResult.rawTextPreview || rawText).slice(0, 500),
+        groundingRejected:
+          pipelineResult.meta.groundingRejected || gated.rejected.slice(0, 40),
+        parsePartial: pipelineResult.meta.partial,
         aiReview,
         processedAt: new Date().toISOString(),
       };
@@ -143,8 +183,10 @@ export class ResumeProcessorService {
         this.logger.warn(`Embedding after resume process failed: ${(err as Error).message}`);
       }
 
-      this.logger.log(`Resume ${resumeId} processing completed via ${extraction.extractor}`);
-      return { ok: true, extractor: extraction.extractor };
+      this.logger.log(
+        `Resume ${resumeId} processing completed via ${pipelineResult.meta.extractor}/${pipelineResult.meta.layoutMode}`,
+      );
+      return { ok: true, extractor: pipelineResult.meta.extractor };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Resume ${resumeId} processing failed: ${message}`);

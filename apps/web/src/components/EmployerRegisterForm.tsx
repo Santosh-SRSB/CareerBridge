@@ -422,7 +422,14 @@ export function EmployerRegisterForm() {
             className="mt-0.5 h-4 w-4 rounded border-primary/20 text-[#0a2e2c] focus:ring-[#0d9488]"
           />
           <span>
-            I agree to <a href="/terms" target="_blank" className="text-[#0d9488] hover:underline">Terms & Privacy Policy</a>
+            I agree to the{' '}
+            <a href="/employer/terms" target="_blank" rel="noreferrer" className="text-[#0d9488] hover:underline">
+              Employer Terms
+            </a>{' '}
+            and{' '}
+            <a href="/privacy" target="_blank" rel="noreferrer" className="text-[#0d9488] hover:underline">
+              Privacy Policy
+            </a>
           </span>
         </label>
         {termsError ? (

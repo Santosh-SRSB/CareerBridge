@@ -745,23 +745,23 @@ function pickDensity(data: AtsData, fonts: Fonts): PdfDensity {
  */
 export async function renderMasterResumePdf(doc: MasterResumeDocument): Promise<Uint8Array> {
   const data = masterResumeToAtsData(doc);
-  const pdf = await PDFDocument.create();
+    const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.TimesRoman);
   const bold = await pdf.embedFont(StandardFonts.TimesRomanBold);
   const italic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
   const fonts = { regular, bold, italic };
 
   const density = pickDensity(data, fonts);
-  const page = pdf.addPage([PDF_WIDTH, PDF_HEIGHT]);
+      const page = pdf.addPage([PDF_WIDTH, PDF_HEIGHT]);
   const { links } = layoutResume(data, fonts, density, { draw: true, pdf, startPage: page });
 
   const pages = pdf.getPages();
   for (const hit of links) {
     const target = pages[hit.pageIndex];
     if (target) addPdfUriLink(target, hit.uri, hit.rect);
-  }
+    }
 
-  return pdf.save();
+    return pdf.save();
 }
 
 export async function downloadMasterResumePdf(doc: MasterResumeDocument, fileName?: string) {

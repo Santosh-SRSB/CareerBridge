@@ -10,7 +10,9 @@ function isPublicEmployerPath(pathname: string) {
     pathname === '/employer/register' ||
     pathname.startsWith('/employer/register/') ||
     pathname === '/employer/welcome' ||
-    pathname.startsWith('/employer/welcome/')
+    pathname.startsWith('/employer/welcome/') ||
+    pathname === '/employer/terms' ||
+    pathname.startsWith('/employer/terms/')
   );
 }
 

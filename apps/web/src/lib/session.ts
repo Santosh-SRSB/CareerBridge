@@ -1,4 +1,5 @@
 import type { AuthSession, AuthUser } from '@careerbridge/shared';
+import { clearAllResumeClientState } from '@/features/resume/resume-wizard-draft';
 
 const ACCESS = 'cb_access_token';
 const REFRESH = 'cb_refresh_token';
@@ -32,6 +33,11 @@ export function clearSession() {
   localStorage.removeItem(REFRESH);
   localStorage.removeItem(USER);
   setAuthCookie(false);
+  try {
+    clearAllResumeClientState();
+  } catch {
+    // ignore — sessionStorage may be unavailable
+  }
 }
 
 export function getAccessToken() {

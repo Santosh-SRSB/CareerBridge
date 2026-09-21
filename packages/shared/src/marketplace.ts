@@ -537,7 +537,18 @@ export type ResumeContent = {
   email?: string | null;
   summary: string;
   skills: string[];
-  education: Array<{ qualification: string; institution: string | null; yearCompleted: number | null }>;
+  /** Programming / technical languages (never human languages). Additive; empty for legacy. */
+  programmingLanguages?: string[];
+  education: Array<{
+    qualification: string;
+    institution: string | null;
+    yearCompleted: number | null;
+    fieldOfStudy?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    location?: string | null;
+    isCurrent?: boolean;
+  }>;
   experiences: Array<{
     company: string;
     jobTitle: string;
@@ -547,6 +558,10 @@ export type ResumeContent = {
     startDate?: string | null;
     endDate?: string | null;
     isCurrent?: boolean;
+    location?: string | null;
+    responsibilities?: string[];
+    achievements?: string[];
+    technologies?: string[];
   }>;
   languages: string[];
   /**
@@ -576,6 +591,33 @@ export type ResumeContent = {
     bullets?: string[];
     /** Tech stack tokens — required for ATS project feedback to clear after edits. */
     technologies?: string[];
+    responsibilities?: string[];
+    startDate?: string | null;
+    endDate?: string | null;
+  }>;
+  /**
+   * Structured personal/contact — additive mirror of top-level contact fields.
+   * Legacy readers continue to use fullName/city/phone/email/links.
+   */
+  personal?: {
+    fullName?: string;
+    email?: string | null;
+    phone?: string | null;
+    city?: string | null;
+    state?: string | null;
+    country?: string | null;
+    address?: string | null;
+    postalCode?: string | null;
+    linkedin?: string;
+    github?: string;
+    portfolio?: string;
+  };
+  /** Optional extraction confidence hints for review UI (not required for ATS). */
+  fieldConfidence?: Array<{
+    field: string;
+    value: string;
+    confidence: number;
+    source?: string;
   }>;
   includePhoto?: boolean;
   /** Profile / resume links — also mirrored under resumeData.links. */

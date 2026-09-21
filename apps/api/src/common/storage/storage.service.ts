@@ -88,7 +88,7 @@ export class StorageService implements OnModuleInit {
     const lastDot = cleaned.lastIndexOf('.');
     const base = lastDot > 0 ? cleaned.slice(0, lastDot) : cleaned || 'file';
     const ext = lastDot > 0 ? cleaned.slice(lastDot) : '';
-    const unique = uniquePart?.replace(/[^\w.\-]+/g, '_').slice(0, 40);
+    const unique = uniquePart?.replace(/[^\w.\-]+/g, '_').slice(0, 64);
     const finalName = unique ? `${base}-${unique}${ext}` : `${base}${ext}`;
     return `${folder}/${finalName}`;
   }
@@ -163,6 +163,15 @@ export class StorageService implements OnModuleInit {
     });
 
     return url;
+  }
+
+  async downloadFile(filePath: string): Promise<Buffer> {
+    if (!this.storageClient) {
+      throw new Error(this.getConfigurationError() || 'Google Cloud Storage is not configured.');
+    }
+    const bucket = this.storageClient.bucket(this.bucketName);
+    const [buf] = await bucket.file(filePath).download();
+    return buf;
   }
 
   async deleteFile(filePath: string): Promise<boolean> {

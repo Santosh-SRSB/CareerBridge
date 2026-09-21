@@ -189,3 +189,18 @@ export function clearResumeFromAutofill() {
   sessionStorage.removeItem(AUTOFILL_FLAG_KEY);
   sessionStorage.removeItem('cb.resumeStartWizard');
 }
+
+/** Wipe all resume wizard/autofill keys — call on logout to prevent cross-account seed bleed. */
+export function clearAllResumeClientState() {
+  if (typeof window === 'undefined') return;
+  clearResumeWizardDraft();
+  clearResumeFromBuild();
+  clearResumeAutofillSeed();
+  clearResumeFromAutofill();
+  sessionStorage.removeItem('cb.resumeUpdateMode');
+  sessionStorage.removeItem('cb.resumeUpdateResumeId');
+  sessionStorage.removeItem('cb.resumeUpdateReturnTo');
+  sessionStorage.removeItem('cb.resumeBuild');
+  sessionStorage.removeItem('cb.resumeFromProfile');
+  sessionStorage.removeItem('cb.resumeStartWizard');
+}

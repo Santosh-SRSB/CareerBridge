@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   AdminDashboard,
   ApiResponse,
   ApplicationRecord,
@@ -748,19 +748,23 @@ export async function aiReviewResume(id: string, payload: { targetRole: string }
   );
 }
 
-export async function downloadResume(id: string) {
+export async function downloadResume(id: string, variant?: 'original' | 'formatted') {
+  const q = variant ? `?variant=${variant}` : '';
   return request<{
     html?: string;
     pdf?: string;
     fileName: string;
     mimeType?: string;
+    variant?: 'original' | 'formatted';
+    isPortalRendered?: boolean;
+    note?: string;
     storage?: { pdfStoragePath: string; pdfStorageUri: string; pdfPublicUrl: string } | null;
     storageError?: string | null;
     pdfStoragePath?: string | null;
     pdfStorageUri?: string | null;
     pdfPublicUrl?: string | null;
     pdfUploadedAt?: string | null;
-  }>(`/resumes/${id}/download`);
+  }>(`/resumes/${id}/download${q}`);
 }
 
 export function saveBase64File(content: string, fileName: string, mimeType: string) {
