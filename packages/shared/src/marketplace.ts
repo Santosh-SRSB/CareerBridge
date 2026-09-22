@@ -61,6 +61,19 @@ export const JOB_SKILL_SUGGESTIONS = [
   'Teamwork',
 ] as const;
 
+export const JOB_TITLE_SUGGESTIONS = [
+  'Customer Service Executive',
+  'Sales Executive',
+  'Backend Developer',
+  'Frontend Developer',
+  'Full Stack Developer',
+  'Data Analyst',
+  'HR Executive',
+  'Operations Associate',
+  'Business Development Executive',
+  'Software Engineer',
+] as const;
+
 export type WorkMode = (typeof WORK_MODES)[number];
 export type ScreeningQuestionType = (typeof SCREENING_QUESTION_TYPES)[number];
 
@@ -187,6 +200,35 @@ export const INDIAN_CITIES = [
   'Visakhapatnam',
   'Warangal',
 ] as const;
+
+/** Major hubs first in employer/candidate city pickers. */
+export const MAIN_INDIAN_CITIES = [
+  'Bengaluru',
+  'Mumbai',
+  'Delhi',
+  'Hyderabad',
+  'Chennai',
+  'Pune',
+  'Kolkata',
+  'Ahmedabad',
+  'Gurugram',
+  'Noida',
+  'Jaipur',
+  'Chandigarh',
+  'Kochi',
+  'Coimbatore',
+  'Indore',
+] as const;
+
+export function orderedIndianCitiesForJobForm(): string[] {
+  const main = MAIN_INDIAN_CITIES as readonly string[];
+  const mainSet = new Set(main.map((c) => c.toLowerCase()));
+  const rest = (INDIAN_CITIES as readonly string[])
+    .filter((city) => !mainSet.has(city.toLowerCase()))
+    .slice()
+    .sort((a, b) => a.localeCompare(b, 'en'));
+  return [...main, ...rest];
+}
 
 export type IndianCity = (typeof INDIAN_CITIES)[number];
 
@@ -886,6 +928,7 @@ export type EmployerProfile = {
   panNumber: string | null;
   workEmail: string | null;
   designation: string | null;
+  logoUrl?: string | null;
   verificationStatus: EmployerVerificationStatus;
   verified: boolean;
 };
@@ -957,7 +1000,7 @@ export type EmployerPaymentRecord = {
 
 export type EmployerKycPayload = {
   gstNumber: string;
-  cin: string;
+  cin?: string;
   website: string;
   panNumber: string;
   trademark?: string;
@@ -974,8 +1017,15 @@ export type EmployerDashboard = {
   applications: number;
   shortlisted: number;
   interviews: number;
+  applicationsByMonth?: Array<{
+    year: number;
+    month: number;
+    label: string;
+    count: number;
+  }>;
   recent: Array<{
     candidateName: string;
+    candidateId?: string;
     jobTitle: string;
     status: string;
     applicationId: string;
@@ -1006,14 +1056,20 @@ export type EmployerCandidateSearchResult = {
   firstName: string | null;
   lastName: string | null;
   city: string | null;
+  state?: string | null;
   highestEducation: string | null;
   experienceYears: number;
+  experienceMonths?: number;
   profileCompletion: number;
   skills: string[];
+  skillsTotal?: number;
   latestRole: { title: string; company: string } | null;
   matchScore: number | null;
   appliedToEmployer: boolean;
   applicationId?: string | null;
+  applicationStatus?: string | null;
+  availabilityLabel?: string | null;
+  availabilityTone?: 'ready' | 'soon' | 'neutral' | string | null;
 };
 
 /** Job posting fee in paise (₹999). Each paid unit unlocks a batch of matched profiles. */
@@ -1094,6 +1150,12 @@ export type EmployerInterviewRecord = {
   confirmedAt: string | null;
   createdAt: string;
   applicationStatus: string;
+  feedbackRequestedAt?: string | null;
+  candidateFeedback?: {
+    rating: number;
+    text: string | null;
+    submittedAt: string;
+  } | null;
   candidate: {
     id: string;
     firstName: string | null;

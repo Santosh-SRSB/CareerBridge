@@ -12,6 +12,7 @@ import {
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
+import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
 import { Button } from '@/components/ui/Button';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
@@ -82,6 +83,10 @@ export default function EmployerCandidatesPage() {
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
   const [notifiedIds, setNotifiedIds] = useState<Set<string>>(new Set());
+  const [shortlistTarget, setShortlistTarget] = useState<{
+    applicationId: string;
+    name: string;
+  } | null>(null);
 
   async function runSearch(selectedJobId: string) {
     if (!selectedJobId) {
@@ -138,13 +143,14 @@ export default function EmployerCandidatesPage() {
     if (jobId) void runSearch(jobId);
   }
 
-  async function shortlist(applicationId: string) {
+  async function shortlist(applicationId: string, _note?: string) {
     setBusyId(applicationId);
     setError('');
     setMessage('');
     try {
       await changeApplicationStatus(applicationId, 'SHORTLIST');
       setMessage('Candidate has been shortlisted.');
+      setShortlistTarget(null);
       await runSearch(jobId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not shortlist.');
@@ -397,7 +403,12 @@ export default function EmployerCandidatesPage() {
                               type="button"
                               className="ep-cand__btn ep-cand__btn--solid"
                               disabled={busyId === row.applicationId}
-                              onClick={() => void shortlist(row.applicationId!)}
+                              onClick={() =>
+                                setShortlistTarget({
+                                  applicationId: row.applicationId!,
+                                  name: candidateName(row),
+                                })
+                              }
                             >
                               {busyId === row.applicationId ? '…' : 'Shortlist'}
                             </button>
@@ -425,6 +436,18 @@ export default function EmployerCandidatesPage() {
           </section>
         </div>
       </div>
+
+      <ShortlistConfirmModal
+        open={Boolean(shortlistTarget)}
+        candidateName={shortlistTarget?.name || 'Candidate'}
+        jobTitle={selectedJob?.title}
+        busy={Boolean(shortlistTarget && busyId === shortlistTarget.applicationId)}
+        onCancel={() => setShortlistTarget(null)}
+        onConfirm={(note) => {
+          if (!shortlistTarget) return;
+          return shortlist(shortlistTarget.applicationId, note);
+        }}
+      />
     </EmployerShellFallback>
   );
 }

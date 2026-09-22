@@ -229,10 +229,6 @@ export default function EmployerDashboardPage() {
             </div>
           </header>
 
-          <div className="mb-5 px-1">
-            <TestimonialPromptCard audience="EMPLOYER" />
-          </div>
-
           <div className="ep-saas-dash__cluster ep-saas-dash__cluster--right">
             <Link href="/employer/jobs/new" className="ep-saas-btn ep-saas-btn--primary ep-saas-btn--sm">
               + Post a job
@@ -304,6 +300,10 @@ export default function EmployerDashboardPage() {
           </div>
         </div>
 
+        <div className="mb-5 px-1">
+          <TestimonialPromptCard audience="EMPLOYER" />
+        </div>
+
         <section className="ep-saas-metrics" aria-label="Overview statistics">
           {metrics.map((item) => (
             <Link key={item.label} href={item.href} className="ep-saas-metric">
@@ -340,6 +340,9 @@ export default function EmployerDashboardPage() {
               <div>
                 <h2 id="interviews-title">Upcoming interviews</h2>
               </div>
+              <Link href="/employer/interviews" className="ep-saas-panel__link">
+                View all
+              </Link>
             </div>
             {upcomingInterviews.length === 0 ? (
               <div className="ep-saas-empty">
@@ -368,6 +371,64 @@ export default function EmployerDashboardPage() {
             )}
           </section>
         </div>
+
+        <section className="ep-saas-panel ep-saas-panel--wide" aria-labelledby="recent-apps-title">
+          <div className="ep-saas-panel__head">
+            <div>
+              <h2 id="recent-apps-title">Recent applications</h2>
+              <p className="ep-saas-panel__hint">Latest inbound candidates across your jobs</p>
+            </div>
+            <Link href="/employer/applications" className="ep-saas-panel__link">
+              View all
+            </Link>
+          </div>
+          {(data.recent?.length ?? 0) === 0 ? (
+            <div className="ep-saas-empty">
+              <p>No applications yet</p>
+              <Link href="/employer/jobs/new" className="ep-saas-btn ep-saas-btn--primary ep-saas-btn--sm">
+                Post a job
+              </Link>
+            </div>
+          ) : (
+            <div className="ep-saas-table-wrap">
+              <table className="ep-saas-table">
+                <thead>
+                  <tr>
+                    <th>Candidate</th>
+                    <th>Job</th>
+                    <th>Status</th>
+                    <th aria-label="Open" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recent.slice(0, 8).map((row) => (
+                    <tr key={row.applicationId}>
+                      <td>
+                        <strong>{row.candidateName}</strong>
+                      </td>
+                      <td>{row.jobTitle}</td>
+                      <td>
+                        <span className="ep-saas-status">{row.status.replaceAll('_', ' ')}</span>
+                      </td>
+                      <td>
+                        <Link
+                          href={
+                            row.candidateId
+                              ? `/employer/candidates/${row.candidateId}?jobId=${encodeURIComponent(row.jobId || '')}&from=applications`
+                              : `/employer/applications?jobId=${encodeURIComponent(row.jobId || '')}`
+                          }
+                          className="ep-saas-table__link"
+                        >
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </EmployerShell>
   );
