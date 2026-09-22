@@ -68,6 +68,11 @@ export function canManageAccounts(role?: string | null) {
   return role === 'SUPER_ADMIN' || role === 'PLATFORM_ADMIN' || role === 'PLATFORM_OPERATOR';
 }
 
+/** Open full employer portal (post jobs, hire flow) as that company. */
+export function canImpersonateEmployer(role?: string | null) {
+  return role === 'SUPER_ADMIN' || role === 'PLATFORM_ADMIN';
+}
+
 export function roleLabel(role?: string | null) {
   if (role === 'SUPER_ADMIN') return 'Super admin';
   if (role === 'PLATFORM_ADMIN') return 'Platform admin';

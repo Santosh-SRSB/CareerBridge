@@ -51,7 +51,7 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
             </button>
             <button
               type="button"
-              className="ep-wire-action ep-wire-action--muted"
+              className="ep-wire-action ep-wire-action--danger"
               disabled={busy !== null}
               onClick={() => void run('close', () => closeEmployerJob(jobId))}
             >
@@ -72,7 +72,7 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
             {status === 'PAUSED' ? (
               <button
                 type="button"
-                className="ep-wire-action ep-wire-action--muted"
+                className="ep-wire-action ep-wire-action--danger"
                 disabled={busy !== null}
                 onClick={() => void run('close', () => closeEmployerJob(jobId))}
               >

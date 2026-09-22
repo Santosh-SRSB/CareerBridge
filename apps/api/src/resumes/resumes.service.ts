@@ -321,16 +321,10 @@ export class ResumesService {
       },
     });
 
-    // Flat path only: resumes/harsh.pdf (no candidate/upload subfolders)
-    const storagePath = this.storage.resumeObjectPath(name, created.id.slice(0, 8));
-    let storageUri: string;
+    // Flat path: resumes/{file}-{fullResumeId}.ext — never truncate id (collision risk).
+    const storagePath = this.storage.resumeObjectPath(name, created.id);
+    let storageUri: string | null = null;
     try {
-      if (!this.storage.isConfigured()) {
-        throw new Error(
-          this.storage.getConfigurationError() ||
-            'Google Cloud Storage is not configured. Resume uploads require GCS.',
-        );
-      }
       const uploaded = await this.storage.uploadFile(storagePath, file.buffer, {
         contentType: mime || 'application/octet-stream',
         metadata: {
@@ -349,27 +343,15 @@ export class ResumesService {
           pdfStorageUri: uploaded.gcsUri,
           pdfPublicUrl: uploaded.publicUrl,
           pdfUploadedAt: new Date(),
-          processingStatus: 'PROCESSING',
         },
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Cloud Storage upload failed';
-      this.logger.error(`GCS upload failed for resume ${created.id}: ${message}`);
-      await this.prisma.resume.update({
-        where: { id: created.id },
-        data: {
-          processingStatus: 'FAILED',
-          processingError: `Cloud Storage upload failed: ${message}`.slice(0, 2000),
-        },
-      });
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: `Could not upload resume to Cloud Storage. ${message}`,
-      });
+      this.logger.error(`GCS upload failed for resume ${created.id}: ${(err as Error).message}`);
+      // Keep local processing with in-memory buffer even if GCS fails in local/dev.
     }
 
     await this.cloudTasks.enqueueResumeProcessing(created.id, userId, () =>
-      this.processor.processUploadedResume(created.id, userId),
+      this.processor.processUploadedResume(created.id, userId, file.buffer),
     );
 
     const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: created.id } });
@@ -401,64 +383,10 @@ export class ResumesService {
           : status === 'FAILED'
             ? resume.processingError || 'Processing failed.'
             : status === 'PROCESSING'
-              ? 'Uploaded successfully, reading your resume…'
+              ? 'Extracting text and analysing with AI…'
               : status === 'PENDING'
-                ? 'Your resume is uploading…'
+                ? 'Queued for processing…'
                 : 'Ready',
-    };
-  }
-
-  /** User-triggered retry after FAILED (or stuck PENDING/PROCESSING). */
-  async retryProcessing(userId: string, id: string) {
-    const resume = await this.requireResume(userId, id);
-    if (!resume.sourceStoragePath) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: 'This resume has no file in Cloud Storage. Please upload the file again.',
-      });
-    }
-    await this.prisma.resume.update({
-      where: { id: resume.id },
-      data: { processingStatus: 'PENDING', processingError: null },
-    });
-    await this.cloudTasks.enqueueResumeProcessing(resume.id, userId, () =>
-      this.processor.processUploadedResume(resume.id, userId),
-    );
-    return {
-      id: resume.id,
-      processingStatus: 'PENDING',
-      processingError: null,
-      message: 'Resume queued for reprocessing.',
-    };
-  }
-
-  /** Signed Cloud Storage URL for viewing the original uploaded file (or generated PDF). */
-  async getViewUrl(userId: string, id: string) {
-    const resume = await this.requireResume(userId, id);
-    const objectPath = resume.sourceStoragePath || resume.pdfStoragePath;
-    if (!objectPath) {
-      throw new NotFoundException({
-        code: ErrorCode.RESOURCE_NOT_FOUND,
-        message: 'No resume file is stored in Cloud Storage for this record.',
-      });
-    }
-    if (!this.storage.isConfigured()) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: this.storage.getConfigurationError() || 'Cloud Storage is not configured.',
-      });
-    }
-    const url = await this.storage.getSignedUrl(objectPath, {
-      action: 'read',
-      expiresInMinutes: 30,
-    });
-    return {
-      id: resume.id,
-      url,
-      fileName: resume.sourceFileName || `${resume.title}.pdf`,
-      mimeType: resume.sourceMimeType || 'application/pdf',
-      storagePath: objectPath,
-      expiresInMinutes: 30,
     };
   }
 
@@ -760,8 +688,37 @@ export class ResumesService {
     return this.toRecord(copy);
   }
 
-  async download(userId: string, id: string) {
+  async download(userId: string, id: string, variant?: 'original' | 'formatted') {
     const resume = await this.requireResume(userId, id);
+    const preferOriginal =
+      variant === 'original' ||
+      (variant !== 'formatted' && Boolean(resume.sourceStoragePath));
+
+    // A: prefer original uploaded bytes when available — portal-rendered PDF is lossy.
+    if (preferOriginal && resume.sourceStoragePath) {
+      try {
+        const buf = await this.storage.downloadFile(resume.sourceStoragePath);
+        return {
+          pdf: buf.toString('base64'),
+          fileName: resume.sourceFileName || `${resume.title.replace(/\s+/g, '-')}-original.pdf`,
+          mimeType: resume.sourceMimeType || 'application/pdf',
+          variant: 'original' as const,
+          isPortalRendered: false,
+          note: 'Original uploaded file (not CareerBridge-formatted).',
+          storage: null,
+          storageError: null,
+          pdfStoragePath: resume.pdfStoragePath,
+          pdfStorageUri: resume.pdfStorageUri,
+          pdfPublicUrl: resume.pdfPublicUrl,
+          pdfUploadedAt: resume.pdfUploadedAt?.toISOString() || null,
+        };
+      } catch (err) {
+        this.logger.warn(
+          `Original source download failed for ${resume.id}, falling back to formatted PDF: ${(err as Error).message}`,
+        );
+      }
+    }
+
     let storage: {
       pdfStoragePath: string;
       pdfStorageUri: string;
@@ -781,6 +738,9 @@ export class ResumesService {
       pdf: pdf.toString('base64'),
       fileName: `${resume.title.replace(/\s+/g, '-')}.pdf`,
       mimeType: 'application/pdf',
+      variant: 'formatted' as const,
+      isPortalRendered: true,
+      note: 'CareerBridge-formatted PDF regenerated from stored contentJson — not the original upload.',
       storage,
       storageError,
       pdfStoragePath: fresh.pdfStoragePath,
@@ -1041,7 +1001,7 @@ export class ResumesService {
     );
     const path = this.storage.resumeObjectPath(
       `${content.fullName || 'resume'}.pdf`,
-      resume.id.slice(0, 8),
+      resume.id,
     );
     const uploaded = await this.storage.uploadFile(path, pdf, {
       contentType: 'application/pdf',
@@ -1154,12 +1114,6 @@ export class ResumesService {
       pdfPublicUrl?: string | null;
       pdfUploadedAt?: Date | null;
       archivedAt?: Date | null;
-      processingStatus?: string | null;
-      processingError?: string | null;
-      sourceStoragePath?: string | null;
-      sourceStorageUri?: string | null;
-      sourceFileName?: string | null;
-      sourceMimeType?: string | null;
     },
     analysis?: ResumeAnalysis,
     applicationCount = 0,
@@ -1181,12 +1135,6 @@ export class ResumesService {
       pdfPublicUrl: row.pdfPublicUrl ?? null,
       pdfUploadedAt: row.pdfUploadedAt?.toISOString() ?? null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
-      processingStatus: row.processingStatus ?? null,
-      processingError: row.processingError ?? null,
-      sourceStoragePath: row.sourceStoragePath ?? null,
-      sourceStorageUri: row.sourceStorageUri ?? null,
-      sourceFileName: row.sourceFileName ?? null,
-      sourceMimeType: row.sourceMimeType ?? null,
       applicationCount,
       updatedAt: row.updatedAt.toISOString(),
       analysis,

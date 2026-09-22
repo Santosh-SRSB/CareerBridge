@@ -45,6 +45,7 @@ export default function EmployerJobApplicationsPage() {
   const [matches, setMatches] = useState<JobMatchRow[]>([]);
   const [title, setTitle] = useState('this job');
   const [status, setStatus] = useState('PUBLISHED');
+  const [jobDetail, setJobDetail] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [ranking, setRanking] = useState(false);
   const [message, setMessage] = useState('');
@@ -71,8 +72,11 @@ export default function EmployerJobApplicationsPage() {
 
   async function load() {
     const job = await getEmployerJob(params.id).catch(() => null);
-    if (job && typeof job.title === 'string') setTitle(job.title);
-    if (job && typeof job.status === 'string') setStatus(job.status);
+    if (job) {
+      setJobDetail(job as Record<string, unknown>);
+      if (typeof job.title === 'string') setTitle(job.title);
+      if (typeof job.status === 'string') setStatus(job.status);
+    }
 
     const nextItems = await listEmployerApplications(params.id).catch(() => [] as EmployerApplication[]);
     setItems(nextItems);
@@ -112,18 +116,79 @@ export default function EmployerJobApplicationsPage() {
     <EmployerShellFallback title="Matched candidates">
       <div className="ep-desk">
         <EmployerPageHeader
-          title="Matched candidates"
-          subtitle={`${title}${loading ? '' : ` · ${countLabel}`}`}
+          title={title === 'this job' ? 'Posted job' : title}
+          subtitle={`${loading ? '' : countLabel}${loading ? '' : ' · '}Job details and matched candidates`}
           action={
-            <Link href="/employer/applications" className="ep-link">
-              ← Applications
+            <Link href="/employer/jobs" className="ep-link">
+              ← My Jobs
             </Link>
           }
         />
+
+        {!loading && jobDetail ? (
+          <article className="ep-card mb-4">
+            <div className="ep-card__head">
+              <div>
+                <h2>Posted job details</h2>
+                <p>What candidates see for this opening</p>
+              </div>
+              <StatusBadge status={status} />
+            </div>
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-muted">Title</dt>
+                <dd className="mt-1 font-semibold text-primary">{String(jobDetail.title || title)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-muted">Location</dt>
+                <dd className="mt-1 font-semibold text-primary">{String(jobDetail.city || '—')}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-muted">Department</dt>
+                <dd className="mt-1 font-semibold text-primary">{String(jobDetail.department || '—')}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-muted">Type</dt>
+                <dd className="mt-1 font-semibold text-primary">
+                  {String(jobDetail.jobType || '—').replaceAll('_', ' ')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-muted">Experience</dt>
+                <dd className="mt-1 font-semibold text-primary">{String(jobDetail.experience || '—')}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wide text-muted">Education</dt>
+                <dd className="mt-1 font-semibold text-primary">{String(jobDetail.educationMin || '—')}</dd>
+              </div>
+              {(jobDetail.salaryMin != null || jobDetail.salaryMax != null) && (
+                <div>
+                  <dt className="text-xs font-bold uppercase tracking-wide text-muted">Salary (₹ / month)</dt>
+                  <dd className="mt-1 font-semibold text-primary">
+                    {[jobDetail.salaryMin, jobDetail.salaryMax].filter((v) => v != null).join(' – ') || '—'}
+                  </dd>
+                </div>
+              )}
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-bold uppercase tracking-wide text-muted">Description</dt>
+                <dd className="mt-1 whitespace-pre-wrap text-primary">
+                  {String(jobDetail.description || '—')}
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href={`/employer/jobs/new?edit=${encodeURIComponent(params.id)}`} className="ep-link font-extrabold">
+                Edit job
+              </Link>
+              <JobStatusActions jobId={params.id} status={status} onUpdated={load} />
+            </div>
+          </article>
+        ) : null}
+
         <article className="ep-card ep-list-card">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              {!loading ? <StatusBadge status={status} /> : null}
+              <h2 className="text-base font-extrabold text-primary">Matched candidates</h2>
               <Button
                 type="button"
                 variant="secondary"
@@ -137,7 +202,6 @@ export default function EmployerJobApplicationsPage() {
               </Button>
             </div>
           </div>
-          {!loading ? <JobStatusActions jobId={params.id} status={status} onUpdated={load} /> : null}
           {error ? <p className="mt-3 text-sm font-semibold text-error">{error}</p> : null}
           {message ? <p className="mt-3 text-sm font-semibold text-teal">{message}</p> : null}
           {loading ? <p className="mt-6 text-sm text-muted">Loading…</p> : null}
@@ -371,11 +435,14 @@ export default function EmployerJobApplicationsPage() {
                           }`}
                           onClick={async () => {
                             setError('');
+                            setMessage('');
                             try {
                               await changeApplicationStatus(item.id, action.value);
                               if (action.value === 'HIRE') {
                                 await recordHiringOutcome(item.id, 'HIRED');
                                 setMessage('Candidate hired.');
+                              } else if (action.value === 'SHORTLIST') {
+                                setMessage('Candidate has been shortlisted.');
                               }
                               await load();
                             } catch (err) {

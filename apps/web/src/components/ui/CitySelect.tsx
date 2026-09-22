@@ -1,6 +1,7 @@
 ﻿'use client';
 
-import { INDIAN_CITIES } from '@careerbridge/shared';
+import { useMemo } from 'react';
+import { orderedIndianCitiesForJobForm } from '@careerbridge/shared';
 import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
 
 export function CitySelect({
@@ -18,7 +19,8 @@ export function CitySelect({
   required?: boolean;
   id?: string;
 }) {
-  const options = allowAll ? ['All cities', ...INDIAN_CITIES] : INDIAN_CITIES;
+  const ordered = useMemo(() => orderedIndianCitiesForJobForm(), []);
+  const options = allowAll ? ['All cities', ...ordered] : ordered;
 
   return (
     <SearchableCreatableSelect
@@ -30,6 +32,7 @@ export function CitySelect({
       placeholder="Search city or type your own…"
       allowCustom={!allowAll}
       required={required && !allowAll}
+      emptyLimit={40}
     />
   );
 }

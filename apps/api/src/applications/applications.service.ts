@@ -241,7 +241,10 @@ export class ApplicationsService {
     const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
       .split(',')[0]
       .trim();
-    const meetingUrl = row.meetingUrl || `${portalBase}/interviews/scheduled/${row.id}`;
+    const portalUrl = `${portalBase}/interviews/scheduled/${row.id}`;
+    const location = (row.location || '').trim();
+    const meetingUrl =
+      (location && /^https?:\/\//i.test(location) ? location : null) || row.meetingUrl || portalUrl;
 
     const updated = await this.prisma.employerInterview.update({
       where: { id },
@@ -417,6 +420,87 @@ export class ApplicationsService {
     return this.toScheduledInterview(updated);
   }
 
+  async submitScheduledInterviewFeedback(
+    userId: string,
+    id: string,
+    body: { rating?: number; text?: string },
+  ) {
+    const candidate = await this.requireCandidate(userId);
+    const rating = Number(body.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Rating must be a whole number from 1 to 5.',
+      });
+    }
+    const text = (body.text || '').trim().slice(0, 2000) || null;
+
+    const row = await this.prisma.employerInterview.findFirst({
+      where: { id, candidateId: candidate.id },
+      include: {
+        application: {
+          include: {
+            job: { include: { employer: true } },
+          },
+        },
+      },
+    });
+    if (!row) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'Interview was not found',
+      });
+    }
+    if (!['CONFIRMED', 'COMPLETED'].includes(row.status)) {
+      throw new BadRequestException({
+        code: ErrorCode.BUSINESS_RULE_VIOLATION,
+        message: 'Feedback is available after the interview is confirmed or completed.',
+      });
+    }
+    if (row.candidateFeedbackAt) {
+      throw new BadRequestException({
+        code: ErrorCode.BUSINESS_RULE_VIOLATION,
+        message: 'You have already submitted feedback for this interview.',
+      });
+    }
+
+    const updated = await this.prisma.employerInterview.update({
+      where: { id: row.id },
+      data: {
+        candidateFeedbackRating: rating,
+        candidateFeedbackText: text,
+        candidateFeedbackAt: new Date(),
+      },
+      include: {
+        application: {
+          include: {
+            job: { include: { employer: true } },
+          },
+        },
+      },
+    });
+
+    const employerUserId = await this.prisma.employer.findUnique({
+      where: { id: row.employerId },
+      select: { userId: true },
+    });
+    if (employerUserId?.userId) {
+      const candidateName =
+        [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim() || 'A candidate';
+      await this.notifications
+        .create({
+          userId: employerUserId.userId,
+          title: 'Interview feedback received',
+          body: `${candidateName} shared feedback for ${row.application.job.title} (${rating}/5).`,
+          type: 'INTERVIEW_FEEDBACK',
+          link: `/employer/interviews`,
+        })
+        .catch(() => undefined);
+    }
+
+    return this.toScheduledInterview(updated);
+  }
+
   private toScheduledInterview(row: {
     id: string;
     applicationId: string;
@@ -427,6 +511,10 @@ export class ApplicationsService {
     status: string;
     meetingUrl?: string | null;
     notes?: string | null;
+    candidateFeedbackRating?: number | null;
+    candidateFeedbackText?: string | null;
+    candidateFeedbackAt?: Date | null;
+    feedbackRequestedAt?: Date | null;
     application: {
       job: {
         title: string;
@@ -447,7 +535,11 @@ export class ApplicationsService {
         ? 'CONFIRMED'
         : row.status === 'RESCHEDULE_REQUESTED'
           ? 'RESCHEDULE_REQUESTED'
-          : 'PENDING_CONFIRMATION';
+          : row.status === 'COMPLETED'
+            ? 'COMPLETED'
+            : row.status === 'CANCELLED'
+              ? 'CANCELLED'
+              : 'PENDING_CONFIRMATION';
     const mode = row.mode?.toUpperCase().includes('VIDEO') ? 'VIDEO' : 'IN_PERSON';
     const preferredAt = parsePreferredReschedule(row.notes);
     const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
@@ -468,6 +560,17 @@ export class ApplicationsService {
       meetingUrl: row.meetingUrl || `${portalBase}/interviews/scheduled/${row.id}`,
       preferredRescheduleAt: preferredAt?.toISOString() || null,
       preferredRescheduleReason: parseRescheduleReason(row.notes),
+      candidateFeedback:
+        row.candidateFeedbackAt && row.candidateFeedbackRating
+          ? {
+              rating: row.candidateFeedbackRating,
+              text: row.candidateFeedbackText || null,
+              submittedAt: row.candidateFeedbackAt.toISOString(),
+            }
+          : null,
+      feedbackRequestedAt: row.feedbackRequestedAt?.toISOString() || null,
+      canSubmitFeedback:
+        ['CONFIRMED', 'COMPLETED'].includes(row.status) && !row.candidateFeedbackAt,
     };
   }
 

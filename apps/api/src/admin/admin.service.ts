@@ -7,6 +7,7 @@ import {
 import { ErrorCode } from '@careerbridge/shared';
 import { UserStatus, UserType } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthService } from '../auth/auth.service';
 import { hashPlatformPassword } from '../auth/password.util';
 
 const DEFAULT_SETTINGS: Record<string, string> = {
@@ -30,7 +31,10 @@ const ALLOWED_SETTING_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auth: AuthService,
+  ) {}
 
   private async writeAudit(input: {
     userId?: string | null;
@@ -605,6 +609,76 @@ export class AdminService {
       newValue: { verified: true },
     });
     return updated;
+  }
+
+  /**
+   * Super / platform admin opens the full employer workspace as that company
+   * (post jobs, candidates, applications, interviews, profile, etc.).
+   */
+  async impersonateEmployer(actorId: string, employerId: string, actorRole?: string) {
+    if (actorRole !== 'SUPER_ADMIN' && actorRole !== 'PLATFORM_ADMIN') {
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN,
+        message: 'Only super admins and platform admins can open an employer workspace.',
+      });
+    }
+
+    const employer = await this.prisma.employer.findUnique({
+      where: { id: employerId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            status: true,
+            userType: true,
+            phone: true,
+            email: true,
+          },
+        },
+      },
+    });
+    if (!employer) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'Employer was not found',
+      });
+    }
+    if (
+      employer.user.userType !== 'EMPLOYER_ADMIN' &&
+      employer.user.userType !== 'EMPLOYER_RECRUITER'
+    ) {
+      throw new BadRequestException({
+        code: ErrorCode.BUSINESS_RULE_VIOLATION,
+        message: 'This account is not an employer login.',
+      });
+    }
+    if (employer.user.status === 'SUSPENDED' || employer.user.status === 'INACTIVE') {
+      throw new BadRequestException({
+        code: ErrorCode.BUSINESS_RULE_VIOLATION,
+        message: 'Activate this employer account before opening their workspace.',
+      });
+    }
+
+    const session = await this.auth.issueSessionForUserId(employer.user.id);
+    await this.writeAudit({
+      userId: actorId,
+      action: 'IMPERSONATE_EMPLOYER',
+      resourceType: 'EMPLOYER',
+      resourceId: employer.id,
+      newValue: {
+        companyName: employer.companyName,
+        employerUserId: employer.user.id,
+      },
+    });
+
+    return {
+      ...session,
+      impersonation: {
+        employerId: employer.id,
+        companyName: employer.companyName,
+        adminUserId: actorId,
+      },
+    };
   }
 
   async employerDetails(id: string) {

@@ -1,17 +1,16 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { EmployerProfile } from '@careerbridge/shared';
-import { personNameError } from '@careerbridge/shared';
-import { getEmployerMe, updateEmployerMe, listEmployerJobs } from '@/lib/api';
+import { personNameError, photoFileError } from '@careerbridge/shared';
+import { getEmployerMe, updateEmployerMe, uploadEmployerLogo, listEmployerJobs } from '@/lib/api';
 import { EmployerShell, EmployerShellFallback, statusLabel } from '@/components/EmployerPortal';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
 import Link from 'next/link';
 import { FormEvent, useMemo } from 'react';
-
 function Field({
   label,
   name,
@@ -79,9 +78,11 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
   const settingsTab = params.get('tab') !== 'desk';
   const [profile, setProfile] = useState(initial);
   const [saving, setSaving] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [events, setEvents] = useState<Array<{ title: string; meta: string; href: string }>>([]);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const user = getStoredUser();
 
   useEffect(() => {
@@ -160,13 +161,44 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
     setSaving(true);
     setError('');
     try {
-      const updated = await updateEmployerMe(profile);
+      const updated = await updateEmployerMe({
+        companyName: profile.companyName,
+        industry: profile.industry ?? undefined,
+        city: profile.city ?? undefined,
+        contactName: profile.contactName ?? undefined,
+        designation: profile.designation ?? undefined,
+        workEmail: profile.workEmail ?? undefined,
+        website: profile.website ?? undefined,
+      });
       setProfile(updated);
       setMessage('Company profile saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'We could not save the company profile.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onLogoSelected(file: File | null) {
+    if (!file) return;
+    const invalid = photoFileError(file.type, file.size);
+    if (invalid) {
+      setError(invalid);
+      setMessage('');
+      return;
+    }
+    setLogoBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const updated = await uploadEmployerLogo(file, file.name || 'logo.jpg');
+      setProfile(updated);
+      setMessage('Company logo updated.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the company logo.');
+    } finally {
+      setLogoBusy(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
     }
   }
 
@@ -183,7 +215,12 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
           <div className="ep-desk__top">
             <article className="ep-card ep-identity">
               <div className="ep-identity__photo" aria-hidden>
-                {contact.slice(0, 1).toUpperCase()}
+                {profile.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.logoUrl} alt="" className="ep-identity__logo" />
+                ) : (
+                  contact.slice(0, 1).toUpperCase()
+                )}
               </div>
               <div className="ep-identity__body">
                 <div className="ep-identity__name">
@@ -307,9 +344,31 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
                 <h2>Company Profile</h2>
                 <p>E03 — Logo, company details, and website for your hiring workspace.</p>
               </div>
-              <button type="button" className="ep-btn-gold text-sm font-extrabold">
-                Logo
-              </button>
+              <div className="ep-settings__logo">
+                <div className="ep-settings__logo-preview" aria-hidden>
+                  {profile.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={profile.logoUrl} alt="" />
+                  ) : (
+                    <span>{(profile.companyName || 'C').slice(0, 1).toUpperCase()}</span>
+                  )}
+                </div>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  className="sr-only"
+                  onChange={(event) => void onLogoSelected(event.target.files?.[0] || null)}
+                />
+                <button
+                  type="button"
+                  className="ep-btn-gold text-sm font-extrabold"
+                  disabled={logoBusy}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  {logoBusy ? 'Uploading…' : profile.logoUrl ? 'Change logo' : 'Logo'}
+                </button>
+              </div>
             </div>
             <div className="ep-settings__grid">
               <Field

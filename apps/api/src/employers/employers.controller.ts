@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
 import { Type } from 'class-transformer';
 import {
@@ -7,6 +8,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -16,8 +18,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  ErrorCode,
   JOB_CATEGORIES,
-  JOB_EDUCATION_LEVELS,
   JOB_EXPERIENCE_RANGES,
   JOB_TYPES,
   SCREENING_QUESTION_TYPES,
@@ -64,9 +66,9 @@ class SaveEmployerKycDto {
   @MinLength(1)
   gstNumber: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(1)
-  cin: string;
+  cin?: string;
 
   @IsString()
   @MinLength(1)
@@ -154,7 +156,7 @@ class CreateJobDto {
 
   @IsOptional()
   @IsString()
-  @IsIn([...JOB_EDUCATION_LEVELS])
+  @MaxLength(80)
   educationMin?: string;
 
   @IsOptional()
@@ -229,8 +231,9 @@ class CandidateSearchQueryDto {
 
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(50)
   experienceMin?: number;
 
   @IsString()
@@ -308,6 +311,27 @@ export class EmployersController {
     return this.employers.updateMe(user.id, dto);
   }
 
+  @Post('me/logo')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  uploadLogo(
+    @CurrentUser() user: { id: string },
+    @UploadedFile()
+    file?: { buffer: Buffer; mimetype: string; size: number; originalname: string },
+  ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Please choose a JPG or PNG logo.',
+      });
+    }
+    return this.employers.uploadLogoFile(user.id, file);
+  }
+
   @Patch('me/kyc')
   saveKyc(@CurrentUser() user: { id: string }, @Body() dto: SaveEmployerKycDto) {
     return this.employers.saveKyc(user.id, dto);
@@ -376,6 +400,21 @@ export class EmployersController {
     return this.employers.searchCandidates(user.id, query);
   }
 
+  @Post('candidates/:id/notify')
+  notifyCandidate(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() body: { jobId?: string },
+  ) {
+    if (!body?.jobId?.trim()) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'jobId is required',
+      });
+    }
+    return this.employers.notifyMatchedCandidate(user.id, id, body.jobId.trim());
+  }
+
   @Get('candidates/:id')
   candidate(
     @CurrentUser() user: { id: string },
@@ -416,6 +455,11 @@ export class EmployersController {
       dto.action as 'confirm' | 'reschedule' | 'complete' | 'cancel' | 'notes',
       dto,
     );
+  }
+
+  @Post('interviews/:id/request-feedback')
+  requestInterviewFeedback(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.employers.requestInterviewFeedback(user.id, id);
   }
 
   @Post('applications/:id/status')

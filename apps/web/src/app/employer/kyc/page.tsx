@@ -79,8 +79,8 @@ export default function EmployerKycPage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError('');
-    if (![gstNumber, trademark, cin, website, panNumber].every((value) => value.trim().length > 0)) {
-      setError('Fill in all fields to continue.');
+    if (![gstNumber, trademark, website, panNumber].every((value) => value.trim().length > 0)) {
+      setError('GSTIN, trademark, PAN, and website are required. CIN is optional.');
       return;
     }
 
@@ -102,7 +102,7 @@ export default function EmployerKycPage() {
       if (mark) setTrademark(mark);
       await saveEmployerKyc({
         gstNumber: gstNumber.trim().toUpperCase(),
-        cin: cin.trim().toUpperCase(),
+        ...(cin.trim() ? { cin: cin.trim().toUpperCase() } : {}),
         website: website.trim(),
         panNumber: panNumber.trim().toUpperCase(),
         trademark: (mark || trademark).trim(),
@@ -185,10 +185,9 @@ export default function EmployerKycPage() {
 
         <div className="ep-kyc__grid">
           <label className="ep-kyc__field">
-            <span>CIN</span>
+            <span>CIN <em className="ep-kyc__optional">(optional)</em></span>
             <input
               name="cin"
-              required
               autoComplete="off"
               placeholder="U72900MH2015PTC12345"
               value={cin}
@@ -208,7 +207,7 @@ export default function EmployerKycPage() {
               onChange={(event) => setPanNumber(event.target.value.toUpperCase())}
               className="ep-kyc__input"
             />
-            <em>Permanent account number</em>
+            <em>Permanent account number (required)</em>
           </label>
         </div>
 

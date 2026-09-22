@@ -1,86 +1,55 @@
 import type { ResumeContent } from '@careerbridge/shared';
 import type { StructuredResumeDraft } from '../ai/ai.types';
-import { extractProjectTechnologies, isPageMarkerText } from './parse-extracted-resume';
+import {
+  classifyLanguageTokens,
+  extractProjectTechnologies,
+  isPageMarkerText,
+  parseExtractedResumeText,
+} from './parse-extracted-resume';
+import {
+  attachPersonalBlock,
+  ensureExperienceDateShape,
+  filterGroundedList,
+  filterGroundedString,
+  groundedInSource,
+} from './resume-extract-normalize';
 
-function pickEmail(raw: string): string | null {
-  const match = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  return match?.[0]?.trim() || null;
+function richness(content: Pick<ResumeContent, 'skills' | 'education' | 'experiences' | 'projects'>): number {
+  return (
+    (content.skills?.length || 0) +
+    (content.education?.length || 0) * 2 +
+    (content.experiences?.length || 0) * 3 +
+    (content.projects?.length || 0) * 3 +
+    (content.experiences || []).reduce((n, row) => n + (row.description?.length || 0), 0) / 80 +
+    (content.projects || []).reduce((n, row) => n + (row.description?.length || 0), 0) / 80
+  );
 }
 
-function pickPhone(raw: string): string | null {
-  const labeled = raw.match(/(?:mobile|phone|contact|cell)\s*[:\-–]?\s*([+]?\d[\d\s\-()]{7,18}\d)/i);
-  if (labeled?.[1]) return labeled[1].replace(/\s+/g, ' ').trim();
-  const loose = raw.match(/(?<![\w.])(?:\+?\d{1,3}[\s-]?)?\d{10}(?![\w.])/);
-  return loose?.[0]?.replace(/\s+/g, ' ').trim() || null;
-}
-
-/** Fill gaps the LLM missed using the Document AI raw text. */
-export function enrichResumeContentFromRawText(
-  content: ResumeContent,
-  rawText: string,
-): ResumeContent {
-  const text = rawText || '';
-  const email = content.email?.trim() || pickEmail(text);
-  const phone = content.phone?.trim() || pickPhone(text);
-
-  let city = content.city;
-  if (!city?.trim()) {
-    const place = text.match(/Place\s*:\s*([A-Za-z .'-]{2,40})/i)?.[1]?.trim();
-    const bangalore = /\bBangalore\b|\bBengaluru\b/i.test(text) ? 'Bangalore' : null;
-    city = place || bangalore || city;
-  }
-
-  const personal = { ...(content.personalDetails || {}) };
-  if (!personal.dateOfBirth) {
-    const dob =
-      text.match(/Date of Birth\s*\n?\s*([A-Za-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i)?.[1] ||
-      text.match(/DOB\s*[:\-–]?\s*([A-Za-z0-9 ,\/\-]{4,30})/i)?.[1];
-    if (dob) personal.dateOfBirth = dob.trim();
-  }
-  if (!personal.fatherName) {
-    const father = text.match(/Father'?s Name\s*\n?\s*([A-Za-z .']{2,60})/i)?.[1];
-    if (father) personal.fatherName = father.trim();
-  }
-  if (!personal.maritalStatus) {
-    const marital = text.match(/Marital Status\s*\n?\s*([A-Za-z ]{3,20})/i)?.[1];
-    if (marital) personal.maritalStatus = marital.trim();
-  }
-  if (!personal.permanentAddress) {
-    const addrBlock = text.match(
-      /Permanent Address\s*\n([\s\S]*?)(?:\nDeclaration|\nPlace:|\nI hereby|$)/i,
-    )?.[1];
-    if (addrBlock) {
-      personal.permanentAddress = addrBlock
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .join(', ')
-        .slice(0, 500);
-    }
-  }
-  if (!personal.place) {
-    const place = text.match(/Place\s*:\s*([A-Za-z .'-]{2,40})/i)?.[1]?.trim();
-    if (place) personal.place = place;
-  }
-
-  return {
-    ...content,
-    email: email || null,
-    phone: phone || null,
-    city: city?.trim() || null,
-    ...(Object.values(personal).some(Boolean) ? { personalDetails: personal } : {}),
-  };
+function pickRicher<T>(ai: T[], heuristic: T[], aiRich: number, heuristicRich: number): T[] {
+  if (!ai.length) return heuristic;
+  if (!heuristic.length) return ai;
+  // Prefer AI when it captured at least as much structure; otherwise keep heuristic.
+  return aiRich >= heuristicRich * 0.75 ? ai : heuristic;
 }
 
 /**
- * Convert LLM structured draft → ResumeContent (no heuristic local parser for structure).
+ * Merge AI-structured draft with heuristic parse (phone/email/languages/certs often better from heuristic).
  */
-export function structuredDraftToResumeContent(draft: StructuredResumeDraft): ResumeContent {
-  const fullName =
-    [draft.firstName, draft.lastName].filter((part) => String(part || '').trim()).join(' ').trim() ||
-    'Candidate';
+export function mergeStructuredIntoResumeContent(
+  draft: StructuredResumeDraft,
+  fallback: ResumeContent,
+  sourceText = '',
+): ResumeContent {
+  const grounded = (value: string | null | undefined, fb: string | null = null) =>
+    sourceText ? filterGroundedString(value, sourceText, fb) : String(value || '').trim() || fb;
 
-  const education =
+  const fullName =
+    grounded(
+      [draft.firstName, draft.lastName].filter((part) => String(part || '').trim()).join(' ').trim(),
+      fallback.fullName,
+    ) || fallback.fullName;
+
+  const educationFromAi =
     Array.isArray(draft.education) && draft.education.length
       ? draft.education
           .map((row) => {
@@ -99,28 +68,19 @@ export function structuredDraftToResumeContent(draft: StructuredResumeDraft): Re
           .filter((row) => row.qualification || row.institution)
       : [];
 
-  const experiences =
+  const experiencesFromAi =
     Array.isArray(draft.experience) && draft.experience.length
       ? draft.experience
-          .map((row) => {
-            const endRaw = String(row.endDate || '').trim();
-            const isCurrent =
-              Boolean(row.isCurrent) ||
-              /till\s*date|present|current|ongoing/i.test(endRaw);
-            return {
-              company: String(row.company || '').trim(),
-              jobTitle: String(row.jobTitle || '').trim(),
-              description: String(row.description || '').trim() || null,
-              isInternship: Boolean(row.isInternship),
-              startDate: String(row.startDate || '').trim() || null,
-              endDate: isCurrent ? null : endRaw || null,
-              isCurrent,
-            };
-          })
+          .map((row) => ({
+            company: String(row.company || '').trim(),
+            jobTitle: String(row.jobTitle || '').trim(),
+            description: String(row.description || '').trim() || null,
+            isInternship: Boolean(row.isInternship),
+          }))
           .filter((row) => row.company || row.jobTitle || row.description)
       : [];
 
-  const projects =
+  const projectsFromAi =
     Array.isArray(draft.projects) && draft.projects.length
       ? draft.projects
           .map((row) => {
@@ -129,160 +89,223 @@ export function structuredDraftToResumeContent(draft: StructuredResumeDraft): Re
             const fromAiTech = Array.isArray(row.technologies)
               ? row.technologies.map((t) => String(t || '').trim()).filter(Boolean)
               : [];
+            // Older prompts put stack in `role` — treat as tech when it looks like a stack list.
             const role = String(row.role || '').trim();
             const roleAsTech =
               role && /[,|/]/.test(role)
                 ? role.split(/[,;/|]+/).map((t) => t.trim()).filter((t) => t.length > 1 && t.length < 48)
                 : [];
-            const bodyLines = rawDescription
-              .split(/\n+/)
-              .map((line) => line.trim())
-              .filter(Boolean);
-            const peeled = extractProjectTechnologies(bodyLines);
-            const technologies = Array.from(
-              new Set([...peeled.technologies, ...fromAiTech, ...roleAsTech]),
-            ).slice(0, 24);
+            const { description, technologies } = extractProjectTechnologies(
+              rawDescription ? rawDescription.split(/\n+/).map((l) => l.trim()).filter(Boolean) : [],
+            );
+            const mergedTech = [...new Set([...fromAiTech, ...roleAsTech, ...technologies])];
             return {
               name,
-              description: peeled.description || null,
+              description,
               url: String(row.url || '').trim() || null,
-              ...(technologies.length ? { technologies } : {}),
+              ...(mergedTech.length ? { technologies: mergedTech } : {}),
             };
           })
-          .filter((row) => row.name || row.description)
+          .filter((row) => row.name)
       : [];
 
-  const skills = Array.isArray(draft.skills)
-    ? [...new Set(draft.skills.map((s) => String(s || '').trim()).filter(Boolean))]
-    : [];
+  const skillsFromAi =
+    Array.isArray(draft.skills) && draft.skills.length
+      ? filterGroundedList(
+          draft.skills.map((s) => String(s || '').trim()).filter(Boolean),
+          sourceText || fallback.summary + ' ' + (fallback.skills || []).join(' '),
+        )
+      : [];
 
-  const languages = Array.isArray(draft.languages)
-    ? draft.languages.map((l) => String(l || '').trim()).filter(Boolean)
-    : [];
+  const languagesFromAiRaw =
+    Array.isArray(draft.languages) && draft.languages.length
+      ? draft.languages.map((s) => String(s || '').trim()).filter(Boolean)
+      : [];
+  const languagesClassified = classifyLanguageTokens(languagesFromAiRaw);
+  const languagesFromAi = languagesClassified.human;
+  const techFromAiLanguages = languagesClassified.tech;
 
-  const certifications = Array.isArray(draft.certifications)
-    ? draft.certifications
-        .map((row) => ({
-          name: String(row.name || '').trim(),
-          issuer: String(row.issuer || '').trim() || null,
-          date: String(row.date || '').trim() || null,
-        }))
-        .filter((row) => row.name)
-    : [];
+  const certificationsFromAi =
+    Array.isArray(draft.certifications) && draft.certifications.length
+      ? draft.certifications
+          .map((row) => {
+            const name = String(row?.name || '').trim();
+            if (!name) return null;
+            return {
+              name,
+              issuer: String(row?.issuer || '').trim() || null,
+              date: String(row?.date || '').trim() || null,
+            };
+          })
+          .filter((row): row is { name: string; issuer: string | null; date: string | null } => Boolean(row))
+      : [];
 
-  const achievements = Array.isArray(draft.achievements)
-    ? draft.achievements
-        .map((row) => ({
-          title: String(row.title || '').trim(),
-          organization: String(row.organization || '').trim() || null,
-          description: String(row.description || '').trim() || null,
-          date: String(row.date || '').trim() || null,
-        }))
-        .filter((row) => row.title && !isPageMarkerText(row.title, row.organization, row.description))
-    : [];
+  const achievementsFromAi =
+    Array.isArray(draft.achievements) && draft.achievements.length
+      ? draft.achievements
+          .map((row) => {
+            const title = String(row?.title || '').trim();
+            if (!title) return null;
+            if (isPageMarkerText(title, row?.organization, row?.description)) return null;
+            return {
+              title,
+              organization: String(row?.organization || '').trim() || null,
+              description: String(row?.description || '').trim() || null,
+              date: String(row?.date || '').trim() || null,
+            };
+          })
+          .filter(
+            (
+              row,
+            ): row is {
+              title: string;
+              organization: string | null;
+              description: string | null;
+              date: string | null;
+            } => Boolean(row),
+          )
+      : [];
 
-  const links = {
-    linkedin: String(draft.linkedin || '').trim() || undefined,
-    github: String(draft.github || '').trim() || undefined,
-    portfolio: String(draft.portfolio || '').trim() || undefined,
-    website: String(draft.website || '').trim() || undefined,
+  const aiSlice = {
+    skills: skillsFromAi,
+    education: educationFromAi,
+    experiences: experiencesFromAi,
+    projects: projectsFromAi,
   };
-
-  const personalDetails = {
-    dateOfBirth: String(draft.dateOfBirth || '').trim() || null,
-    fatherName: String(draft.fatherName || '').trim() || null,
-    maritalStatus: String(draft.maritalStatus || '').trim() || null,
-    gender: String(draft.gender || '').trim() || null,
-    permanentAddress: String(draft.permanentAddress || '').trim() || null,
-    place: String(draft.place || '').trim() || null,
+  const heuristicProjects = (fallback.projects || []).map((row) => ({
+    name: row.name,
+    description: row.description || null,
+    url: row.url ?? null,
+    ...(row.technologies?.length ? { technologies: row.technologies } : {}),
+  }));
+  const heuristicSlice = {
+    skills: fallback.skills || [],
+    education: fallback.education || [],
+    experiences: fallback.experiences || [],
+    projects: heuristicProjects,
   };
+  const aiRich = richness(aiSlice);
+  const heuristicRich = richness(heuristicSlice);
 
-  return {
-    fullName,
-    city: String(draft.city || '').trim() || null,
-    state: String(draft.state || '').trim() || null,
-    phone: String(draft.phone || '').trim() || null,
-    email: String(draft.email || '').trim() || null,
-    summary: String(draft.about || '').trim() || '',
-    skills,
-    education,
-    experiences,
-    languages,
-    certifications,
-    achievements,
-    projects,
-    includePhoto: false,
-    ...(Object.values(personalDetails).some(Boolean) ? { personalDetails } : {}),
-    ...(links.linkedin || links.github || links.portfolio || links.website ? { links } : {}),
-  };
-}
+  const skills = pickRicher(skillsFromAi, heuristicSlice.skills, skillsFromAi.length, heuristicSlice.skills.length);
+  // Prefer union of skills when both have content (deduped).
+  const mergedSkills =
+    skillsFromAi.length && heuristicSlice.skills.length
+      ? [
+          ...new Set(
+            [...skillsFromAi, ...heuristicSlice.skills, ...techFromAiLanguages]
+              .map((s) => s.trim())
+              .filter(Boolean),
+          ),
+        ]
+      : [...new Set([...skills, ...techFromAiLanguages].map((s) => s.trim()).filter(Boolean))];
 
-/** Reject empty / nonsense LLM output before persisting. */
-export function validateStructuredResume(content: ResumeContent, rawText: string): string[] {
-  const errors: string[] = [];
-  const textLen = (rawText || '').trim().length;
-  if (textLen < 40) {
-    errors.push('Extracted resume text is too short to parse reliably.');
-  }
+  const mergedLanguages = languagesFromAi.length
+    ? languagesFromAi
+    : classifyLanguageTokens(fallback.languages || []).human;
 
-  const hasName = Boolean(content.fullName?.trim() && content.fullName.trim().toLowerCase() !== 'candidate');
-  const hasSkills = (content.skills?.length || 0) > 0;
-  const hasEducation = (content.education?.length || 0) > 0;
-  const hasExperience = (content.experiences?.length || 0) > 0;
-  const hasProjects = (content.projects?.length || 0) > 0;
-  const hasContact = Boolean(content.email?.trim() || content.phone?.trim());
-
-  if (!hasName && !hasSkills && !hasEducation && !hasExperience && !hasProjects && !hasContact) {
-    errors.push(
-      'LLM parser returned no usable fields (name, skills, education, experience, projects, or contact).',
-    );
-  }
-
-  return errors;
-}
-
-/** LLM structuring with retries + raw-text enrichment for contact/personal gaps. */
-export async function parseResumeTextWithLlm(
-  rawText: string,
-  structureFn: (text: string) => Promise<StructuredResumeDraft | null>,
-  options?: { attempts?: number; delayMs?: number },
-): Promise<ResumeContent> {
-  const attempts = options?.attempts ?? 4;
-  const delayMs = options?.delayMs ?? 2000;
-  let lastError: unknown;
-
-  for (let i = 0; i < attempts; i += 1) {
-    try {
-      const structured = await structureFn(rawText);
-      if (!structured) {
-        throw new Error('LLM resume parser returned empty result.');
-      }
-      const content = enrichResumeContentFromRawText(
-        structuredDraftToResumeContent(structured),
-        rawText,
-      );
-      const validationErrors = validateStructuredResume(content, rawText);
-      if (validationErrors.length) {
-        throw new Error(validationErrors.join(' '));
-      }
-      return content;
-    } catch (err) {
-      lastError = err;
-      if (i < attempts - 1) {
-        await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
-      }
+  const pickedExperiences = pickRicher(
+    experiencesFromAi,
+    heuristicSlice.experiences,
+    aiRich,
+    heuristicRich,
+  );
+  // Backfill dates from heuristic when AI rows omit them (same company/title).
+  const experiences: ResumeContent['experiences'] = pickedExperiences.map((row) => {
+    const existing = row as ResumeContent['experiences'][number];
+    // Drop AI rows that invent company+title not present in source when we have source text.
+    if (
+      sourceText &&
+      existing.company &&
+      !groundedInSource(existing.company, sourceText) &&
+      existing.jobTitle &&
+      !groundedInSource(existing.jobTitle, sourceText)
+    ) {
+      return null;
     }
-  }
+    if (existing.startDate || existing.endDate || existing.isCurrent) return existing;
+    const match = heuristicSlice.experiences.find(
+      (h) =>
+        (h.company && row.company && h.company.toLowerCase() === row.company.toLowerCase()) ||
+        (h.jobTitle && row.jobTitle && h.jobTitle.toLowerCase() === row.jobTitle.toLowerCase()),
+    );
+    if (!match) return existing;
+    return {
+      ...existing,
+      ...(match.startDate ? { startDate: match.startDate } : {}),
+      ...(match.endDate ? { endDate: match.endDate } : {}),
+      ...(match.isCurrent ? { isCurrent: true, endDate: null } : {}),
+      ...(match.responsibilities?.length ? { responsibilities: match.responsibilities } : {}),
+    };
+  }).filter(Boolean) as ResumeContent['experiences'];
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('LLM resume parser failed after retries.');
+  const city =
+    grounded(String(draft.city || '').trim(), fallback.city) || fallback.city;
+
+  let merged: ResumeContent = {
+    fullName: fullName || fallback.fullName || 'Candidate',
+    city,
+    phone: fallback.phone,
+    email: fallback.email,
+    summary: grounded(String(draft.about || '').trim(), fallback.summary) || fallback.summary,
+    skills: mergedSkills,
+    programmingLanguages: fallback.programmingLanguages || [],
+    education: pickRicher(educationFromAi, heuristicSlice.education, aiRich, heuristicRich),
+    experiences: experiences.length ? experiences : heuristicSlice.experiences,
+    languages: mergedLanguages,
+    certifications: certificationsFromAi.length
+      ? certificationsFromAi
+      : fallback.certifications || [],
+    achievements: (achievementsFromAi.length ? achievementsFromAi : fallback.achievements || []).filter(
+      (row) => !isPageMarkerText(row.title, row.organization, row.description),
+    ),
+    projects: pickRicher(projectsFromAi, heuristicProjects, aiRich, heuristicRich),
+    includePhoto: false,
+    fieldConfidence: fallback.fieldConfidence,
+    personal: fallback.personal,
+    ...( (() => {
+      const links = {
+        linkedin:
+          String(draft.linkedin || '').trim() ||
+          fallback.links?.linkedin ||
+          undefined,
+        github:
+          String(draft.github || '').trim() ||
+          fallback.links?.github ||
+          undefined,
+        portfolio:
+          String(draft.portfolio || '').trim() ||
+          fallback.links?.portfolio ||
+          undefined,
+        website:
+          String(draft.website || '').trim() ||
+          fallback.links?.website ||
+          undefined,
+      };
+      return links.linkedin || links.github || links.portfolio || links.website
+        ? { links }
+        : fallback.links
+          ? { links: fallback.links }
+          : {};
+    })() ),
+  };
+
+  merged = ensureExperienceDateShape(merged);
+  merged = attachPersonalBlock(merged);
+  return merged;
 }
 
-/** @deprecated Prefer parseResumeTextWithLlm — kept for any legacy callers. */
+/** Prefer AI structure when available; always fall back to deterministic parse. */
 export async function parseResumeTextWithOptionalAi(
   rawText: string,
   structureFn: (text: string) => Promise<StructuredResumeDraft | null>,
 ): Promise<ResumeContent> {
-  return parseResumeTextWithLlm(rawText, structureFn, { attempts: 3 });
+  const heuristic = parseExtractedResumeText(rawText);
+  try {
+    const structured = await structureFn(rawText);
+    if (structured) return mergeStructuredIntoResumeContent(structured, heuristic, rawText);
+  } catch {
+    /* use heuristic */
+  }
+  return heuristic;
 }

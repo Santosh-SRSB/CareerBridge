@@ -53,6 +53,15 @@ export class ApplicationsController {
     return this.applications.requestRescheduleInterview(user.id, id, body || {});
   }
 
+  @Post('scheduled-interviews/:id/feedback')
+  submitFeedback(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() body: { rating?: number; text?: string },
+  ) {
+    return this.applications.submitScheduledInterviewFeedback(user.id, id, body || {});
+  }
+
   @Get(':id')
   get(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.applications.get(user.id, id);

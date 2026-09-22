@@ -11,7 +11,12 @@
     "prisma:push": "prisma db push --schema prisma/schema.prisma",
     "test:gst": "node -r ts-node/register/transpile-only --test src/gst/gst.unit.test.ts",
     "test:chunking": "node -r ts-node/register/transpile-only --test src/ai/chunking/resume-chunking.test.ts",
-    "test:gst:integration": "node -r ts-node/register/transpile-only --test src/gst/gst.integration.test.ts"
+    "test:gst:integration": "node -r ts-node/register/transpile-only --test src/gst/gst.integration.test.ts",
+    "test:resume-parse": "node -r ts-node/register/transpile-only --test src/resumes/parse-extracted-resume.unit.test.ts",
+    "test:resume-isolation": "node -r ts-node/register/transpile-only --test src/resumes/isolation.unit.test.ts src/resumes/content-grounding-gate.unit.test.ts",
+    "test:resume-fixtures": "node -r ts-node/register/transpile-only --test src/resumes/fixture-integration.unit.test.ts",
+    "test:resume-layout": "node -r ts-node/register/transpile-only --test src/resumes/layout-sanitize.unit.test.ts",
+    "test:resume": "node -r ts-node/register/transpile-only --test src/resumes/*.unit.test.ts"
   },
   "dependencies": {
     "@careerbridge/shared": "*",

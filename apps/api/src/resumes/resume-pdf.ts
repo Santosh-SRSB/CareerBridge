@@ -148,10 +148,28 @@ async function renderCareerBridgeTemplatePdf(content: ResumeContent) {
         page.drawText(winAnsi(item.company), { x: left, y, size: 10, font: italic, color: INK });
         y -= 13;
       }
-      if (item.description) {
-        for (const bullet of item.description.split(/\n+/).map((b) => b.trim()).filter(Boolean)) {
-          drawLines(`• ${bullet.replace(/^[-•*]\s*/, '')}`);
-        }
+      const dateLine = [item.startDate, item.isCurrent ? 'Present' : item.endDate]
+        .filter(Boolean)
+        .join(' – ');
+      if (dateLine) {
+        ensure(14);
+        page.drawText(winAnsi(dateLine), { x: left, y, size: 9.5, font: italic, color: MUTED });
+        y -= 12;
+      }
+      // B: only real duty lines as bullets — never dump every description newline as a bullet
+      const dutyLines =
+        item.responsibilities?.length
+          ? item.responsibilities.map((b) => b.trim()).filter(Boolean)
+          : (item.description || '')
+              .split(/\n+/)
+              .map((b) => b.trim())
+              .filter(Boolean)
+              .filter((line) => /^[-•*]/.test(line) || /^(managed|led|built|developed|designed|implemented|created|owned|handled|worked)\b/i.test(line));
+      for (const bullet of dutyLines) {
+        drawLines(`• ${bullet.replace(/^[-•*]\s*/, '')}`);
+      }
+      if (!dutyLines.length && item.description?.trim()) {
+        drawLines(item.description.trim());
       }
       y -= 2;
     }
@@ -179,10 +197,19 @@ async function renderCareerBridgeTemplatePdf(content: ResumeContent) {
     for (const proj of content.projects) {
       if (!proj.name?.trim()) continue;
       drawLines(proj.name, bold, 10.5);
-      if (proj.description) {
-        for (const line of proj.description.split(/\n+/).map((b) => b.trim()).filter(Boolean)) {
-          drawLines(line.startsWith('•') ? line : `• ${line}`);
-        }
+      const projBullets =
+        proj.bullets?.length
+          ? proj.bullets.map((b) => b.trim()).filter(Boolean)
+          : (proj.description || '')
+              .split(/\n+/)
+              .map((b) => b.trim())
+              .filter(Boolean)
+              .filter((line) => /^[-•*]/.test(line));
+      for (const line of projBullets) {
+        drawLines(`• ${line.replace(/^[-•*]\s*/, '')}`);
+      }
+      if (!projBullets.length && proj.description?.trim()) {
+        drawLines(proj.description.trim());
       }
       y -= 2;
     }
@@ -200,7 +227,7 @@ async function renderCareerBridgeTemplatePdf(content: ResumeContent) {
               .replace(/\s+/g, ' ')
               .trim();
       if (!text) continue;
-      drawLines(`• ${text}`);
+      drawLines(text);
     }
   }
 

@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
-import { AiProvider, ProviderGenerateOptions, ProviderGenerateResult } from './ai-provider.interface';
+import {
+  AiProvider,
+  MultimodalPart,
+  ProviderGenerateOptions,
+  ProviderGenerateResult,
+} from './ai-provider.interface';
 import { AiProviderName } from '../ai.types';
 
 @Injectable()
@@ -170,6 +175,66 @@ export class GeminiProvider implements AiProvider {
     if (inString) s += '"';
     while (opens.length) s += opens.pop();
     return s;
+  }
+
+  async generateStructuredMultimodal<T>(
+    systemPrompt: string,
+    parts: MultimodalPart[],
+    options?: ProviderGenerateOptions,
+  ): Promise<ProviderGenerateResult<T>> {
+    const client = this.getClient();
+    const model = options?.model || this.getDefaultModel();
+
+    const contents = parts.map((part) => {
+      if (part.type === 'text') return { text: part.text };
+      return {
+        inlineData: {
+          mimeType: part.mimeType,
+          data: part.dataBase64,
+        },
+      };
+    });
+
+    try {
+      const response = await client.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: contents }],
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: options?.temperature ?? 0,
+          maxOutputTokens: options?.maxOutputTokens ?? 8192,
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const rawText = response.text || '';
+      let data: T | null = null;
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText) as T;
+        } catch {
+          const match = rawText.match(/\{[\s\S]*\}/);
+          if (match) {
+            try {
+              data = JSON.parse(match[0]) as T;
+            } catch (e) {
+              this.logger.warn(`Failed to parse Gemini multimodal JSON: ${(e as Error).message}`);
+            }
+          }
+        }
+      }
+
+      return {
+        data,
+        rawText,
+        model,
+        inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+      };
+    } catch (err) {
+      this.logger.error(`Gemini multimodal error: ${(err as Error).message}`);
+      throw err;
+    }
   }
 
   async embed(text: string, options?: { model?: string; dimensions?: number }): Promise<{

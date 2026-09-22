@@ -1,6 +1,5 @@
 import type { ResumeRecord } from '@careerbridge/shared';
-import { parseLanguageSkills } from '@careerbridge/shared';
-import { formatCityState, parseCityState } from '@/data/india-locations';
+import { parseLanguageSkills, toMonthInputValue } from '@careerbridge/shared';
 import { splitProjectFields } from './project-fields';
 import { normalizeCertificationList } from './certification-fields';
 
@@ -31,12 +30,6 @@ function splitDegreeAndField(qualification: string) {
   return { degree: match[1].trim(), field: match[2].trim() };
 }
 
-function locationFromContent(city?: string | null, state?: string | null) {
-  const raw = [city, state].filter(Boolean).join(', ').trim() || city || '';
-  const parsed = parseCityState(raw);
-  return formatCityState(parsed.city, parsed.state) || raw;
-}
-
 export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
   const content = record.content;
   const languages = content.languages || [];
@@ -44,45 +37,71 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
     languages.map((entry) => parseLanguageSkills(entry)[0]?.name || entry),
   );
   const links = content.links || content.resumeData?.links || {};
-  const location = locationFromContent(content.city, content.state);
+  const personal = content.personal;
+
+  const skills = [
+    ...(content.skills || []),
+    ...(content.programmingLanguages || []).filter(
+      (p) => !(content.skills || []).some((s) => s.toLowerCase() === p.toLowerCase()),
+    ),
+  ];
 
   return {
-    fullName: content.fullName || '',
-    location,
-    email: content.email || '',
-    phone: content.phone || '',
+    fullName: personal?.fullName || content.fullName || '',
+    location:
+      [personal?.city || content.city, personal?.state, personal?.country].filter(Boolean).join(', ') ||
+      content.city ||
+      '',
+    email: personal?.email || content.email || '',
+    phone: personal?.phone || content.phone || '',
     summary: record.summary || content.summary || '',
-    skills: content.skills || [],
-    linkedin: links.linkedin || '',
-    github: links.github || '',
-    portfolio: links.portfolio || links.website || '',
+    skills,
+    linkedin: personal?.linkedin || links.linkedin || '',
+    github: personal?.github || links.github || '',
+    portfolio: personal?.portfolio || links.portfolio || links.website || '',
     educationList: (content.education || []).map((edu, index) => {
       const parsed = splitDegreeAndField(edu.qualification || '');
       return {
         id: `edu-${index}`,
         degree: parsed.degree,
-        field: parsed.field,
+        field: edu.fieldOfStudy || parsed.field,
         institution: edu.institution || '',
-        location: '',
-        startDate: '',
-        endDate: edu.yearCompleted ? `${edu.yearCompleted}-06` : '',
-        isCurrent: false,
+        location: edu.location || '',
+        startDate: toMonthInputValue(edu.startDate) || '',
+        endDate:
+          toMonthInputValue(edu.endDate) ||
+          (edu.yearCompleted ? `${edu.yearCompleted}-06` : ''),
+        isCurrent: Boolean(edu.isCurrent),
         grade: '',
         gradeType: '',
       };
     }),
     experienceList: (content.experiences || []).map((exp, index) => {
       const fromData = content.resumeData?.experience?.[index];
+      const isCurrent = Boolean(exp.isCurrent ?? fromData?.isCurrent);
+      const responsibilities =
+        Array.isArray(exp.responsibilities) && exp.responsibilities.length
+          ? exp.responsibilities
+          : splitLines(exp.description);
       return {
         id: `exp-${index}`,
         role: exp.jobTitle || '',
         company: exp.company || '',
-        location: '',
-        startDate: exp.startDate || fromData?.startDate || '',
-        endDate: exp.endDate || fromData?.endDate || '',
-        isCurrent: Boolean(exp.isCurrent ?? fromData?.isCurrent),
+        location: exp.location || '',
+        startDate:
+          toMonthInputValue(exp.startDate || fromData?.startDate) ||
+          exp.startDate ||
+          fromData?.startDate ||
+          '',
+        endDate: isCurrent
+          ? ''
+          : toMonthInputValue(exp.endDate || fromData?.endDate) ||
+            exp.endDate ||
+            fromData?.endDate ||
+            '',
+        isCurrent,
         isInternship: Boolean(exp.isInternship) || /\bintern(?:ship|s)?\b/i.test(exp.jobTitle || ''),
-        responsibilities: splitLines(exp.description),
+        responsibilities,
       };
     }),
     projectList: (content.projects || []).map((project, index) => {
@@ -115,16 +134,16 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
         return blob.trim() && !/^\d+\s*of\s*\d+$/i.test(blob.replace(/[-–—]/g, '').replace(/\s+/g, ''));
       })
       .map((ach, index) => ({
-      id: `ach-${index}`,
-      title: ach.title || '',
-      organization: ach.organization || '',
-      description: ach.description || '',
-      date: ach.date || '',
-    })),
+        id: `ach-${index}`,
+        title: ach.title || '',
+        organization: ach.organization || '',
+        description: ach.description || '',
+        date: ach.date || '',
+      })),
     languages,
     availableLanguages: LANGUAGE_POOL.filter((name) => !languageNames.has(name)),
     preferredRole: record.targetJobTitle || '',
-    preferredLocation: location,
+    preferredLocation: personal?.city || content.city || '',
     expectedSalary: '',
   };
 }

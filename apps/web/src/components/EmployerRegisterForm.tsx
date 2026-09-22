@@ -428,7 +428,7 @@ export function EmployerRegisterForm() {
             className="mt-0.5 h-4 w-4 rounded border-primary/20 text-[#0a2e2c] focus:ring-[#0d9488]"
           />
           <span>
-            I agree to{' '}
+            I agree to the{' '}
             <a href="/employer/terms" target="_blank" rel="noreferrer" className="text-[#0d9488] hover:underline">
               Employer Terms
             </a>{' '}

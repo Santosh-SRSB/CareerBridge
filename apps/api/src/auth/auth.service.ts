@@ -2,6 +2,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -870,6 +871,24 @@ export class AuthService {
       });
     }
     return { loggedOut: true };
+  }
+
+  /** Issue a normal employer (or user) session — used for admin impersonation. */
+  async issueSessionForUserId(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        candidate: true,
+        employer: true,
+      },
+    });
+    if (!user) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'User was not found',
+      });
+    }
+    return this.issueSession(user);
   }
 
   private async issueSession(user: {

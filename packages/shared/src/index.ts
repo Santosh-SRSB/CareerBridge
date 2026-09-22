@@ -5,6 +5,7 @@ export * from './marketplace';
 export * from './ats';
 export * from './validation';
 export * from './resume-data';
+export * from './resume-dates';
 export * from './city-centroids';
 export * from './career-gap';
 export * from './experience-status';

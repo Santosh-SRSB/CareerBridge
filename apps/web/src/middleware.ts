@@ -10,7 +10,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Public employer entry points
+  // Public employer entry points (no login required)
   if (pathname === '/employer/register' || pathname.startsWith('/employer/register/')) {
     return NextResponse.next();
   }

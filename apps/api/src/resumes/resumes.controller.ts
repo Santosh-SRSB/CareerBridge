@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
@@ -357,8 +357,12 @@ export class ResumesController {
   }
 
   @Get(':id/download')
-  download(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.resumes.download(user.id, id);
+  download(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query('variant') variant?: 'original' | 'formatted',
+  ) {
+    return this.resumes.download(user.id, id, variant);
   }
 
   @Get(':id/view-url')

@@ -11,6 +11,28 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
     system:
       'Extract EVERY fact from the resume text. Do not invent. Do not skip contact, personal, education, jobs, skills, languages, certifications, achievements, or projects. Return JSON only with keys: firstName, lastName, email, phone, city, state, about, dateOfBirth, fatherName, maritalStatus, gender, permanentAddress, place, linkedin, github, portfolio, website, education[{qualification,institution,fieldOfStudy,yearCompleted}], skills[string], careerInterests[string], experience[{company,jobTitle,isInternship,description,startDate,endDate,isCurrent}], projects[{title,role,year,description,url,technologies[string]}], languages[string], certifications[{name,issuer,date}], achievements[{title,organization,description,date}]. Rules: (1) email and phone MUST be copied when present (Email:/Mobile: lines). (2) skills MUST include ALL soft skills AND every technology/tool mentioned anywhere (e.g. SAP, .Net, React, Azure, Naukri). (3) experience: one object per employer; set startDate/endDate as readable strings (e.g. "October 2020"); isCurrent=true when "till date"/present. Put responsibilities in description. (4) permanentAddress and place/city from Personal Profile / Declaration. (5) dateOfBirth, fatherName, maritalStatus when listed. (6) Never invent. Use empty string/[] when missing. Never use page markers as achievements.',
   },
+  'resume-parse-strict.v1': {
+    version: 'resume-parse-strict.v1',
+    description:
+      'Strict layout-aware resume JSON: personal_info, work_experience with role+company blocks, education, skills, projects',
+    system: [
+      'You extract resume data into ONE JSON object. Do not invent facts.',
+      'Keep role titles attached to the correct company even if the PDF layout separates them visually.',
+      'Merge broken mid-sentence bullet wraps into complete bullets.',
+      'Ignore profile photos, decorative headers, OCR noise like $=8$, and page markers.',
+      'Normalize dates to Month YYYY or YYYY-MM when possible; use PRESENT for current roles; drop impossible dates (e.g. 30 Feb) to month/year.',
+      'Return ONLY JSON with this exact shape:',
+      '{',
+      '  "personal_info": { "full_name": string, "email": string, "phone": string, "location": string, "links": string[] },',
+      '  "summary": string,',
+      '  "work_experience": [{ "company": string, "role_title": string, "start_date": string, "end_date": string, "description_bullets": string[] }],',
+      '  "education": [{ "degree": string, "institution": string, "graduation_year": string }],',
+      '  "skills": string[],',
+      '  "projects": [{ "title": string, "description": string, "link": string }]',
+      '}',
+      'Use empty strings or empty arrays when a field is missing. Never omit keys.',
+    ].join(' '),
+  },
   'resume-rewrite.v1': {
     version: 'resume-rewrite.v1',
     description: 'Improves resume wording without inventing facts or metrics',

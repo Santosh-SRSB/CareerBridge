@@ -34,26 +34,58 @@ function formatInterviewWhen(iso: string) {
   };
 }
 
-function PerformanceChart({ applications }: { applications: number }) {
-  const heights = useMemo(() => {
-    void applications;
-    return ['35%', '48%', '42%', '70%', '85%', '100%'];
-  }, [applications]);
+function PerformanceChart({
+  series,
+}: {
+  series: Array<{ label: string; count: number }>;
+}) {
+  const bars = useMemo(() => {
+    const rows =
+      series.length > 0
+        ? series
+        : Array.from({ length: 6 }, () => ({ label: '—', count: 0 }));
+    const max = Math.max(...rows.map((row) => row.count), 0);
+    return rows.map((row) => ({
+      ...row,
+      heightPct: max > 0 ? Math.max(8, Math.round((row.count / max) * 100)) : 8,
+    }));
+  }, [series]);
+
+  const total = bars.reduce((sum, row) => sum + row.count, 0);
 
   return (
-    <div className="ep-saas-bars" role="img" aria-label="Applications over the last six months">
-      {heights.map((height, i) => (
-        <div key={i} className="ep-saas-bars__col">
-          <div className="ep-saas-bars__bar" style={{ height }} />
-        </div>
-      ))}
+    <div className="ep-saas-bars-wrap">
+      <div
+        className="ep-saas-bars"
+        role="img"
+        aria-label={
+          total > 0
+            ? `Applications over the last six months: ${bars.map((b) => `${b.label} ${b.count}`).join(', ')}`
+            : 'No applications in the last six months'
+        }
+      >
+        {bars.map((bar) => (
+          <div key={`${bar.label}-${bar.count}`} className="ep-saas-bars__col" title={`${bar.label}: ${bar.count}`}>
+            <span className="ep-saas-bars__value">{bar.count}</span>
+            <div className="ep-saas-bars__plot">
+              <div className="ep-saas-bars__bar" style={{ height: `${bar.heightPct}%` }} />
+            </div>
+            <span className="ep-saas-bars__label">{bar.label}</span>
+          </div>
+        ))}
+      </div>
+      <p className="ep-saas-bars__caption">
+        {total > 0
+          ? `${total} application${total === 1 ? '' : 's'} in the last 6 months`
+          : 'Applications will appear here as candidates apply'}
+      </p>
     </div>
   );
 }
 
 function DashboardSkeleton() {
   return (
-    <div className="ep-app ep-app--desk ep-app--saas ep-app--topnav">
+    <div className="ep-app ep-app--desk ep-app--saas ep-app--leftnav">
       <div className="ep-main">
         <div className="ep-content">
           <div className="ep-saas-dash ep-saas-dash--loading" aria-busy="true">
@@ -247,7 +279,7 @@ export default function EmployerDashboardPage() {
                     strokeWidth="1.4"
                   />
                   <path d="M50 72c2.5 10 5 16 8 16s5.5-6 8-16c-2.5 2-5.5 3-8 3s-5.5-1-8-3Z" fill="#f6f4ef" />
-                  <path d="M58 72v16" stroke="#e8a63b" strokeWidth="1.2" />
+                  <path d="M58 72v16" stroke="#1f9d8a" strokeWidth="1.2" />
                   {/* lapels */}
                   <path d="M42 72l10 8-4-10" fill="#144039" stroke="#0c332c" strokeWidth="1" />
                   <path d="M74 72l-10 8 4-10" fill="#144039" stroke="#0c332c" strokeWidth="1" />
@@ -261,7 +293,7 @@ export default function EmployerDashboardPage() {
                     strokeWidth="1.5"
                     strokeLinejoin="round"
                   />
-                  <path d="M48 112h20" stroke="#e8a63b" strokeWidth="1.2" opacity="0.7" />
+                  <path d="M48 112h20" stroke="#1f9d8a" strokeWidth="1.2" opacity="0.7" />
                   {/* legs + heels */}
                   <path d="M50 144v12M66 144v12" stroke="#f0c4a8" strokeWidth="3.2" strokeLinecap="round" />
                   <path d="M46 156h10l-1 4H45l1-4Z" fill="#0c332c" />
@@ -300,7 +332,7 @@ export default function EmployerDashboardPage() {
                 <h2 id="perf-title">Recruitment performance</h2>
               </div>
             </div>
-            <PerformanceChart applications={data.applications} />
+            <PerformanceChart series={data.applicationsByMonth || []} />
           </section>
 
           <section className="ep-saas-panel" aria-labelledby="interviews-title">
