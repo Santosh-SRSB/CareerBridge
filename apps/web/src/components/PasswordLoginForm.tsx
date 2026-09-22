@@ -13,6 +13,24 @@ function safeNextPath(raw: string | null) {
   return raw;
 }
 
+function MailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+      <path d="M4 7l8 6 8-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function PasswordLoginForm({ accountType }: { accountType: LoginAccountType }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -21,7 +39,6 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // Touched state
   const [touched, setTouched] = useState({
     identifier: false,
     password: false,
@@ -83,85 +100,77 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      {/* Email Input */}
-      <div>
-        <label className="mb-1.5 block text-xs font-bold text-primary" htmlFor="email-input">
-          Email address
+    <form onSubmit={onSubmit} className="cb-auth-form-stack" noValidate>
+      <div className="cb-auth-field">
+        <label className="cb-auth-field__label" htmlFor="email-input">
+          Email
         </label>
-        <input
-          id="email-input"
-          name="identifier"
-          type="email"
-          required
-          autoComplete="username"
-          placeholder={accountType === 'EMPLOYER' ? 'you@company.com' : 'Enter your email'}
-          value={identifier}
-          onChange={(event) => {
-            setIdentifier(event.target.value);
-            if (!touched.identifier) markTouched('identifier');
-          }}
-          onBlur={() => markTouched('identifier')}
-          className={`w-full rounded-xl border bg-[#f8fafc] px-3.5 py-3 text-sm font-medium text-slate-800 outline-none transition focus:bg-white focus:ring-2 ${
-            identifierError
-              ? 'border-error focus:border-error focus:ring-error/20'
-              : 'border-slate-200 focus:border-[#0284c7] focus:ring-[#0284c7]/20'
-          }`}
-        />
-        {identifierError ? (
-          <span className="mt-1 block text-[11px] font-medium text-error">{identifierError}</span>
-        ) : null}
+        <div className={`cb-auth-field__control ${identifierError ? 'is-error' : ''}`}>
+          <span className="cb-auth-field__icon">
+            <MailIcon />
+          </span>
+          <input
+            id="email-input"
+            name="identifier"
+            type="email"
+            required
+            autoComplete="username"
+            placeholder="Username"
+            value={identifier}
+            onChange={(event) => {
+              setIdentifier(event.target.value);
+              if (!touched.identifier) markTouched('identifier');
+            }}
+            onBlur={() => markTouched('identifier')}
+            className="cb-auth-field__input"
+          />
+        </div>
+        {identifierError ? <span className="cb-auth-field__error">{identifierError}</span> : null}
       </div>
 
-      {/* Password Input */}
-      <div>
-        <label className="mb-1.5 block text-xs font-bold text-slate-700" htmlFor="password-input">
+      <div className="cb-auth-field">
+        <label className="cb-auth-field__label" htmlFor="password-input">
           Password
         </label>
-        <div className="relative">
+        <div className={`cb-auth-field__control ${passwordError ? 'is-error' : ''}`}>
+          <span className="cb-auth-field__icon">
+            <LockIcon />
+          </span>
           <input
             id="password-input"
             name="password"
             type={showPassword ? 'text' : 'password'}
             required
             autoComplete="current-password"
-            placeholder="Enter your password"
+            placeholder="Password"
             value={password}
             onChange={(event) => {
               setPassword(event.target.value);
               if (!touched.password) markTouched('password');
             }}
             onBlur={() => markTouched('password')}
-            className={`w-full rounded-xl border bg-[#f8fafc] px-3.5 py-3 pr-11 text-sm font-medium text-slate-800 outline-none transition focus:bg-white focus:ring-2 ${
-              passwordError
-                ? 'border-error focus:border-error focus:ring-error/20'
-                : 'border-slate-200 focus:border-[#0284c7] focus:ring-[#0284c7]/20'
-            }`}
+            className="cb-auth-field__input"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3.5 top-1/2 z-10 -translate-y-1/2 text-xs font-bold text-slate-500 hover:text-slate-800"
+            className="cb-auth-field__action"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? 'Hide' : 'Show'}
           </button>
         </div>
-        {passwordError ? (
-          <span className="mt-1 block text-[11px] font-medium text-error">{passwordError}</span>
-        ) : null}
+        {passwordError ? <span className="cb-auth-field__error">{passwordError}</span> : null}
       </div>
 
-      {/* Remember me row */}
-      <div className="flex items-center justify-between text-xs font-semibold">
-        <label className="inline-flex items-center gap-2 cursor-pointer text-slate-500 hover:text-slate-800">
+      <div className="cb-auth-meta">
+        <label className="cb-auth-meta__check">
           <input
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-[#0284c7] focus:ring-[#0284c7]"
           />
-          <span>Remember me</span>
+          <span>Remember</span>
         </label>
         <button
           type="button"
@@ -172,25 +181,16 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
               }`,
             )
           }
-          className="text-[#0284c7] hover:underline"
+          className="cb-auth-meta__link"
         >
-          Forgot your password?
+          Forgot password?
         </button>
       </div>
 
-      {error ? (
-        <div className="rounded-xl border border-error/20 bg-error/5 p-2.5 text-xs font-semibold text-error">
-          {error}
-        </div>
-      ) : null}
+      {error ? <div className="cb-auth-alert">{error}</div> : null}
 
-      <Button
-        type="submit"
-        loading={loading}
-        loadingLabel="Signing in..."
-        className="w-full py-3.5 text-sm font-bold bg-[#0284c7] hover:bg-[#0369a1] text-white shadow-md hover:shadow-lg transition rounded-xl tracking-wider uppercase"
-      >
-        Sign In
+      <Button type="submit" loading={loading} loadingLabel="Signing in..." className="w-full">
+        LOGIN
       </Button>
     </form>
   );

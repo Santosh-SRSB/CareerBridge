@@ -191,6 +191,7 @@ export default function VerifyOtpPage() {
       subtitle={`OTP sent to ${destination}`}
       backHref={backHref}
       scene="verify"
+      mode="register"
       panelTitle={verifyTitle}
       panelCopy={panelCopy}
     >

@@ -15,6 +15,9 @@ export function AuthShell({
   scene = 'candidate',
   panelTitle,
   panelCopy,
+  mode = 'signin',
+  signInHref,
+  registerHref,
   children,
 }: {
   title: string;
@@ -25,6 +28,9 @@ export function AuthShell({
   panelCopy?: string;
   marketing?: boolean;
   maxWidthClass?: string;
+  mode?: 'signin' | 'register';
+  signInHref?: string;
+  registerHref?: string;
   children: ReactNode;
 }) {
   if (!marketing) {
@@ -49,61 +55,49 @@ export function AuthShell({
     );
   }
 
-  const heroHeadline =
-    panelTitle ||
-    (scene === 'employer'
-      ? 'Hire verified talent with clarity'
-      : 'Find your dream job simply and quickly');
+  const loginLink = signInHref || (scene === 'employer' ? '/login?role=employer' : '/login?role=candidate');
+  const signupLink =
+    registerHref || (scene === 'employer' ? '/register?role=employer' : '/register?role=candidate');
+  const heading = mode === 'register' ? 'USER REGISTER' : 'USER LOGIN';
+  const headerCtaHref = mode === 'register' ? loginLink : signupLink;
+  const headerCtaLabel = mode === 'register' ? 'Sign in' : 'Register';
 
   return (
-    <main className="min-h-screen w-full flex flex-col bg-[#f0f4f8] text-[#0f172a]">
-      <div className="flex flex-1 items-center justify-center px-3 py-4 sm:px-5 sm:py-5 md:px-6 lg:px-8">
-        <div className="relative w-full max-w-6xl xl:max-w-[1160px] bg-white rounded-2xl md:rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.08)] overflow-hidden border border-slate-200/80 flex flex-col md:flex-row md:min-h-[min(680px,calc(100dvh-3rem))] max-h-[none] md:max-h-[calc(100dvh-2rem)]">
-          <Link
-            href={backHref ?? '/'}
-            className="absolute right-3 top-3 z-20 inline-flex items-center gap-1 text-sm font-semibold text-[#142a4f] transition hover:text-[#43526b] sm:right-5 sm:top-5"
-          >
-            Back ←
-          </Link>
-          <AuthSplitHero headline={heroHeadline} subhead={panelCopy} scene={scene} />
+    <main className="cb-auth-page">
+      <div className="cb-auth-page__shapes" aria-hidden>
+        <span className="cb-auth-page__blob cb-auth-page__blob--a" />
+        <span className="cb-auth-page__blob cb-auth-page__blob--b" />
+        <span className="cb-auth-page__blob cb-auth-page__blob--c" />
+        <span className="cb-auth-page__blob cb-auth-page__blob--d" />
+      </div>
 
-          <div className="flex flex-1 flex-col justify-between p-4 pt-12 sm:p-6 sm:pt-14 md:p-8 md:pt-16 lg:p-10 xl:p-12 bg-white min-w-0 overflow-y-auto">
-            <div className="w-full max-w-[420px] mx-auto md:my-auto">
-              <div className="mb-5 text-center md:hidden">
-                <p className="text-xl font-black tracking-tight text-[#0a2e2c]">
-                  Career<span className="text-[#0d9488]">Bridge</span>
-                </p>
-                <p className="mt-2 text-sm font-semibold leading-snug text-[#0a2e2c]">
-                  {heroHeadline}
-                </p>
+      <div className="cb-auth-page__frame">
+        <div className="cb-auth-sheet">
+          <div className="cb-auth-sheet__body">
+            <AuthSplitHero mode={mode} />
+
+            <section className="cb-auth-form">
+              <div className="cb-auth-form__toolbar">
+                <div className="cb-auth-form__actions">
+                  <Link href={headerCtaHref} className="cb-auth-sheet__cta">
+                    {headerCtaLabel}
+                  </Link>
+                  {backHref ? (
+                    <Link href={backHref} className="cb-auth-sheet__back">
+                      ← Back
+                    </Link>
+                  ) : null}
+                </div>
               </div>
 
-              <div className="mb-4">
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0f172a] leading-tight">
-                  {title}
-                </h1>
-                {subtitle ? (
-                  <p className="mt-1 text-xs sm:text-sm text-slate-500 leading-relaxed font-normal">
-                    {subtitle}
-                  </p>
-                ) : null}
+              <div className="cb-auth-form__scroll">
+                <div className="cb-auth-form__body">
+                  <h1 className="sr-only">{heading}</h1>
+                  {subtitle ? <p className="cb-auth-form__sub">{subtitle}</p> : null}
+                  <div className="cb-auth-portal">{children}</div>
+                </div>
               </div>
-
-              {/* Injected Form Component */}
-              <div className="cb-auth-portal">
-                {children}
-              </div>
-            </div>
-
-            {/* Bottom Form Footer Notes */}
-            <div className="mt-6 hidden pt-4 border-t border-slate-100 text-center text-xs text-slate-400 md:flex flex-col sm:flex-row items-center justify-between gap-1.5">
-              <div className="flex items-center gap-3 font-medium">
-                <Link href="/terms" className="hover:text-slate-600 transition">Terms of Service</Link>
-                <span>|</span>
-                <Link href="/privacy" className="hover:text-slate-600 transition">Privacy Policy</Link>
-              </div>
-              <p className="font-medium">CareerBridge 2026. All rights reserved.</p>
-            </div>
+            </section>
           </div>
         </div>
       </div>

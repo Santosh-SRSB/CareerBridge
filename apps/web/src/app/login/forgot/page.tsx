@@ -111,11 +111,14 @@ function ForgotPasswordBody() {
           : 'Enter the email on your candidate account to receive a reset code.'
       }
       scene={role === 'EMPLOYER' ? 'employer' : 'candidate'}
-      panelTitle={role === 'EMPLOYER' ? 'Hire your dream team simply and quickly' : 'Find your dream job simply and quickly'}
+      mode="signin"
+      signInHref={`/login?role=${role.toLowerCase()}`}
+      registerHref={role === 'EMPLOYER' ? '/register?role=employer' : '/register?role=candidate'}
+      panelTitle="Welcome Page"
       panelCopy={
         role === 'EMPLOYER'
-          ? 'Access candidate passports, manage postings, and collaborate with your team.'
-          : 'Access your projects, manage campaigns, and collaborate with our expert team.'
+          ? 'Access candidate passports, manage postings, and collaborate with your team on CareerBridge.'
+          : 'Build your Career Passport, practice with AI interviews, and get discovered by employers who hire on merit.'
       }
     >
       <RoleToggle value={role} onChange={selectRole} />
