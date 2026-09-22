@@ -69,8 +69,17 @@ export interface AiInteractionRecord {
 export interface StructuredResumeDraft {
   firstName: string;
   lastName: string;
+  email?: string;
+  phone?: string;
   city: string;
+  state?: string;
   about: string;
+  dateOfBirth?: string;
+  fatherName?: string;
+  maritalStatus?: string;
+  gender?: string;
+  permanentAddress?: string;
+  place?: string;
   linkedin?: string;
   github?: string;
   portfolio?: string;
@@ -88,6 +97,9 @@ export interface StructuredResumeDraft {
     jobTitle: string;
     isInternship: boolean;
     description: string;
+    startDate?: string;
+    endDate?: string;
+    isCurrent?: boolean;
   }>;
   projects: Array<{
     title: string;

@@ -2,16 +2,8 @@
 
 import { formatMonthRange, formatEducationYearRange } from '@/lib/resume-dates';
 
-/** Accept YYYY-MM-DD or legacy YYYY-MM for <input type="date">. */
-function toDateInputValue(value: string) {
-  if (!value) return '';
-  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
-  if (/^\d{4}-\d{2}$/.test(value)) return `${value}-01`;
-  return '';
-}
-
 const fieldStyles = `
-  .cb-date-field input[type="date"] {
+  .cb-date-field input[type="month"] {
     border: 2px solid #7A8270;
     border-radius: 0.5rem;
     padding: 10px 12px;
@@ -23,14 +15,10 @@ const fieldStyles = `
     background: #fff;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  .cb-date-field input[type="date"]:focus {
+  .cb-date-field input[type="month"]:focus {
     outline: none;
     border-color: #0A2E2C;
     box-shadow: 0 0 0 3px rgba(10, 46, 44, 0.25);
-  }
-  .cb-date-field input[type="date"]:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
   }
   .cb-date-range {
     display: grid;
@@ -41,21 +29,12 @@ const fieldStyles = `
     grid-column: 1 / -1;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     font-size: 13px;
-    font-weight: 600;
-    color: #241C15;
+    color: #6B6355;
     font-family: var(--font-inter), Inter, sans-serif;
-    border: 1px solid rgba(10, 46, 44, 0.12);
-    border-radius: 0.5rem;
-    padding: 10px 12px;
-    background: #fff;
-    cursor: pointer;
   }
-  .cb-date-range .cb-present-row input {
-    width: auto;
-    accent-color: #0a2e2c;
-  }
+  .cb-date-range .cb-present-row input { width: auto; }
   @media (max-width: 600px) {
     .cb-date-range { grid-template-columns: 1fr; }
   }
@@ -76,19 +55,14 @@ export function MonthField({
     <div className="cb-date-field cb-field">
       <style dangerouslySetInnerHTML={{ __html: fieldStyles }} />
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        type="date"
-        value={toDateInputValue(value)}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <input id={id} type="month" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
 
 export function MonthRangeFields({
-  startLabel = 'From',
-  endLabel = 'To',
+  startLabel = 'Start date',
+  endLabel = 'End date',
   start,
   end,
   isCurrent,
@@ -96,7 +70,7 @@ export function MonthRangeFields({
   onEndChange,
   onCurrentChange,
   showPresent = true,
-  presentLabel = 'I am working currently',
+  presentLabel = 'Currently working / studying here',
 }: {
   startLabel?: string;
   endLabel?: string;
@@ -114,34 +88,18 @@ export function MonthRangeFields({
       <style dangerouslySetInnerHTML={{ __html: fieldStyles }} />
       <div className="cb-field">
         <label>{startLabel}</label>
-        <input
-          type="date"
-          value={toDateInputValue(start)}
-          onChange={(e) => onStartChange(e.target.value)}
-        />
+        <input type="month" value={start} onChange={(e) => onStartChange(e.target.value)} />
       </div>
       <div className="cb-field">
         <label>{endLabel}</label>
-        <input
-          type="date"
-          value={isCurrent ? '' : toDateInputValue(end)}
-          onChange={(e) => onEndChange(e.target.value)}
-          disabled={isCurrent}
-        />
+        <input type="month" value={end} onChange={(e) => onEndChange(e.target.value)} disabled={isCurrent} />
       </div>
-      {showPresent ? (
+      {showPresent && (
         <label className="cb-present-row">
-          <input
-            type="checkbox"
-            checked={isCurrent}
-            onChange={(e) => {
-              onCurrentChange(e.target.checked);
-              if (e.target.checked) onEndChange('');
-            }}
-          />
+          <input type="checkbox" checked={isCurrent} onChange={(e) => onCurrentChange(e.target.checked)} />
           {presentLabel}
         </label>
-      ) : null}
+      )}
     </div>
   );
 }

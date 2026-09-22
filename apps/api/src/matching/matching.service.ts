@@ -8,7 +8,8 @@ import { ErrorCode as SharedError, employerCandidateUnlockLimit } from '@careerb
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
-import { cosineSimilarity, parseEmbeddingJson } from '../ai/utils/vector.util';
+import { DocumentIndexService } from '../ai/document-index.service';
+import { VectorStoreService } from '../ai/vector-store.service';
 
 @Injectable()
 export class MatchingService {
@@ -17,6 +18,8 @@ export class MatchingService {
     private readonly intelligence: IntelligenceService,
     private readonly config: ConfigService,
     private readonly aiGateway: AiGatewayService,
+    private readonly documentIndex: DocumentIndexService,
+    private readonly vectors: VectorStoreService,
   ) {}
 
   async getSkillProfile(userId: string, jobId: string) {
@@ -126,19 +129,18 @@ export class MatchingService {
       : parseList(job.requiredSkills);
     const experienceYearsMin = profile?.experienceYearsMin || 0;
 
-    // Ensure job embedding exists for hybrid matching (rules + vector).
-    await this.aiGateway
-      .upsertEmbedding({
-        entityType: 'JOB',
-        entityId: job.id,
-        text: this.aiGateway.buildJobEmbedText({
-          title: job.title,
-          description: job.description,
-          city: job.city,
-          category: job.category,
-          requiredSkills,
-          experience: job.experience,
-        }),
+    // Ensure job profile + JD chunks exist in pgvector (required for semantic score).
+    await this.documentIndex
+      .indexJob({
+        id: job.id,
+        title: job.title,
+        description: job.description,
+        city: job.city,
+        category: job.category,
+        requiredSkills,
+        preferredSkills: parseList(job.preferredSkills),
+        experience: job.experience,
+        educationMin: job.educationMin,
       })
       .catch(() => undefined);
 
@@ -159,15 +161,40 @@ export class MatchingService {
       take: 200,
     });
 
-    const candidateEmbeddings = await this.prisma.embedding.findMany({
-      where: {
-        entityType: 'CANDIDATE',
-        entityId: { in: candidates.map((c) => c.id) },
-      },
-    });
-    const embeddingByCandidate = new Map(
-      candidateEmbeddings.map((row) => [row.entityId, parseEmbeddingJson(row.embeddingJson)]),
-    );
+    let pgScores = jobVector?.length
+      ? await this.vectors
+          .scoreCandidates(
+            jobVector,
+            candidates.map((row) => row.id),
+          )
+          .catch(() => new Map<string, number>())
+      : new Map<string, number>();
+
+    if (this.aiGateway.isConfigured() && jobVector?.length) {
+      const missing = candidates.filter((candidate) => !pgScores.has(candidate.id));
+      for (const candidate of missing) {
+        const resume = candidate.resumes[0];
+        await this.aiGateway.upsertEmbedding({
+          entityType: 'CANDIDATE',
+          entityId: candidate.id,
+          text: this.aiGateway.buildCandidateEmbedText({
+            city: candidate.city,
+            skills: candidate.skills.map((s) => s.name),
+            careerInterests: parseList(candidate.careerInterests),
+            about: resume?.summary || null,
+            experienceSummary: resume?.rawText?.slice(0, 2000) || null,
+          }),
+        });
+      }
+      if (missing.length) {
+        pgScores = await this.vectors
+          .scoreCandidates(
+            jobVector,
+            candidates.map((row) => row.id),
+          )
+          .catch(() => pgScores);
+      }
+    }
 
     const scored: Array<{
       applicationId: string | null;
@@ -216,27 +243,9 @@ export class MatchingService {
         skillsScore + experienceScore + Math.round(interviewReadinessScore * 0.3),
       );
 
-      let candidateVec = embeddingByCandidate.get(candidate.id) || null;
-      if (!candidateVec?.length && this.aiGateway.isConfigured()) {
-        const resume = candidate.resumes[0];
-        await this.aiGateway.upsertEmbedding({
-          entityType: 'CANDIDATE',
-          entityId: candidate.id,
-          text: this.aiGateway.buildCandidateEmbedText({
-            city: candidate.city,
-            skills: candidate.skills.map((s) => s.name),
-            careerInterests: parseList(candidate.careerInterests),
-            about: resume?.summary || null,
-            experienceSummary: resume?.rawText?.slice(0, 2000) || null,
-          }),
-        });
-        candidateVec = await this.aiGateway.getEmbeddingVector('CANDIDATE', candidate.id);
-      }
-
+      const fromPg = pgScores.get(candidate.id);
       const semanticScore =
-        jobVector && candidateVec?.length
-          ? Math.round(Math.max(0, Math.min(1, cosineSimilarity(jobVector, candidateVec))) * 100)
-          : 0;
+        fromPg != null ? Math.round(Math.max(0, Math.min(1, fromPg)) * 100) : 0;
 
       // Hybrid: 70% deterministic rules + 30% semantic similarity (Volume 2 matching).
       const totalScore =

@@ -5,6 +5,7 @@ import {
   type ResumeContent,
   type ResumeRecord,
 } from '@careerbridge/shared';
+import { formatCityState, parseCityState } from '@/data/india-locations';
 import {
   analyzeResumeRole,
   careerGuidance,
@@ -79,7 +80,11 @@ function contentToFriendData(content: ResumeContent & { _manual?: boolean; data?
     fullName: content.fullName || '',
     email: content.email || '',
     phone: content.phone || '',
-    location: content.city || '',
+    location: (() => {
+      const raw = [content.city, content.state].filter(Boolean).join(', ').trim() || content.city || '';
+      const parsed = parseCityState(raw);
+      return formatCityState(parsed.city, parsed.state) || raw;
+    })(),
     summary: content.summary || '',
     skills: content.skills || [],
     experience: (content.experiences || []).map((item) => ({

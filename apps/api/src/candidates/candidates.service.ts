@@ -10,12 +10,13 @@ import {
   optionalUrlError,
   yearNumberError,
   computeCareerGapAfterHighestEducation,
-  resolveCandidateExperienceBand,
+  deriveExperienceFlags,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { StorageService } from '../common/storage/storage.service';
+import { TestimonialsService } from '../testimonials/testimonials.service';
 import {
   EducationDto,
   ExperienceDto,
@@ -40,11 +41,11 @@ export class CandidatesService {
     private readonly matching: MatchingService,
     private readonly aiGateway: AiGatewayService,
     private readonly storage: StorageService,
+    private readonly testimonials: TestimonialsService,
   ) {}
 
   async me(userId: string) {
-    // Sync Fresher/Experienced from onboarding + jobs so dashboard STATUS stays accurate.
-    return this.recompute(userId);
+    return this.withReadablePhoto(this.toProfile(await this.loadCandidate(userId)));
   }
 
   /** Multipart profile photo upload — avoids large JSON data-URL payloads. */
@@ -67,21 +68,21 @@ export class CandidatesService {
     }
 
     const candidate = await this.loadCandidate(userId);
+    const previousPath = this.gcsPathFromPhotoUrl(candidate.photoUrl);
     const ext = mime.includes('png') ? '.png' : '.jpg';
     let storedUrl: string;
 
     if (this.storage.isConfigured()) {
       try {
-        const path = this.storage.imageObjectPath(
-          `photo-${Date.now()}${ext}`,
-          candidate.id.slice(0, 8),
-        );
+        // Stable key per candidate so replace overwrites instead of leaving orphans.
+        const path = this.storage.imageObjectPath(`profile-photo${ext}`, candidate.id.slice(0, 8));
         const uploaded = await this.storage.uploadFile(path, file.buffer, {
           contentType: mime.includes('png') ? 'image/png' : 'image/jpeg',
           isPublic: true,
           metadata: { candidateId: candidate.id, source: 'profile-photo' },
         });
         storedUrl = uploaded.publicUrl;
+        await this.deleteReplacedProfilePhotos(candidate.id, previousPath, path);
       } catch (err) {
         this.logger.error(
           `Profile photo multipart GCS upload failed for ${candidate.id}: ${(err as Error).message}`,
@@ -241,25 +242,12 @@ export class CandidatesService {
         ...(dto.highestEducation !== undefined ? { highestEducation: dto.highestEducation } : {}),
         ...(careerInterests !== undefined ? { careerInterests } : {}),
         ...(dto.hasExperience !== undefined ? { hasExperience: dto.hasExperience } : {}),
-        ...(dto.experienceLevel !== undefined
-          ? { experienceLevel: dto.experienceLevel }
-          : dto.hasExperience !== undefined
-            ? {
-                experienceLevel:
-                  dto.hasExperience === 'YES' ? 'experienced' : 'fresher',
-              }
-            : {}),
-        ...(dto.totalExperienceYears !== undefined || dto.totalExperienceMonths !== undefined
-          ? (() => {
-              const split = splitExperienceDuration(
-                dto.totalExperienceYears,
-                dto.totalExperienceMonths,
-              );
-              return {
-                totalExperienceYears: split.years,
-                totalExperienceMonths: split.months,
-              };
-            })()
+        ...(dto.experienceLevel !== undefined ? { experienceLevel: dto.experienceLevel } : {}),
+        ...(dto.totalExperienceYears !== undefined
+          ? { totalExperienceYears: Number.parseInt(dto.totalExperienceYears, 10) || 0 }
+          : {}),
+        ...(dto.totalExperienceMonths !== undefined
+          ? { totalExperienceMonths: Number.parseInt(dto.totalExperienceMonths, 10) || 0 }
           : {}),
         ...(dto.photoUrl !== undefined ? { photoUrl: photoUrl || null } : {}),
         ...(dto.links !== undefined ? { profileLinks: JSON.stringify(cleanLinks(dto.links)) } : {}),
@@ -287,16 +275,31 @@ export class CandidatesService {
 
   async savePassport(userId: string, dto: SavePassportDto) {
     const candidate = await this.loadCandidate(userId);
-    const education = (dto.education ?? []).filter((row) => row.qualification?.trim());
+    const education = (dto.education ?? []).filter(
+      (row) => row.qualification?.trim() || row.institution?.trim(),
+    );
     const skills = [...new Set((dto.skills ?? []).map((item) => item.trim()).filter(Boolean))];
-    const jobs = (dto.experience ?? []).filter(
+    const incomingExperience = (dto.experience ?? []).filter(
       (row) => row.company?.trim() || row.jobTitle?.trim() || row.description?.trim(),
     );
-    const hasPaidJob = jobs.some((row) => !row.isInternship);
-    const yearsSplit = splitExperienceDuration(dto.totalExperienceYears, dto.totalExperienceMonths);
-    const years = yearsSplit.years;
-    const months = yearsSplit.months;
+    const paidJobs = incomingExperience.filter((row) => !row.isInternship);
+    const internshipJobs = incomingExperience.filter((row) => Boolean(row.isInternship));
+    // Fresher / internship-only: keep internship rows; do not wipe them on fresher save.
+    const jobs =
+      dto.experienceLevel === 'fresher'
+        ? internshipJobs
+        : paidJobs.length
+          ? incomingExperience
+          : internshipJobs;
+    const years = Number.parseInt(dto.totalExperienceYears || '0', 10) || 0;
+    const months = Number.parseInt(dto.totalExperienceMonths || '0', 10) || 0;
     const firstEdu = education[0];
+    const resolvedLevel =
+      paidJobs.length > 0 ? 'experienced' : dto.experienceLevel === 'experienced' && paidJobs.length === 0
+        ? 'fresher'
+        : dto.experienceLevel || (paidJobs.length ? 'experienced' : 'fresher');
+    const hasExperienceFlag =
+      paidJobs.length > 0 ? 'YES' : internshipJobs.length > 0 || jobs.some((r) => r.isInternship) ? 'INTERNSHIP' : 'NONE';
     const careerInterests = [...new Set((dto.careerInterests ?? []).map((item) => item.trim()).filter(Boolean))].slice(
       0,
       8,
@@ -336,11 +339,14 @@ export class CandidatesService {
           ...(careerInterests.length
             ? { careerInterests: JSON.stringify(careerInterests) }
             : {}),
-          highestEducation: firstEdu?.qualification.trim() || candidate.highestEducation,
+          highestEducation:
+            firstEdu?.qualification?.trim() ||
+            firstEdu?.institution?.trim() ||
+            candidate.highestEducation,
           stillInCollege: Boolean(dto.stillInCollege),
           educationStart: dto.educationStart?.trim() || null,
           educationEnd: dto.stillInCollege ? null : dto.educationEnd?.trim() || null,
-          experienceLevel: hasPaidJob || dto.experienceLevel === 'experienced' ? 'experienced' : 'fresher',
+          experienceLevel: resolvedLevel,
           totalExperienceYears: years,
           totalExperienceMonths: months,
           gapReason: dto.gapReason?.trim() || null,
@@ -349,11 +355,7 @@ export class CandidatesService {
               ? Math.max(0, Math.floor(dto.gapMonths))
               : null,
           source: dto.source === 'resume' ? 'resume' : 'manual',
-          hasExperience: hasPaidJob
-            ? 'YES'
-            : jobs.some((row) => row.isInternship)
-              ? 'INTERNSHIP'
-              : 'NONE',
+          hasExperience: hasExperienceFlag,
           ...(projectSeed ? { projects: projectSeed } : {}),
         },
       });
@@ -364,7 +366,7 @@ export class CandidatesService {
         await tx.candidateEducation.createMany({
           data: education.map((row) => ({
             candidateId: candidate.id,
-            qualification: row.qualification.trim(),
+            qualification: row.qualification?.trim() || row.institution?.trim() || 'Education',
             institution: row.institution?.trim() || null,
             fieldOfStudy: row.fieldOfStudy?.trim() || null,
             yearCompleted: yearFrom(row.yearCompleted || row.endDate || ''),
@@ -503,34 +505,27 @@ export class CandidatesService {
 
   async addExperience(userId: string, dto: ExperienceDto) {
     const candidate = await this.loadCandidate(userId);
-    const stillInCompany = Boolean(dto.stillInCompany);
     await this.prisma.candidateExperience.create({
       data: {
         candidateId: candidate.id,
         company: dto.company.trim(),
         jobTitle: dto.jobTitle.trim(),
         startDate: dto.startDate ? new Date(dto.startDate) : null,
-        endDate: stillInCompany ? null : dto.endDate ? new Date(dto.endDate) : null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
         description: dto.description?.trim() || null,
         isInternship: Boolean(dto.isInternship),
-        stillInCompany,
+        stillInCompany: Boolean(dto.stillInCompany),
       },
     });
-    const isInternship = Boolean(dto.isInternship);
     await this.prisma.candidate.update({
       where: { userId },
       data: {
-        hasExperience: isInternship
+        hasExperience: dto.isInternship
           ? candidate.hasExperience === 'YES'
             ? 'YES'
             : 'INTERNSHIP'
           : 'YES',
-        experienceLevel:
-          !isInternship ||
-          candidate.hasExperience === 'YES' ||
-          candidate.experienceLevel === 'experienced'
-            ? 'experienced'
-            : 'fresher',
+        experienceLevel: dto.isInternship ? candidate.experienceLevel || 'fresher' : 'experienced',
       },
     });
     return this.recompute(userId);
@@ -547,28 +542,16 @@ export class CandidatesService {
         message: 'Experience record was not found',
       });
     }
-    const stillInCompany =
-      dto.stillInCompany !== undefined ? Boolean(dto.stillInCompany) : existing.stillInCompany;
     await this.prisma.candidateExperience.update({
       where: { id: experienceId },
       data: {
         ...(dto.company !== undefined ? { company: dto.company.trim() } : {}),
         ...(dto.jobTitle !== undefined ? { jobTitle: dto.jobTitle.trim() } : {}),
         ...(dto.startDate !== undefined ? { startDate: dto.startDate ? new Date(dto.startDate) : null } : {}),
-        ...(dto.endDate !== undefined || dto.stillInCompany !== undefined
-          ? {
-              endDate: stillInCompany
-                ? null
-                : dto.endDate !== undefined
-                  ? dto.endDate
-                    ? new Date(dto.endDate)
-                    : null
-                  : existing.endDate,
-            }
-          : {}),
+        ...(dto.endDate !== undefined ? { endDate: dto.endDate ? new Date(dto.endDate) : null } : {}),
         ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
         ...(dto.isInternship !== undefined ? { isInternship: dto.isInternship } : {}),
-        ...(dto.stillInCompany !== undefined ? { stillInCompany } : {}),
+        ...(dto.stillInCompany !== undefined ? { stillInCompany: dto.stillInCompany } : {}),
       },
     });
     return this.recompute(userId);
@@ -643,7 +626,7 @@ export class CandidatesService {
     return this.recompute(userId);
   }
 
-  /** Store profile photos flat under Images/ in GCS (e.g. Images/photo-abc123.jpg). */
+  /** Store profile photos flat under Images/ in GCS (overwrite stable key per candidate). */
   private async persistProfilePhoto(candidateId: string, photoUrl: string): Promise<string> {
     const dataUrl = photoUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+)(?:;[^,]*)?;base64,([\s\S]+)$/i);
     if (!dataUrl) {
@@ -658,14 +641,18 @@ export class CandidatesService {
       const ext =
         mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : mime.includes('gif') ? '.gif' : '.jpg';
       const buffer = Buffer.from(dataUrl[2], 'base64');
-      const path = this.storage.imageObjectPath(
-        `photo-${Date.now()}${ext}`,
-        candidateId.slice(0, 8),
-      );      const uploaded = await this.storage.uploadFile(path, buffer, {
+      const previous = await this.prisma.candidate.findUnique({
+        where: { id: candidateId },
+        select: { photoUrl: true },
+      });
+      const previousPath = this.gcsPathFromPhotoUrl(previous?.photoUrl);
+      const path = this.storage.imageObjectPath(`profile-photo${ext}`, candidateId.slice(0, 8));
+      const uploaded = await this.storage.uploadFile(path, buffer, {
         contentType: mime,
         isPublic: true,
         metadata: { candidateId, source: 'profile-photo' },
       });
+      await this.deleteReplacedProfilePhotos(candidateId, previousPath, path);
       return uploaded.publicUrl;
     } catch (err) {
       this.logger.error(
@@ -676,22 +663,78 @@ export class CandidatesService {
     }
   }
 
-  /** Turn private GCS object URLs into short-lived signed URLs for the browser. */
+  private gcsPathFromPhotoUrl(photoUrl: string | null | undefined): string | null {
+    if (!photoUrl) return null;
+    const match = photoUrl.match(/^https?:\/\/storage\.googleapis\.com\/[^/]+\/(.+?)(?:\?|$)/i);
+    if (!match?.[1]) return null;
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+
+  /** Remove the previous object (and jpg/png twin) when a new profile photo replaces it. */
+  private async deleteReplacedProfilePhotos(
+    candidateId: string,
+    previousPath: string | null,
+    nextPath: string,
+  ) {
+    if (!this.storage.isConfigured()) return;
+    const prefix = candidateId.slice(0, 8);
+    const candidates = new Set<string>();
+    if (previousPath && previousPath !== nextPath) candidates.add(previousPath);
+    // Drop the other extension on the stable key (jpg ↔ png).
+    for (const ext of ['.jpg', '.jpeg', '.png', '.webp', '.gif'] as const) {
+      const twin = this.storage.imageObjectPath(`profile-photo${ext === '.jpeg' ? '.jpg' : ext}`, prefix);
+      if (twin !== nextPath) candidates.add(twin);
+    }
+    // Legacy timestamped keys: Images/photo-{ts}-{id}.ext
+    if (previousPath && /\/photo-\d+-/.test(previousPath) && previousPath !== nextPath) {
+      candidates.add(previousPath);
+    }
+    for (const path of candidates) {
+      await this.storage.deleteFile(path);
+    }
+  }
+
+  /** Turn private GCS object URLs into browser-readable URLs (signed, or data URL fallback). */
   private async resolvePhotoUrl(photoUrl: string | null | undefined): Promise<string | null> {
     if (!photoUrl) return null;
-    if (photoUrl.startsWith('data:') || !this.storage.isConfigured()) return photoUrl;
+    if (photoUrl.startsWith('data:') || photoUrl.startsWith('blob:')) return photoUrl;
+    if (!this.storage.isConfigured()) return photoUrl;
+
     const match = photoUrl.match(
       /^https?:\/\/storage\.googleapis\.com\/[^/]+\/(.+?)(?:\?|$)/i,
     );
     if (!match?.[1]) return photoUrl;
+
+    const objectPath = decodeURIComponent(match[1]);
+
     try {
-      const objectPath = decodeURIComponent(match[1]);
       return await this.storage.getSignedUrl(objectPath, {
         action: 'read',
         expiresInMinutes: 60 * 24 * 7,
       });
     } catch (err) {
       this.logger.warn(`Could not sign photo URL: ${(err as Error).message}`);
+    }
+
+    // Uniform bucket ACL + missing client_email → public URL 403s in the browser.
+    // Download via the same credentials that uploaded and return a data URL.
+    try {
+      const buffer = await this.storage.downloadFile(objectPath);
+      const lower = objectPath.toLowerCase();
+      const mime = lower.endsWith('.png')
+        ? 'image/png'
+        : lower.endsWith('.webp')
+          ? 'image/webp'
+          : lower.endsWith('.gif')
+            ? 'image/gif'
+            : 'image/jpeg';
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    } catch (err) {
+      this.logger.warn(`Could not download photo for display: ${(err as Error).message}`);
       return photoUrl;
     }
   }
@@ -719,39 +762,25 @@ export class CandidatesService {
 
   private async recompute(userId: string) {
     const candidate = await this.loadCandidate(userId);
+    const previousCompletion = candidate.profileCompletion || 0;
     const profileCompletion = computeCompletion(candidate);
-    const band = resolveCandidateExperienceBand({
-      experienceLevel: candidate.experienceLevel,
+    const flags = deriveExperienceFlags({
       hasExperience: candidate.hasExperience,
-      totalExperienceYears: candidate.totalExperienceYears,
-      totalExperienceMonths: candidate.totalExperienceMonths,
+      experienceLevel: candidate.experienceLevel,
       experiences: candidate.experiences,
     });
-    const hasPaid = candidate.experiences.some((row) => !row.isInternship);
-    const hasIntern = candidate.experiences.some((row) => row.isInternship);
-    const nextHasExperience = hasPaid
-      ? 'YES'
-      : hasIntern
-        ? candidate.hasExperience === 'YES'
-          ? 'YES'
-          : 'INTERNSHIP'
-        : candidate.hasExperience === 'YES'
-          ? 'YES'
-          : candidate.hasExperience || 'NONE';
-    const nextLevel = band;
-    const syncExperience =
-      candidate.hasExperience !== nextHasExperience || candidate.experienceLevel !== nextLevel;
-
     const updated = await this.prisma.candidate.update({
       where: { userId },
       data: {
         profileCompletion,
-        ...(syncExperience
-          ? { hasExperience: nextHasExperience, experienceLevel: nextLevel }
-          : {}),
+        hasExperience: flags.hasExperience,
+        experienceLevel: flags.experienceLevel,
       },
       include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
+    if (previousCompletion < 80 && profileCompletion >= 80) {
+      await this.testimonials.markEligible(userId, 'PROFILE_80_COMPLETE').catch(() => undefined);
+    }
     return this.withReadablePhoto(this.toProfile(updated));
   }
 
@@ -837,31 +866,6 @@ function yearFrom(value: string) {
   return year >= 1970 && year <= 2100 ? year : null;
 }
 
-/** Accept whole or decimal years (e.g. "2.5") and optional months. */
-function splitExperienceDuration(
-  yearsRaw?: string | number | null,
-  monthsRaw?: string | number | null,
-) {
-  const yearsStr = yearsRaw == null ? '' : String(yearsRaw).trim().replace(',', '.');
-  const monthsStr = monthsRaw == null ? '' : String(monthsRaw).trim();
-  if (yearsStr.includes('.') || (yearsStr && !monthsStr)) {
-    const decimal = Number.parseFloat(yearsStr);
-    if (Number.isFinite(decimal) && decimal >= 0) {
-      const totalMonths = Math.round(Math.min(50, decimal) * 12);
-      return {
-        years: Math.floor(totalMonths / 12),
-        months: totalMonths % 12,
-      };
-    }
-  }
-  const years = Number.parseInt(yearsStr || '0', 10) || 0;
-  const months = Number.parseInt(monthsStr || '0', 10) || 0;
-  return {
-    years: Math.max(0, Math.min(50, years)),
-    months: Math.max(0, Math.min(11, months)),
-  };
-}
-
 function parseOptionalDate(value?: string) {
   const raw = value?.trim();
   if (!raw) return null;
@@ -883,11 +887,9 @@ function sectionDone(candidate: NonNullable<CandidateRecord>, key: PassportSecti
     return Boolean(candidate.firstName?.trim() && candidate.city?.trim() && candidate.dateOfBirth);
   }
   if (key === 'education') {
-    // Onboarding may save highestEducation / qualification without institution;
-    // resume import can put the school name in qualification only.
     if (candidate.highestEducation?.trim()) return true;
     return candidate.education.some(
-      (row) => Boolean(row.qualification?.trim() || row.institution?.trim()),
+      (row) => Boolean(row.qualification?.trim()) || Boolean(row.institution?.trim()),
     );
   }
   if (key === 'skills') return candidate.skills.length >= 3;

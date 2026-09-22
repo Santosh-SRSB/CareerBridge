@@ -8,6 +8,7 @@ export type SuperAdminNavId =
   | 'skills'
   | 'ai-usage'
   | 'notifications'
+  | 'testimonials'
   | 'reports'
   | 'admins'
   | 'settings'
@@ -37,6 +38,7 @@ export const ADMIN_NAV_ROLES: Record<SuperAdminNavId, StaffRole[]> = {
   skills: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   'ai-usage': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   notifications: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
+  testimonials: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   reports: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   admins: ['SUPER_ADMIN'],
   settings: ['SUPER_ADMIN'],

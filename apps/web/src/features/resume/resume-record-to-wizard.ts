@@ -1,5 +1,6 @@
 import type { ResumeRecord } from '@careerbridge/shared';
 import { parseLanguageSkills } from '@careerbridge/shared';
+import { formatCityState, parseCityState } from '@/data/india-locations';
 import { splitProjectFields } from './project-fields';
 import { normalizeCertificationList } from './certification-fields';
 
@@ -30,6 +31,12 @@ function splitDegreeAndField(qualification: string) {
   return { degree: match[1].trim(), field: match[2].trim() };
 }
 
+function locationFromContent(city?: string | null, state?: string | null) {
+  const raw = [city, state].filter(Boolean).join(', ').trim() || city || '';
+  const parsed = parseCityState(raw);
+  return formatCityState(parsed.city, parsed.state) || raw;
+}
+
 export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
   const content = record.content;
   const languages = content.languages || [];
@@ -37,10 +44,11 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
     languages.map((entry) => parseLanguageSkills(entry)[0]?.name || entry),
   );
   const links = content.links || content.resumeData?.links || {};
+  const location = locationFromContent(content.city, content.state);
 
   return {
     fullName: content.fullName || '',
-    location: content.city || '',
+    location,
     email: content.email || '',
     phone: content.phone || '',
     summary: record.summary || content.summary || '',
@@ -121,7 +129,7 @@ export function mapResumeRecordToWizardSeed(record: ResumeRecord) {
     languages,
     availableLanguages: LANGUAGE_POOL.filter((name) => !languageNames.has(name)),
     preferredRole: record.targetJobTitle || '',
-    preferredLocation: content.city || '',
+    preferredLocation: location,
     expectedSalary: '',
   };
 }

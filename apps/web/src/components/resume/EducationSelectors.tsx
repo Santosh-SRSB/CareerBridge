@@ -5,8 +5,10 @@ import { DEGREE_OPTIONS, FIELD_OF_STUDY_OPTIONS } from '@/data/degree-options';
 import { INSTITUTION_OPTIONS } from '@/data/institutions';
 import {
   INDIA_STATES,
+  findStateForCity,
   formatCityState,
   getCitiesForState,
+  normalizeCityName,
   parseCityState,
 } from '@/data/india-locations';
 
@@ -357,16 +359,52 @@ export function StateCitySelect({
     const p = parseCityState(location);
     setState(p.state);
     setCity(p.city);
-  }, [location]);
+    // If resume/autofill gave city only (e.g. Bangalore), persist inferred state once.
+    if (p.city && p.state) {
+      const next = formatCityState(p.city, p.state);
+      if (next !== location.trim()) onChange(next);
+    }
+  }, [location, onChange]);
 
   const cities = useMemo(() => getCitiesForState(state), [state]);
   const stateMissing = highlightMissing && !state.trim();
   const cityMissing = highlightMissing && !city.trim();
 
   function update(nextState: string, nextCity: string) {
+    const normalizedCity = nextCity ? normalizeCityName(nextCity) || nextCity : '';
     setState(nextState);
-    setCity(nextCity);
-    onChange(formatCityState(nextCity, nextState));
+    setCity(normalizedCity);
+    onChange(formatCityState(normalizedCity, nextState));
+  }
+
+  function onStatePicked(nextState: string) {
+    if (!nextState) {
+      update('', '');
+      return;
+    }
+    const stateCities = getCitiesForState(nextState);
+    const normalized = city ? normalizeCityName(city) || city : '';
+    if (!normalized) {
+      update(nextState, '');
+      return;
+    }
+    const inThisState = stateCities.some(
+      (c) => c.toLowerCase() === normalized.toLowerCase(),
+    );
+    if (inThisState) {
+      update(nextState, normalized);
+      return;
+    }
+    // Keep unknown/custom cities; clear only if the city belongs to another state.
+    const knownElsewhere = Boolean(findStateForCity(normalized));
+    update(nextState, knownElsewhere ? '' : normalized);
+  }
+
+  function onCityPicked(nextCity: string) {
+    const normalized = nextCity ? normalizeCityName(nextCity) || nextCity : '';
+    const inferred = normalized ? findStateForCity(normalized) : '';
+    const nextState = state || inferred;
+    update(nextState, normalized);
   }
 
   return (
@@ -377,7 +415,7 @@ export function StateCitySelect({
         <select
           className="cb-form-select"
           value={state}
-          onChange={(e) => update(e.target.value, '')}
+          onChange={(e) => onStatePicked(e.target.value)}
         >
           <option value="">Select state</option>
           {INDIA_STATES.map((s) => (
@@ -391,10 +429,16 @@ export function StateCitySelect({
         <SearchableCombobox
           label={cityLabel}
           value={city}
-          onChange={(nextCity) => update(state, nextCity)}
-          options={cities}
-          placeholder={state ? 'Search or type city' : 'Search or type city'}
-          allowCustom
+          onChange={onCityPicked}
+          options={state ? cities : []}
+          placeholder={
+            state
+              ? 'Search city in this state'
+              : city
+                ? 'City set — state will fill automatically'
+                : 'Select state first, then city'
+          }
+          allowCustom={Boolean(state)}
           disabled={!state && !city.trim()}
         />
       </div>
@@ -402,4 +446,4 @@ export function StateCitySelect({
   );
 }
 
-export { formatCityState, parseCityState };
+export { formatCityState, parseCityState, findStateForCity, normalizeCityName };

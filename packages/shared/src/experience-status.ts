@@ -1,99 +1,126 @@
-/** Inputs needed to decide Fresher vs Experienced on the dashboard boarding pass. */
-export type ExperienceStatusInput = {
-  experienceLevel?: string | null;
-  hasExperience?: string | null;
-  totalExperienceYears?: number | null;
-  totalExperienceMonths?: number | null;
-  experiences?: Array<{
-    isInternship?: boolean;
-    company?: string | null;
-    jobTitle?: string | null;
-  }>;
+/** Single source of truth for candidate fresher vs experienced banding. */
+
+export type ExperienceBand = 'fresher' | 'experienced';
+
+/** Boarding-pass LEVEL chip keys. */
+export type ExperienceLevelChip = 'fresher' | '0-1' | '1-3' | '3-5' | '5+';
+
+/** @deprecated Prefer ExperienceLevelChip; kept for STATUS label helpers. */
+export type ExperienceChip = {
+  band: ExperienceBand;
+  label: 'FRESHER' | 'EXPERIENCED';
+  level: ExperienceLevelChip;
 };
 
-export type CandidateExperienceBand = 'fresher' | 'experienced';
+export type ExperienceBandInput = {
+  hasExperience?: string | null;
+  experienceLevel?: string | null;
+  totalExperienceYears?: number | null;
+  totalExperienceMonths?: number | null;
+  experiences?: Array<{ isInternship?: boolean | null; jobTitle?: string | null; company?: string | null }>;
+};
 
-export type ExperienceChipKey = 'fresher' | '0-1' | '1-3' | '3-5' | '5+';
-
-function normalizeHasExperience(value?: string | null) {
-  return (value || '').trim().toUpperCase();
+function hasPaidRole(
+  experiences?: Array<{ isInternship?: boolean | null; jobTitle?: string | null; company?: string | null }>,
+) {
+  return (experiences || []).some(
+    (row) =>
+      !row.isInternship &&
+      Boolean((row.jobTitle || '').trim() || (row.company || '').trim()),
+  );
 }
 
-export function experienceYearsTotal(profile: ExperienceStatusInput) {
-  const years = profile.totalExperienceYears ?? 0;
-  const months = profile.totalExperienceMonths ?? 0;
+function hasInternshipOnly(
+  experiences?: Array<{ isInternship?: boolean | null; jobTitle?: string | null; company?: string | null }>,
+) {
+  const rows = experiences || [];
+  if (!rows.length) return false;
+  const anyPaid = hasPaidRole(rows);
+  const anyIntern = rows.some((row) => Boolean(row.isInternship));
+  return anyIntern && !anyPaid;
+}
+
+function totalYears(input: ExperienceBandInput) {
+  const years = Number(input.totalExperienceYears) || 0;
+  const months = Number(input.totalExperienceMonths) || 0;
   return years + months / 12;
 }
 
-function paidJobs(profile: ExperienceStatusInput) {
-  return (profile.experiences || []).filter(
-    (row) =>
-      !row.isInternship && Boolean(row.company?.trim() || row.jobTitle?.trim()),
-  );
-}
-
-function internshipJobs(profile: ExperienceStatusInput) {
-  return (profile.experiences || []).filter(
-    (row) =>
-      row.isInternship && Boolean(row.company?.trim() || row.jobTitle?.trim()),
-  );
-}
-
-/**
- * Single source of truth for STATUS / LEVEL on the candidate dashboard.
- * Prefers 4-step onboarding `hasExperience`, then real job rows, years, then stored level.
- */
-export function resolveCandidateExperienceBand(
-  profile: ExperienceStatusInput,
-): CandidateExperienceBand {
-  const has = normalizeHasExperience(profile.hasExperience);
-  const paid = paidJobs(profile);
-  const total = experienceYearsTotal(profile);
-
-  if (has === 'YES') return 'experienced';
-  if (has === 'NONE' || has === 'NO') return 'fresher';
-  if (has === 'INTERNSHIP') {
-    if (paid.length > 0 || total >= 1) return 'experienced';
+/** Prefer onboarding hasExperience → paid vs internship rows → years → stored level. */
+export function resolveCandidateExperienceBand(input: ExperienceBandInput): ExperienceBand {
+  const flag = (input.hasExperience || '').trim().toUpperCase();
+  if (flag === 'YES') return 'experienced';
+  if (flag === 'NONE') return 'fresher';
+  // Internship: fresher unless paid jobs or ≥1 year.
+  if (flag === 'INTERNSHIP') {
+    if (hasPaidRole(input.experiences) || totalYears(input) >= 1) return 'experienced';
     return 'fresher';
   }
 
-  if (paid.length > 0) return 'experienced';
-  if (total >= 1) return 'experienced';
-  if (internshipJobs(profile).length > 0) return 'fresher';
+  if (hasPaidRole(input.experiences)) return 'experienced';
+  if (hasInternshipOnly(input.experiences)) return 'fresher';
 
-  const level = (profile.experienceLevel || '').trim().toLowerCase();
+  if (totalYears(input) > 0) return 'experienced';
+
+  const level = (input.experienceLevel || '').trim().toLowerCase();
   if (level === 'experienced') return 'experienced';
-  if (level === 'fresher') return 'fresher';
-
   return 'fresher';
 }
 
-export function resolveExperienceChip(profile: ExperienceStatusInput): ExperienceChipKey {
-  if (resolveCandidateExperienceBand(profile) === 'fresher') return 'fresher';
-  const total = experienceYearsTotal(profile);
+/** LEVEL chip: fresher | 0-1 | 1-3 | 3-5 | 5+ */
+export function resolveExperienceLevelChip(input: ExperienceBandInput): ExperienceLevelChip {
+  const band = resolveCandidateExperienceBand(input);
+  if (band === 'fresher') return 'fresher';
+  const total = totalYears(input);
   if (total < 1.5) return '0-1';
   if (total < 3.5) return '1-3';
   if (total < 5.5) return '3-5';
   return '5+';
 }
 
-export function experienceLevelFromHasExperience(
-  hasExperience?: string | null,
-): 'fresher' | 'experienced' {
-  return normalizeHasExperience(hasExperience) === 'YES' ? 'experienced' : 'fresher';
+/**
+ * STATUS + LEVEL together.
+ * - label → boarding STATUS (FRESHER / EXPERIENCED)
+ * - level → boarding LEVEL chip key
+ */
+export function resolveExperienceChip(input: ExperienceBandInput): ExperienceChip {
+  const band = resolveCandidateExperienceBand(input);
+  return {
+    band,
+    label: band === 'experienced' ? 'EXPERIENCED' : 'FRESHER',
+    level: resolveExperienceLevelChip(input),
+  };
 }
 
-/** Collapse repeated city/state tokens for display (e.g. "X, Karnataka, Karnataka"). */
-export function formatLocationLabel(...parts: Array<string | null | undefined>) {
+/** Deduplicate location display tokens (e.g. "Karnataka, Karnataka"). */
+export function formatLocationLabel(...parts: Array<string | null | undefined>): string {
   const tokens: string[] = [];
+  const seen = new Set<string>();
   for (const part of parts) {
-    if (!part?.trim()) continue;
-    for (const token of part.split(',')) {
-      const cleaned = token.trim();
-      if (!cleaned) continue;
-      if (tokens.some((existing) => existing.toLowerCase() === cleaned.toLowerCase())) continue;
-      tokens.push(cleaned);
+    const raw = (part || '').trim();
+    if (!raw) continue;
+    for (const piece of raw.split(/[,|/]+/).map((p) => p.trim()).filter(Boolean)) {
+      const key = piece.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tokens.push(piece);
     }
   }
   return tokens.join(', ');
+}
+
+/** Derive hasExperience + experienceLevel for persistence. */
+export function deriveExperienceFlags(input: {
+  experienceLevel?: string | null;
+  experiences?: Array<{ isInternship?: boolean | null; jobTitle?: string | null; company?: string | null }>;
+  hasExperience?: string | null;
+}): { experienceLevel: ExperienceBand; hasExperience: 'YES' | 'NONE' | 'INTERNSHIP' } {
+  const band = resolveCandidateExperienceBand(input);
+  if (band === 'experienced') {
+    return { experienceLevel: 'experienced', hasExperience: 'YES' };
+  }
+  if (hasInternshipOnly(input.experiences) || (input.hasExperience || '').toUpperCase() === 'INTERNSHIP') {
+    return { experienceLevel: 'fresher', hasExperience: 'INTERNSHIP' };
+  }
+  return { experienceLevel: 'fresher', hasExperience: 'NONE' };
 }

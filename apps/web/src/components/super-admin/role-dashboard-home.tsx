@@ -20,6 +20,7 @@ const MODULE_TILES: Tile[] = [
   { label: 'Skills', href: '/adminsrsb/dashboard?tab=skills', color: '#f74d4d', icon: '✦' },
   { label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage', color: '#852b99', icon: '⚡' },
   { label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications', color: '#0aa3c2', icon: '🔔' },
+  { label: 'Testimonials', href: '/adminsrsb/dashboard?tab=testimonials', color: '#0a2e2c', icon: '💬' },
   { label: 'Reports', href: '/adminsrsb/dashboard?tab=reports', color: '#1f9d68', icon: '📊' },
   { label: 'Audit', href: '/adminsrsb/dashboard?tab=audit', color: '#c9a227', icon: '🧾' },
   { label: 'Administration', href: '/adminsrsb/dashboard?tab=admins', color: '#2b3643', icon: '🛡' },

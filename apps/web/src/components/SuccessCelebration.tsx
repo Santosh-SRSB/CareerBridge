@@ -8,6 +8,8 @@ type SuccessCelebrationProps = {
   loadingSubtitle?: string;
   successTitle: string;
   successSubtitle?: string;
+  /** Bouncing teal dots (resume upload) vs default spinner. */
+  loader?: 'spinner' | 'dots';
 };
 
 export function SuccessCelebration({
@@ -16,6 +18,7 @@ export function SuccessCelebration({
   loadingSubtitle,
   successTitle,
   successSubtitle,
+  loader = 'spinner',
 }: SuccessCelebrationProps) {
   return (
     <div
@@ -33,7 +36,16 @@ export function SuccessCelebration({
       >
         {phase === 'loading' ? (
           <>
-            <div className="cb-success-spinner mx-auto" aria-hidden />
+            {loader === 'dots' ? (
+              <div className="cb-bounce-dots mx-auto" aria-hidden>
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : (
+              <div className="cb-success-spinner mx-auto" aria-hidden />
+            )}
             <p
               className="mt-5 text-lg font-semibold"
               style={{

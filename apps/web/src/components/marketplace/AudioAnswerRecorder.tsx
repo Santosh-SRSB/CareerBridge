@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 
 const BAR_COUNT = 28;
@@ -8,6 +8,13 @@ const SILENT_FLOOR = 10;
 const VOICE_THRESHOLD = 18;
 
 type CountdownPhase = number | 'speak';
+
+export type AudioAnswerRecorderHandle = {
+  /** Acquire mic and start recording immediately (no internal 1-2-3). */
+  startImmediate: () => Promise<boolean>;
+  stop: () => void;
+  isRecording: () => boolean;
+};
 
 function speechCtor() {
   if (typeof window === 'undefined') return null;
@@ -27,20 +34,38 @@ function buildIdleLevels() {
   return Array.from({ length: BAR_COUNT }, () => SILENT_FLOOR);
 }
 
-export function AudioAnswerRecorder({
-  disabled = false,
-  onRecorded,
-  onClear,
-  onLiveTranscript,
-  onRecordingChange,
-}: {
-  disabled?: boolean;
-  onRecorded?: (payload: { durationSec: number; transcript?: string }) => void;
-  onClear?: () => void;
-  /** Fires while speaking so the parent can show live captions in a text box. */
-  onLiveTranscript?: (text: string) => void;
-  onRecordingChange?: (recording: boolean) => void;
-}) {
+function formatClock(totalSec: number) {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+export const AudioAnswerRecorder = forwardRef<
+  AudioAnswerRecorderHandle,
+  {
+    disabled?: boolean;
+    onRecorded?: (payload: { durationSec: number; transcript?: string }) => void;
+    onClear?: () => void;
+    /** Fires while speaking so the parent can show live captions in a text box. */
+    onLiveTranscript?: (text: string) => void;
+    onRecordingChange?: (recording: boolean) => void;
+    /** Hide the manual "Record Answer" button (guided flow starts recording externally). */
+    hideIdleButton?: boolean;
+    /** Hide the built-in 1-2-3 countdown UI (parent owns the immersive countdown). */
+    hideInternalCountdown?: boolean;
+  }
+>(function AudioAnswerRecorder(
+  {
+    disabled = false,
+    onRecorded,
+    onClear,
+    onLiveTranscript,
+    onRecordingChange,
+    hideIdleButton = false,
+    hideInternalCountdown = false,
+  },
+  ref,
+) {
   const [recording, setRecording] = useState(false);
   const [countdown, setCountdown] = useState<CountdownPhase | null>(null);
   const [recordedSec, setRecordedSec] = useState(0);
@@ -65,6 +90,7 @@ export function AudioAnswerRecorder({
   const speechRef = useRef<SpeechRecognition | null>(null);
   const onLiveTranscriptRef = useRef(onLiveTranscript);
   const onRecordingChangeRef = useRef(onRecordingChange);
+  const recordingRef = useRef(false);
 
   useEffect(() => {
     onLiveTranscriptRef.current = onLiveTranscript;
@@ -193,6 +219,75 @@ export function AudioAnswerRecorder({
     });
   }
 
+  function startRecordingWithStream(stream: MediaStream): boolean {
+    setError('');
+    setRecordedSec(0);
+    setElapsedSec(0);
+    setFrozenLevels(null);
+
+    try {
+      mediaRef.current = stream;
+      chunksRef.current = [];
+      const mimeType = pickMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      startedAtRef.current = Date.now();
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        const durationSec = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
+        const transcript = (committedRef.current || transcriptRef.current).trim();
+        transcriptRef.current = transcript;
+        setFrozenLevels([...levelsRef.current]);
+        setRecordedSec(durationSec);
+        stopSpeech();
+        if (transcript) publishTranscript(transcript);
+        onRecorded?.({ durationSec, transcript: transcript || undefined });
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRef.current = null;
+        recorderRef.current = null;
+        stopVisualizer();
+      };
+
+      recorder.start(200);
+      startVisualizer(stream);
+      startSpeech();
+      recordingRef.current = true;
+      setRecording(true);
+      onRecordingChangeRef.current?.(true);
+      return true;
+    } catch {
+      stopVisualizer();
+      recordingRef.current = false;
+      setRecording(false);
+      onRecordingChangeRef.current?.(false);
+      return false;
+    }
+  }
+
+  async function startImmediate(): Promise<boolean> {
+    if (disabled || recordingRef.current) return false;
+    setError('');
+    setCountdown(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const armed = startRecordingWithStream(stream);
+      if (!armed) {
+        stream.getTracks().forEach((track) => track.stop());
+        setError('Microphone access is needed to record your answer.');
+        return false;
+      }
+      scrollRecorderIntoView();
+      return true;
+    } catch {
+      setError('Microphone access is needed to record your answer.');
+      return false;
+    }
+  }
+
   async function beginCountdownThenRecord() {
     if (disabled || recording || countdown != null) return;
     setError('');
@@ -230,56 +325,11 @@ export function AudioAnswerRecorder({
     }
   }
 
-  function startRecordingWithStream(stream: MediaStream): boolean {
-    setError('');
-    setRecordedSec(0);
-    setElapsedSec(0);
-
-    try {
-      mediaRef.current = stream;
-      chunksRef.current = [];
-      const mimeType = pickMimeType();
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      recorderRef.current = recorder;
-      startedAtRef.current = Date.now();
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
-      };
-
-      recorder.onstop = () => {
-        const durationSec = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
-        const transcript = (committedRef.current || transcriptRef.current).trim();
-        transcriptRef.current = transcript;
-        setFrozenLevels([...levelsRef.current]);
-        setRecordedSec(durationSec);
-        stopSpeech();
-        if (transcript) publishTranscript(transcript);
-        onRecorded?.({ durationSec, transcript: transcript || undefined });
-        stream.getTracks().forEach((track) => track.stop());
-        mediaRef.current = null;
-        recorderRef.current = null;
-        stopVisualizer();
-      };
-
-      recorder.start(200);
-      startVisualizer(stream);
-      startSpeech();
-      setRecording(true);
-      onRecordingChangeRef.current?.(true);
-      return true;
-    } catch {
-      stopVisualizer();
-      setRecording(false);
-      onRecordingChangeRef.current?.(false);
-      return false;
-    }
-  }
-
   function stopRecording() {
     if (recorderRef.current?.state === 'recording') {
       recorderRef.current.stop();
     }
+    recordingRef.current = false;
     setRecording(false);
     onRecordingChangeRef.current?.(false);
   }
@@ -296,8 +346,14 @@ export function AudioAnswerRecorder({
     onClear?.();
   }
 
-  const showIdleButton = !recording && recordedSec === 0 && countdown == null;
-  const showCountdown = countdown != null && !recording;
+  useImperativeHandle(ref, () => ({
+    startImmediate,
+    stop: stopRecording,
+    isRecording: () => recordingRef.current,
+  }));
+
+  const showIdleButton = !hideIdleButton && !recording && recordedSec === 0 && countdown == null;
+  const showCountdown = !hideInternalCountdown && countdown != null && !recording;
   const showRecordingBar = recording;
 
   return (
@@ -336,7 +392,7 @@ export function AudioAnswerRecorder({
               <span className="cb-audio-recorder-box__dot" aria-hidden="true" />
               Recording
             </span>
-            <span className="cb-audio-recorder-box__time">{elapsedSec}s</span>
+            <span className="cb-audio-recorder-box__time">{formatClock(elapsedSec)}</span>
           </div>
 
           <div className="cb-audio-recorder-box__wave" aria-hidden="true">
@@ -365,7 +421,7 @@ export function AudioAnswerRecorder({
         <div className="cb-audio-recorder-box is-saved">
           <div className="cb-audio-recorder-box__head">
             <span className="cb-audio-recorder-box__status is-saved">Audio saved</span>
-            <span className="cb-audio-recorder-box__time">{recordedSec}s</span>
+            <span className="cb-audio-recorder-box__time">{formatClock(recordedSec)}</span>
           </div>
           <div className="cb-audio-recorder-box__wave is-static" aria-hidden="true">
             {(frozenLevels ?? levels).map((height, index) => (
@@ -558,4 +614,4 @@ export function AudioAnswerRecorder({
       `}</style>
     </div>
   );
-}
+});

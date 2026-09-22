@@ -148,19 +148,47 @@ export default function InterviewsHubPage() {
 
         {message ? <p className="text-sm font-semibold text-emerald-700">{message}</p> : null}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start gap-3">
-            <InterviewBotFace size="md" />
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base font-extrabold text-slate-900">AI Mock Interview</h2>
-              <p className="mt-2 text-sm text-slate-600">
+        <section
+          className="overflow-hidden rounded-[22px] border border-[#d7eef6] p-4 shadow-[0_10px_28px_rgba(47,143,173,0.10)] sm:p-5"
+          style={{
+            background:
+              'radial-gradient(ellipse 70% 80% at 12% 50%, rgba(159, 217, 236, 0.45), transparent 55%), linear-gradient(135deg, #f4fbfd 0%, #ffffff 48%, #f7faf9 100%)',
+          }}
+        >
+          <div className="flex items-center gap-4 sm:gap-5">
+            <InterviewBotFace size="lg" className="shrink-0" />
+
+            <div className="relative min-w-0 flex-1 rounded-2xl border border-[#d7eef6] bg-white px-4 pb-4 pt-5 shadow-[0_6px_18px_rgba(47,143,173,0.10)]">
+              <span className="absolute left-4 top-0 -translate-y-1/2 drop-shadow-sm" aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="6.5" r="3.2" fill="#5bb8d4" stroke="#2f8fad" strokeWidth="1.2" />
+                  <path d="M12 9.5v8.5" stroke="#2f8fad" strokeWidth="2" strokeLinecap="round" />
+                  <path
+                    d="M9.2 12.2h5.6l-.7 3.6H9.9l-.7-3.6Z"
+                    fill="#7ec8e3"
+                    stroke="#2f8fad"
+                    strokeWidth="1.1"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <h2 className="text-base font-extrabold text-[#0a2e2c]">AI Mock Interview</h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-[#35565f]">
                 Practise common and role-specific questions before your real interview.
               </p>
+              <div className="mt-3 flex justify-center">
+                <Button
+                  type="button"
+                  size="md"
+                  block={false}
+                  className="!bg-[#0a2e2c] px-4 text-white hover:!bg-[#0a2e2c]/90 sm:px-5"
+                  onClick={() => router.push('/interviews/mock')}
+                >
+                  Start Mock Interview
+                </Button>
+              </div>
             </div>
           </div>
-          <Button type="button" className="mt-4" onClick={() => router.push('/interviews/mock')}>
-            Start Mock Interview
-          </Button>
         </section>
       </div>
     </CandidateAppShell>

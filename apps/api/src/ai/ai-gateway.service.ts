@@ -18,7 +18,8 @@ import {
   ResumeReviewResult,
   ResumeRewriteResult,
 } from './schemas/ai-response.schemas';
-import { cosineSimilarity, parseEmbeddingJson } from './utils/vector.util';
+import { cosineSimilarity } from './utils/vector.util';
+import { VectorStoreService } from './vector-store.service';
 
 @Injectable()
 export class AiGatewayService {
@@ -28,6 +29,7 @@ export class AiGatewayService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly gemini: GeminiProvider,
+    private readonly vectors: VectorStoreService,
   ) {}
 
   /**
@@ -183,7 +185,7 @@ export class AiGatewayService {
   }
 
   /**
-   * Create or refresh an embedding via Gemini only. Stored as JSON vector in Postgres.
+   * Create or refresh a profile embedding in pgvector only (no JSON storage).
    */
   async upsertEmbedding(input: {
     entityType: EmbeddingEntityType;
@@ -197,16 +199,17 @@ export class AiGatewayService {
     }
 
     const contentHash = createHash('sha256').update(text).digest('hex').slice(0, 40);
-    const existing = await this.prisma.embedding.findUnique({
-      where: {
-        entityType_entityId: {
-          entityType: input.entityType,
-          entityId: input.entityId,
-        },
-      },
-    });
-    if (existing && existing.contentHash === contentHash) {
-      return { ok: true, dimensions: existing.dimensions, reused: true };
+    try {
+      const existing = await this.vectors.getProfileMeta(input.entityType, input.entityId);
+      if (existing && existing.contentHash === contentHash) {
+        return { ok: true, dimensions: existing.dimensions, reused: true };
+      }
+    } catch (err) {
+      if (this.vectors.isUnavailable(err)) {
+        this.vectors.logUnavailable(err);
+        return { ok: false, dimensions: 0, reused: false };
+      }
+      throw err;
     }
 
     const start = Date.now();
@@ -216,27 +219,12 @@ export class AiGatewayService {
         return { ok: false, dimensions: 0, reused: false };
       }
 
-      await this.prisma.embedding.upsert({
-        where: {
-          entityType_entityId: {
-            entityType: input.entityType,
-            entityId: input.entityId,
-          },
-        },
-        create: {
-          entityType: input.entityType,
-          entityId: input.entityId,
-          contentHash,
-          embeddingJson: JSON.stringify(embedded.values),
-          model: embedded.model,
-          dimensions: embedded.values.length,
-        },
-        update: {
-          contentHash,
-          embeddingJson: JSON.stringify(embedded.values),
-          model: embedded.model,
-          dimensions: embedded.values.length,
-        },
+      await this.vectors.upsertProfile({
+        entityType: input.entityType,
+        entityId: input.entityId,
+        text,
+        values: embedded.values,
+        model: embedded.model,
       });
 
       try {
@@ -260,22 +248,27 @@ export class AiGatewayService {
 
       return { ok: true, dimensions: embedded.values.length, reused: false };
     } catch (err) {
+      if (this.vectors.isUnavailable(err)) this.vectors.logUnavailable(err);
       this.logger.warn(`Embedding failed for ${input.entityType}/${input.entityId}: ${(err as Error).message}`);
       return { ok: false, dimensions: 0, reused: false };
     }
   }
 
   async getEmbeddingVector(entityType: EmbeddingEntityType, entityId: string): Promise<number[] | null> {
-    const row = await this.prisma.embedding.findUnique({
-      where: { entityType_entityId: { entityType, entityId } },
-    });
-    if (!row) return null;
-    const values = parseEmbeddingJson(row.embeddingJson);
-    return values.length ? values : null;
+    try {
+      return await this.vectors.getProfileVector(entityType, entityId);
+    } catch (err) {
+      if (this.vectors.isUnavailable(err)) {
+        this.vectors.logUnavailable(err);
+        return null;
+      }
+      this.logger.warn(`pgvector profile read failed: ${(err as Error).message}`);
+      return null;
+    }
   }
 
   /**
-   * RAG-style retrieval: embed the query, rank stored embeddings by cosine similarity.
+   * Profile-level similarity search in Postgres (pgvector). No in-memory JSON scan.
    */
   async retrieveSimilar(input: {
     query: string;
@@ -290,27 +283,15 @@ export class AiGatewayService {
     try {
       const embedded = await this.gemini.embed(query);
       if (!embedded.values.length) return [];
-
-      const rows = await this.prisma.embedding.findMany({
-        where: input.entityTypes?.length
-          ? { entityType: { in: input.entityTypes } }
-          : undefined,
-        take: 500,
+      return await this.vectors.searchProfiles({
+        vector: embedded.values,
+        entityTypes: input.entityTypes,
+        limit: input.limit ?? 5,
+        minScore: input.minScore ?? 0.35,
       });
-
-      const minScore = input.minScore ?? 0.35;
-      const limit = input.limit ?? 5;
-      return rows
-        .map((row) => ({
-          entityType: row.entityType,
-          entityId: row.entityId,
-          score: cosineSimilarity(embedded.values, parseEmbeddingJson(row.embeddingJson)),
-        }))
-        .filter((row) => row.score >= minScore)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
     } catch (err) {
-      this.logger.warn(`RAG retrieve failed: ${(err as Error).message}`);
+      if (this.vectors.isUnavailable(err)) this.vectors.logUnavailable(err);
+      else this.logger.warn(`RAG retrieve failed: ${(err as Error).message}`);
       return [];
     }
   }
@@ -335,14 +316,20 @@ export class AiGatewayService {
     const res = await this.generate<StructuredResumeDraft>({
       task: 'RESUME_STRUCTURE',
       systemPrompt: prompt.system,
-      userPrompt: `Resume text:\n${rawText.slice(0, 14000)}`,
+      userPrompt: `Resume text:\n${rawText.slice(0, 12000)}`,
       options: {
         ...options,
         promptVersion: prompt.version,
         temperature: 0,
+        // Large resumes were truncating JSON mid-array (~4k tokens) and forcing retries.
+        maxOutputTokens: 12288,
       },
     });
-    return res.data;
+    if (res.data) return res.data;
+    if (res.error) {
+      throw new Error(`LLM resume structure failed: ${res.error}`);
+    }
+    throw new Error('LLM resume parser returned empty result.');
   }
 
   async rewriteResume(
@@ -472,6 +459,7 @@ export class AiGatewayService {
       lastExchange?: { question: string; answer: string } | null;
       profile: unknown;
       coverageFocus?: string;
+      retrievedChunks?: string[];
     },
     options?: AiRequestOptions,
   ): Promise<{
@@ -490,7 +478,7 @@ export class AiGatewayService {
       task: 'INTERVIEW_QUESTION',
       systemPrompt: [
         prompt.system,
-        'Use the FULL candidate profile: education, skills, projects, work/internship experience, summary, and job role. Do not stick to only one skill, project, or topic across the interview.',
+        'Use retrievedChunks when present. They are the candidate resume passages most relevant to this question. Prefer a specific company, project, or technology from those passages over a generic question.',
         'coverageFocus tells you which profile area to emphasize for THIS question — follow it, while still staying natural.',
         'Question 1 is already a fixed intro elsewhere. Never ask "tell me about yourself" or "who are you" again.',
         'Rotate topics across questions. Prefer a new profile area over repeating the same project/skill.',

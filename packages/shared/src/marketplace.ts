@@ -41,36 +41,6 @@ export const JOB_DEPARTMENTS = [
   'Retail',
 ] as const;
 
-/** Common role titles for searchable + creatable job title field */
-export const JOB_TITLE_SUGGESTIONS = [
-  'Accountant',
-  'Backend Developer',
-  'Business Analyst',
-  'Business Development Executive',
-  'Content Writer',
-  'Customer Service Executive',
-  'Data Analyst',
-  'Data Entry Operator',
-  'Delivery Executive',
-  'DevOps Engineer',
-  'Frontend Developer',
-  'Full Stack Developer',
-  'Graphic Designer',
-  'HR Executive',
-  'Marketing Executive',
-  'Operations Executive',
-  'Operations Manager',
-  'Product Manager',
-  'Project Manager',
-  'QA Engineer',
-  'Sales Executive',
-  'Software Developer',
-  'Software Engineer',
-  'Store Manager',
-  'Telecaller',
-  'UI/UX Designer',
-] as const;
-
 export const SCREENING_QUESTION_TYPES = ['YES_NO', 'SHORT_TEXT', 'SINGLE_CHOICE'] as const;
 
 export const JOB_SKILL_SUGGESTIONS = [
@@ -217,36 +187,6 @@ export const INDIAN_CITIES = [
   'Visakhapatnam',
   'Warangal',
 ] as const;
-
-/** Primary hiring hubs — shown first in location pickers */
-export const MAIN_INDIAN_CITIES = [
-  'Bengaluru',
-  'Mumbai',
-  'Delhi',
-  'Hyderabad',
-  'Chennai',
-  'Pune',
-  'Kolkata',
-  'Ahmedabad',
-  'Gurugram',
-  'Noida',
-  'Jaipur',
-  'Chandigarh',
-  'Kochi',
-  'Coimbatore',
-  'Indore',
-] as const;
-
-/** Main hubs first, then remaining cities A–Z (for job location dropdown). */
-export function orderedIndianCitiesForJobForm(): string[] {
-  const main = MAIN_INDIAN_CITIES as readonly string[];
-  const mainSet = new Set(main.map((c) => c.toLowerCase()));
-  const rest = (INDIAN_CITIES as readonly string[])
-    .filter((city) => !mainSet.has(city.toLowerCase()))
-    .slice()
-    .sort((a, b) => a.localeCompare(b, 'en'));
-  return [...main, ...rest];
-}
 
 export type IndianCity = (typeof INDIAN_CITIES)[number];
 
@@ -485,7 +425,7 @@ export type JobCard = {
   distanceKm?: number | null;
   match?: JobMatch;
   saved?: boolean;
-  /** True when the signed-in candidate already applied to this job. */
+  /** True when the current candidate has already applied to this job. */
   applied?: boolean;
 };
 
@@ -535,6 +475,7 @@ export type NearbyJobsResponse = {
 export type ResumeContent = {
   fullName: string;
   city: string | null;
+  state?: string | null;
   phone: string | null;
   email?: string | null;
   summary: string;
@@ -580,6 +521,15 @@ export type ResumeContent = {
     technologies?: string[];
   }>;
   includePhoto?: boolean;
+  /** Extra personal facts from uploaded resume (optional). */
+  personalDetails?: {
+    dateOfBirth?: string | null;
+    fatherName?: string | null;
+    maritalStatus?: string | null;
+    gender?: string | null;
+    permanentAddress?: string | null;
+    place?: string | null;
+  };
   /** Profile / resume links — also mirrored under resumeData.links. */
   links?: {
     linkedin?: string;
@@ -598,7 +548,7 @@ export type ResumeRecord = {
   template: string;
   summary: string | null;
   content: ResumeContent;
-  /** Extracted plain text when available (upload / OCR). Used for file size hints. */
+  /** Extracted plain text when available (upload / Document AI). Used for file size hints. */
   rawText?: string | null;
   score: number;
   version: number;
@@ -611,6 +561,12 @@ export type ResumeRecord = {
   pdfStorageUri?: string | null;
   pdfPublicUrl?: string | null;
   pdfUploadedAt?: string | null;
+  processingStatus?: string | null;
+  processingError?: string | null;
+  sourceStoragePath?: string | null;
+  sourceStorageUri?: string | null;
+  sourceFileName?: string | null;
+  sourceMimeType?: string | null;
   analysis?: import('./ats').ResumeAnalysis;
   plans?: Array<{ id: string; label: string; minScore: number; maxScore: number; amount: number }>;
 };
@@ -930,7 +886,6 @@ export type EmployerProfile = {
   panNumber: string | null;
   workEmail: string | null;
   designation: string | null;
-  logoUrl: string | null;
   verificationStatus: EmployerVerificationStatus;
   verified: boolean;
 };
@@ -1002,7 +957,7 @@ export type EmployerPaymentRecord = {
 
 export type EmployerKycPayload = {
   gstNumber: string;
-  cin?: string;
+  cin: string;
   website: string;
   panNumber: string;
   trademark?: string;
@@ -1019,13 +974,6 @@ export type EmployerDashboard = {
   applications: number;
   shortlisted: number;
   interviews: number;
-  /** Applications received per month for the last 6 calendar months (oldest → newest). */
-  applicationsByMonth: Array<{
-    year: number;
-    month: number;
-    label: string;
-    count: number;
-  }>;
   recent: Array<{
     candidateName: string;
     jobTitle: string;
@@ -1058,23 +1006,14 @@ export type EmployerCandidateSearchResult = {
   firstName: string | null;
   lastName: string | null;
   city: string | null;
-  state: string | null;
   highestEducation: string | null;
   experienceYears: number;
-  experienceMonths: number;
-  stillInCollege: boolean;
-  openToRelocating: boolean;
-  currentlyEmployed: boolean;
-  availabilityLabel: string;
-  availabilityTone: 'immediate' | 'notice' | 'neutral';
   profileCompletion: number;
   skills: string[];
-  skillsTotal: number;
   latestRole: { title: string; company: string } | null;
   matchScore: number | null;
   appliedToEmployer: boolean;
   applicationId?: string | null;
-  applicationStatus?: string | null;
 };
 
 /** Job posting fee in paise (₹999). Each paid unit unlocks a batch of matched profiles. */
@@ -1155,12 +1094,6 @@ export type EmployerInterviewRecord = {
   confirmedAt: string | null;
   createdAt: string;
   applicationStatus: string;
-  candidateFeedback?: {
-    rating: number;
-    text: string | null;
-    submittedAt: string;
-  } | null;
-  feedbackRequestedAt?: string | null;
   candidate: {
     id: string;
     firstName: string | null;

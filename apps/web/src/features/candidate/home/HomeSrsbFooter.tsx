@@ -58,6 +58,24 @@ export function HomeSrsbFooter() {
         </div>
 
         <div className="cb-home-srsb-footer__col">
+          <p className="cb-home-srsb-footer__label">Legal</p>
+          <ul>
+            <li>
+              <Link href="/testimonials">Testimonials</Link>
+            </li>
+            <li>
+              <Link href="/privacy">Privacy Policy</Link>
+            </li>
+            <li>
+              <Link href="/terms">Candidate Terms</Link>
+            </li>
+            <li>
+              <Link href="/employer/terms">Employer Terms</Link>
+            </li>
+          </ul>
+        </div>
+
+        <div className="cb-home-srsb-footer__col">
           <p className="cb-home-srsb-footer__label">SRSB</p>
           <p className="cb-home-srsb-footer__note">
             Build your career. Build your future. Keep moving — one passport, one path.

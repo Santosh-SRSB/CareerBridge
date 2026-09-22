@@ -9,56 +9,19 @@ function splitLines(text?: string | null) {
     .filter(Boolean);
 }
 
-/** Matches STATUS / LEVEL chips on the dashboard boarding pass. */
-export function isFresherProfile(profile: CandidateProfile) {
-  return resolveCandidateExperienceBand(profile) === 'fresher';
-}
-
-const YEARS_OF_EXPERIENCE_CLAIM =
-  /\b(?:with\s+|and\s+)?(?:over\s+|more than\s+)?\d+(?:\.\d+)?\+?\s*(?:years?|yrs?)(?:\s+of)?(?:\s+(?:hands[- ]?on\s+)?)?(?:experience|exp)\b/gi;
-
-function claimsProfessionalTenure(text: string) {
-  return /\b(?:with\s+|and\s+)?(?:over\s+|more than\s+)?\d+(?:\.\d+)?\+?\s*(?:years?|yrs?)(?:\s+of)?(?:\s+(?:hands[- ]?on\s+)?)?(?:experience|exp)\b/i.test(
-    text,
-  );
-}
-
-/** Resume "about" often claims years of experience even when the profile is Fresher. */
-function alignSummaryForFresher(text: string): string | null {
-  let cleaned = text
-    .replace(YEARS_OF_EXPERIENCE_CLAIM, '')
-    .replace(/\b(?:an?\s+)?experienced\s+/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([.,;])/g, '$1')
-    .replace(/^[,.\s]+|[,.\s]+$/g, '')
-    .trim();
-
-  if (!cleaned || cleaned.length < 12) return null;
-  if (claimsProfessionalTenure(cleaned)) return null;
-
-  if (
-    /^(full[- ]?stack|software|web|frontend|backend|data|product|senior|junior)\b/i.test(cleaned) &&
-    !/\b(aspiring|fresher|seeking|looking|graduate|student|intern)\b/i.test(cleaned)
-  ) {
-    cleaned = `Aspiring ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}`;
-  }
-
-  return cleaned;
-}
-
 function fallbackSummary(profile: CandidateProfile, fullName: string, title: string) {
+  if (profile.about?.trim()) return profile.about.trim();
   const skill = profile.skills?.[0]?.name;
-  const fresher = isFresherProfile(profile);
-  const roleBit = title
-    ? fresher
-      ? `aspiring ${title}`
-      : title
-    : fresher
-      ? 'building a career'
-      : 'building a career';
+  const band = resolveCandidateExperienceBand(profile);
   const bits = [
     fullName || 'Candidate',
-    roleBit,
+    band === 'fresher'
+      ? title
+        ? `an aspiring ${title}`
+        : 'building a career as a fresher'
+      : title
+        ? `aspiring ${title}`
+        : 'building a career',
     profile.city ? `based in ${profile.city}` : '',
     skill ? `with strengths in ${skill}` : '',
   ].filter(Boolean);
@@ -69,20 +32,42 @@ export function resolvePassportSummary(
   profile: CandidateProfile,
   resumeSummary?: string | null,
 ) {
+  const fromProfile = profile.about?.trim();
+  if (fromProfile) {
+    const band = resolveCandidateExperienceBand(profile);
+    if (band === 'fresher' && /\d+(\.\d+)?\+?\s*years?\s+of\s+experience/i.test(fromProfile)) {
+      // Strip false years-of-experience claims for freshers; soften if empty.
+      const cleaned = fromProfile
+        .replace(/\d+(\.\d+)?\+?\s*years?\s+of\s+experience[,.]?\s*/gi, '')
+        .trim();
+      if (cleaned) return cleaned;
+      const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
+      const title = profile.careerInterests?.[0] || profile.experiences?.[0]?.jobTitle || '';
+      return fallbackSummary(profile, fullName, title);
+    }
+    return fromProfile;
+  }
+
+  const fromResume = resumeSummary?.trim();
+  if (fromResume) {
+    const band = resolveCandidateExperienceBand(profile);
+    if (band === 'fresher' && /\d+(\.\d+)?\+?\s*years?\s+of\s+experience/i.test(fromResume)) {
+      const cleaned = fromResume
+        .replace(/\d+(\.\d+)?\+?\s*years?\s+of\s+experience[,.]?\s*/gi, '')
+        .trim();
+      if (cleaned) return cleaned;
+      const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
+      const title = profile.careerInterests?.[0] || profile.experiences?.[0]?.jobTitle || '';
+      return fallbackSummary(profile, fullName, title);
+    }
+    return fromResume;
+  }
+
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
   const title =
     profile.careerInterests?.[0] ||
     profile.experiences?.[0]?.jobTitle ||
     '';
-  const fresher = isFresherProfile(profile);
-
-  const candidates = [profile.about?.trim(), resumeSummary?.trim()].filter(Boolean) as string[];
-
-  for (const raw of candidates) {
-    if (!fresher) return raw;
-    const aligned = alignSummaryForFresher(raw);
-    if (aligned) return aligned;
-  }
 
   return fallbackSummary(profile, fullName, title);
 }
@@ -185,7 +170,7 @@ export function passportToFriendResumeData(
     website: profile.links?.portfolio || profile.links?.website || '',
     github: profile.links?.github || '',
     photo: includePhoto && profile.photoUrl ? profile.photoUrl : null,
-    summary: resolvePassportSummary(profile),
+    summary: fallbackSummary(profile, fullName, title),
     targetRole: title,
     jobDescription: '',
     skills,

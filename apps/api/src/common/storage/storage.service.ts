@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { gcpClientOptions } from '../gcp/gcp-credentials';
 
 export interface UploadOptions {
   contentType?: string;
@@ -37,20 +38,21 @@ export class StorageService implements OnModuleInit {
   private async initClient() {
     try {
       const { Storage } = await import('@google-cloud/storage');
-      const keyFile = this.config.get<string>('GOOGLE_APPLICATION_CREDENTIALS');
-      this.storageClient = new Storage({
-        projectId: this.projectId || undefined,
-        keyFilename: keyFile || undefined,
+      const auth = gcpClientOptions(this.config, {
+        projectIdFallback: this.projectId,
+        // Bucket access is via ADC / dedicated GCS SA — Firebase Admin SA often lacks Storage IAM.
+        allowFirebaseSa: false,
       });
+      this.storageClient = new Storage(auth);
       this.logger.log(
-        `Google Cloud Storage ready (bucket: ${this.bucketName}, project: ${this.projectId || 'default'})`,
+        `Google Cloud Storage ready (bucket: ${this.bucketName}, project: ${auth.projectId || this.projectId || 'default'})`,
       );
     } catch (err) {
       this.initError = (err as Error).message;
       this.storageClient = null;
       this.logger.error(
         `Google Cloud Storage failed to initialize: ${this.initError}. ` +
-          'Set GOOGLE_APPLICATION_CREDENTIALS to a service-account JSON path.',
+          'Set GOOGLE_APPLICATION_CREDENTIALS (or FIREBASE_SERVICE_ACCOUNT_PATH) to a valid service-account JSON.',
       );
     }
   }
@@ -165,15 +167,29 @@ export class StorageService implements OnModuleInit {
     return url;
   }
 
+  async downloadFile(filePath: string): Promise<Buffer> {
+    if (!this.storageClient) {
+      throw new Error(this.getConfigurationError() || 'Google Cloud Storage is not configured.');
+    }
+    try {
+      const [buf] = await this.storageClient.bucket(this.bucketName).file(filePath).download();
+      return buf;
+    } catch (err) {
+      const message = (err as Error).message;
+      this.logger.error(`GCS download failed for ${filePath}: ${message}`);
+      throw new Error(`Failed to download file from Google Cloud Storage: ${message}`);
+    }
+  }
+
   async deleteFile(filePath: string): Promise<boolean> {
     if (!this.storageClient) return false;
     try {
       const bucket = this.storageClient.bucket(this.bucketName);
-      await bucket.file(filePath).delete();
-      this.logger.log(`Deleted ${filePath} from GCS`);
+      await bucket.file(filePath).delete({ ignoreNotFound: true });
+      this.logger.log(`Deleted ${filePath} from GCS (or already absent)`);
       return true;
     } catch (err) {
-      this.logger.error(`Failed to delete file from GCS (${filePath}): ${(err as Error).message}`);
+      this.logger.warn(`Failed to delete file from GCS (${filePath}): ${(err as Error).message}`);
       return false;
     }
   }

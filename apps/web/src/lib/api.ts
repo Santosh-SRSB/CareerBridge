@@ -607,6 +607,26 @@ export async function getResumeProcessingStatus(id: string) {
   }>(`/resumes/${id}/processing`);
 }
 
+export async function retryResumeProcessing(id: string) {
+  return request<{
+    id: string;
+    processingStatus: string | null;
+    processingError: string | null;
+    message?: string;
+  }>(`/resumes/${id}/processing/retry`, { method: 'POST' });
+}
+
+export async function getResumeViewUrl(id: string) {
+  return request<{
+    id: string;
+    url: string;
+    fileName: string;
+    mimeType: string;
+    storagePath: string;
+    expiresInMinutes: number;
+  }>(`/resumes/${id}/view-url`);
+}
+
 export async function savePrimaryResume(payload: {
   resumeId?: string;
   title?: string;
@@ -1570,6 +1590,87 @@ export async function updateAdminSettings(settings: Record<string, string>) {
 export async function getAdminAudit(query?: string) {
   const q = query ? `?query=${encodeURIComponent(query)}` : '';
   return request<Array<Record<string, unknown>>>(`/admin/audit${q}`);
+}
+
+export async function listPublicTestimonials(audience?: 'CANDIDATE' | 'EMPLOYER') {
+  const q = audience ? `?audience=${audience}` : '';
+  return request<
+    Array<{
+      id: string;
+      audience: 'CANDIDATE' | 'EMPLOYER';
+      rating: number;
+      quote: string;
+      displayName: string;
+      headline: string | null;
+      createdAt: string;
+    }>
+  >(`/testimonials${q}`, { auth: false });
+}
+
+export async function getTestimonialPrompt() {
+  return request<{
+    source: string;
+    audience: 'CANDIDATE' | 'EMPLOYER';
+    title: string;
+    subtitle: string;
+  } | null>('/testimonials/me/prompt');
+}
+
+export async function dismissTestimonialPrompt(source: string) {
+  return request('/testimonials/me/prompt/dismiss', {
+    method: 'POST',
+    body: JSON.stringify({ source }),
+  });
+}
+
+export async function submitTestimonial(payload: {
+  rating: number;
+  quote: string;
+  source?: string;
+  displayName?: string;
+  headline?: string;
+}) {
+  return request<{ id: string; status: string; message: string }>('/testimonials', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminTestimonials(status?: string) {
+  const q = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request<
+    Array<{
+      id: string;
+      audience: string;
+      source: string;
+      rating: number;
+      quote: string;
+      displayName: string | null;
+      headline: string | null;
+      status: string;
+      rejectReason: string | null;
+      reviewedAt: string | null;
+      createdAt: string;
+      user: {
+        email: string | null;
+        phone: string;
+        userType: string;
+        name: string | null;
+        company: string | null;
+      };
+    }>
+  >(`/admin/testimonials${q}`);
+}
+
+export async function reviewAdminTestimonial(
+  id: string,
+  action: 'APPROVE' | 'REJECT',
+  rejectReason?: string,
+) {
+  return request(`/admin/testimonials/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify({ action, rejectReason }),
+  });
 }
 
 export async function createAdminSkill(payload: { name: string; category: string; aliases?: string }) {

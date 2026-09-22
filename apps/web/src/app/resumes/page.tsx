@@ -1,25 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ResumeRecord } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
-import { getTemplateComponent } from '@/components/resume-templates/index.js';
-import { buildResumeFromResumeContent } from '@/features/resume/build-resume-from-resume-content';
-import { masterResumeToAtsData } from '@/features/resume/master-to-ats-data';
 import {
   deleteResume,
-  getResume,
   getResumeProcessingStatus,
+  getResumeViewUrl,
   listResumes,
+  retryResumeProcessing,
   uploadResumeFile,
 } from '@/lib/api';
 import { startResumeUpdate } from '@/features/resume/resume-update-mode';
 import { rememberReturnTo } from '@/lib/nav-return';
-import '@/components/resume-templates/resume-template-01.css';
 
 const ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg';
-const PREVIEW_TEMPLATE = 'resume-template-01';
 
 function versionLabel(row: ResumeRecord) {
   const kind =
@@ -31,53 +27,69 @@ function versionLabel(row: ResumeRecord) {
   return `V${row.version} · ${kind}`;
 }
 
-function InlineResumePreview({
-  resume,
+function CloudResumePreview({
+  url,
+  mimeType,
+  fileName,
   onClose,
+  onRetry,
 }: {
-  resume: ResumeRecord;
+  url: string;
+  mimeType: string;
+  fileName: string;
   onClose: () => void;
+  onRetry?: () => void;
 }) {
-  const Template = getTemplateComponent(PREVIEW_TEMPLATE);
-  const templateData = useMemo(() => {
-    const content = resume.content;
-    const doc = buildResumeFromResumeContent(
-      {
-        ...content,
-        fullName: content.fullName || resume.title || '',
-        summary: content.summary || resume.summary || '',
-      },
-      content.summary || resume.summary,
-    );
-    return masterResumeToAtsData(doc);
-  }, [resume]);
-
+  const isPdf = /pdf/i.test(mimeType) || /\.pdf$/i.test(fileName);
   return (
     <div className="relative mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 hover:text-slate-900"
-        aria-label="Close resume preview"
-      >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-      <div className="max-h-[min(70vh,720px)] overflow-y-auto overflow-x-hidden p-3 sm:p-4">
-        <div className="cb-resumes-inline-preview mx-auto w-full max-w-[794px] overflow-hidden bg-white shadow-sm ring-1 ring-slate-200">
-          <Template data={templateData} />
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2">
+        <p className="truncate text-xs font-semibold text-slate-600">{fileName}</p>
+        <div className="flex shrink-0 items-center gap-2">
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg px-2 py-1 text-xs font-bold text-[#0a2e2c] hover:bg-[#0a2e2c]/8"
+          >
+            Open
+          </a>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-lg px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100"
+            >
+              Reload
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+            aria-label="Close resume preview"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </div>
-      <style jsx global>{`
-        .cb-resumes-inline-preview .resume,
-        .cb-resumes-inline-preview .resume-template-01 {
-          height: auto !important;
-          min-height: 0 !important;
-          max-height: none !important;
-          overflow: visible !important;
-        }
-      `}</style>
+      {isPdf ? (
+        <iframe title={fileName} src={url} className="h-[min(70vh,720px)] w-full bg-white" />
+      ) : (
+        <div className="px-4 py-10 text-center">
+          <p className="text-sm text-slate-600">Preview is available for PDF files.</p>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-block rounded-xl bg-[#0a2e2c] px-5 py-2.5 text-sm font-bold text-white"
+          >
+            Open file from Cloud Storage
+          </a>
+        </div>
+      )}
     </div>
   );
 }
@@ -93,9 +105,12 @@ export default function ViewResumesPage() {
   const [toast, setToast] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [failedResumeId, setFailedResumeId] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
-  const [viewingResume, setViewingResume] = useState<ResumeRecord | null>(null);
+  const [viewUrl, setViewUrl] = useState<string | null>(null);
+  const [viewMeta, setViewMeta] = useState<{ fileName: string; mimeType: string } | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewError, setViewError] = useState('');
 
@@ -122,37 +137,39 @@ export default function ViewResumesPage() {
     return () => window.clearTimeout(timer);
   }, [highlightId]);
 
-  async function onViewResume(row: ResumeRecord) {
-    if (viewingId === row.id) {
-      setViewingId(null);
-      setViewingResume(null);
-      setViewError('');
-      return;
-    }
-    setViewingId(row.id);
+  function closePreview() {
+    setViewingId(null);
+    setViewUrl(null);
+    setViewMeta(null);
     setViewError('');
+    setViewLoading(false);
+  }
+
+  async function loadCloudView(resumeId: string) {
     setViewLoading(true);
-    setViewingResume(row.content ? row : null);
+    setViewError('');
     try {
-      const full = await getResume(row.id);
-      setViewingResume(full);
+      const result = await getResumeViewUrl(resumeId);
+      setViewUrl(result.url);
+      setViewMeta({ fileName: result.fileName, mimeType: result.mimeType });
     } catch (err) {
-      if (row.content) {
-        setViewingResume(row);
-      } else {
-        setViewError(err instanceof Error ? err.message : 'Could not load resume preview.');
-        setViewingResume(null);
-      }
+      setViewUrl(null);
+      setViewMeta(null);
+      setViewError(err instanceof Error ? err.message : 'Could not load resume from Cloud Storage.');
     } finally {
       setViewLoading(false);
     }
   }
 
-  function closePreview() {
-    setViewingId(null);
-    setViewingResume(null);
-    setViewError('');
-    setViewLoading(false);
+  async function onViewResume(row: ResumeRecord) {
+    if (viewingId === row.id) {
+      closePreview();
+      return;
+    }
+    setViewingId(row.id);
+    setViewUrl(null);
+    setViewMeta(null);
+    await loadCloudView(row.id);
   }
 
   function onEdit(row: ResumeRecord) {
@@ -170,6 +187,7 @@ export default function ViewResumesPage() {
     if (uploading) return;
     setError('');
     setToast('');
+    setFailedResumeId(null);
     if (fileRef.current) {
       fileRef.current.value = '';
       fileRef.current.click();
@@ -177,38 +195,89 @@ export default function ViewResumesPage() {
   }
 
   async function waitForProcessing(resumeId: string) {
-    for (let i = 0; i < 40; i += 1) {
+    for (let i = 0; i < 180; i += 1) {
       const result = await getResumeProcessingStatus(resumeId);
       if (result.processingStatus === 'COMPLETED') return;
       if (result.processingStatus === 'FAILED') {
+        setFailedResumeId(resumeId);
         throw new Error(result.processingError || 'Resume processing failed.');
       }
-      setUploadStatus(i < 2 ? 'Adding resume…' : 'About to done…');
-      await new Promise((r) => setTimeout(r, 1500));
+      setUploadStatus('Uploaded successfully, reading your resume…');
+      await new Promise((r) => setTimeout(r, 1000));
     }
-    throw new Error('Processing is taking too long. Please try again.');
+    setFailedResumeId(resumeId);
+    throw new Error('Processing is taking too long. Please retry.');
   }
 
   async function onFilePicked(file: File) {
     setUploading(true);
     setError('');
     setToast('');
-    setUploadStatus('Adding resume…');
+    setFailedResumeId(null);
+    setUploadStatus('Your resume is uploading…');
     try {
       const uploaded = await uploadResumeFile(file);
-      setUploadStatus('About to done…');
-      await waitForProcessing(uploaded.id);
-      setUploadStatus('Almost there…');
-      await refresh();
-      setHighlightId(uploaded.id);
-      setToast(`“${uploaded.title || file.name}” added to your resumes.`);
+      // Do not block the UI on Document AI + Gemini — return as soon as the file is stored.
       setUploadStatus('');
+      setHighlightId(uploaded.id);
+      setToast(
+        `“${uploaded.title || file.name}” uploaded. Reading details in the background…`,
+      );
+      await refresh();
+      // Soft-poll in background so the list flips to ready without locking the modal.
+      void (async () => {
+        try {
+          for (let i = 0; i < 120; i += 1) {
+            const result = await getResumeProcessingStatus(uploaded.id);
+            if (result.processingStatus === 'COMPLETED') {
+              await refresh();
+              setToast(`“${uploaded.title || file.name}” is ready.`);
+              return;
+            }
+            if (result.processingStatus === 'FAILED') {
+              setFailedResumeId(uploaded.id);
+              setError(result.processingError || 'Resume processing failed.');
+              await refresh().catch(() => undefined);
+              return;
+            }
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+        } catch {
+          /* list already shows the uploaded row */
+        }
+      })();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add resume.');
       setUploadStatus('');
+      await refresh().catch(() => undefined);
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  async function onRetryProcessing(resumeId: string) {
+    setRetryingId(resumeId);
+    setError('');
+    setToast('');
+    setUploadStatus('Retrying…');
+    setUploading(true);
+    try {
+      await retryResumeProcessing(resumeId);
+      setFailedResumeId(null);
+      await waitForProcessing(resumeId);
+      await refresh();
+      setHighlightId(resumeId);
+      setToast('Resume processed successfully.');
+      setUploadStatus('');
+    } catch (err) {
+      setFailedResumeId(resumeId);
+      setError(err instanceof Error ? err.message : 'Retry failed. Please try again.');
+      setUploadStatus('');
+      await refresh().catch(() => undefined);
+    } finally {
+      setRetryingId(null);
+      setUploading(false);
     }
   }
 
@@ -255,9 +324,7 @@ export default function ViewResumesPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">Your resumes</h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
-            Your profile stays independent of any resume.
-            <br />
-            Each save creates a new version of your resume.
+            Uploaded files are stored in Cloud Storage and parsed with Google Document AI.
           </p>
         </div>
 
@@ -266,7 +333,21 @@ export default function ViewResumesPage() {
             {toast}
           </p>
         ) : null}
-        {error ? <p className="mt-4 text-sm font-semibold text-red-600">{error}</p> : null}
+        {error ? (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-3">
+            <p className="text-sm font-semibold text-red-700">{error}</p>
+            {failedResumeId ? (
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => void onRetryProcessing(failedResumeId)}
+                className="mt-3 rounded-xl bg-[#0a2e2c] px-4 py-2 text-sm font-bold text-white hover:bg-[#072422] disabled:opacity-60"
+              >
+                {retryingId === failedResumeId ? 'Retrying…' : 'Retry processing'}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {loading ? (
           <p className="mt-8 text-sm text-slate-500">Loading resumes…</p>
@@ -290,6 +371,9 @@ export default function ViewResumesPage() {
             <ul className="mt-6 space-y-3">
               {items.map((row) => {
                 const isOpen = viewingId === row.id;
+                const failed = row.processingStatus === 'FAILED';
+                const processing =
+                  row.processingStatus === 'PENDING' || row.processingStatus === 'PROCESSING';
                 return (
                   <li
                     key={row.id}
@@ -314,6 +398,14 @@ export default function ViewResumesPage() {
                         <p className="mt-1 text-xs text-slate-400">
                           Updated {new Date(row.updatedAt).toLocaleString()}
                         </p>
+                        {failed ? (
+                          <p className="mt-2 text-xs font-semibold text-red-600">
+                            {row.processingError || 'Processing failed.'}
+                          </p>
+                        ) : null}
+                        {processing ? (
+                          <p className="mt-2 text-xs font-semibold text-amber-700">Processing…</p>
+                        ) : null}
                       </div>
                       <button
                         type="button"
@@ -325,6 +417,16 @@ export default function ViewResumesPage() {
                     </div>
 
                     <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-2.5">
+                      {failed ? (
+                        <button
+                          type="button"
+                          disabled={uploading}
+                          onClick={() => void onRetryProcessing(row.id)}
+                          className="min-w-[7.5rem] rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-bold text-amber-900 hover:bg-amber-100 sm:min-w-[8.5rem] disabled:opacity-60"
+                        >
+                          {retryingId === row.id ? 'Retrying…' : 'Retry'}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => onEdit(row)}
@@ -349,16 +451,29 @@ export default function ViewResumesPage() {
                     </div>
 
                     {isOpen ? (
-                      viewLoading && !viewingResume ? (
+                      viewLoading && !viewUrl ? (
                         <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                          Loading resume…
+                          Loading from Cloud Storage…
                         </p>
                       ) : viewError ? (
-                        <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                          {viewError}
-                        </p>
-                      ) : viewingResume ? (
-                        <InlineResumePreview resume={viewingResume} onClose={closePreview} />
+                        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                          <p className="text-sm font-semibold text-red-700">{viewError}</p>
+                          <button
+                            type="button"
+                            onClick={() => void loadCloudView(row.id)}
+                            className="mt-3 rounded-xl bg-[#0a2e2c] px-4 py-2 text-sm font-bold text-white"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      ) : viewUrl && viewMeta ? (
+                        <CloudResumePreview
+                          url={viewUrl}
+                          mimeType={viewMeta.mimeType}
+                          fileName={viewMeta.fileName}
+                          onClose={closePreview}
+                          onRetry={() => void loadCloudView(row.id)}
+                        />
                       ) : null
                     ) : null}
                   </li>
@@ -383,12 +498,25 @@ export default function ViewResumesPage() {
       {uploading ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white px-6 py-8 text-center shadow-xl">
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-[#0a2e2c]" />
+            <div className="cb-bounce-dots mx-auto" aria-hidden>
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
             <h2 className="mt-5 text-lg font-extrabold text-slate-900">
-              {uploadStatus || 'Adding resume…'}
+              {uploadStatus?.startsWith('Your resume is uploading')
+                ? 'Your resume is uploading'
+                : uploadStatus?.startsWith('Uploaded successfully')
+                  ? 'Uploaded successfully'
+                  : uploadStatus || 'Processing resume…'}
             </h2>
             <p className="mt-2 text-sm text-slate-500">
-              Hang tight — we&apos;ll bring you back here when it&apos;s ready.
+              {uploadStatus?.startsWith('Your resume is uploading')
+                ? 'Please wait a moment…'
+                : uploadStatus?.startsWith('Uploaded successfully')
+                  ? 'Reading your resume'
+                  : 'Hang tight — this usually takes a few seconds.'}
             </p>
           </div>
         </div>

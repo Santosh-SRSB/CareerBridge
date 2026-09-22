@@ -41,7 +41,7 @@ const formStyles = `
     font-weight: 600;
     color: var(--ink-70, #43526b);
   }
-  .cb-inline-form input:not([type="date"]):not([type="month"]):not([type="checkbox"]),
+  .cb-inline-form input:not([type="month"]):not([type="checkbox"]),
   .cb-inline-form select,
   .cb-inline-form textarea {
     border: 1.5px solid var(--line, #dde0d3);
@@ -178,8 +178,8 @@ export function EducationInlineForm({
         </div>
         <div className="cb-field full">
           <MonthRangeFields
-            startLabel="From"
-            endLabel="To"
+            startLabel="Start date"
+            endLabel="End date"
             start={startDate}
             end={endDate}
             isCurrent={isCurrent}
@@ -275,15 +275,13 @@ export function ExperienceInlineForm({
         </div>
         <div className="cb-field full">
           <MonthRangeFields
-            startLabel="From"
-            endLabel="To"
             start={startDate}
             end={endDate}
             isCurrent={isCurrent}
             onStartChange={setStartDate}
             onEndChange={setEndDate}
             onCurrentChange={setIsCurrent}
-            presentLabel="I am working currently"
+            presentLabel="Currently working here"
           />
         </div>
         <div className="cb-field full">
@@ -456,7 +454,7 @@ export function CertificationInlineForm({
             placeholder="HackerRank"
           />
         </div>
-        <MonthField label="Date" value={date} onChange={setDate} />
+        <MonthField label="Date (Month + Year)" value={date} onChange={setDate} />
       </div>
     </FormShell>
   );

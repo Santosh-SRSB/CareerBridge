@@ -19,15 +19,20 @@ export function useOnboardingGate(step: OnboardingStep) {
 
     fetchMe()
       .then((me) => {
+        const onboardingCompleted = me.onboardingCompleted ?? stored.onboardingCompleted;
+        const dashboardReached = me.dashboardReached ?? stored.dashboardReached;
         patchStoredUser({
           firstName: me.firstName ?? stored.firstName,
-          onboardingCompleted: me.onboardingCompleted ?? stored.onboardingCompleted,
-          dashboardReached: me.dashboardReached ?? stored.dashboardReached,
+          onboardingCompleted,
+          dashboardReached,
         });
-        // Once the candidate has opened the dashboard, keep them there.
-        // Until then, allow revisiting the 4 profile steps (e.g. Back from autofill).
-        if (me.dashboardReached) {
+        // Completed users must not bounce on step pages when dashboardReached is still false.
+        if (dashboardReached) {
           router.replace('/dashboard');
+          return;
+        }
+        if (onboardingCompleted) {
+          router.replace('/onboarding/complete');
           return;
         }
         setReady(true);
@@ -35,6 +40,10 @@ export function useOnboardingGate(step: OnboardingStep) {
       .catch(() => {
         if (stored.dashboardReached) {
           router.replace('/dashboard');
+          return;
+        }
+        if (stored.onboardingCompleted) {
+          router.replace('/onboarding/complete');
           return;
         }
         setReady(true);

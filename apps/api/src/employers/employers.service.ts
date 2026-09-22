@@ -3,7 +3,6 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
-  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -19,14 +18,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { MatchingService } from '../matching/matching.service';
 import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service';
-import { WhatsAppService } from '../whatsapp/whatsapp.service';
-import { WhatsAppWebhookService } from '../whatsapp/whatsapp.webhook.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '@nestjs/config';
 import { ResumesService } from '../resumes/resumes.service';
 import { EmailService } from '../auth/email.service';
 import { JobsService } from '../jobs/jobs.service';
-import { StorageService } from '../common/storage/storage.service';
+import { TestimonialsService } from '../testimonials/testimonials.service';
 
 const ACTION_STATUS: Record<string, ApplicationStatus> = {
   REVIEW: 'UNDER_REVIEW',
@@ -57,87 +54,21 @@ function parsePreferredReschedule(notes: string | null | undefined) {
 
 @Injectable()
 export class EmployersService {
-  private readonly logger = new Logger(EmployersService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
     private readonly matching: MatchingService,
     private readonly interviewWhatsApp: InterviewWhatsAppService,
-    private readonly whatsapp: WhatsAppService,
-    private readonly whatsappWebhook: WhatsAppWebhookService,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
     private readonly resumes: ResumesService,
     private readonly email: EmailService,
     private readonly jobsService: JobsService,
-    private readonly storage: StorageService,
+    private readonly testimonials: TestimonialsService,
   ) {}
 
   async me(userId: string) {
     return this.toProfile(await this.requireEmployer(userId));
-  }
-
-  async uploadLogoFile(
-    userId: string,
-    file: { buffer: Buffer; mimetype: string; size: number; originalname?: string },
-  ) {
-    const mime = (file.mimetype || '').toLowerCase();
-    const allowed =
-      mime.startsWith('image/jpeg') ||
-      mime.startsWith('image/jpg') ||
-      mime.startsWith('image/png') ||
-      mime.startsWith('image/webp');
-    if (!allowed) {
-      throw new BadRequestException({
-        code: SharedError.VALIDATION_ERROR,
-        message: 'Please upload a JPG, PNG, or WebP logo.',
-      });
-    }
-    if (!file.buffer?.length || file.size > 5 * 1024 * 1024) {
-      throw new BadRequestException({
-        code: SharedError.VALIDATION_ERROR,
-        message: 'Logo must be under 5 MB.',
-      });
-    }
-
-    const employer = await this.requireEmployer(userId);
-    const ext = mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : '.jpg';
-    const contentType = mime.includes('png')
-      ? 'image/png'
-      : mime.includes('webp')
-        ? 'image/webp'
-        : 'image/jpeg';
-    let storedUrl: string;
-
-    if (this.storage.isConfigured()) {
-      try {
-        const path = this.storage.imageObjectPath(
-          `logo-${Date.now()}${ext}`,
-          employer.id.slice(0, 8),
-        );
-        const uploaded = await this.storage.uploadFile(path, file.buffer, {
-          contentType,
-          isPublic: true,
-          metadata: { employerId: employer.id, source: 'company-logo' },
-        });
-        storedUrl = uploaded.publicUrl;
-      } catch (err) {
-        this.logger.error(
-          `Company logo GCS upload failed for ${employer.id}: ${(err as Error).message}`,
-        );
-        storedUrl = `data:${contentType};base64,${file.buffer.toString('base64')}`;
-      }
-    } else {
-      storedUrl = `data:${contentType};base64,${file.buffer.toString('base64')}`;
-    }
-
-    const updated = await this.prisma.employer.update({
-      where: { id: employer.id },
-      data: { logoUrl: storedUrl },
-    });
-    this.logger.log(`Saved company logo for employer ${employer.id} (${file.size} bytes)`);
-    return this.toProfile(updated);
   }
 
   async updateMe(
@@ -180,7 +111,7 @@ export class EmployersService {
     userId: string,
     dto: {
       gstNumber: string;
-      cin?: string;
+      cin: string;
       website: string;
       panNumber: string;
       trademark?: string;
@@ -188,13 +119,14 @@ export class EmployersService {
   ) {
     const employer = await this.requireEmployer(userId);
     const gst = dto.gstNumber.trim().toUpperCase();
-    const cin = (dto.cin || '').trim().toUpperCase();
+    const cin = dto.cin.trim().toUpperCase();
     const pan = dto.panNumber.trim().toUpperCase();
     const websiteRaw = dto.website.trim();
     const trademark = dto.trademark?.trim().replace(/\s+/g, ' ') || '';
-    if (![gst, pan, websiteRaw].every((value) => value.length > 0)) {
+    // Temporary: skip strict GST/CIN/PAN/website format checks so onboarding can proceed.
+    if (![gst, cin, pan, websiteRaw].every((value) => value.length > 0)) {
       throw new HttpException(
-        { code: SharedError.VALIDATION_ERROR, message: 'GSTIN, PAN, and website are required.' },
+        { code: SharedError.VALIDATION_ERROR, message: 'Fill in all KYC fields to continue.' },
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -209,7 +141,7 @@ export class EmployersService {
       where: { id: employer.id },
       data: {
         gstNumber: gst,
-        cin: cin || null,
+        cin,
         website,
         panNumber: pan,
         ...(trademark.length >= 2 ? { companyName: trademark } : {}),
@@ -267,66 +199,28 @@ export class EmployersService {
     const employer = await this.requireEmployer(userId);
     const jobs = await this.prisma.job.findMany({ where: { employerId: employer.id }, select: { id: true, status: true } });
     const jobIds = jobs.map((item) => item.id);
-
-    const now = new Date();
-    const monthBuckets = Array.from({ length: 6 }, (_, index) => {
-      const offset = 5 - index;
-      const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-      return {
-        year: date.getFullYear(),
-        month: date.getMonth(),
-        label: date.toLocaleString('en-IN', { month: 'short' }),
-        count: 0,
-        start: date,
-        end: new Date(date.getFullYear(), date.getMonth() + 1, 1),
-      };
-    });
-    const seriesStart = monthBuckets[0]?.start || new Date(now.getFullYear(), now.getMonth() - 5, 1);
-
-    const [applications, shortlisted, interviewApps, scheduledInterviews, recent, monthlyApps] =
-      await Promise.all([
-        this.prisma.application.count({ where: { jobId: { in: jobIds } } }),
-        this.prisma.application.count({ where: { jobId: { in: jobIds }, status: 'SHORTLISTED' } }),
-        this.prisma.application.count({ where: { jobId: { in: jobIds }, status: 'INTERVIEW' } }),
-        this.prisma.employerInterview.count({
-          where: {
-            employerId: employer.id,
-            status: { in: ['PROPOSED', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULE_REQUESTED'] },
-          },
-        }),
-        this.prisma.application.findMany({
-          where: { jobId: { in: jobIds } },
-          include: { candidate: true, job: true },
-          orderBy: { createdAt: 'desc' },
-          take: 8,
-        }),
-        jobIds.length
-          ? this.prisma.application.findMany({
-              where: { jobId: { in: jobIds }, createdAt: { gte: seriesStart } },
-              select: { createdAt: true },
-            })
-          : Promise.resolve([] as Array<{ createdAt: Date }>),
-      ]);
-
-    for (const row of monthlyApps) {
-      const created = row.createdAt;
-      const bucket = monthBuckets.find(
-        (item) => created >= item.start && created < item.end,
-      );
-      if (bucket) bucket.count += 1;
-    }
-
+    const [applications, shortlisted, interviewApps, scheduledInterviews, recent] = await Promise.all([
+      this.prisma.application.count({ where: { jobId: { in: jobIds } } }),
+      this.prisma.application.count({ where: { jobId: { in: jobIds }, status: 'SHORTLISTED' } }),
+      this.prisma.application.count({ where: { jobId: { in: jobIds }, status: 'INTERVIEW' } }),
+      this.prisma.employerInterview.count({
+        where: {
+          employerId: employer.id,
+          status: { in: ['PROPOSED', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULE_REQUESTED'] },
+        },
+      }),
+      this.prisma.application.findMany({
+        where: { jobId: { in: jobIds } },
+        include: { candidate: true, job: true },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+      }),
+    ]);
     return {
       openJobs: jobs.filter((item) => item.status === 'PUBLISHED').length,
       applications,
       shortlisted,
       interviews: Math.max(interviewApps, scheduledInterviews),
-      applicationsByMonth: monthBuckets.map(({ year, month, label, count }) => ({
-        year,
-        month,
-        label,
-        count,
-      })),
       recent: recent.map((item) => ({
         candidateName: [item.candidate.firstName, item.candidate.lastName].filter(Boolean).join(' ') || 'Candidate',
         candidateId: item.candidate.id,
@@ -391,6 +285,7 @@ export class EmployersService {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
       await this.matching.recomputeMatchesForJob(job.id);
       await this.jobsService.notifyCandidatesForPublishedJob(job.id).catch(() => undefined);
+      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
     }
     return job;
   }
@@ -445,6 +340,7 @@ export class EmployersService {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
       await this.matching.recomputeMatchesForJob(job.id);
       await this.jobsService.notifyCandidatesForPublishedJob(job.id).catch(() => undefined);
+      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
     }
     return updated;
   }
@@ -586,22 +482,15 @@ export class EmployersService {
       where: { id: { in: matchRows.map((row) => row.candidateId) } },
       include: {
         skills: true,
-        experiences: { orderBy: { startDate: 'desc' }, take: 3 },
+        experiences: { orderBy: { startDate: 'desc' }, take: 1 },
         applications: {
           where: { jobId: job.id, status: { not: 'WITHDRAWN' } },
           take: 1,
-          select: {
-            id: true,
-            status: true,
-            screeningAnswersJson: true,
-          },
         },
       },
     });
     const candidateById = new Map(candidates.map((row) => [row.id, row]));
-    const questionMap = new Map(
-      parseScreeningQuestions(job.screeningQuestionsJson).map((item) => [item.id, item.prompt]),
-    );
+    const matchByCandidate = new Map(matchRows.map((row) => [row.candidateId, row]));
 
     const filtered = matchRows
       .map((match) => {
@@ -610,10 +499,8 @@ export class EmployersService {
         if (cityFilter && !candidate.city?.toLowerCase().includes(cityFilter.toLowerCase())) {
           return null;
         }
-        if (experienceMin > 0) {
-          const candidateYears =
-            (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
-          if (candidateYears + 1e-9 < experienceMin) return null;
+        if (experienceMin > 0 && (candidate.totalExperienceYears || 0) < experienceMin) {
+          return null;
         }
         if (skillFilter && !candidate.skills.some((item) => item.name.toLowerCase().includes(skillFilter))) {
           return null;
@@ -623,7 +510,6 @@ export class EmployersService {
             candidate.firstName,
             candidate.lastName,
             candidate.city,
-            candidate.state,
             candidate.highestEducation,
             ...candidate.skills.map((item) => item.name),
           ]
@@ -643,104 +529,25 @@ export class EmployersService {
       totalMatched,
       candidates: filtered.map(({ match, candidate }) => {
         const latestRole = candidate.experiences[0];
-        const currentlyEmployed = candidate.experiences.some((item) => item.stillInCompany);
-        const application = candidate.applications[0] || null;
-        const noticeAnswer = extractNoticePeriodAnswer(
-          application?.screeningAnswersJson,
-          questionMap,
-        );
-        const availability = resolveCandidateAvailability({
-          stillInCollege: candidate.stillInCollege,
-          currentlyEmployed,
-          noticeAnswer,
-          experienceYears: candidate.totalExperienceYears || 0,
-        });
-        const skillNames = candidate.skills.map((item) => item.name);
         const matchScore = Math.round(match.totalScore);
         return {
           id: candidate.id,
           firstName: candidate.firstName,
           lastName: candidate.lastName,
           city: candidate.city,
-          state: candidate.state,
           highestEducation: candidate.highestEducation,
-          experienceYears: candidate.totalExperienceYears || 0,
-          experienceMonths: candidate.totalExperienceMonths || 0,
-          stillInCollege: candidate.stillInCollege,
-          openToRelocating: candidate.openToRelocating,
-          currentlyEmployed,
-          availabilityLabel: availability.label,
-          availabilityTone: availability.tone,
+          experienceYears: candidate.totalExperienceYears,
           profileCompletion: candidate.profileCompletion,
-          skills: skillNames.slice(0, 6),
-          skillsTotal: skillNames.length,
+          skills: candidate.skills.map((item) => item.name).slice(0, 8),
           latestRole: latestRole
             ? { title: latestRole.jobTitle, company: latestRole.company }
             : null,
           matchScore,
-          appliedToEmployer: Boolean(application),
-          applicationId: application?.id || null,
-          applicationStatus: application?.status || null,
+          appliedToEmployer: candidate.applications.length > 0,
+          applicationId: candidate.applications[0]?.id || null,
         };
       }),
     };
-  }
-
-  async notifyMatchedCandidate(userId: string, candidateId: string, jobId: string) {
-    const employer = await this.requireEmployer(userId);
-    const job = await this.requireJob(userId, jobId);
-    await this.matching.assertCandidateVisibleForJob(userId, jobId, candidateId);
-
-    const candidate = await this.prisma.candidate.findUnique({
-      where: { id: candidateId },
-      select: {
-        id: true,
-        userId: true,
-        firstName: true,
-        whatsappOptIn: true,
-        whatsappNumber: true,
-        user: { select: { phone: true } },
-      },
-    });
-    if (!candidate) {
-      throw new NotFoundException({
-        code: SharedError.RESOURCE_NOT_FOUND,
-        message: 'Candidate was not found',
-      });
-    }
-
-    const company = employer.companyName?.trim() || 'An employer';
-    const firstName = candidate.firstName?.trim() || 'there';
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
-    const jobUrl = `${portalBase}/jobs/${job.id}`;
-
-    await this.notifications.create({
-      userId: candidate.userId,
-      title: 'Invited to apply',
-      body: `You were invited by ${company} for ${job.title}.`,
-      type: 'JOB_INVITE',
-      link: `/jobs/${job.id}`,
-    });
-
-    let whatsappSent = false;
-    const phone = this.whatsappWebhook.resolveNotifyPhone(candidate);
-    if (phone) {
-      try {
-        await this.whatsapp.sendText({
-          to: phone,
-          candidateId: candidate.id,
-          messageType: 'job_invite',
-          body: `Hi ${firstName}, ${company} invited you to apply for ${job.title} on CareerBridge.\n\nView the role: ${jobUrl}`,
-        });
-        whatsappSent = true;
-      } catch {
-        // In-app notify already sent; WhatsApp is best-effort.
-      }
-    }
-
-    return { ok: true as const, candidateId, jobId, whatsappSent };
   }
 
   async candidateView(userId: string, candidateId: string, jobId?: string) {
@@ -913,7 +720,7 @@ export class EmployersService {
     const employer = await this.requireEmployer(userId);
     const application = await this.prisma.application.findFirst({
       where: { id: dto.applicationId, job: { employerId: employer.id } },
-      include: { candidate: { include: { user: true } }, job: true },
+      include: { candidate: true, job: true },
     });
     if (!application) {
       throw new NotFoundException({
@@ -936,32 +743,6 @@ export class EmployersService {
     const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
       .split(',')[0]
       .trim();
-    const locationRaw = dto.location?.trim() || '';
-    if (mode === 'VIDEO') {
-      const meetingUrl = normalizeHttpUrl(locationRaw);
-      if (!meetingUrl) {
-        throw new HttpException(
-          {
-            code: SharedError.VALIDATION_ERROR,
-            message: 'Enter a valid meeting link (e.g. Google Meet or Zoom URL) before scheduling.',
-          },
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-    } else if (!locationRaw) {
-      throw new HttpException(
-        {
-          code: SharedError.VALIDATION_ERROR,
-          message:
-            mode === 'IN_PERSON'
-              ? 'Enter the venue address before scheduling.'
-              : 'Enter the phone / dial-in details before scheduling.',
-        },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    const location =
-      mode === 'VIDEO' ? (normalizeHttpUrl(locationRaw) as string) : locationRaw;
     const notifyBits = [
       dto.notifyWhatsApp !== false ? 'WhatsApp notify: yes' : 'WhatsApp notify: no',
       dto.notifyEmail !== false ? 'Email notify: yes' : 'Email notify: no',
@@ -986,7 +767,7 @@ export class EmployersService {
           timezone: 'Asia/Kolkata',
           durationMin,
           mode,
-          location,
+          location: dto.location?.trim() || null,
           meetingUrl: null,
           notes,
           status: 'SCHEDULED',
@@ -1003,13 +784,9 @@ export class EmployersService {
       });
     });
 
-    const portalMeetingUrl = `${portalBase}/interviews/scheduled/${interview.id}`;
-    const joinUrl =
-      (location && /^https?:\/\//i.test(location) ? location : null) || portalMeetingUrl;
-
     const withMeeting = await this.prisma.employerInterview.update({
       where: { id: interview.id },
-      data: { meetingUrl: joinUrl },
+      data: { meetingUrl: `${portalBase}/interviews/scheduled/${interview.id}` },
       include: {
         application: {
           include: {
@@ -1025,41 +802,15 @@ export class EmployersService {
       await this.interviewWhatsApp.enqueueInvitation(withMeeting.id).catch(() => undefined);
     }
 
-    const whenLabel = new Intl.DateTimeFormat('en-IN', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: 'Asia/Kolkata',
-    }).format(scheduledAt);
-    const candidateName =
-      [application.candidate.firstName, application.candidate.lastName].filter(Boolean).join(' ').trim() ||
-      'there';
-    const candidateEmail = application.candidate.user?.email?.trim() || '';
-
     await this.notifications
       .create({
         userId: application.candidate.userId,
         title: 'Interview scheduled',
-        body: `${employer.companyName || 'An employer'} scheduled an interview for ${application.job.title} on ${whenLabel}.`,
+        body: `${employer.companyName || 'An employer'} scheduled an interview for ${application.job.title}.`,
         type: 'INTERVIEW',
         link: `/interviews/scheduled/${withMeeting.id}`,
       })
       .catch(() => undefined);
-
-    if (dto.notifyEmail !== false && candidateEmail) {
-      await this.email
-        .sendEmployerInterviewScheduled({
-          to: candidateEmail,
-          candidateName: application.candidate.firstName || candidateName,
-          companyName: employer.companyName || 'Employer',
-          jobTitle: application.job.title,
-          whenLabel,
-          mode,
-          portalUrl: portalMeetingUrl,
-          meetingUrl: joinUrl,
-          location,
-        })
-        .catch(() => undefined);
-    }
 
     return this.toInterview(withMeeting);
   }
@@ -1152,11 +903,7 @@ export class EmployersService {
     const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
       .split(',')[0]
       .trim();
-    const location = (interview.location || '').trim();
-    const meetingUrl =
-      (location && /^https?:\/\//i.test(location) ? location : null) ||
-      interview.meetingUrl ||
-      `${portalBase}/interviews/scheduled/${interview.id}`;
+    const meetingUrl = interview.meetingUrl || `${portalBase}/interviews/scheduled/${interview.id}`;
     const scheduledEnd = new Date(scheduledAt.getTime() + interview.durationMin * 60_000);
 
     const updated = await this.prisma.employerInterview.update({
@@ -1222,83 +969,6 @@ export class EmployersService {
     return this.toInterview(updated);
   }
 
-  async requestInterviewFeedback(userId: string, interviewId: string) {
-    const employer = await this.requireEmployer(userId);
-    const interview = await this.prisma.employerInterview.findFirst({
-      where: { id: interviewId, employerId: employer.id },
-      include: {
-        application: {
-          include: {
-            candidate: { include: { user: true, skills: true } },
-            job: { select: { id: true, title: true } },
-          },
-        },
-      },
-    });
-    if (!interview) {
-      throw new NotFoundException({
-        code: SharedError.RESOURCE_NOT_FOUND,
-        message: 'Interview was not found',
-      });
-    }
-    if (interview.candidateFeedbackAt) {
-      return this.toInterview(interview);
-    }
-    if (!['CONFIRMED', 'COMPLETED'].includes(interview.status)) {
-      throw new BadRequestException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: 'Feedback can be requested after the interview is confirmed or completed.',
-      });
-    }
-
-    const updated = await this.prisma.employerInterview.update({
-      where: { id: interview.id },
-      data: { feedbackRequestedAt: new Date() },
-      include: {
-        application: {
-          include: {
-            candidate: { include: { skills: true } },
-            job: { select: { id: true, title: true } },
-          },
-        },
-      },
-    });
-
-    const company = employer.companyName?.trim() || 'the employer';
-    const jobTitle = interview.application.job.title;
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
-    const feedbackUrl = `${portalBase}/interviews/scheduled/${interview.id}`;
-    const candidate = interview.application.candidate;
-    const firstName = candidate.firstName?.trim() || 'there';
-
-    await this.notifications.create({
-      userId: candidate.userId,
-      title: 'Share interview feedback',
-      body: `${company} asked for your feedback on the ${jobTitle} interview.`,
-      type: 'INTERVIEW_FEEDBACK_REQUEST',
-      link: `/interviews/scheduled/${interview.id}`,
-    });
-
-    const phone = this.whatsappWebhook.resolveNotifyPhone(candidate);
-    if (phone) {
-      try {
-        await this.whatsapp.sendText({
-          to: phone,
-          candidateId: candidate.id,
-          interviewId: interview.id,
-          messageType: 'interview_feedback_request',
-          body: `Hi ${firstName}, ${company} would like your feedback on the ${jobTitle} interview.\n\nShare feedback: ${feedbackUrl}`,
-        });
-      } catch {
-        // Notification already created.
-      }
-    }
-
-    return this.toInterview(updated);
-  }
-
   private toInterview(row: {
     id: string;
     applicationId: string;
@@ -1313,10 +983,6 @@ export class EmployersService {
     notes: string | null;
     confirmedAt: Date | null;
     createdAt: Date;
-    candidateFeedbackRating?: number | null;
-    candidateFeedbackText?: string | null;
-    candidateFeedbackAt?: Date | null;
-    feedbackRequestedAt?: Date | null;
     application: {
       status: ApplicationStatus;
       candidate: {
@@ -1347,15 +1013,6 @@ export class EmployersService {
       confirmedAt: row.confirmedAt?.toISOString() || null,
       createdAt: row.createdAt.toISOString(),
       applicationStatus: row.application.status,
-      candidateFeedback:
-        row.candidateFeedbackAt && row.candidateFeedbackRating
-          ? {
-              rating: row.candidateFeedbackRating,
-              text: row.candidateFeedbackText || null,
-              submittedAt: row.candidateFeedbackAt.toISOString(),
-            }
-          : null,
-      feedbackRequestedAt: row.feedbackRequestedAt?.toISOString() || null,
       candidate: {
         id: candidate.id,
         firstName: candidate.firstName,
@@ -1379,7 +1036,25 @@ export class EmployersService {
     if (!status) {
       throw new ForbiddenException({ code: SharedError.BUSINESS_RULE_VIOLATION, message: 'This action is not allowed.' });
     }
-    return this.prisma.application.update({ where: { id: application.id }, data: { status } });
+    const updated = await this.prisma.application.update({ where: { id: application.id }, data: { status } });
+    if (status === 'SHORTLISTED' || status === 'INTERVIEW') {
+      await this.testimonials
+        .markEligible(userId, 'AFTER_SHORTLIST_OR_INTERVIEW')
+        .catch(() => undefined);
+    }
+    if (status === 'SELECTED' || status === 'HIRED') {
+      await this.testimonials.markEligible(userId, 'AFTER_HIRE_OR_SELECT').catch(() => undefined);
+    }
+    return updated;
+  }
+
+  private async maybeFirstJobPublishedPrompt(userId: string, employerId: string) {
+    const publishedCount = await this.prisma.job.count({
+      where: { employerId, status: 'PUBLISHED' },
+    });
+    if (publishedCount === 1) {
+      await this.testimonials.markEligible(userId, 'FIRST_JOB_PUBLISHED').catch(() => undefined);
+    }
   }
 
   private async requireEmployer(userId: string) {
@@ -1411,7 +1086,6 @@ export class EmployersService {
     panNumber: string | null;
     workEmail: string | null;
     designation: string | null;
-    logoUrl?: string | null;
     verificationStatus: string;
     verified: boolean;
   }) {
@@ -1431,7 +1105,6 @@ export class EmployersService {
       panNumber: employer.panNumber,
       workEmail: employer.workEmail,
       designation: employer.designation,
-      logoUrl: employer.logoUrl || null,
       verificationStatus,
       verified: employer.verified || verificationStatus === 'VERIFIED',
     };
@@ -1551,49 +1224,6 @@ function parseScreeningAnswers(raw: string | null | undefined) {
   } catch {
     return [];
   }
-}
-
-function extractNoticePeriodAnswer(
-  rawAnswers: string | null | undefined,
-  questionMap: Map<string, string>,
-) {
-  const answers = parseScreeningAnswers(rawAnswers);
-  for (const item of answers) {
-    const prompt = (questionMap.get(item.questionId) || '').toLowerCase();
-    const answer = item.answer.trim();
-    if (!answer) continue;
-    if (prompt.includes('notice') || /notice|immediate|joining/i.test(answer)) {
-      return answer;
-    }
-  }
-  return null;
-}
-
-function resolveCandidateAvailability(input: {
-  stillInCollege: boolean;
-  currentlyEmployed: boolean;
-  noticeAnswer: string | null;
-  experienceYears: number;
-}): { label: string; tone: 'immediate' | 'notice' | 'neutral' } {
-  if (input.noticeAnswer) {
-    const raw = input.noticeAnswer.trim();
-    const lower = raw.toLowerCase();
-    if (/immediate|asap|0\s*(day|week|month)?|serving notice|available now/.test(lower)) {
-      return { label: formatAvailabilityLabel(raw, 'Immediate'), tone: 'immediate' };
-    }
-    return { label: formatAvailabilityLabel(raw, raw), tone: 'notice' };
-  }
-  if (input.stillInCollege) return { label: 'Student', tone: 'neutral' };
-  if (input.currentlyEmployed) return { label: 'Employed', tone: 'notice' };
-  if (input.experienceYears <= 0) return { label: 'Immediate', tone: 'immediate' };
-  return { label: 'Immediate', tone: 'immediate' };
-}
-
-function formatAvailabilityLabel(raw: string, fallback: string) {
-  const cleaned = raw.replace(/\s+/g, ' ').trim();
-  if (!cleaned) return fallback;
-  if (cleaned.length > 18) return `${cleaned.slice(0, 16)}…`;
-  return cleaned;
 }
 
 function parseScreeningQuestions(raw: string | null | undefined) {

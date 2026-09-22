@@ -259,11 +259,11 @@ export function RegistrationForm() {
           </button>
         </div>
         <p className="mt-1.5 text-[11px] font-medium text-slate-500">
-          {otpChannel === 'EMAIL'
-            ? 'A 6-digit OTP will be sent to your email.'
-            : otpChannel === 'MOBILE'
-              ? 'A 6-digit OTP will be sent to your mobile number.'
-              : 'Choose Mobile OTP or Email OTP.'}
+          {!otpChannel
+            ? 'Choose Mobile OTP or Email OTP.'
+            : otpChannel === 'EMAIL'
+              ? 'A 6-digit OTP will be sent to your email.'
+              : 'A 6-digit OTP will be sent to your mobile number.'}
         </p>
       </div>
 

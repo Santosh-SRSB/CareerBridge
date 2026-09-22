@@ -20,6 +20,7 @@ import {
 } from './interview-conduct';
 import { renderInterviewPdf } from './interview-pdf';
 import { countAnsweredQuestions, isAnsweredQuestion, isAudioPlaceholderAnswer } from './interview-answer.util';
+import { TestimonialsService } from '../testimonials/testimonials.service';
 
 @Injectable()
 export class InterviewsService {
@@ -31,6 +32,7 @@ export class InterviewsService {
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
     private readonly ai: InterviewAiService,
+    private readonly testimonials: TestimonialsService,
   ) {}
 
   async list(userId: string) {
@@ -102,7 +104,7 @@ export class InterviewsService {
         source: dto.source,
         difficulty: dto.difficulty || band,
         durationLimitMin: dto.durationLimitMin,
-        profileJson: JSON.stringify({ ...content, experienceYears: years, questionLimit }),
+        profileJson: JSON.stringify({ ...content, experienceYears: years, questionLimit, candidateId: candidate.id }),
         transcriptJson: '[]',
         warningsJson: '[]',
       },
@@ -441,6 +443,9 @@ export class InterviewsService {
         questionsJson: JSON.stringify(questions),
       },
     });
+    await this.testimonials
+      .markEligible(userId, 'AFTER_FIRST_MOCK_INTERVIEW')
+      .catch(() => undefined);
     return this.toSession(updated);
   }
 
@@ -518,10 +523,9 @@ export class InterviewsService {
   }
 
   private profileOf(interview: { profileJson: string | null; jobRole: string }): InterviewProfile {
-    const content = parseJson<Partial<ResumeContent> & { experienceYears?: number; questionLimit?: number }>(
-      interview.profileJson,
-      {},
-    );
+    const content = parseJson<
+      Partial<ResumeContent> & { experienceYears?: number; questionLimit?: number; candidateId?: string }
+    >(interview.profileJson, {});
     const profile = profileFromResume(
       {
         fullName: content.fullName || 'Candidate',
@@ -538,7 +542,11 @@ export class InterviewsService {
       } as ResumeContent & { experienceYears?: number },
       interview.jobRole,
     );
-    return { ...profile, questionLimit: content.questionLimit };
+    return {
+      ...profile,
+      questionLimit: content.questionLimit,
+      candidateId: (content as { candidateId?: string }).candidateId,
+    };
   }
 
   private async requireCandidate(userId: string) {

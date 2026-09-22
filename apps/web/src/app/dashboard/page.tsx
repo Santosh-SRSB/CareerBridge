@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { photoFileError } from '@careerbridge/shared';
+import {
+  photoFileError,
+  resolveExperienceChip,
+  resolveCandidateExperienceBand,
+  formatLocationLabel,
+} from '@careerbridge/shared';
+import type { CandidateProfile, JobCard } from '@careerbridge/shared';
 import {
   getCandidateMe,
   getProfileCompletion,
@@ -15,15 +21,9 @@ import {
   uploadCandidatePhoto,
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
-import type { CandidateProfile, JobCard } from '@careerbridge/shared';
-import {
-  experienceYearsTotal,
-  formatLocationLabel,
-  resolveCandidateExperienceBand,
-  resolveExperienceChip,
-} from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
-import { formatCandidateExperienceLine } from '@/lib/format-candidate-experience';
+import { TestimonialPromptCard } from '@/components/TestimonialPromptCard';
+import { formatCandidateExperienceLine, resolveTotalExperienceYears } from '@/lib/format-candidate-experience';
 import { resolvePassportSummary } from '@/lib/passport-to-friend-resume';
 import {
   fetchScheduledInterviews,
@@ -46,14 +46,17 @@ function formatExperienceField(profile: CandidateProfile | null) {
   if (!profile) return '—';
   const band = resolveCandidateExperienceBand(profile);
   if (band === 'fresher') {
-    const internship = profile.experiences?.find((item) => item.isInternship);
-    if (internship?.company) return `Internship · ${internship.company}`;
-    if (profile.hasExperience === 'INTERNSHIP' && profile.experiences?.[0]?.company) {
-      return `Internship · ${profile.experiences[0].company}`;
+    const flag = (profile.hasExperience || '').toUpperCase();
+    const internship =
+      profile.experiences?.find((item) => item.isInternship && item.company?.trim()) ||
+      profile.experiences?.find((item) => item.isInternship);
+    if (flag === 'INTERNSHIP' || internship) {
+      const company = internship?.company?.trim();
+      return company ? `Internship · ${company}` : 'Internship';
     }
     return 'Fresher';
   }
-  const total = experienceYearsTotal(profile);
+  const total = resolveTotalExperienceYears(profile);
   if (total >= 1) {
     const rounded = Math.floor(total);
     return rounded <= 1 ? '1+ Year' : `${rounded}+ Years`;
@@ -63,7 +66,52 @@ function formatExperienceField(profile: CandidateProfile | null) {
 
 function statusLabel(profile: CandidateProfile | null) {
   if (!profile) return 'CANDIDATE';
-  return resolveCandidateExperienceBand(profile) === 'fresher' ? 'FRESHER' : 'EXPERIENCED';
+  return resolveExperienceChip(profile).label;
+}
+
+function companyInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+  }
+  return (parts[0] || 'C').slice(0, 2).toUpperCase();
+}
+
+function jobSkillPills(job: JobCard, limit = 5) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const skill of [...(job.requiredSkills || []), ...(job.preferredSkills || [])]) {
+    const key = skill.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(skill.trim());
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function PinGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="10" r="2.2" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function BriefcaseGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 12h18" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
 }
 
 function targetRole(profile: CandidateProfile | null) {
@@ -77,21 +125,25 @@ function targetRole(profile: CandidateProfile | null) {
 }
 
 function currentCompany(profile: CandidateProfile | null) {
-  if (!profile) return '—';
+  if (!profile?.experiences?.length) return '—';
   const band = resolveCandidateExperienceBand(profile);
+  const rows = profile.experiences;
   if (band === 'fresher') {
-    const internship =
-      profile.experiences?.find((item) => item.isInternship) ||
-      (profile.hasExperience === 'INTERNSHIP' ? profile.experiences?.[0] : undefined);
-    return internship?.company || '—';
+    const intern =
+      rows.find((item) => item.isInternship && item.stillInCompany) ||
+      rows.find((item) => item.isInternship && item.company?.trim()) ||
+      rows.find((item) => item.isInternship) ||
+      null;
+    return intern?.company?.trim() || '—';
   }
-  if (!profile.experiences?.length) return '—';
+  const paid = rows.filter((item) => !item.isInternship);
   const current =
-    profile.experiences.find((item) => item.stillInCompany && !item.isInternship) ||
-    profile.experiences.find((item) => !item.isInternship) ||
-    profile.experiences.find((item) => item.stillInCompany) ||
-    profile.experiences[0];
-  return current?.company || '—';
+    paid.find((item) => item.stillInCompany) ||
+    paid.find((item) => !item.endDate) ||
+    paid[0] ||
+    rows.find((item) => item.stillInCompany) ||
+    rows[0];
+  return current?.company?.trim() || '—';
 }
 
 function formatInterviewDate(value: string) {
@@ -190,7 +242,13 @@ const EXPERIENCE_LEVEL_CHIPS = [
 
 function activeExperienceChip(profile: CandidateProfile | null) {
   if (!profile) return 'fresher';
-  return resolveExperienceChip(profile);
+  const band = resolveCandidateExperienceBand(profile);
+  if (band === 'fresher') return 'fresher';
+  const total = resolveTotalExperienceYears(profile);
+  if (total < 1.5) return '0-1';
+  if (total < 3.5) return '1-3';
+  if (total < 5.5) return '3-5';
+  return '5+';
 }
 
 export default function DashboardPage() {
@@ -208,6 +266,8 @@ export default function DashboardPage() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoPct, setPhotoPct] = useState(0);
   const [photoError, setPhotoError] = useState('');
+  const [photoBroken, setPhotoBroken] = useState(false);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!photoUploading) return;
@@ -282,7 +342,11 @@ export default function DashboardPage() {
           }
           setName(formatPersonName(candidateProfile.firstName || me.firstName || stored.firstName || 'there'));
           setCity(
-            formatLocationLabel(candidateProfile.city || candidateProfile.preferredWorkCity || ''),
+            formatLocationLabel(
+              candidateProfile.city,
+              candidateProfile.state,
+              candidateProfile.preferredWorkCity,
+            ) || candidateProfile.city || candidateProfile.preferredWorkCity || '',
           );
           const percent = completion?.percentage ?? candidateProfile.profileCompletion ?? 0;
           setCompletionPercent(percent);
@@ -314,6 +378,8 @@ export default function DashboardPage() {
       const url = detail.photoUrl ?? null;
       setProfile((prev) => (prev ? { ...prev, photoUrl: url } : prev));
       patchStoredUser({ photoUrl: url });
+      setPhotoBroken(false);
+      setPhotoPreviewUrl(null);
     };
     window.addEventListener('cb-photo-updated', onPhoto);
     return () => window.removeEventListener('cb-photo-updated', onPhoto);
@@ -355,6 +421,10 @@ export default function DashboardPage() {
     window.dispatchEvent(new CustomEvent('cb-photo-updated', { detail: { photoUrl } }));
   }
 
+  const displayPhotoUrl = photoPreviewUrl || profile?.photoUrl || null;
+  // Keep preview visible during upload — hiding it caused a flash of the blue circle.
+  const showPhoto = Boolean(displayPhotoUrl) && !photoBroken;
+
   async function onPickDashboardPhoto(file?: File) {
     if (!file || photoUploading) return;
     const invalid = photoFileError(file.type, file.size);
@@ -363,10 +433,19 @@ export default function DashboardPage() {
       return;
     }
     setPhotoError('');
+    setPhotoBroken(false);
     setPhotoUploading(true);
     setPhotoPct(10);
+    let localPreview: string | null = null;
     try {
       const blob = await compressImageBlob(file, 420);
+      localPreview = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Could not preview that photo.'));
+        reader.readAsDataURL(blob);
+      });
+      setPhotoPreviewUrl(localPreview);
       setPhotoPct(55);
       const updated = await uploadCandidatePhoto(blob, 'photo.jpg');
       const nextUrl = updated.photoUrl;
@@ -375,7 +454,14 @@ export default function DashboardPage() {
       notifyPhotoUpdated(nextUrl);
       setPhotoPct(100);
       await new Promise((r) => setTimeout(r, 280));
+      // Prefer server-readable URL (signed / data). Keep local preview only as backup.
+      if (nextUrl.startsWith('data:') || nextUrl.includes('X-Goog-Signature') || nextUrl.includes('Signature=')) {
+        setPhotoPreviewUrl(null);
+      }
+      setPhotoBroken(false);
     } catch (err) {
+      // Keep local preview if upload failed after we already showed it.
+      if (!localPreview) setPhotoPreviewUrl(null);
       setPhotoError(err instanceof Error ? err.message : 'Could not upload that photo.');
     } finally {
       setPhotoUploading(false);
@@ -408,6 +494,10 @@ export default function DashboardPage() {
               ? 'Welcome back. Your check-in is complete — explore stronger job matches below.'
               : 'Welcome back. Finish check-in on your profile to board better job matches.'}
           </p>
+        </div>
+
+        <div className="mb-5">
+          <TestimonialPromptCard audience="CANDIDATE" />
         </div>
 
         <div className="cb-boarding__ticket">
@@ -500,50 +590,94 @@ export default function DashboardPage() {
               <span className="cb-boarding__tag">FREE</span>
             </div>
             <div className="cb-boarding__id-row">
-              <button
-                type="button"
-                className={`cb-boarding__id-photo ${profile?.photoUrl ? '' : 'cb-boarding__id-photo--empty'}`}
-                onClick={() => photoInputRef.current?.click()}
-                disabled={photoUploading}
-                aria-label={profile?.photoUrl ? 'Change profile photo' : 'Add profile photo'}
-              >
-                {profile?.photoUrl && !photoUploading ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={
-                      profile.photoUrl.startsWith('data:')
-                        ? profile.photoUrl
-                        : `${profile.photoUrl}${profile.photoUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(profile.photoUrl.slice(-24))}`
-                    }
-                    alt=""
-                  />
-                ) : (
-                  <span className="cb-boarding__id-photo-empty">
-                    <span className="cb-boarding__id-photo-cam" aria-hidden>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M4 8.5A2.5 2.5 0 016.5 6h2.1l1.2-1.8A1.5 1.5 0 0111 3.5h2a1.5 1.5 0 011.2.7L15.4 6h2.1A2.5 2.5 0 0120 8.5v9A2.5 2.5 0 0117.5 20h-11A2.5 2.5 0 014 17.5v-9z"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                        />
-                        <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.8" />
-                      </svg>
-                    </span>
-                    <span className="cb-boarding__id-photo-stripe">Add Photo</span>
-                  </span>
-                )}
-                {photoUploading ? (
-                  <span className="cb-boarding__id-photo-upload" aria-live="polite">
-                    <span
-                      className="cb-boarding__id-photo-water"
-                      style={{ height: `${Math.max(12, photoPct)}%` }}
+              <div className="cb-boarding__id-photo-wrap">
+                <button
+                  type="button"
+                  className={`cb-boarding__id-photo ${showPhoto ? '' : 'cb-boarding__id-photo--empty'}`}
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                  aria-label={showPhoto ? 'Change profile photo' : 'Add profile photo'}
+                >
+                  {showPhoto ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={displayPhotoUrl || 'photo'}
+                      src={
+                        !displayPhotoUrl
+                          ? ''
+                          : displayPhotoUrl.startsWith('data:') || displayPhotoUrl.startsWith('blob:')
+                            ? displayPhotoUrl
+                            : `${displayPhotoUrl}${displayPhotoUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(displayPhotoUrl.slice(-24))}`
+                      }
+                      alt=""
+                      onLoad={() => {
+                        setPhotoBroken(false);
+                        // Remote readable URL loaded — drop local preview.
+                        if (
+                          photoPreviewUrl &&
+                          profile?.photoUrl &&
+                          displayPhotoUrl === profile.photoUrl
+                        ) {
+                          setPhotoPreviewUrl(null);
+                        }
+                      }}
+                      onError={() => {
+                        // Private GCS URL often 403s. Keep local preview if we have one.
+                        if (photoPreviewUrl && displayPhotoUrl !== photoPreviewUrl) {
+                          return;
+                        }
+                        if (photoPreviewUrl) return;
+                        setPhotoBroken(true);
+                      }}
                     />
-                    <span className="cb-boarding__id-photo-upload-txt">
-                      {photoPct < 100 ? `${photoPct}%` : '✓'}
+                  ) : (
+                    <span className="cb-boarding__id-photo-empty">
+                      <span className="cb-boarding__id-photo-cam" aria-hidden>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M4 8.5A2.5 2.5 0 016.5 6h2.1l1.2-1.8A1.5 1.5 0 0111 3.5h2a1.5 1.5 0 011.2.7L15.4 6h2.1A2.5 2.5 0 0120 8.5v9A2.5 2.5 0 0117.5 20h-11A2.5 2.5 0 014 17.5v-9z"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                          />
+                          <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+                        </svg>
+                      </span>
+                      <span className="cb-boarding__id-photo-stripe">Add Photo</span>
                     </span>
-                  </span>
+                  )}
+                  {photoUploading ? (
+                    <span className="cb-boarding__id-photo-upload" aria-live="polite">
+                      <span
+                        className="cb-boarding__id-photo-water"
+                        style={{ height: `${Math.max(12, photoPct)}%` }}
+                      />
+                      <span className="cb-boarding__id-photo-upload-txt">
+                        {photoPct < 100 ? `${photoPct}%` : '✓'}
+                      </span>
+                    </span>
+                  ) : null}
+                </button>
+                {showPhoto ? (
+                  <button
+                    type="button"
+                    className="cb-boarding__id-photo-edit"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoUploading}
+                    aria-label="Edit profile photo"
+                    title="Edit photo"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M4 20h4.5L19 9.5 14.5 5 4 15.5V20z"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinejoin="round"
+                      />
+                      <path d="M12.5 7.5l4 4" stroke="currentColor" strokeWidth="1.8" />
+                    </svg>
+                  </button>
                 ) : null}
-              </button>
+              </div>
               <input
                 ref={photoInputRef}
                 type="file"
@@ -616,31 +750,21 @@ export default function DashboardPage() {
         ) : (
           <div className="cb-rec-jobs">
             {jobs.map((job) => {
-              const mark = (job.companyName || 'CB')
-                .split(/\s+/)
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((part) => part[0]?.toUpperCase() || '')
-                .join('');
-              const skills = [...(job.requiredSkills || []), ...(job.preferredSkills || [])]
-                .map((s) => s.trim())
-                .filter(Boolean)
-                .filter((s, i, arr) => arr.findIndex((x) => x.toLowerCase() === s.toLowerCase()) === i)
-                .slice(0, 5);
+              const skills = jobSkillPills(job);
+              const matchScore =
+                typeof job.match?.score === 'number' ? Math.round(job.match.score) : null;
               const experienceLabel = job.experience?.trim() || null;
               return (
                 <article key={job.id} className="cb-rec-job">
                   <div className="cb-rec-job__head">
                     <div className="cb-rec-job__brand">
                       <span className="cb-rec-job__logo" aria-hidden>
-                        {mark || 'CB'}
+                        {companyInitials(job.companyName)}
                       </span>
                       <span className="cb-rec-job__company">{job.companyName}</span>
                     </div>
                     <span className="cb-rec-job__match">
-                      {typeof job.match?.score === 'number'
-                        ? `${job.match.score}% match`
-                        : 'Recommended'}
+                      {matchScore != null ? `${matchScore}% match` : 'Recommended'}
                     </span>
                   </div>
 
@@ -648,43 +772,22 @@ export default function DashboardPage() {
                     <h3 className="cb-rec-job__title">{job.title}</h3>
                     <p className="cb-rec-job__meta">
                       <span className="cb-rec-job__meta-icon" aria-hidden>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                          <path
-                            d="M12 21s7-5.2 7-11a7 7 0 10-14 0c0 5.8 7 11 7 11z"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                          />
-                          <circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.8" />
-                        </svg>
+                        <PinGlyph />
                       </span>
-                      {job.city || city || 'India'}
+                      {formatLocationLabel(job.city, (job as { state?: string | null }).state) ||
+                        job.city ||
+                        city ||
+                        'India'}
                     </p>
                     {experienceLabel ? (
                       <p className="cb-rec-job__meta">
                         <span className="cb-rec-job__meta-icon" aria-hidden>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path
-                              d="M8 7V5.5A1.5 1.5 0 019.5 4h5A1.5 1.5 0 0116 5.5V7"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                            />
-                            <rect
-                              x="3.5"
-                              y="7"
-                              width="17"
-                              height="12.5"
-                              rx="2"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                            />
-                            <path d="M3.5 12h17" stroke="currentColor" strokeWidth="1.8" />
-                          </svg>
+                          <BriefcaseGlyph />
                         </span>
                         Experience required: <strong>{experienceLabel}</strong>
                       </p>
                     ) : null}
-                    {skills.length ? (
+                    {skills.length > 0 ? (
                       <div className="cb-rec-job__skills">
                         {skills.map((skill) => (
                           <span key={skill} className="cb-rec-job__skill">

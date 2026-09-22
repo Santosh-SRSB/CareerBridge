@@ -8,6 +8,7 @@ type JobRoleComboboxProps = {
   onChange: (value: string) => void;
   label?: string;
   placeholder?: string;
+  showHint?: boolean;
 };
 
 export function JobRoleCombobox({
@@ -16,6 +17,7 @@ export function JobRoleCombobox({
   onChange,
   label = 'Job Role',
   placeholder = 'Search or type your job role…',
+  showHint = true,
 }: JobRoleComboboxProps) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
@@ -159,7 +161,9 @@ export function JobRoleCombobox({
         </ul>
       ) : null}
 
-      <p className="mt-2 text-xs text-slate-500">Search from the list or type any job role.</p>
+      {showHint ? (
+        <p className="mt-2 text-xs text-slate-500">Search from the list or type any job role.</p>
+      ) : null}
     </div>
   );
 }

@@ -31,32 +31,21 @@ export interface ResumeWizardDraft {
   savedAt: number;
 }
 
-function readDraftRaw(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    // Prefer localStorage so Back / reload keeps the resume until the user clears it.
-    const local = localStorage.getItem(RESUME_WIZARD_DRAFT_KEY);
-    if (local) return local;
-    const session = sessionStorage.getItem(RESUME_WIZARD_DRAFT_KEY);
-    if (session) {
-      localStorage.setItem(RESUME_WIZARD_DRAFT_KEY, session);
-      sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
-      return session;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 export function loadResumeWizardDraft(): ResumeWizardDraft | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = readDraftRaw();
+    const raw =
+      localStorage.getItem(RESUME_WIZARD_DRAFT_KEY) ||
+      sessionStorage.getItem(RESUME_WIZARD_DRAFT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ResumeWizardDraft;
     if (!parsed || typeof parsed !== 'object') return null;
     if ((parsed.version ?? 0) < RESUME_WIZARD_DRAFT_VERSION) return null;
+    // Migrate older session drafts into localStorage so Back survives reloads.
+    if (!localStorage.getItem(RESUME_WIZARD_DRAFT_KEY)) {
+      localStorage.setItem(RESUME_WIZARD_DRAFT_KEY, raw);
+    }
+    sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
     return parsed;
   } catch {
     return null;
@@ -71,24 +60,17 @@ export function saveResumeWizardDraft(draft: Omit<ResumeWizardDraft, 'savedAt' |
       version: RESUME_WIZARD_DRAFT_VERSION,
       savedAt: Date.now(),
     };
-    const raw = JSON.stringify(payload);
-    localStorage.setItem(RESUME_WIZARD_DRAFT_KEY, raw);
-    // Keep session copy in sync for older code paths.
-    sessionStorage.setItem(RESUME_WIZARD_DRAFT_KEY, raw);
+    localStorage.setItem(RESUME_WIZARD_DRAFT_KEY, JSON.stringify(payload));
+    sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
   } catch {
     // Ignore quota errors
   }
 }
 
-/** Explicit clear only — e.g. user starts a brand-new upload that replaces everything. */
 export function clearResumeWizardDraft() {
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
-    sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
-  } catch {
-    // ignore
-  }
+  localStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
+  sessionStorage.removeItem(RESUME_WIZARD_DRAFT_KEY);
 }
 
 const AUTOFILL_SEED_KEY = 'cb.resumeAutofillSeed';
@@ -110,6 +92,7 @@ export function consumeResumeSeedFromProfile() {
   const flagged = sessionStorage.getItem('cb.resumeFromProfile') === '1';
   if (flagged) {
     sessionStorage.removeItem('cb.resumeFromProfile');
+    clearResumeWizardDraft();
   }
   return flagged;
 }
@@ -158,28 +141,64 @@ export function clearResumeFromBuild() {
   sessionStorage.removeItem('cb.resumeFromProfile');
 }
 
-/**
- * Store wizard seed from uploaded resume and open /resume wizard.
- * Does NOT wipe an existing draft until the seed is applied on /resume —
- * so Back from the finish screen keeps filled data when returning.
- */
+/** Store wizard seed from uploaded resume and open /resume wizard. */
 export function markResumeAutofillSeed(input: {
   seed: Omit<ResumeWizardDraft, 'savedAt' | 'version' | 'flowPhase' | 'wizardIndex'>;
   resumeId?: string;
+  pendingParse?: boolean;
 }) {
   if (typeof window === 'undefined') return;
+  clearResumeWizardDraft();
   sessionStorage.removeItem(BUILD_FLAG_KEY);
-  sessionStorage.setItem('cb.resumeReplaceDraft', '1');
   sessionStorage.setItem(
     AUTOFILL_SEED_KEY,
     JSON.stringify({
       ...input.seed,
       resumeId: input.resumeId || null,
       highlightMissing: true,
+      pendingParse: Boolean(input.pendingParse),
     }),
   );
   sessionStorage.setItem(AUTOFILL_FLAG_KEY, '1');
   sessionStorage.setItem('cb.resumeStartWizard', '1');
+}
+
+/**
+ * Fast upload path: open wizard immediately while Document AI + Gemini finish
+ * in the background. Wizard polls and hydrates when processing completes.
+ */
+export function markResumePendingParse(input: {
+  resumeId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+}) {
+  markResumeAutofillSeed({
+    resumeId: input.resumeId,
+    pendingParse: true,
+    seed: {
+      fullName: input.fullName || '',
+      location: '',
+      email: input.email || '',
+      phone: input.phone || '',
+      summary: '',
+      skills: [],
+      educationList: [],
+      experienceList: [],
+      projectList: [],
+      certificationList: [],
+      achievementList: [],
+      linkedin: '',
+      github: '',
+      portfolio: '',
+      gapReason: '',
+      languages: [],
+      availableLanguages: [],
+      preferredRole: '',
+      preferredLocation: '',
+      expectedSalary: '',
+    },
+  });
 }
 
 export function peekResumeFromAutofill() {
@@ -191,6 +210,7 @@ export function peekResumeAutofillSeed():
   | (Omit<ResumeWizardDraft, 'savedAt' | 'version' | 'flowPhase' | 'wizardIndex'> & {
       resumeId?: string | null;
       highlightMissing?: boolean;
+      pendingParse?: boolean;
     })
   | null {
   if (typeof window === 'undefined') return null;

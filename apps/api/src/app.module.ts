@@ -23,6 +23,7 @@ import { AiModule } from './ai/ai.module';
 import { StorageModule } from './common/storage/storage.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TestimonialsModule } from './testimonials/testimonials.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -60,6 +61,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     StorageModule,
     WhatsAppModule,
     NotificationsModule,
+    TestimonialsModule,
   ],
   controllers: [HealthController],
   providers: [

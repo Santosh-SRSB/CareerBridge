@@ -1,9 +1,16 @@
 import type { ResumeContent } from '@careerbridge/shared';
 import { parseLanguageSkills } from '@careerbridge/shared';
+import { formatCityState, parseCityState } from '@/data/india-locations';
 import { buildMasterResume } from './build-master-resume';
 import type { MasterResumeDocument } from './master-resume.types';
 import { splitProjectFields } from './project-fields';
 import { normalizeCertificationList } from './certification-fields';
+
+function locationFromContent(content: Pick<ResumeContent, 'city' | 'state'>) {
+  const raw = [content.city, content.state].filter(Boolean).join(', ').trim() || content.city || '';
+  const parsed = parseCityState(raw);
+  return formatCityState(parsed.city, parsed.state) || raw;
+}
 
 function splitDegreeAndField(qualification: string) {
   const match = qualification.match(/^(.+?)\s+in\s+(.+)$/i);
@@ -28,7 +35,7 @@ export function buildResumeFromResumeContent(
 
   return buildMasterResume({
     fullName: content.fullName || '',
-    location: content.city || '',
+    location: locationFromContent(content),
     email: content.email || '',
     phone: content.phone || '',
     linkedin,

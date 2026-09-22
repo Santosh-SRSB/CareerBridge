@@ -67,7 +67,7 @@ export function EmployerRegisterForm() {
   })();
 
   const workEmailError = (() => {
-    if (!touched.workEmail && otpChannel !== 'EMAIL') return '';
+    if (!touched.workEmail && otpChannel === 'MOBILE') return '';
     if (otpChannel === 'EMAIL' && !workEmail.trim()) {
       return 'Work email is required for Email OTP verification.';
     }
@@ -127,23 +127,6 @@ export function EmployerRegisterForm() {
       setError('Enter your company name.');
       return;
     }
-    if (!isValidNational(country.maxLength, national)) {
-      setError('Enter a valid mobile number.');
-      return;
-    }
-    const passwordProblem = registrationPasswordError(password);
-    if (passwordProblem) {
-      setError(passwordProblem);
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Password and confirm password do not match.');
-      return;
-    }
-    if (!otpChannel) {
-      setError('Select Mobile OTP or Email OTP.');
-      return;
-    }
     if (otpChannel === 'EMAIL') {
       if (!workEmail.trim()) {
         setError('Please enter your work email to receive the OTP.');
@@ -160,6 +143,23 @@ export function EmployerRegisterForm() {
         setError(emailProblem);
         return;
       }
+    }
+    if (!isValidNational(country.maxLength, national)) {
+      setError('Enter a valid mobile number.');
+      return;
+    }
+    const passwordProblem = registrationPasswordError(password);
+    if (passwordProblem) {
+      setError(passwordProblem);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Password and confirm password do not match.');
+      return;
+    }
+    if (!otpChannel) {
+      setError('Select Mobile OTP or Email OTP.');
+      return;
     }
     if (!agreeTerms) {
       setError('You must agree to Terms & Privacy Policy to continue.');
@@ -275,7 +275,8 @@ export function EmployerRegisterForm() {
         hint=""
       />
 
-      <div className="pt-1">
+      {/* 5. Password */}
+      <div>
         <label className="mb-1.5 block text-xs font-bold text-primary" htmlFor="emp-password">
           Password
         </label>
@@ -405,11 +406,11 @@ export function EmployerRegisterForm() {
           </button>
         </div>
         <p className="mt-1.5 text-[11px] font-medium text-slate-500">
-          {otpChannel === 'EMAIL'
-            ? 'A 6-digit OTP will be sent to your work email.'
-            : otpChannel === 'MOBILE'
-              ? 'A 6-digit OTP will be sent to your mobile number.'
-              : 'Choose Mobile OTP or Email OTP.'}
+          {!otpChannel
+            ? 'Choose Mobile OTP or Email OTP.'
+            : otpChannel === 'EMAIL'
+              ? 'A 6-digit OTP will be sent to your work email.'
+              : 'A 6-digit OTP will be sent to your mobile number.'}
         </p>
       </div>
 
@@ -427,7 +428,14 @@ export function EmployerRegisterForm() {
             className="mt-0.5 h-4 w-4 rounded border-primary/20 text-[#0a2e2c] focus:ring-[#0d9488]"
           />
           <span>
-            I agree to <a href="/terms" target="_blank" className="text-[#0d9488] hover:underline">Terms & Privacy Policy</a>
+            I agree to{' '}
+            <a href="/employer/terms" target="_blank" rel="noreferrer" className="text-[#0d9488] hover:underline">
+              Employer Terms
+            </a>{' '}
+            and{' '}
+            <a href="/privacy" target="_blank" rel="noreferrer" className="text-[#0d9488] hover:underline">
+              Privacy Policy
+            </a>
           </span>
         </label>
         {termsError ? (

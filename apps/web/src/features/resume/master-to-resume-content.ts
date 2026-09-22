@@ -1,5 +1,6 @@
 import type { ResumeContent } from '@careerbridge/shared';
 import { withNormalizedResumeData } from '@careerbridge/shared';
+import { parseCityState } from '@/data/india-locations';
 import type { MasterResumeDocument } from './master-resume.types';
 import { dedupeBulletList, splitProjectFields } from './project-fields';
 
@@ -19,10 +20,12 @@ export function masterResumeToResumeContent(doc: MasterResumeDocument): ResumeCo
     portfolio: (doc.personalInfo.portfolio || '').trim() || undefined,
   };
   const hasLinks = Boolean(links.linkedin || links.github || links.portfolio);
+  const { city, state } = parseCityState(doc.personalInfo.location || '');
 
   const content: ResumeContent = {
     fullName: doc.personalInfo.fullName,
-    city: doc.personalInfo.location || null,
+    city: city || doc.personalInfo.location || null,
+    state: state || null,
     phone: doc.personalInfo.phone || null,
     email: doc.personalInfo.email || null,
     summary: doc.summary,

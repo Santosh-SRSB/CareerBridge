@@ -780,16 +780,30 @@ function JobsSearchContent() {
                           ) : null}
                         </div>
 
-                        <Link
-                          href={`/jobs/${job.id}`}
-                          className={`mt-4 block w-full rounded-[10px] py-3 text-center text-sm font-bold transition hover:-translate-y-px ${
-                            job.applied
-                              ? 'border border-[var(--jobs-hair)] bg-[#eef3f1] text-[var(--jobs-dark)] hover:bg-[#e4ebe8] hover:shadow-none'
-                              : 'bg-[var(--jobs-dark)] text-white hover:bg-[var(--jobs-dark-2)] hover:shadow-[0_8px_18px_rgba(12,40,34,.25)]'
-                          }`}
-                        >
-                          {job.applied ? 'Applied' : 'Get Details'}
-                        </Link>
+                        <div className="mt-4 flex gap-2">
+                          <Link
+                            href={`/jobs/${job.id}`}
+                            className="flex-1 rounded-[10px] border border-[var(--jobs-dark)] bg-white py-3 text-center text-sm font-bold text-[var(--jobs-dark)] transition hover:bg-[#f4f7f6]"
+                          >
+                            View
+                          </Link>
+                          {job.applied ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="flex-1 cursor-not-allowed rounded-[10px] border border-[var(--jobs-hair)] bg-[#eef2f1] py-3 text-center text-sm font-bold text-[var(--jobs-muted)]"
+                            >
+                              Applied
+                            </button>
+                          ) : (
+                            <Link
+                              href={`/jobs/${job.id}/apply`}
+                              className="flex-1 rounded-[10px] bg-[var(--jobs-dark)] py-3 text-center text-sm font-bold text-white transition hover:-translate-y-px hover:bg-[var(--jobs-dark-2)] hover:shadow-[0_8px_18px_rgba(12,40,34,.25)]"
+                            >
+                              Apply
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

@@ -52,6 +52,8 @@ model User {
   refreshTokens RefreshToken[]
   notifications Notification[]
   deviceTokens  DeviceToken[]
+  testimonials  Testimonial[]
+  testimonialPrompts TestimonialPrompt[]
 
   @@unique([email, userType])
   @@unique([phone, userType])
@@ -900,7 +902,7 @@ model AiInteraction {
   @@map("ai_interactions")
 }
 
-/// Vector embeddings for hybrid matching + RAG (Volume 2A.21). Stored as JSON floats for MVP portability.
+/// Legacy JSON embeddings table (unused by new writes). Profile + chunk vectors live in pgvector tables.
 model Embedding {
   id            String   @id @default(uuid())
   entityType    String   @map("entity_type") // CANDIDATE | JOB | RESUME | SKILL | KNOWLEDGE
@@ -916,6 +918,50 @@ model Embedding {
   @@index([entityType])
   @@index([contentHash])
   @@map("embeddings")
+}
+
+/// One profile vector per candidate or job. Similarity runs in Postgres.
+model ProfileEmbedding {
+  id           String                       @id @default(uuid())
+  entityType   String                       @map("entity_type")
+  entityId     String                       @map("entity_id")
+  contentHash  String                       @map("content_hash")
+  embedding    Unsupported("vector(768)")
+  model        String
+  dimensions   Int
+  createdAt    DateTime                     @default(now()) @map("created_at")
+  updatedAt    DateTime                     @updatedAt @map("updated_at")
+
+  @@unique([entityType, entityId])
+  @@index([entityType])
+  @@map("profile_embeddings")
+}
+
+/// Semantic resume/JD chunks. Inactive rows must not be retrieved.
+model EmbeddingChunk {
+  id               String                       @id @default(uuid())
+  entityType       String                       @map("entity_type")
+  parentId         String                       @map("parent_id")
+  candidateId      String?                      @map("candidate_id")
+  jobId            String?                      @map("job_id")
+  resumeId         String?                      @map("resume_id")
+  section          String
+  subsection       String?
+  chunkIndex       Int                          @map("chunk_index")
+  content          String                       @db.Text
+  tokenCount       Int                          @map("token_count")
+  embedding        Unsupported("vector(768)")
+  metadata         Json                         @default("{}")
+  chunkingVersion  String                       @map("chunking_version")
+  embeddingModel   String                       @map("embedding_model")
+  active           Boolean                      @default(true)
+  createdAt        DateTime                     @default(now()) @map("created_at")
+  updatedAt        DateTime                     @updatedAt @map("updated_at")
+
+  @@index([candidateId, active])
+  @@index([jobId, active])
+  @@index([resumeId])
+  @@map("embedding_chunks")
 }
 
 /// Centralized Audit Log (Volume 2 HLD Section 2A.25)
@@ -946,5 +992,74 @@ model PlatformSetting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("platform_settings")
+}
+
+enum TestimonialAudience {
+  CANDIDATE
+  EMPLOYER
+}
+
+enum TestimonialStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TestimonialSource {
+  AFTER_5_APPLICATIONS
+  AFTER_FIRST_MOCK_INTERVIEW
+  PROFILE_80_COMPLETE
+  DASHBOARD_SOFT_PROMPT
+  FIRST_JOB_PUBLISHED
+  AFTER_SHORTLIST_OR_INTERVIEW
+  AFTER_HIRE_OR_SELECT
+  MANUAL
+}
+
+enum TestimonialPromptStatus {
+  ELIGIBLE
+  DISMISSED
+  SUBMITTED
+}
+
+model Testimonial {
+  id               String               @id @default(uuid())
+  userId           String               @map("user_id")
+  audience         TestimonialAudience
+  source           TestimonialSource
+  rating           Int
+  quote            String               @db.Text
+  displayName      String?              @map("display_name")
+  headline         String?
+  status           TestimonialStatus    @default(PENDING)
+  reviewedByUserId String?              @map("reviewed_by_user_id")
+  reviewedAt       DateTime?            @map("reviewed_at")
+  rejectReason     String?              @map("reject_reason") @db.Text
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, audience, createdAt])
+  @@index([userId, source])
+  @@map("testimonials")
+}
+
+model TestimonialPrompt {
+  id          String                  @id @default(uuid())
+  userId      String                  @map("user_id")
+  source      TestimonialSource
+  status      TestimonialPromptStatus @default(ELIGIBLE)
+  eligibleAt  DateTime                @default(now()) @map("eligible_at")
+  dismissedAt DateTime?               @map("dismissed_at")
+  submittedAt DateTime?               @map("submitted_at")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, source])
+  @@index([userId, status])
+  @@map("testimonial_prompts")
 }
 

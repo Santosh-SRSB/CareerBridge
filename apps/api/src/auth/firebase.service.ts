@@ -41,14 +41,17 @@ export class FirebaseService {
 
   private loadServiceAccountFile(): ServiceAccountShape | null {
     const configured = this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_PATH');
-    if (!configured) return null;
+    if (!configured?.trim()) return null;
     const path = isAbsolute(configured) ? configured : resolve(process.cwd(), configured);
     if (!existsSync(path)) {
       this.logger.warn(`FIREBASE_SERVICE_ACCOUNT_PATH not found: ${path}`);
       return null;
     }
     try {
-      return JSON.parse(readFileSync(path, 'utf8')) as ServiceAccountShape;
+      let text = readFileSync(path, 'utf8');
+      if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+      text = text.replace(/^\uFEFF/, '').replace(/^\?+/, '').trim();
+      return JSON.parse(text) as ServiceAccountShape;
     } catch (err) {
       this.logger.warn(
         `Could not read FIREBASE_SERVICE_ACCOUNT_PATH: ${err instanceof Error ? err.message : String(err)}`,

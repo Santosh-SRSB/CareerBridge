@@ -7,9 +7,13 @@ export function mapResumeContentToPassportPayload(content: ResumeContent): SaveP
   const lastName = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
 
   const experiences = content.experiences || [];
-  const hasPaidJobs = experiences.some(
+  const paidJobs = experiences.filter(
     (row) => !row.isInternship && Boolean(row.company?.trim() || row.jobTitle?.trim()),
   );
+  const internships = experiences.filter(
+    (row) => row.isInternship && Boolean(row.company?.trim() || row.jobTitle?.trim()),
+  );
+  const isExperienced = paidJobs.length > 0;
 
   return {
     firstName,
@@ -17,8 +21,7 @@ export function mapResumeContentToPassportPayload(content: ResumeContent): SaveP
     city: content.city?.trim() || undefined,
     about: content.summary?.trim() || undefined,
     source: 'resume',
-    // Paid roles → experienced; internship-only / none → fresher (matches 4-step onboarding).
-    experienceLevel: hasPaidJobs ? 'experienced' : 'fresher',
+    experienceLevel: isExperienced ? 'experienced' : 'fresher',
     skills: (content.skills || []).map((s) => s.trim()).filter(Boolean),
     education: (content.education || [])
       .filter((row) => row.qualification?.trim())
@@ -28,14 +31,12 @@ export function mapResumeContentToPassportPayload(content: ResumeContent): SaveP
         yearCompleted: row.yearCompleted ? String(row.yearCompleted) : undefined,
         endDate: row.yearCompleted ? `${row.yearCompleted}-06` : undefined,
       })),
-    experience: experiences
-      .filter((row) => row.company?.trim() || row.jobTitle?.trim())
-      .map((row) => ({
-        company: row.company?.trim() || undefined,
-        jobTitle: row.jobTitle?.trim() || undefined,
-        description: row.description?.trim() || undefined,
-        isInternship: Boolean(row.isInternship),
-      })),
+    experience: [...paidJobs, ...internships].map((row) => ({
+      company: row.company?.trim() || undefined,
+      jobTitle: row.jobTitle?.trim() || undefined,
+      description: row.description?.trim() || undefined,
+      isInternship: Boolean(row.isInternship),
+    })),
     projects: (content.projects || [])
       .filter((row) => row.name?.trim())
       .map((row) => {

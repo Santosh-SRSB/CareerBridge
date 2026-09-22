@@ -4,16 +4,32 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { OB, OnboardingFrame, onboardingPrimaryButtonClass } from '@/components/OnboardingFrame';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
-import { getCandidateMe, getResume, getResumeProcessingStatus, uploadResumeFile } from '@/lib/api';
+import { getCandidateMe, retryResumeProcessing, uploadResumeFile } from '@/lib/api';
 import {
-  markResumeAutofillSeed,
+  markResumePendingParse,
   markResumeBuildPath,
 } from '@/features/resume/resume-wizard-draft';
-import { mapResumeRecordToWizardSeed } from '@/features/resume/resume-record-to-wizard';
 import { rememberReturnTo } from '@/lib/nav-return';
 import { SuccessCelebration } from '@/components/SuccessCelebration';
 
 const ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg';
+
+function guessNameFromFile(fileName: string) {
+  const base = fileName.replace(/\.[^.]+$/, '');
+  const cleaned = base
+    .replace(/[_-]?resume.*$/i, '')
+    .replace(/[_-]?cv.*$/i, '')
+    .replace(/[_\-]+/g, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.length < 2) return '';
+  return cleaned
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
@@ -64,6 +80,7 @@ export default function OnboardingCompletePage() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [failedResumeId, setFailedResumeId] = useState<string | null>(null);
   const [uploadCelebration, setUploadCelebration] = useState<'idle' | 'loading' | 'success'>('idle');
 
   const statViews = useCountUp(ready, 3.2, 'x', 1, 900, 550);
@@ -109,17 +126,19 @@ export default function OnboardingCompletePage() {
     if (fileRef.current) fileRef.current.value = '';
   }
 
-  async function waitForProcessing(resumeId: string) {
-    for (let i = 0; i < 40; i += 1) {
-      const result = await getResumeProcessingStatus(resumeId);
-      if (result.processingStatus === 'COMPLETED') return;
-      if (result.processingStatus === 'FAILED') {
-        throw new Error(result.processingError || 'Resume processing failed.');
-      }
-      setStatus(i < 2 ? 'Extracting details…' : 'Almost done…');
-      await new Promise((r) => setTimeout(r, 1500));
-    }
-    throw new Error('Processing is taking too long. Please try again.');
+  async function openWizardAfterUpload(resumeId: string, fileName: string) {
+    const stored = getStoredUser();
+    const guessed = guessNameFromFile(fileName);
+    markResumePendingParse({
+      resumeId,
+      fullName: guessed || stored?.firstName || '',
+    });
+    setStatus('reading');
+    setUploadCelebration('success');
+    // Keep celebration under ~1s total after upload — never wait for Gemini here.
+    await new Promise((r) => setTimeout(r, 500));
+    rememberReturnTo('/onboarding/complete');
+    router.push('/resume?from=autofill');
   }
 
   async function onAddResume() {
@@ -128,27 +147,40 @@ export default function OnboardingCompletePage() {
       return;
     }
     setError('');
+    setFailedResumeId(null);
     setBusy(true);
     setUploadCelebration('loading');
-    setStatus('Uploading resume…');
+    setStatus('uploading');
     try {
       const uploaded = await uploadResumeFile(file);
-      setStatus('Extracting details…');
-      await waitForProcessing(uploaded.id);
-      const record = await getResume(uploaded.id);
-      const seed = mapResumeRecordToWizardSeed(record);
-      markResumeAutofillSeed({ seed, resumeId: record.id });
-      setStatus('');
-      setUploadCelebration('success');
-      await new Promise((r) => setTimeout(r, 1700));
-      rememberReturnTo('/onboarding/complete');
-      router.push('/resume?from=autofill');
+      await openWizardAfterUpload(uploaded.id, file.name);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed. Please try again.';
       if (message.includes('sign in') || (err as { code?: string })?.code === 'UNAUTHORIZED') {
         router.replace('/login');
         return;
       }
+      setError(message);
+      setBusy(false);
+      setStatus('');
+      setUploadCelebration('idle');
+    }
+  }
+
+  async function onRetryProcessing() {
+    if (!failedResumeId) {
+      void onAddResume();
+      return;
+    }
+    setError('');
+    setBusy(true);
+    setUploadCelebration('loading');
+    setStatus('uploading');
+    try {
+      await retryResumeProcessing(failedResumeId);
+      await openWizardAfterUpload(failedResumeId, file?.name || 'resume.pdf');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Retry failed. Please try again.';
       setError(message);
       setBusy(false);
       setStatus('');
@@ -323,10 +355,17 @@ export default function OnboardingCompletePage() {
       {uploadCelebration !== 'idle' ? (
         <SuccessCelebration
           phase={uploadCelebration}
-          loadingTitle={status || 'Extracting details…'}
-          loadingSubtitle="Reading your resume securely."
-          successTitle="Your resume is saved with us"
-          successSubtitle="Opening the profile wizard next…"
+          loader="dots"
+          loadingTitle={
+            status === 'uploading'
+              ? 'Your resume is uploading'
+              : 'Uploaded successfully'
+          }
+          loadingSubtitle={
+            status === 'uploading' ? 'Please wait a moment…' : 'Opening your resume wizard…'
+          }
+          successTitle="Uploaded successfully"
+          successSubtitle="Opening your resume wizard…"
         />
       ) : null}
 
@@ -368,7 +407,20 @@ export default function OnboardingCompletePage() {
                 {status}
               </p>
             ) : null}
-            {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+            {error ? (
+              <div className="mt-2">
+                <p className="text-sm text-red-600">{error}</p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onRetryProcessing()}
+                  className="mt-3 w-full rounded-full border py-2.5 text-sm font-semibold transition hover:bg-[#f6f5ee] disabled:opacity-60"
+                  style={{ borderColor: OB.moss, color: OB.ink }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
 
             <div className="mt-5 flex gap-2">
               <button

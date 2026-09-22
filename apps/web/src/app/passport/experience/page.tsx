@@ -114,10 +114,9 @@ export default function PassportExperiencePage() {
     setError('');
     setLoading(true);
     try {
-      let profile = await updateCandidateMe({
-        hasExperience,
-        experienceLevel: hasExperience === 'YES' ? 'experienced' : 'fresher',
-      });
+      const experienceLevel =
+        hasExperience === 'YES' ? 'experienced' : 'fresher';
+      let profile = await updateCandidateMe({ hasExperience, experienceLevel });
       if (hasExperience !== 'NONE') {
         if (company.trim() || jobTitle.trim()) {
           const saved = await saveCurrentJob();
@@ -206,7 +205,7 @@ export default function PassportExperiencePage() {
               I currently work here
             </label>
             <Textarea
-              label="What did you do?"
+              label="Role and responsibility"
               name="description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
