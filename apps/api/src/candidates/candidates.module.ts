@@ -3,9 +3,10 @@ import { CandidatesController } from './candidates.controller';
 import { CandidatesService } from './candidates.service';
 import { MatchingModule } from '../matching/matching.module';
 import { StorageModule } from '../common/storage/storage.module';
+import { TestimonialsModule } from '../testimonials/testimonials.module';
 
 @Module({
-  imports: [MatchingModule, StorageModule],
+  imports: [MatchingModule, StorageModule, TestimonialsModule],
   controllers: [CandidatesController],
   providers: [CandidatesService],
 })

@@ -61,6 +61,9 @@ export function HomeSrsbFooter() {
           <p className="cb-home-srsb-footer__label">Legal</p>
           <ul>
             <li>
+              <Link href="/testimonials">Testimonials</Link>
+            </li>
+            <li>
               <Link href="/privacy">Privacy Policy</Link>
             </li>
             <li>

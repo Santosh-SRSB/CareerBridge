@@ -22,6 +22,7 @@ import {
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { TestimonialPromptCard } from '@/components/TestimonialPromptCard';
 import { formatCandidateExperienceLine, resolveTotalExperienceYears } from '@/lib/format-candidate-experience';
 import { resolvePassportSummary } from '@/lib/passport-to-friend-resume';
 import {
@@ -493,6 +494,10 @@ export default function DashboardPage() {
               ? 'Welcome back. Your check-in is complete — explore stronger job matches below.'
               : 'Welcome back. Finish check-in on your profile to board better job matches.'}
           </p>
+        </div>
+
+        <div className="mb-5">
+          <TestimonialPromptCard audience="CANDIDATE" />
         </div>
 
         <div className="cb-boarding__ticket">

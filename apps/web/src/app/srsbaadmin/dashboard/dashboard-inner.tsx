@@ -23,6 +23,8 @@ import {
   updateAdminSkill,
   verifyEmployer,
   getAdminAiUsage,
+  getAdminTestimonials,
+  reviewAdminTestimonial,
 } from '@/lib/api';
 import { SuperAdminShell } from '@/components/super-admin/SuperAdminShell';
 import {
@@ -54,6 +56,7 @@ const TABS: SuperAdminNavId[] = [
   'skills',
   'ai-usage',
   'notifications',
+  'testimonials',
   'reports',
   'admins',
   'settings',
@@ -173,6 +176,31 @@ export default function SuperAdminDashboardInner() {
     inbox: Array<Record<string, unknown>>;
     whatsapp: Array<Record<string, unknown>>;
   } | null>(null);
+  const [testimonials, setTestimonials] = useState<
+    Array<{
+      id: string;
+      audience: string;
+      source: string;
+      rating: number;
+      quote: string;
+      displayName: string | null;
+      headline: string | null;
+      status: string;
+      rejectReason: string | null;
+      reviewedAt: string | null;
+      createdAt: string;
+      user: {
+        email: string | null;
+        phone: string;
+        userType: string;
+        name: string | null;
+        company: string | null;
+      };
+    }>
+  >([]);
+  const [testimonialFilter, setTestimonialFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | ''>(
+    'PENDING',
+  );
   const [reports, setReports] = useState<Record<string, unknown> | null>(null);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [auditRows, setAuditRows] = useState<Array<Record<string, unknown>>>([]);
@@ -277,6 +305,18 @@ export default function SuperAdminDashboardInner() {
       return;
     }
 
+    if (tab === 'testimonials') {
+      setListLoading(true);
+      getAdminTestimonials(testimonialFilter || undefined)
+        .then(setTestimonials)
+        .catch(() => {
+          setTestimonials([]);
+          setError('Could not load testimonials.');
+        })
+        .finally(() => setListLoading(false));
+      return;
+    }
+
     if (tab === 'reports') {
       setListLoading(true);
       getAdminReports()
@@ -316,7 +356,7 @@ export default function SuperAdminDashboardInner() {
         .finally(() => setListLoading(false));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, tab, appliedSearch, superAdmin, statusFilter]);
+  }, [ready, tab, appliedSearch, superAdmin, statusFilter, testimonialFilter]);
 
   const reportBlocks = useMemo(() => {
     if (!reports) return [] as Array<{ title: string; entries: Array<[string, unknown]> }>;
@@ -337,6 +377,9 @@ export default function SuperAdminDashboardInner() {
       await action();
       setOk(success);
       if (LIST_TABS.includes(tab)) await reloadList(appliedSearch);
+      if (tab === 'testimonials') {
+        setTestimonials(await getAdminTestimonials(testimonialFilter || undefined));
+      }
       if (tab === 'dashboard') {
         const next = await getAdminDashboard();
         setMetrics(next);
@@ -712,6 +755,90 @@ export default function SuperAdminDashboardInner() {
                   </div>
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {tab === 'testimonials' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {(['PENDING', 'APPROVED', 'REJECTED', ''] as const).map((value) => (
+                <button
+                  key={value || 'ALL'}
+                  type="button"
+                  onClick={() => setTestimonialFilter(value)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                    testimonialFilter === value
+                      ? 'bg-[#0a2e2c] text-white'
+                      : 'border border-[#d7e0dd] bg-white text-[#0a2e2c]'
+                  }`}
+                >
+                  {value || 'ALL'}
+                </button>
+              ))}
+            </div>
+            {listLoading && testimonials.length === 0 ? (
+              <p className="text-sm text-[#888]">Loading testimonials…</p>
+            ) : testimonials.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-[#d7e0dd] bg-white p-6 text-sm text-[#666]">
+                No testimonials in this filter.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {testimonials.map((row) => (
+                  <article key={row.id} className="rounded-xl border border-[#d7e0dd] bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusPill status={row.status} />
+                        <span className="text-xs font-bold uppercase tracking-wide text-[#888]">
+                          {row.audience} · {row.source}
+                        </span>
+                      </div>
+                      <span className="text-sm font-extrabold text-[#0a2e2c]">{'★'.repeat(row.rating)}</span>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold leading-relaxed text-[#333]">“{row.quote}”</p>
+                    <p className="mt-2 text-xs text-[#666]">
+                      {row.displayName || row.user.name || 'Member'}
+                      {row.headline ? ` · ${row.headline}` : ''}
+                      {row.user.company ? ` · ${row.user.company}` : ''}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[#999]">
+                      {row.user.email || row.user.phone} · {new Date(row.createdAt).toLocaleString()}
+                    </p>
+                    {row.status === 'PENDING' && (staffRole === 'SUPER_ADMIN' || staffRole === 'PLATFORM_ADMIN') ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <ActionBtn
+                          disabled={busyId === row.id}
+                          accent="#28b779"
+                          onClick={() =>
+                            void runAction(row.id, () => reviewAdminTestimonial(row.id, 'APPROVE'), 'Testimonial approved.')
+                          }
+                        >
+                          Approve
+                        </ActionBtn>
+                        <ActionBtn
+                          danger
+                          disabled={busyId === row.id}
+                          onClick={() =>
+                            void runAction(
+                              row.id,
+                              () => reviewAdminTestimonial(row.id, 'REJECT', 'Not suitable for public page'),
+                              'Testimonial rejected.',
+                            )
+                          }
+                        >
+                          Reject
+                        </ActionBtn>
+                        <ActionBtn onClick={() => setDetail({ kind: 'testimonials', ...row })}>View</ActionBtn>
+                      </div>
+                    ) : (
+                      <div className="mt-3">
+                        <ActionBtn onClick={() => setDetail({ kind: 'testimonials', ...row })}>View</ActionBtn>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
             )}
           </div>
         )}

@@ -16,6 +16,7 @@ import {
   listEmployerInterviews,
 } from '@/lib/api';
 import { EmployerShell, TinyEagleIcon } from '@/components/EmployerPortal';
+import { TestimonialPromptCard } from '@/components/TestimonialPromptCard';
 
 function greetingLabel(date = new Date()) {
   const h = date.getHours();
@@ -195,6 +196,10 @@ export default function EmployerDashboardPage() {
               </p>
             </div>
           </header>
+
+          <div className="mb-5 px-1">
+            <TestimonialPromptCard audience="EMPLOYER" />
+          </div>
 
           <div className="ep-saas-dash__cluster ep-saas-dash__cluster--right">
             <Link href="/employer/jobs/new" className="ep-saas-btn ep-saas-btn--primary ep-saas-btn--sm">

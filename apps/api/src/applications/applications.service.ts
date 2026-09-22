@@ -11,6 +11,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service';
 import { EmailService } from '../auth/email.service';
 import { ConfigService } from '@nestjs/config';
+import { TestimonialsService } from '../testimonials/testimonials.service';
 
 const FLOW: ApplicationStatus[] = ['APPLIED', 'UNDER_REVIEW', 'SHORTLISTED', 'INTERVIEW', 'SELECTED'];
 
@@ -64,6 +65,7 @@ export class ApplicationsService {
     private readonly interviewWhatsApp: InterviewWhatsAppService,
     private readonly email: EmailService,
     private readonly config: ConfigService,
+    private readonly testimonials: TestimonialsService,
   ) {}
 
   async apply(userId: string, jobId: string, resumeId?: string) {
@@ -125,6 +127,15 @@ export class ApplicationsService {
           type: 'APPLICATION',
           link: `/employer/jobs/${job.id}`,
         })
+        .catch(() => undefined);
+    }
+
+    const applicationCount = await this.prisma.application.count({
+      where: { candidateId: candidate.id, status: { not: 'WITHDRAWN' } },
+    });
+    if (applicationCount >= 5) {
+      await this.testimonials
+        .markEligible(userId, 'AFTER_5_APPLICATIONS')
         .catch(() => undefined);
     }
 

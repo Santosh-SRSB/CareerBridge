@@ -277,6 +277,11 @@ export default function MockInterviewResultPage() {
       >
         Download Report
       </Button>
+      <Link href="/feedback?source=AFTER_FIRST_MOCK_INTERVIEW" className="w-full sm:w-auto">
+        <Button type="button" variant="secondary" className="w-full !rounded-full sm:min-w-[160px]">
+          Share feedback
+        </Button>
+      </Link>
     </>
   );
 

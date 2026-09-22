@@ -23,6 +23,7 @@ import { ConfigService } from '@nestjs/config';
 import { ResumesService } from '../resumes/resumes.service';
 import { EmailService } from '../auth/email.service';
 import { JobsService } from '../jobs/jobs.service';
+import { TestimonialsService } from '../testimonials/testimonials.service';
 
 const ACTION_STATUS: Record<string, ApplicationStatus> = {
   REVIEW: 'UNDER_REVIEW',
@@ -63,6 +64,7 @@ export class EmployersService {
     private readonly resumes: ResumesService,
     private readonly email: EmailService,
     private readonly jobsService: JobsService,
+    private readonly testimonials: TestimonialsService,
   ) {}
 
   async me(userId: string) {
@@ -283,6 +285,7 @@ export class EmployersService {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
       await this.matching.recomputeMatchesForJob(job.id);
       await this.jobsService.notifyCandidatesForPublishedJob(job.id).catch(() => undefined);
+      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
     }
     return job;
   }
@@ -337,6 +340,7 @@ export class EmployersService {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
       await this.matching.recomputeMatchesForJob(job.id);
       await this.jobsService.notifyCandidatesForPublishedJob(job.id).catch(() => undefined);
+      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
     }
     return updated;
   }
@@ -1032,7 +1036,25 @@ export class EmployersService {
     if (!status) {
       throw new ForbiddenException({ code: SharedError.BUSINESS_RULE_VIOLATION, message: 'This action is not allowed.' });
     }
-    return this.prisma.application.update({ where: { id: application.id }, data: { status } });
+    const updated = await this.prisma.application.update({ where: { id: application.id }, data: { status } });
+    if (status === 'SHORTLISTED' || status === 'INTERVIEW') {
+      await this.testimonials
+        .markEligible(userId, 'AFTER_SHORTLIST_OR_INTERVIEW')
+        .catch(() => undefined);
+    }
+    if (status === 'SELECTED' || status === 'HIRED') {
+      await this.testimonials.markEligible(userId, 'AFTER_HIRE_OR_SELECT').catch(() => undefined);
+    }
+    return updated;
+  }
+
+  private async maybeFirstJobPublishedPrompt(userId: string, employerId: string) {
+    const publishedCount = await this.prisma.job.count({
+      where: { employerId, status: 'PUBLISHED' },
+    });
+    if (publishedCount === 1) {
+      await this.testimonials.markEligible(userId, 'FIRST_JOB_PUBLISHED').catch(() => undefined);
+    }
   }
 
   private async requireEmployer(userId: string) {

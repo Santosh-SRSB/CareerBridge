@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { StorageService } from '../common/storage/storage.service';
+import { TestimonialsService } from '../testimonials/testimonials.service';
 import {
   EducationDto,
   ExperienceDto,
@@ -40,6 +41,7 @@ export class CandidatesService {
     private readonly matching: MatchingService,
     private readonly aiGateway: AiGatewayService,
     private readonly storage: StorageService,
+    private readonly testimonials: TestimonialsService,
   ) {}
 
   async me(userId: string) {
@@ -760,6 +762,7 @@ export class CandidatesService {
 
   private async recompute(userId: string) {
     const candidate = await this.loadCandidate(userId);
+    const previousCompletion = candidate.profileCompletion || 0;
     const profileCompletion = computeCompletion(candidate);
     const flags = deriveExperienceFlags({
       hasExperience: candidate.hasExperience,
@@ -775,6 +778,9 @@ export class CandidatesService {
       },
       include: { education: true, skills: true, experiences: true, user: { select: { phone: true, email: true } } },
     });
+    if (previousCompletion < 80 && profileCompletion >= 80) {
+      await this.testimonials.markEligible(userId, 'PROFILE_80_COMPLETE').catch(() => undefined);
+    }
     return this.withReadablePhoto(this.toProfile(updated));
   }
 

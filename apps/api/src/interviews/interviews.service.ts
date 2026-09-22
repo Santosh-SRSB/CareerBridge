@@ -20,6 +20,7 @@ import {
 } from './interview-conduct';
 import { renderInterviewPdf } from './interview-pdf';
 import { countAnsweredQuestions, isAnsweredQuestion, isAudioPlaceholderAnswer } from './interview-answer.util';
+import { TestimonialsService } from '../testimonials/testimonials.service';
 
 @Injectable()
 export class InterviewsService {
@@ -31,6 +32,7 @@ export class InterviewsService {
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
     private readonly ai: InterviewAiService,
+    private readonly testimonials: TestimonialsService,
   ) {}
 
   async list(userId: string) {
@@ -441,6 +443,9 @@ export class InterviewsService {
         questionsJson: JSON.stringify(questions),
       },
     });
+    await this.testimonials
+      .markEligible(userId, 'AFTER_FIRST_MOCK_INTERVIEW')
+      .catch(() => undefined);
     return this.toSession(updated);
   }
 

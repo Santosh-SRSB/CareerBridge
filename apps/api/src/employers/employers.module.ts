@@ -8,6 +8,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { ResumesModule } from '../resumes/resumes.module';
 import { AuthModule } from '../auth/auth.module';
 import { JobsModule } from '../jobs/jobs.module';
+import { TestimonialsModule } from '../testimonials/testimonials.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { JobsModule } from '../jobs/jobs.module';
     ResumesModule,
     AuthModule,
     JobsModule,
+    TestimonialsModule,
   ],
   controllers: [EmployersController],
   providers: [EmployersService],

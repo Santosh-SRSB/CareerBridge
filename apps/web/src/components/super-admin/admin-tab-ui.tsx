@@ -96,6 +96,15 @@ export const TAB_THEME: Record<
     panel: '#f2fbfd',
     pattern: 'repeating-linear-gradient(90deg, rgba(10,163,194,0.06) 0 12px, transparent 12px 24px)',
   },
+  testimonials: {
+    accent: '#0a2e2c',
+    soft: '#e7f3ef',
+    ink: '#0a2e2c',
+    title: 'Testimonials',
+    blurb: 'Approve or reject public feedback quotes',
+    panel: '#f4faf8',
+    pattern: 'radial-gradient(circle at 10% 0%, rgba(10,46,44,0.1), transparent 45%)',
+  },
   reports: {
     accent: '#1f9d68',
     soft: '#e8f8f0',
@@ -137,7 +146,7 @@ export const TAB_THEME: Record<
 export function StatusPill({ status }: { status: string }) {
   const s = status.toUpperCase();
   const bg =
-    ['ACTIVE', 'PUBLISHED', 'CONFIRMED', 'HIRED', 'DELIVERED', 'SELECTED', 'COMPLETED', 'SUCCESS', 'VERIFIED'].includes(s)
+    ['ACTIVE', 'PUBLISHED', 'CONFIRMED', 'HIRED', 'DELIVERED', 'SELECTED', 'COMPLETED', 'SUCCESS', 'VERIFIED', 'APPROVED'].includes(s)
       ? '#28b779'
       : ['SUSPENDED', 'CLOSED', 'FAILED', 'REJECTED', 'CANCELLED', 'INACTIVE'].includes(s)
         ? '#da542e'

@@ -21,6 +21,7 @@ const NAV: Array<{ id: SuperAdminNavId; label: string; href: string; icon: strin
   { id: 'skills', label: 'Skills', href: '/adminsrsb/dashboard?tab=skills', icon: '✦' },
   { id: 'ai-usage', label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage', icon: '⚡' },
   { id: 'notifications', label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications', icon: '🔔' },
+  { id: 'testimonials', label: 'Testimonials', href: '/adminsrsb/dashboard?tab=testimonials', icon: '💬' },
   { id: 'reports', label: 'Reports', href: '/adminsrsb/dashboard?tab=reports', icon: '📊' },
   { id: 'admins', label: 'Administration', href: '/adminsrsb/dashboard?tab=admins', icon: '🛡' },
   { id: 'settings', label: 'Settings', href: '/adminsrsb/dashboard?tab=settings', icon: '⚙' },
