@@ -131,18 +131,25 @@ export default function PassportEducationPage() {
 
         {items.length ? (
           <div className="space-y-2">
-            {items.map((item) => (
-              <PassportRecord
-                key={item.id}
-                title={
-                  item.fieldOfStudy
-                    ? `${item.qualification} in ${item.fieldOfStudy}`
-                    : item.qualification
-                }
-                subtitle={[item.institution, item.yearCompleted].filter(Boolean).join(' · ') || 'Saved'}
-                onRemove={() => void removeEducation(item.id).then((profile) => setItems(profile.education))}
-              />
-            ))}
+            {items.map((item) => {
+              const degree = item.qualification?.trim() || '';
+              const school = item.institution?.trim() || '';
+              const title = item.fieldOfStudy && degree
+                ? `${degree} in ${item.fieldOfStudy}`
+                : degree || school || 'Education';
+              const subtitleParts = [
+                degree && school ? school : null,
+                item.yearCompleted,
+              ].filter(Boolean);
+              return (
+                <PassportRecord
+                  key={item.id}
+                  title={title}
+                  subtitle={subtitleParts.length ? subtitleParts.join(' · ') : 'Saved'}
+                  onRemove={() => void removeEducation(item.id).then((profile) => setItems(profile.education))}
+                />
+              );
+            })}
           </div>
         ) : null}
 

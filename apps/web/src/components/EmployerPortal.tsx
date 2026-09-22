@@ -29,6 +29,7 @@ const PRIMARY_NAV = [
 
 const ACCOUNT_NAV = [
   { href: '/employer/profile', label: 'Company Profile', key: 'profile' },
+  { href: '/employer/payments', label: 'Billing', key: 'billing' },
 ] as const;
 
 function NavIcon({ name }: { name: string }) {
@@ -102,6 +103,15 @@ function NavIcon({ name }: { name: string }) {
       </svg>
     );
   }
+  if (name === 'billing') {
+    return (
+      <svg {...common}>
+        <rect x="3.5" y="6" width="17" height="12" rx="2" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M3.5 10h17" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M8 14h3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
   return null;
 }
 
@@ -119,6 +129,7 @@ function isActive(pathname: string, key: string) {
   if (key === 'analytics') return pathname.startsWith('/employer/reports');
   if (key === 'notifications') return pathname.startsWith('/notifications');
   if (key === 'profile') return pathname.startsWith('/employer/profile');
+  if (key === 'billing') return pathname.startsWith('/employer/payments');
   return false;
 }
 

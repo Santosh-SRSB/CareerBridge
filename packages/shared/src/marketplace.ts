@@ -41,36 +41,6 @@ export const JOB_DEPARTMENTS = [
   'Retail',
 ] as const;
 
-/** Common role titles for searchable + creatable job title field */
-export const JOB_TITLE_SUGGESTIONS = [
-  'Accountant',
-  'Backend Developer',
-  'Business Analyst',
-  'Business Development Executive',
-  'Content Writer',
-  'Customer Service Executive',
-  'Data Analyst',
-  'Data Entry Operator',
-  'Delivery Executive',
-  'DevOps Engineer',
-  'Frontend Developer',
-  'Full Stack Developer',
-  'Graphic Designer',
-  'HR Executive',
-  'Marketing Executive',
-  'Operations Executive',
-  'Operations Manager',
-  'Product Manager',
-  'Project Manager',
-  'QA Engineer',
-  'Sales Executive',
-  'Software Developer',
-  'Software Engineer',
-  'Store Manager',
-  'Telecaller',
-  'UI/UX Designer',
-] as const;
-
 export const SCREENING_QUESTION_TYPES = ['YES_NO', 'SHORT_TEXT', 'SINGLE_CHOICE'] as const;
 
 export const JOB_SKILL_SUGGESTIONS = [
@@ -89,6 +59,19 @@ export const JOB_SKILL_SUGGESTIONS = [
   'TypeScript',
   'HTML / CSS',
   'Teamwork',
+] as const;
+
+export const JOB_TITLE_SUGGESTIONS = [
+  'Customer Service Executive',
+  'Sales Executive',
+  'Backend Developer',
+  'Frontend Developer',
+  'Full Stack Developer',
+  'Data Analyst',
+  'HR Executive',
+  'Operations Associate',
+  'Business Development Executive',
+  'Software Engineer',
 ] as const;
 
 export type WorkMode = (typeof WORK_MODES)[number];
@@ -218,7 +201,7 @@ export const INDIAN_CITIES = [
   'Warangal',
 ] as const;
 
-/** Primary hiring hubs — shown first in location pickers */
+/** Major hubs first in employer/candidate city pickers. */
 export const MAIN_INDIAN_CITIES = [
   'Bengaluru',
   'Mumbai',
@@ -237,7 +220,6 @@ export const MAIN_INDIAN_CITIES = [
   'Indore',
 ] as const;
 
-/** Main hubs first, then remaining cities A–Z (for job location dropdown). */
 export function orderedIndianCitiesForJobForm(): string[] {
   const main = MAIN_INDIAN_CITIES as readonly string[];
   const mainSet = new Set(main.map((c) => c.toLowerCase()));
@@ -988,7 +970,7 @@ export type EmployerProfile = {
   panNumber: string | null;
   workEmail: string | null;
   designation: string | null;
-  logoUrl: string | null;
+  logoUrl?: string | null;
   verificationStatus: EmployerVerificationStatus;
   verified: boolean;
 };
@@ -1077,8 +1059,7 @@ export type EmployerDashboard = {
   applications: number;
   shortlisted: number;
   interviews: number;
-  /** Applications received per month for the last 6 calendar months (oldest → newest). */
-  applicationsByMonth: Array<{
+  applicationsByMonth?: Array<{
     year: number;
     month: number;
     label: string;
@@ -1086,6 +1067,7 @@ export type EmployerDashboard = {
   }>;
   recent: Array<{
     candidateName: string;
+    candidateId?: string;
     jobTitle: string;
     status: string;
     applicationId: string;
@@ -1116,23 +1098,20 @@ export type EmployerCandidateSearchResult = {
   firstName: string | null;
   lastName: string | null;
   city: string | null;
-  state: string | null;
+  state?: string | null;
   highestEducation: string | null;
   experienceYears: number;
-  experienceMonths: number;
-  stillInCollege: boolean;
-  openToRelocating: boolean;
-  currentlyEmployed: boolean;
-  availabilityLabel: string;
-  availabilityTone: 'immediate' | 'notice' | 'neutral';
+  experienceMonths?: number;
   profileCompletion: number;
   skills: string[];
-  skillsTotal: number;
+  skillsTotal?: number;
   latestRole: { title: string; company: string } | null;
   matchScore: number | null;
   appliedToEmployer: boolean;
   applicationId?: string | null;
   applicationStatus?: string | null;
+  availabilityLabel?: string | null;
+  availabilityTone?: 'ready' | 'soon' | 'neutral' | string | null;
 };
 
 /** Job posting fee in paise (₹999). Each paid unit unlocks a batch of matched profiles. */
@@ -1213,12 +1192,12 @@ export type EmployerInterviewRecord = {
   confirmedAt: string | null;
   createdAt: string;
   applicationStatus: string;
+  feedbackRequestedAt?: string | null;
   candidateFeedback?: {
     rating: number;
     text: string | null;
     submittedAt: string;
   } | null;
-  feedbackRequestedAt?: string | null;
   candidate: {
     id: string;
     firstName: string | null;

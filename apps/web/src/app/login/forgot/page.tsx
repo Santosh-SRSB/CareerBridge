@@ -72,8 +72,8 @@ function ForgotPasswordBody() {
     event.preventDefault();
     setError('');
     setMessage('');
-    if (otp.trim().length < 4) {
-      setError('Enter the OTP from your email.');
+    if (otp.trim().length !== 6) {
+      setError('Enter the 6-digit OTP from your email.');
       return;
     }
     const passwordProblem = registrationPasswordError(password);

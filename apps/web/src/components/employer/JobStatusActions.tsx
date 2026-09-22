@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { closeEmployerJob, pauseEmployerJob, publishEmployerJob } from '@/lib/api';
-import { Button } from '@/components/ui/Button';
 
 type Props = {
   jobId: string;
@@ -86,57 +85,46 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
   }
 
   return (
-    <div className="mt-3 flex flex-wrap gap-1.5">
+    <div className="ep-job-actions">
       {status === 'PUBLISHED' ? (
         <>
-          <Button
+          <button
             type="button"
-            variant="secondary"
-            size="sm"
-            block={false}
-            loading={busy === 'pause'}
-            loadingLabel="…"
-            onClick={() => run('pause', () => pauseEmployerJob(jobId))}
+            className="ep-job-actions__btn"
+            disabled={busy !== null}
+            onClick={() => void run('pause', () => pauseEmployerJob(jobId))}
           >
-            Pause
-          </Button>
-          <Button
+            {busy === 'pause' ? '…' : 'Pause'}
+          </button>
+          <button
             type="button"
-            variant="destructive"
-            size="sm"
-            block={false}
-            loading={busy === 'close'}
-            loadingLabel="…"
-            onClick={() => run('close', () => closeEmployerJob(jobId))}
+            className="ep-job-actions__btn ep-job-actions__btn--danger"
+            disabled={busy !== null}
+            onClick={() => void run('close', () => closeEmployerJob(jobId))}
           >
-            Close
-          </Button>
+            {busy === 'close' ? '…' : 'Close'}
+          </button>
         </>
       ) : null}
       {status === 'PAUSED' || status === 'DRAFT' ? (
         <>
-          <Button
+          <button
             type="button"
-            size="sm"
-            block={false}
-            loading={busy === 'publish'}
-            loadingLabel="…"
-            onClick={() => run('publish', () => publishEmployerJob(jobId))}
+            className="ep-job-actions__btn ep-job-actions__btn--primary"
+            disabled={busy !== null}
+            onClick={() => void run('publish', () => publishEmployerJob(jobId))}
           >
-            {status === 'PAUSED' ? 'Resume' : 'Publish'}
-          </Button>
+            {busy === 'publish' ? '…' : status === 'PAUSED' ? 'Resume' : 'Publish'}
+          </button>
           {status === 'PAUSED' ? (
-            <Button
+            <button
               type="button"
-              variant="destructive"
-              size="sm"
-              block={false}
-              loading={busy === 'close'}
-              loadingLabel="…"
-              onClick={() => run('close', () => closeEmployerJob(jobId))}
+              className="ep-job-actions__btn ep-job-actions__btn--danger"
+              disabled={busy !== null}
+              onClick={() => void run('close', () => closeEmployerJob(jobId))}
             >
-              Close
-            </Button>
+              {busy === 'close' ? '…' : 'Close'}
+            </button>
           ) : null}
         </>
       ) : null}

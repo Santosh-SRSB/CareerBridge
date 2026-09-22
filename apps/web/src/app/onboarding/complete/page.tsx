@@ -216,7 +216,13 @@ export default function OnboardingCompletePage() {
         }}
       />
 
-      <OnboardingFrame step={4} showProgress={false} showBack={false} hideHeader>
+      <OnboardingFrame
+        step={4}
+        showProgress={false}
+        showBack
+        hideHeader
+        backHref="/onboarding/experience"
+      >
         <div className="cb-ob-complete cb-ob-hide-scrollbar flex min-h-0 flex-1 flex-col justify-center py-2">
           <h2
             className="cb-ob-complete-fx cb-ob-complete-title m-0 text-[1.5rem] leading-[1.28] tracking-[-0.2px] sm:text-[1.7rem]"

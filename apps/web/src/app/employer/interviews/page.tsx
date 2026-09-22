@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EmployerInterviewRecord } from '@careerbridge/shared';
 import {
+  changeApplicationStatus,
   employerInterviewAction,
   listEmployerInterviews,
+  recordHiringOutcome,
   requestEmployerInterviewFeedback,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { Button } from '@/components/ui/Button';
 
 type FilterTab = 'all' | 'upcoming' | 'completed';
+type OutcomeChoice = 'SELECTED' | 'REJECTED' | 'FURTHER' | 'ON_HOLD';
 
 function candidateName(row: EmployerInterviewRecord) {
   const raw = [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ').trim();
@@ -32,6 +35,13 @@ function formatWhen(iso: string) {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function toLocalInputValue(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function formatMode(mode: string) {
@@ -73,6 +83,12 @@ export default function EmployerInterviewsPage() {
   const [busyId, setBusyId] = useState('');
   const [filter, setFilter] = useState<FilterTab>('all');
   const [feedbackRow, setFeedbackRow] = useState<EmployerInterviewRecord | null>(null);
+  const [detailRow, setDetailRow] = useState<EmployerInterviewRecord | null>(null);
+  const [rescheduleRow, setRescheduleRow] = useState<EmployerInterviewRecord | null>(null);
+  const [rescheduleAt, setRescheduleAt] = useState('');
+  const [outcomeRow, setOutcomeRow] = useState<EmployerInterviewRecord | null>(null);
+  const [outcome, setOutcome] = useState<OutcomeChoice>('SELECTED');
+  const [outcomeNotes, setOutcomeNotes] = useState('');
 
   async function load() {
     setError('');
@@ -97,17 +113,73 @@ export default function EmployerInterviewsPage() {
 
   async function act(
     id: string,
-    action: 'confirm' | 'complete' | 'cancel',
-    payload?: { scheduledAt?: string },
+    action: 'confirm' | 'complete' | 'cancel' | 'reschedule' | 'notes',
+    payload?: { scheduledAt?: string; notes?: string },
   ) {
-    if (action === 'cancel' && !window.confirm('Cancel this interview?')) return;
+    if (action === 'cancel' && !window.confirm('Cancel this interview? The candidate will be notified.')) {
+      return;
+    }
     setBusyId(id);
     setError('');
     try {
       await employerInterviewAction(id, action, payload);
       await load();
+      setMessage(
+        action === 'reschedule'
+          ? 'Interview rescheduled. Candidate will confirm the new time.'
+          : action === 'cancel'
+            ? 'Interview cancelled.'
+            : action === 'complete'
+              ? 'Interview marked complete.'
+              : 'Interview updated.',
+      );
+      setRescheduleRow(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed.');
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function saveOutcome() {
+    if (!outcomeRow) return;
+    setBusyId(`outcome-${outcomeRow.id}`);
+    setError('');
+    setMessage('');
+    try {
+      if (outcomeRow.status !== 'COMPLETED') {
+        await employerInterviewAction(outcomeRow.id, 'complete', {
+          notes: outcomeNotes.trim() || undefined,
+        });
+      }
+      if (outcome === 'SELECTED') {
+        await changeApplicationStatus(outcomeRow.applicationId, 'SELECT');
+        await recordHiringOutcome(outcomeRow.applicationId, 'HIRED', outcomeNotes.trim() || undefined);
+      } else if (outcome === 'REJECTED') {
+        await changeApplicationStatus(outcomeRow.applicationId, 'REJECT');
+        await recordHiringOutcome(outcomeRow.applicationId, 'REJECTED', outcomeNotes.trim() || undefined);
+      } else if (outcome === 'FURTHER') {
+        await changeApplicationStatus(outcomeRow.applicationId, 'INTERVIEW');
+        if (outcomeNotes.trim()) {
+          await employerInterviewAction(outcomeRow.id, 'notes', { notes: outcomeNotes.trim() });
+        }
+      } else if (outcomeNotes.trim()) {
+        await employerInterviewAction(outcomeRow.id, 'notes', { notes: `On hold: ${outcomeNotes.trim()}` });
+      }
+      setOutcomeRow(null);
+      setOutcomeNotes('');
+      setMessage(
+        outcome === 'SELECTED'
+          ? 'Candidate selected.'
+          : outcome === 'REJECTED'
+            ? 'Candidate rejected.'
+            : outcome === 'FURTHER'
+              ? 'Marked for further interview.'
+              : 'Candidate placed on hold.',
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not record outcome.');
     } finally {
       setBusyId('');
     }
@@ -142,7 +214,7 @@ export default function EmployerInterviewsPage() {
           <div className="ep-ivdesk__head-copy">
             <p className="ep-ivdesk__eyebrow">Scheduling</p>
             <h1 className="ep-ivdesk__title">Interviews</h1>
-            <p className="ep-ivdesk__sub">Every scheduled conversation, in one operating table.</p>
+            <p className="ep-ivdesk__sub">View, reschedule, cancel, and record outcomes in one place.</p>
           </div>
           <Link href="/employer/interviews/schedule" className="ep-ivdesk__cta">
             Schedule interview
@@ -194,9 +266,8 @@ export default function EmployerInterviewsPage() {
               <thead>
                 <tr>
                   <th>Candidate</th>
-                  <th>Role</th>
-                  <th>When</th>
-                  <th>Format</th>
+                  <th>Job</th>
+                  <th>Date</th>
                   <th>Status</th>
                   <th aria-label="Actions" />
                 </tr>
@@ -209,7 +280,9 @@ export default function EmployerInterviewsPage() {
                       <td>
                         <div className="ep-ivdesk__who">
                           <strong>{candidateName(item)}</strong>
-                          <span>{item.job.title}</span>
+                          <span>
+                            {formatMode(item.mode)} · {item.durationMin} min
+                          </span>
                         </div>
                       </td>
                       <td>
@@ -219,37 +292,48 @@ export default function EmployerInterviewsPage() {
                         <span className="ep-ivdesk__cell">{formatWhen(item.scheduledAt)}</span>
                       </td>
                       <td>
-                        <span className="ep-ivdesk__cell">
-                          {formatMode(item.mode)} · {item.durationMin} min
-                        </span>
-                      </td>
-                      <td>
                         <span className={`ep-ivdesk__status ep-ivdesk__status--${statusTone(item.status)}`}>
                           <i aria-hidden />
                           {statusLabel(item.status)}
-                          {item.candidateFeedback ? ' · Feedback' : null}
                         </span>
                       </td>
                       <td>
                         <div className="ep-ivdesk__actions">
-                          <Link
-                            href={`/employer/candidates/${item.candidateId}?jobId=${encodeURIComponent(item.jobId)}`}
-                            className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
-                          >
-                            Profile
-                          </Link>
                           <Button
                             type="button"
                             size="sm"
                             block={false}
                             className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
-                            onClick={() => {
-                              setMessage('');
-                              setFeedbackRow(item);
-                            }}
+                            onClick={() => setDetailRow(item)}
                           >
-                            Feedback
+                            View
                           </Button>
+                          {upcoming ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              block={false}
+                              className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
+                              onClick={() => {
+                                setRescheduleRow(item);
+                                setRescheduleAt(toLocalInputValue(item.scheduledAt));
+                              }}
+                            >
+                              Reschedule
+                            </Button>
+                          ) : null}
+                          {upcoming ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              block={false}
+                              className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
+                              loading={busyId === item.id}
+                              onClick={() => void act(item.id, 'cancel')}
+                            >
+                              Cancel
+                            </Button>
+                          ) : null}
                           {upcoming && item.status === 'RESCHEDULE_REQUESTED' ? (
                             <Button
                               type="button"
@@ -290,6 +374,22 @@ export default function EmployerInterviewsPage() {
                               Mark done
                             </Button>
                           ) : null}
+                          {(item.status === 'COMPLETED' || item.status === 'CONFIRMED') &&
+                          !['SELECTED', 'HIRED', 'REJECTED'].includes(item.applicationStatus) ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              block={false}
+                              className="ep-ivdesk__btn ep-ivdesk__btn--solid"
+                              onClick={() => {
+                                setOutcomeRow(item);
+                                setOutcome('SELECTED');
+                                setOutcomeNotes('');
+                              }}
+                            >
+                              Outcome
+                            </Button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -300,13 +400,195 @@ export default function EmployerInterviewsPage() {
           </div>
         ) : null}
 
+        {detailRow ? (
+          <div className="ep-ivdesk__modal" role="dialog" aria-modal="true" aria-labelledby="ep-detail-title">
+            <button
+              type="button"
+              className="ep-ivdesk__modal-backdrop"
+              aria-label="Close details"
+              onClick={() => setDetailRow(null)}
+            />
+            <div className="ep-ivdesk__modal-card">
+              <header className="ep-ivdesk__modal-head">
+                <div>
+                  <p className="ep-ivdesk__eyebrow">Interview details</p>
+                  <h2 id="ep-detail-title">{candidateName(detailRow)}</h2>
+                  <p>{detailRow.job.title}</p>
+                </div>
+                <button type="button" className="ep-ivdesk__modal-close" onClick={() => setDetailRow(null)}>
+                  ×
+                </button>
+              </header>
+              <dl className="ep-ivdesk__detail">
+                <div>
+                  <dt>When</dt>
+                  <dd>{formatWhen(detailRow.scheduledAt)}</dd>
+                </div>
+                <div>
+                  <dt>Duration</dt>
+                  <dd>{detailRow.durationMin} minutes</dd>
+                </div>
+                <div>
+                  <dt>Format</dt>
+                  <dd>{formatMode(detailRow.mode)}</dd>
+                </div>
+                <div>
+                  <dt>Location / link</dt>
+                  <dd>{detailRow.meetingUrl || detailRow.location || '—'}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{statusLabel(detailRow.status)}</dd>
+                </div>
+                <div>
+                  <dt>Notes</dt>
+                  <dd>{detailRow.notes || '—'}</dd>
+                </div>
+              </dl>
+              <div className="ep-ivdesk__actions" style={{ marginTop: 14 }}>
+                <Link
+                  href={`/employer/candidates/${detailRow.candidateId}?jobId=${encodeURIComponent(detailRow.jobId)}`}
+                  className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
+                >
+                  Open profile
+                </Link>
+                <Button
+                  type="button"
+                  size="sm"
+                  block={false}
+                  className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
+                  onClick={() => {
+                    setMessage('');
+                    setFeedbackRow(detailRow);
+                    setDetailRow(null);
+                  }}
+                >
+                  Feedback
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {rescheduleRow ? (
+          <div className="ep-ivdesk__modal" role="dialog" aria-modal="true" aria-labelledby="ep-reschedule-title">
+            <button
+              type="button"
+              className="ep-ivdesk__modal-backdrop"
+              aria-label="Close reschedule"
+              onClick={() => setRescheduleRow(null)}
+            />
+            <div className="ep-ivdesk__modal-card">
+              <header className="ep-ivdesk__modal-head">
+                <div>
+                  <p className="ep-ivdesk__eyebrow">Reschedule</p>
+                  <h2 id="ep-reschedule-title">{candidateName(rescheduleRow)}</h2>
+                  <p>{rescheduleRow.job.title}</p>
+                </div>
+                <button type="button" className="ep-ivdesk__modal-close" onClick={() => setRescheduleRow(null)}>
+                  ×
+                </button>
+              </header>
+              <label className="ep-modal__field" htmlFor="ep-reschedule-at">
+                <span>New date &amp; time</span>
+                <input
+                  id="ep-reschedule-at"
+                  type="datetime-local"
+                  value={rescheduleAt}
+                  onChange={(e) => setRescheduleAt(e.target.value)}
+                />
+              </label>
+              <footer className="ep-modal__actions">
+                <Button type="button" variant="secondary" block={false} onClick={() => setRescheduleRow(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  block={false}
+                  loading={busyId === rescheduleRow.id}
+                  disabled={!rescheduleAt}
+                  onClick={() =>
+                    void act(rescheduleRow.id, 'reschedule', {
+                      scheduledAt: new Date(rescheduleAt).toISOString(),
+                    })
+                  }
+                >
+                  Save new time
+                </Button>
+              </footer>
+            </div>
+          </div>
+        ) : null}
+
+        {outcomeRow ? (
+          <div className="ep-ivdesk__modal" role="dialog" aria-modal="true" aria-labelledby="ep-outcome-title">
+            <button
+              type="button"
+              className="ep-ivdesk__modal-backdrop"
+              aria-label="Close outcome"
+              onClick={() => setOutcomeRow(null)}
+            />
+            <div className="ep-ivdesk__modal-card">
+              <header className="ep-ivdesk__modal-head">
+                <div>
+                  <p className="ep-ivdesk__eyebrow">Record outcome</p>
+                  <h2 id="ep-outcome-title">{candidateName(outcomeRow)}</h2>
+                  <p>{outcomeRow.job.title}</p>
+                </div>
+                <button type="button" className="ep-ivdesk__modal-close" onClick={() => setOutcomeRow(null)}>
+                  ×
+                </button>
+              </header>
+              <fieldset className="ep-modal__field">
+                <legend>Outcome</legend>
+                {(
+                  [
+                    ['SELECTED', 'Selected'],
+                    ['REJECTED', 'Rejected'],
+                    ['FURTHER', 'Further interview'],
+                    ['ON_HOLD', 'On hold'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <label key={value} className="ep-modal__radio">
+                    <input
+                      type="radio"
+                      name="interview-outcome"
+                      checked={outcome === value}
+                      onChange={() => setOutcome(value)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </fieldset>
+              <label className="ep-modal__field" htmlFor="ep-outcome-notes">
+                <span>Notes (optional)</span>
+                <textarea
+                  id="ep-outcome-notes"
+                  rows={3}
+                  maxLength={500}
+                  value={outcomeNotes}
+                  onChange={(e) => setOutcomeNotes(e.target.value)}
+                />
+              </label>
+              <footer className="ep-modal__actions">
+                <Button type="button" variant="secondary" block={false} onClick={() => setOutcomeRow(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  block={false}
+                  loading={busyId === `outcome-${outcomeRow.id}`}
+                  onClick={() => void saveOutcome()}
+                >
+                  Save outcome
+                </Button>
+              </footer>
+            </div>
+          </div>
+        ) : null}
+
         {feedbackRow ? (
-          <div
-            className="ep-ivdesk__modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ep-feedback-title"
-          >
+          <div className="ep-ivdesk__modal" role="dialog" aria-modal="true" aria-labelledby="ep-feedback-title">
             <button
               type="button"
               className="ep-ivdesk__modal-backdrop"
@@ -332,16 +614,6 @@ export default function EmployerInterviewsPage() {
                   </p>
                   <p className="ep-ivdesk__feedback-text">
                     {feedbackRow.candidateFeedback.text || 'No written comments.'}
-                  </p>
-                  <p className="ep-ivdesk__muted">
-                    Submitted{' '}
-                    {new Date(feedbackRow.candidateFeedback.submittedAt).toLocaleString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
                   </p>
                 </div>
               ) : (
