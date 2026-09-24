@@ -3,7 +3,7 @@
     "description": "CareerBridge resume parser extraction output (ResumeContent). Produced by parseExtractedResumeText() in apps/api/src/resumes/parse-extracted-resume.ts after PDF/DOCX text extraction.",
     "pipeline": [
       "upload file",
-      "resume-extractor (pdf-parse / mammoth / tesseract)",
+      "resume-extractor (pdf-parse / mammoth / document-ai)",
       "parseExtractedResumeText (heuristic sections)",
       "optional AI structureResumeText merge",
       "map to wizard / ATS"

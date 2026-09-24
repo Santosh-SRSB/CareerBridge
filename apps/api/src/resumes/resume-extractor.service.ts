@@ -5,13 +5,13 @@ import { sanitizeExtractedResumeText } from './layout-sanitize';
 
 export type ResumeExtractionResult = {
   text: string;
-  extractor: 'pdf-parse' | 'mammoth' | 'tesseract' | 'document-ai' | 'none';
+  extractor: 'pdf-parse' | 'mammoth' | 'document-ai' | 'none';
   mimeType: string;
   fileName: string;
   pageCount?: number;
   confidence?: number;
   notes: string[];
-  /** True when OCR was used (lower confidence downstream). */
+  /** True when OCR-style extraction was used (Document AI on images / scanned PDFs). */
   usedOcr?: boolean;
   layoutNotes?: string[];
 };
@@ -74,20 +74,8 @@ export class ResumeExtractorService {
       }
       notes.push(
         ...(pdfResult.notes.length ? pdfResult.notes : ['PDF text layer empty or unusable']),
-        'Attempting OCR via page screenshots (Tesseract cannot read PDF bytes directly)',
+        'Falling back to Document AI (local Tesseract OCR removed)',
       );
-      const ocrPdf = await this.extractPdfViaOcrScreenshots(buffer);
-      if (isUsableResumeText(ocrPdf.text)) {
-        return finalize({
-          ...ocrPdf,
-          mimeType,
-          fileName,
-          usedOcr: true,
-          confidence: Math.min(ocrPdf.confidence ?? 0.55, 0.7),
-          notes: [...notes, ...ocrPdf.notes],
-        });
-      }
-      notes.push(...ocrPdf.notes);
     } else if (isDocx) {
       const doc = await this.extractDocx(buffer);
       if (isUsableResumeText(doc.text) || doc.text.trim().length >= 40) {
@@ -95,24 +83,20 @@ export class ResumeExtractorService {
       }
       notes.push('DOC/DOCX extraction returned little text');
     } else if (isImage) {
-      const ocr = await this.extractOcr(buffer);
-      if (isUsableResumeText(ocr.text) || ocr.text.trim().length >= 40) {
-        return finalize({
-          ...ocr,
-          mimeType,
-          fileName,
-          usedOcr: true,
-          notes: [...notes, ...ocr.notes],
-        });
-      }
-      notes.push(...ocr.notes);
+      notes.push('Image upload — using Document AI (no local OCR)');
     } else {
       notes.push(`Unsupported mime for primary extractors: ${mimeType}`);
     }
 
     const docAi = await this.extractDocumentAi(buffer, mimeType);
     if (docAi.text.trim().length > 0) {
-      return finalize({ ...docAi, mimeType, fileName, notes: [...notes, ...docAi.notes] });
+      return finalize({
+        ...docAi,
+        mimeType,
+        fileName,
+        usedOcr: isImage || isPdf,
+        notes: [...notes, ...docAi.notes],
+      });
     }
 
     notes.push('All extractors failed or returned empty text');
@@ -170,69 +154,6 @@ export class ResumeExtractorService {
     }
   }
 
-  /** Render PDF pages to images, then OCR — used only when text layer is unusable. */
-  private async extractPdfViaOcrScreenshots(
-    buffer: Buffer,
-  ): Promise<Omit<ResumeExtractionResult, 'mimeType' | 'fileName'>> {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mod = require('pdf-parse') as {
-        PDFParse: new (opts: { data: Uint8Array }) => {
-          getScreenshot: (params?: object) => Promise<{
-            pages?: Array<{ data?: Buffer; pageNumber?: number; num?: number }>;
-          }>;
-          destroy: () => Promise<void>;
-        };
-      };
-      const parser = new mod.PDFParse({ data: new Uint8Array(buffer) });
-      try {
-        const shot = await parser.getScreenshot({
-          scale: 1.5,
-          imageBuffer: true,
-          imageDataUrl: false,
-          first: 4, // cap cost on long scanned docs
-        });
-        const pages = shot.pages || [];
-        if (!pages.length) {
-          return { text: '', extractor: 'tesseract', notes: ['PDF screenshot OCR: no pages rendered'] };
-        }
-        const chunks: string[] = [];
-        let confSum = 0;
-        let confN = 0;
-        for (let i = 0; i < pages.length; i += 1) {
-          const data = pages[i]?.data;
-          if (!data || !Buffer.isBuffer(data)) continue;
-          const ocr = await this.extractOcr(data);
-          if (ocr.text.trim()) {
-            chunks.push(`-- page ${pages[i].pageNumber || pages[i].num || i + 1} --\n${ocr.text.trim()}`);
-          }
-          if (typeof ocr.confidence === 'number') {
-            confSum += ocr.confidence;
-            confN += 1;
-          }
-        }
-        const text = stripInternalPageMarkers(chunks.join('\n\n'));
-        return {
-          text,
-          extractor: 'tesseract',
-          pageCount: pages.length,
-          confidence: confN ? confSum / confN / 100 : 0.5,
-          notes: [`OCR via pdf-parse screenshots + tesseract (${pages.length} page(s))`],
-          usedOcr: true,
-        };
-      } finally {
-        await parser.destroy().catch(() => undefined);
-      }
-    } catch (err) {
-      this.logger.warn(`PDF screenshot OCR failed: ${(err as Error).message}`);
-      return {
-        text: '',
-        extractor: 'tesseract',
-        notes: [`PDF screenshot OCR failed: ${(err as Error).message}`],
-      };
-    }
-  }
-
   private async extractDocx(buffer: Buffer): Promise<Omit<ResumeExtractionResult, 'mimeType' | 'fileName'>> {
     try {
       const mammoth = await import('mammoth');
@@ -245,23 +166,6 @@ export class ResumeExtractorService {
     } catch (err) {
       this.logger.warn(`mammoth failed: ${(err as Error).message}`);
       return { text: '', extractor: 'mammoth', notes: [`mammoth failed: ${(err as Error).message}`] };
-    }
-  }
-
-  private async extractOcr(buffer: Buffer): Promise<Omit<ResumeExtractionResult, 'mimeType' | 'fileName'>> {
-    try {
-      const Tesseract = await import('tesseract.js');
-      const result = await Tesseract.recognize(buffer, 'eng');
-      return {
-        text: (result.data.text || '').trim(),
-        extractor: 'tesseract',
-        confidence: result.data.confidence,
-        notes: ['Extracted with tesseract OCR'],
-        usedOcr: true,
-      };
-    } catch (err) {
-      this.logger.warn(`tesseract failed: ${(err as Error).message}`);
-      return { text: '', extractor: 'tesseract', notes: [`tesseract failed: ${(err as Error).message}`] };
     }
   }
 

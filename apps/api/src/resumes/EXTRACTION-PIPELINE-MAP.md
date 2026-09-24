@@ -14,9 +14,11 @@
 
 ## Pipeline
 
-upload-file → ResumeProcessor → ResumeExtractor (layout + OCR)
+upload-file → ResumeProcessor → ResumeExtractor (pdf-parse / mammoth / Document AI)
 → parseResumeTextWithOptionalAi (heuristic + optional Gemini + grounded merge)
 → contentJson → wizard → ATS
+
+Local Tesseract OCR (`tesseract.js` / `eng.traineddata`) was removed; scanned PDFs and images use Document AI when configured.
 
 Weak alternate path: web `candidates/resume/parse` + `parse-resume.ts` (not used by main upload wizard).
 

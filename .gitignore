@@ -22,4 +22,6 @@ gcp-*.json
 firebase-service-account.json
 *.pem
 apps/web/public/candidate-resumes/
+*.traineddata
+apps/api/_smoke-*.txt
 
