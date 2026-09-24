@@ -14,7 +14,8 @@
 
 ## Pipeline
 
-upload-file → ResumeProcessor → ResumeExtractor (pdf-parse / mammoth / Document AI)
+upload-file → ResumeProcessor → ResumeExtractor (**Google Document AI only**)
+
 → parseResumeTextWithOptionalAi (heuristic + optional Gemini + grounded merge)
 → contentJson → wizard → ATS
 

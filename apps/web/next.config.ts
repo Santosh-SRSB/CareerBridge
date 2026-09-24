@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   transpilePackages: ["@careerbridge/shared"],
-  serverExternalPackages: ["@prisma/client", "prisma", "pdf-parse", "pdfjs-dist"],
+  serverExternalPackages: ["@prisma/client", "prisma"],
   // Avoid sharp/jest-worker crashes on large local PNGs during image optimization.
   images: {
     unoptimized: true,

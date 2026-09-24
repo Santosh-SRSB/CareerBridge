@@ -17,8 +17,6 @@ logs
 apps/api/secrets
 **/firebase-service-account.json
 **/*service-account*.json
-apps/web/**
-!apps/web/package.json
 docs
 *.md
 !apps/api/**/*.md
@@ -29,11 +27,6 @@ test-cases*.json
 _git-out.txt
 agent-transcripts
 .cursor
-**/*.test.ts
-**/*.unit.test.ts
-**/fixture-integration.unit.test.ts
-test/fixtures
 **/.DS_Store
-apps/api/src/**/*.spec.ts
 infrastructure/terraform
-scripts
+test/fixtures

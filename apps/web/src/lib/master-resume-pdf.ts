@@ -1,7 +1,7 @@
 /**
  * PDF download for CareerBridge master resume (resume-template-01 layout).
  *
- * Real pdf-lib text (pdf-parse friendly) + URI link annotations for LinkedIn/GitHub.
+ * Real pdf-lib text + URI link annotations for LinkedIn/GitHub.
  * Intelligent one-page density fitting — never truncates candidate content.
  * Preview UI is unchanged.
  */

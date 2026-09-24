@@ -35,7 +35,8 @@ function resolveFixture(name: string): string | null {
 
 const ORIGINAL = resolveFixture('original-resume.pdf');
 const PORTAL = resolveFixture('portal-downloaded-resume.pdf');
-const HAS_FIXTURES = Boolean(ORIGINAL && PORTAL);
+const HAS_DOC_AI = Boolean(process.env.DOCUMENT_AI_PROCESSOR_ID && process.env.GCP_PROJECT_ID);
+const HAS_FIXTURES = Boolean(ORIGINAL && PORTAL && HAS_DOC_AI);
 
 async function extractAndGate(filePath: string) {
   const buffer = fs.readFileSync(filePath);
@@ -53,10 +54,12 @@ async function extractAndGate(filePath: string) {
 
 describe('F — fixture integration (original vs portal download)', () => {
   it('discovers fixture paths or skips clearly', () => {
-    if (!HAS_FIXTURES) {
+    if (!ORIGINAL || !PORTAL) {
       console.log(
         '[skip] Place PDFs at test/fixtures/original-resume.pdf and test/fixtures/portal-downloaded-resume.pdf',
       );
+    } else if (!HAS_DOC_AI) {
+      console.log('[skip] Document AI only — set DOCUMENT_AI_PROCESSOR_ID and GCP_PROJECT_ID to run fixture extract');
     }
     assert.ok(true);
   });

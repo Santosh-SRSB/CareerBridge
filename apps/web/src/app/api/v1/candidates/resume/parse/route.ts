@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 
 /**
- * Local pdf-parse / mammoth / heuristic parsing is disabled.
- * Use the Nest API upload pipeline: GCS → Document AI → LLM → validate → profile.
+ * Local resume parsing is disabled.
+ * Use the Nest API upload pipeline: GCS → Google Document AI → LLM → validate → profile.
  */
 export async function POST() {
   return NextResponse.json(
