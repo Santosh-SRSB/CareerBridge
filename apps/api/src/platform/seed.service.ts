@@ -24,25 +24,33 @@ export class SeedService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
-    await this.skills();
-    await this.srsbPortalAdmin();
-    await this.portalStaff(
-      'admin@careerbridge.local',
-      'Admin@12345',
-      '+919999999000',
-      'PLATFORM_ADMIN',
-      'SRSB Platform Admin',
-    );
-    await this.portalStaff(
-      'ops@careerbridge.local',
-      'Operator@12345',
-      '+919999999026',
-      'PLATFORM_OPERATOR',
-      'SRSB Platform Operator',
-    );
-    // Demo ABC Services jobs are disabled — marketplace uses real employer posts only.
-    if (process.env.SEED_DEMO_JOBS === 'true') {
-      await this.demoEmployerAndJobs();
+    try {
+      await this.skills();
+      await this.srsbPortalAdmin();
+      await this.portalStaff(
+        'admin@careerbridge.local',
+        'Admin@12345',
+        '+919999999000',
+        'PLATFORM_ADMIN',
+        'SRSB Platform Admin',
+      );
+      await this.portalStaff(
+        'ops@careerbridge.local',
+        'Operator@12345',
+        '+919999999026',
+        'PLATFORM_OPERATOR',
+        'SRSB Platform Operator',
+      );
+      // Demo ABC Services jobs are disabled — marketplace uses real employer posts only.
+      if (process.env.SEED_DEMO_JOBS === 'true') {
+        await this.demoEmployerAndJobs();
+      }
+    } catch (err) {
+      // Do not crash Cloud Run / Nest boot if schema is mid-migrate or empty.
+      console.error(
+        'SeedService skipped (database not ready or seed failed):',
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 

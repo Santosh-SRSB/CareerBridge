@@ -39,6 +39,7 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/shared/package.json ./packages/shared/
 RUN npm ci --omit=dev --ignore-scripts -w api -w @careerbridge/shared \
+  && npm install prisma@6 --no-save --ignore-scripts \
   && npm cache clean --force
 
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
@@ -47,7 +48,7 @@ COPY --from=builder /app/apps/api/generated ./apps/api/generated
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 COPY apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
-RUN chmod +x ./apps/api/docker-entrypoint.sh
+RUN sed -i 's/\r$//' ./apps/api/docker-entrypoint.sh && chmod +x ./apps/api/docker-entrypoint.sh
 
 WORKDIR /app/apps/api
 EXPOSE 8080
