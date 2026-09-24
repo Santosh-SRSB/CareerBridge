@@ -90,7 +90,7 @@ export function masterResumeToAtsData(doc: MasterResumeDocument) {
     location: personalInfo.location,
     linkedin: personalInfo.linkedin,
     github: personalInfo.github,
-    website: personalInfo.portfolio || personalInfo.website,
+    website: personalInfo.portfolio,
     portfolio: personalInfo.portfolio,
     photo: '',
     summary: doc.summary,

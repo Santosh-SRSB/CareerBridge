@@ -530,7 +530,7 @@ export function CandidateAppShell({
               return (
                 <Link
                   href={mobileCarouselItem.href}
-                  ref={(node) => {
+                  ref={(node: HTMLAnchorElement | null) => {
                     deskItemRefs.current.carousel = node;
                   }}
                   onClick={onMobileResumeAtsClick}

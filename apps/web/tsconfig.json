@@ -24,6 +24,8 @@
   },
   "include": [
     "next-env.d.ts",
+    "styled-jsx.d.ts",
+    "speech-recognition.d.ts",
     "**/*.ts",
     "**/*.tsx",
     "**/*.js",
@@ -32,5 +34,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "app"]
+  "exclude": ["node_modules", "app", "prisma"]
 }

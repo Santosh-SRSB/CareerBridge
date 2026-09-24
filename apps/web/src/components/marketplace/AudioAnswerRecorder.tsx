@@ -16,13 +16,9 @@ export type AudioAnswerRecorderHandle = {
   isRecording: () => boolean;
 };
 
-function speechCtor() {
+function speechCtor(): SpeechRecognitionConstructor | null {
   if (typeof window === 'undefined') return null;
-  const win = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognition;
-    webkitSpeechRecognition?: new () => SpeechRecognition;
-  };
-  return win.SpeechRecognition || win.webkitSpeechRecognition || null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
 function pickMimeType() {
@@ -153,7 +149,7 @@ export const AudioAnswerRecorder = forwardRef<
     rec.lang = 'en-IN';
     rec.continuous = true;
     rec.interimResults = true;
-    rec.onresult = (event) => {
+    rec.onresult = (event: SpeechRecognitionEvent) => {
       let interim = '';
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const piece = event.results[index][0]?.transcript || '';
@@ -222,7 +218,7 @@ export const AudioAnswerRecorder = forwardRef<
       if (!node || !freq || !timeBuf) return;
 
       // Time-domain RMS for speech volume (more accurate than peak bins alone).
-      node.getByteTimeDomainData(timeBuf);
+      node.getByteTimeDomainData(timeBuf as Uint8Array<ArrayBuffer>);
       let sumSq = 0;
       for (let i = 0; i < timeBuf.length; i += 1) {
         const v = (timeBuf[i] - 128) / 128;
@@ -237,7 +233,7 @@ export const AudioAnswerRecorder = forwardRef<
 
       // Keep legacy bar levels for non-dark recorder UI only.
       if (!hideUiRef.current || onLevelsChangeRef.current) {
-        node.getByteFrequencyData(freq);
+        node.getByteFrequencyData(freq as Uint8Array<ArrayBuffer>);
         const step = Math.max(1, Math.floor(freq.length / BAR_COUNT));
         let peak = 0;
         const rawLevels = Array.from({ length: BAR_COUNT }, (_, index) => {

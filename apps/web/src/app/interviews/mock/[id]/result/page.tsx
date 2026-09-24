@@ -139,6 +139,11 @@ export default function MockInterviewResultPage() {
         try {
           const next = await loadOnce();
           if (cancelled) return;
+          if (!next) {
+            setLoadError('Could not load your interview results.');
+            setLoading(false);
+            return;
+          }
           setSession(next);
           if (next.report) {
             setLoading(false);

@@ -257,7 +257,7 @@ export function ActionBtn({
   );
 }
 
-function txt(value: unknown) {
+function txt(value: unknown): string {
   if (value == null || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') return String(value);
@@ -347,7 +347,7 @@ export function DetailPanel({
     (data.user && typeof data.user === 'object' ? (data.user as Record<string, unknown>).phone : null);
   const profile =
     data.profile && typeof data.profile === 'object' ? (data.profile as Record<string, unknown>) : null;
-  const skills = asList(data.skills).length
+  const skills: Array<Record<string, unknown>> = asList(data.skills).length
     ? asList(data.skills)
     : Array.isArray(data.primarySkills)
       ? (data.primarySkills as unknown[]).map((name) => ({ name }))
@@ -445,7 +445,7 @@ export function DetailPanel({
               <Field label="Highest education" value={data.highestEducation ?? profile?.highestEducation} />
               <Field label="Onboarded" value={profile?.onboardingCompleted ?? data.onboardingCompleted} />
             </div>
-            {(profile?.about || data.about) && (
+            {Boolean(profile?.about || data.about) && (
               <p className="mt-3 text-sm leading-relaxed text-[#555]">{txt(profile?.about ?? data.about)}</p>
             )}
           </Section>
@@ -464,7 +464,7 @@ export function DetailPanel({
           </Section>
         )}
 
-        {(kind === 'jobs' || employer || data.description) && (
+        {Boolean(kind === 'jobs' || employer || data.description) && (
           <Section title="Job info">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Company" value={employer?.companyName ?? data.companyName} />

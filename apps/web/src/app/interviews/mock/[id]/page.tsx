@@ -356,7 +356,7 @@ export default function MockInterviewQuestionPage() {
           if (!alive()) return;
 
           if (!saveResult.ok) {
-            if (saveResult.session) setSession(saveResult.session);
+            if ('session' in saveResult && saveResult.session) setSession(saveResult.session);
             setError(saveResult.error);
             setLoading(false);
             recordingArmedForIndex.current = null;

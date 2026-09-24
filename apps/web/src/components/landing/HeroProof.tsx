@@ -181,7 +181,8 @@ export function HeroProof() {
   }
 
   const beats = buildBeats(stats);
-  const beat = phase < 3 ? beats[phase] : null;
+  const beatList = [...beats];
+  const beat = phase >= 0 && phase < beatList.length ? beatList[phase] : null;
 
   return (
     <div className="hero-proof">

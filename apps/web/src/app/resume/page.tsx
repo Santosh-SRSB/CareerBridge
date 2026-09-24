@@ -625,6 +625,7 @@ function ResumePageInner() {
       for (let i = 0; i < 180; i += 1) {
         if (cancelled) return;
         try {
+          if (!pendingParseId) return;
           const result = await getResumeProcessingStatus(pendingParseId);
           if (result.processingStatus === 'COMPLETED') {
             await hydrateFromParsedResume(pendingParseId);

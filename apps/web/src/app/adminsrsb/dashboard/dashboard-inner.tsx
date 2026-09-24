@@ -897,8 +897,8 @@ export default function SuperAdminDashboardInner() {
                       {scalarEntries.length > 0 && (
                         <div className="grid grid-cols-2 gap-px bg-[#eee]">
                           {scalarEntries.map(([key, value]) => (
-                            <div key={key} className="bg-white px-3 py-3">
-                              <p className="text-[10px] font-bold uppercase tracking-wide text-[#999]">{key}</p>
+                            <div key={String(key)} className="bg-white px-3 py-3">
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-[#999]">{String(key)}</p>
                               <p className="mt-1 text-lg font-black text-[#444]">{cell(value)}</p>
                             </div>
                           ))}
@@ -907,8 +907,8 @@ export default function SuperAdminDashboardInner() {
                       {listEntries.map(([key, value]) => {
                         const rows = value as Array<Record<string, unknown>>;
                         return (
-                          <div key={key} className="border-t border-[#eee] px-3 py-3">
-                            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#999]">{key}</p>
+                          <div key={String(key)} className="border-t border-[#eee] px-3 py-3">
+                            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#999]">{String(key)}</p>
                             <ul className="space-y-2">
                               {rows.slice(0, 8).map((item, i) => (
                                 <li
