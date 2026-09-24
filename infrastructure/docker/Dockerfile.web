@@ -38,6 +38,7 @@ COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 
 RUN npm ci --include=dev --ignore-scripts \
+  && npm install --no-save --include=optional lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu \
   && test -e apps/web/node_modules/@tailwindcss/postcss/package.json \
   && npm run build -w @careerbridge/shared \
   && npm run build -w web
