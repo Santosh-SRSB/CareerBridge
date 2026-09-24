@@ -6,7 +6,7 @@
     "dev": "next dev --webpack --hostname 127.0.0.1",
     "dev:turbo": "next dev --hostname 127.0.0.1",
     "dev:webpack": "next dev --webpack --hostname 127.0.0.1",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@careerbridge/shared": "*",
     "@prisma/client": "^6.19.3",
+    "@tailwindcss/postcss": "^4",
     "firebase": "^11.6.0",
     "html2canvas": "^1.4.1",
     "next": "^16.3.1",
@@ -23,16 +24,15 @@
     "prisma": "^6.19.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "tailwindcss": "^4",
     "three": "^0.185.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
-    "tailwindcss": "^4",
     "typescript": "^5"
   }
 }

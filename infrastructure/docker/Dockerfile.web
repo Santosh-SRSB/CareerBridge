@@ -46,6 +46,11 @@ COPY --from=deps /app/apps/web/package.json ./apps/web/
 COPY --from=deps /app/packages/shared/package.json ./packages/shared/
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
+# Ensure CSS toolchain resolves from the web workspace (npm hoists to root).
+RUN mkdir -p apps/web/node_modules \
+  && ln -sfn /app/node_modules/@tailwindcss apps/web/node_modules/@tailwindcss \
+  && ln -sfn /app/node_modules/tailwindcss apps/web/node_modules/tailwindcss \
+  && test -e /app/node_modules/@tailwindcss/postcss/package.json
 RUN npm run build -w @careerbridge/shared \
   && npm run build -w web
 
