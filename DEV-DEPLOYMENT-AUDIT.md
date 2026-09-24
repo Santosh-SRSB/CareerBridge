@@ -115,6 +115,22 @@
 
 ---
 
-## Next actions (after this audit)
+## Deployment progress (2026-09-24)
 
-Proceed incrementally with code/config fixes for DEV readiness, **without** changing DNS or taking down GitHub Pages.
+### Done
+- Pushed all WIP to `origin/dev` (through `bfef338`)
+- Cloud Build API image → `asia-south1-docker.pkg.dev/careerbridge-f7b72/careerbridge-dev/api:*`
+- Cloud Run service **`careerbridge-api-dev`** live in `asia-south1`
+- Health OK: `GET /health` and `GET /api/v1/health` → 200
+- Cloud SQL connected; Prisma migrate runs on container boot
+- IAM: compute SA has `secretmanager.secretAccessor`, `cloudsql.client`, `storage.objectAdmin`
+
+### Service URL
+`https://careerbridge-api-dev-601892050765.asia-south1.run.app`
+
+### Still TODO (next)
+- Deploy Next.js frontend (Cloud Run) with `NEXT_PUBLIC_API_URL=<API>/api/v1`
+- Add Firebase authorized domain for the frontend host
+- Point DNS only after frontend E2E (OTP, upload) passes — keep GitHub Pages until then
+
+---
