@@ -4,11 +4,13 @@
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
+# Cloud Build may set NODE_ENV=production; we still need web devDeps (Tailwind/PostCSS) for `next build`.
+ENV NODE_ENV=development
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
-RUN npm ci --ignore-scripts
+RUN npm ci --include=dev --ignore-scripts
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
@@ -34,6 +36,8 @@ ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 ENV NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 ENV NEXT_PUBLIC_FIREBASE_VAPID_KEY=$NEXT_PUBLIC_FIREBASE_VAPID_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
+# Keep install tree; Next sets production mode during its own build.
+ENV NODE_ENV=development
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json /app/package-lock.json ./
