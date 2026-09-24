@@ -1,6 +1,8 @@
 # CareerBridge API — production image for Cloud Run (asia-south1)
 # Build from repo root:
 #   docker build -f infrastructure/docker/Dockerfile.api -t careerbridge-api:dev .
+# Or:
+#   gcloud builds submit --config=infrastructure/cloudbuild.api.yaml --substitutions=_TAG=<sha> .
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
@@ -8,7 +10,8 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
-RUN npm ci
+# Root package.json has postinstall "build shared" — skip until sources exist.
+RUN npm ci --ignore-scripts
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
@@ -19,7 +22,6 @@ COPY --from=deps /app/apps/web/package.json ./apps/web/
 COPY --from=deps /app/packages/shared/package.json ./packages/shared/
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
-COPY tsconfig*.json ./
 RUN npm run build -w @careerbridge/shared \
   && npm run prisma:generate -w api \
   && npm run build -w api
@@ -28,14 +30,13 @@ FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
-# OpenSSL for Prisma engines on Debian
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/shared/package.json ./packages/shared/
-RUN npm ci --omit=dev -w api -w @careerbridge/shared \
+RUN npm ci --omit=dev --ignore-scripts -w api -w @careerbridge/shared \
   && npm cache clean --force
 
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
