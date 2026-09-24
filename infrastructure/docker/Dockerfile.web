@@ -1,19 +1,10 @@
 # CareerBridge Web (Next.js) — Cloud Run DEV
 # Build from repo root:
-#   gcloud builds submit --config=infrastructure/cloudbuild.web.yaml --substitutions=_TAG=<sha>,_API_URL=https://.../api/v1 .
-
-FROM node:22-bookworm-slim AS deps
-WORKDIR /app
-# Cloud Build may set NODE_ENV=production; we still need web devDeps (Tailwind/PostCSS) for `next build`.
-ENV NODE_ENV=development
-COPY package.json package-lock.json ./
-COPY apps/api/package.json ./apps/api/
-COPY apps/web/package.json ./apps/web/
-COPY packages/shared/package.json ./packages/shared/
-RUN npm ci --include=dev --ignore-scripts
+#   gcloud builds submit --config=infrastructure/cloudbuild.web.yaml --substitutions=_TAG=<sha> .
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
+
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_AUTH_DEV_OTP=false
 ARG NEXT_PUBLIC_FIREBASE_API_KEY
@@ -36,22 +27,19 @@ ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 ENV NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 ENV NEXT_PUBLIC_FIREBASE_VAPID_KEY=$NEXT_PUBLIC_FIREBASE_VAPID_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
-# Keep install tree; Next sets production mode during its own build.
+# Ensure workspace CSS toolchain (Tailwind) is installed for next build.
 ENV NODE_ENV=development
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/package.json /app/package-lock.json ./
-COPY --from=deps /app/apps/api/package.json ./apps/api/
-COPY --from=deps /app/apps/web/package.json ./apps/web/
-COPY --from=deps /app/packages/shared/package.json ./packages/shared/
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared/package.json ./packages/shared/
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
-# Ensure CSS toolchain resolves from the web workspace (npm hoists to root).
-RUN mkdir -p apps/web/node_modules \
-  && ln -sfn /app/node_modules/@tailwindcss apps/web/node_modules/@tailwindcss \
-  && ln -sfn /app/node_modules/tailwindcss apps/web/node_modules/tailwindcss \
-  && test -e /app/node_modules/@tailwindcss/postcss/package.json
-RUN npm run build -w @careerbridge/shared \
+
+RUN npm ci --include=dev --ignore-scripts \
+  && test -e apps/web/node_modules/@tailwindcss/postcss/package.json \
+  && npm run build -w @careerbridge/shared \
   && npm run build -w web
 
 FROM node:22-bookworm-slim AS runner
