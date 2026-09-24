@@ -129,9 +129,9 @@ export default function JobDetailPage() {
     ? [
         { label: 'Skills', value: job.match.skillScore },
         { label: 'Experience', value: job.match.experienceScore },
-        { label: 'Education', value: job.match.educationScore ?? 0 },
         { label: 'Location', value: job.match.locationScore },
-        { label: 'Resume Quality', value: job.match.resumeQualityScore ?? 0 },
+        { label: 'Language', value: job.match.languageScore ?? 0 },
+        { label: 'Education', value: job.match.educationScore ?? 0 },
       ]
     : [];
   const eyebrow = [formatJobType(job.jobType), job.city].filter(Boolean).join(' · ').toUpperCase();

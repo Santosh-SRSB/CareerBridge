@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "tsc && node --test dist/ats.test.js dist/career-gap.test.js dist/resume-dates.test.js"
+    "test": "tsc && node --test dist/ats.test.js dist/career-gap.test.js dist/resume-dates.test.js dist/career-timeline-gaps.test.js dist/handbook-match-weights.test.js"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

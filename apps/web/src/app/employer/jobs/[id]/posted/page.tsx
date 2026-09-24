@@ -40,6 +40,26 @@ function parseList(value: string | string[] | null | undefined) {
     .filter(Boolean);
 }
 
+function splitBenefitsAndLanguages(value: string | null | undefined) {
+  const lines = parseList(value);
+  const languages: string[] = [];
+  const benefits: string[] = [];
+  for (const line of lines) {
+    const match = line.match(/^languages:\s*(.+)$/i);
+    if (match) {
+      languages.push(
+        ...match[1]
+          .split(/[,/|]/)
+          .map((item) => item.trim())
+          .filter(Boolean),
+      );
+      continue;
+    }
+    benefits.push(line);
+  }
+  return { benefits, languages };
+}
+
 function formatJobType(value?: string | null) {
   if (!value) return '—';
   return value.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -66,7 +86,8 @@ function JobPostedBody() {
   }, [params.id, searchParams]);
 
   const skills = parseList(job?.requiredSkills);
-  const benefits = parseList(job?.benefits);
+  const { benefits, languages } = splitBenefitsAndLanguages(job?.benefits);
+  const hasSkillsPanel = skills.length > 0 || languages.length > 0 || benefits.length > 0;
 
   return (
     <EmployerShellFallback title="Job posted">
@@ -90,11 +111,11 @@ function JobPostedBody() {
         </section>
 
         <div className="ep-posted-success__body">
-          <div className="ep-posted-success__grid">
+          <div className="ep-posted-success__top">
             <article className="ep-posted-success__card">
               <header>
-                <h2>Compact Job Details</h2>
-                <p>Review what candidates will see</p>
+                <h2>Job details</h2>
+                <p>Review what candidates will see.</p>
               </header>
               <dl className="ep-posted-success__facts">
                 <div>
@@ -102,116 +123,144 @@ function JobPostedBody() {
                   <dd>{title || '—'}</dd>
                 </div>
                 <div>
-                  <dt>Location</dt>
-                  <dd>{job?.city || '—'}</dd>
-                </div>
-                <div>
                   <dt>Department</dt>
                   <dd>{job?.department || '—'}</dd>
+                </div>
+                <div>
+                  <dt>Location</dt>
+                  <dd>{job?.city || '—'}</dd>
                 </div>
                 <div>
                   <dt>Job type</dt>
                   <dd>{formatJobType(job?.jobType)}</dd>
                 </div>
                 <div>
-                  <dt>Experience</dt>
-                  <dd>{job?.experience || '—'}</dd>
+                  <dt>Work mode</dt>
+                  <dd>{formatJobType(job?.workMode)}</dd>
                 </div>
                 <div>
                   <dt>Openings</dt>
                   <dd>{job?.openings ?? '—'}</dd>
                 </div>
-                {job?.educationMin ? (
-                  <div>
-                    <dt>Education</dt>
-                    <dd>{job.educationMin}</dd>
-                  </div>
-                ) : null}
-                {job?.workMode ? (
-                  <div>
-                    <dt>Work mode</dt>
-                    <dd>{formatJobType(job.workMode)}</dd>
-                  </div>
-                ) : null}
+                <div>
+                  <dt>Experience</dt>
+                  <dd>{job?.experience || '—'}</dd>
+                </div>
+                <div>
+                  <dt>Education</dt>
+                  <dd>{job?.educationMin || '—'}</dd>
+                </div>
               </dl>
             </article>
 
             <article className="ep-posted-success__card">
               <header>
-                <h2>Skills &amp; Benefits</h2>
+                <h2>Skills &amp; benefits</h2>
+                <p>Shown on the job listing.</p>
               </header>
-              {skills.length || benefits.length ? (
-                <div className="ep-posted-success__tags">
-                  {skills.map((skill) => (
-                    <span key={`skill-${skill}`}>{skill}</span>
-                  ))}
-                  {benefits.map((benefit) => (
-                    <span key={`benefit-${benefit}`} className="is-benefit">
-                      {benefit}
-                    </span>
-                  ))}
+              {hasSkillsPanel ? (
+                <div className="ep-posted-success__skill-groups">
+                  {skills.length ? (
+                    <div className="ep-posted-success__skill-group">
+                      <span className="ep-posted-success__skill-label">Skills</span>
+                      <div className="ep-posted-success__tags">
+                        {skills.map((skill) => (
+                          <span key={`skill-${skill}`}>{skill}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {languages.length ? (
+                    <div className="ep-posted-success__skill-group">
+                      <span className="ep-posted-success__skill-label">Languages</span>
+                      <div className="ep-posted-success__tags">
+                        {languages.map((lang) => (
+                          <span key={`lang-${lang}`}>{lang}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {benefits.length ? (
+                    <div className="ep-posted-success__skill-group">
+                      <span className="ep-posted-success__skill-label">Benefits</span>
+                      <div className="ep-posted-success__tags">
+                        {benefits.map((benefit) => (
+                          <span key={`benefit-${benefit}`} className="is-benefit">
+                            {benefit}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <p className="ep-posted-success__empty">No skills or benefits listed yet.</p>
               )}
             </article>
-
-            <article className="ep-posted-success__card ep-posted-success__card--hire">
-              <header>
-                <h2>Ready to Hire</h2>
-                <p>Matched profiles are available for this role.</p>
-              </header>
-              <Link href={`/employer/jobs/${params.id}`} className="ep-posted-success__solid">
-                View job &amp; candidates
-              </Link>
-            </article>
-
-            <article className="ep-posted-success__card">
-              <header>
-                <h2>Next Steps</h2>
-              </header>
-              <ol className="ep-posted-success__steps">
-                <li>
-                  <span>1</span>
-                  <div>
-                    <strong>Review matches</strong>
-                    <p>Browse candidates by skill fit.</p>
-                  </div>
-                </li>
-                <li>
-                  <span>2</span>
-                  <div>
-                    <strong>Schedule interviews</strong>
-                    <p>Invite strong profiles to talk.</p>
-                  </div>
-                </li>
-                <li>
-                  <span>3</span>
-                  <div>
-                    <strong>Move to hire</strong>
-                    <p>Update application status as you decide.</p>
-                  </div>
-                </li>
-              </ol>
-            </article>
           </div>
 
-          <article className="ep-posted-success__card ep-posted-success__card--controls">
+          <article className="ep-posted-success__card ep-posted-success__card--steps">
             <header>
-              <h2>Position Controls</h2>
+              <h2>Next steps</h2>
+              <p>Here&apos;s how to go from posting to hiring.</p>
             </header>
+            <ol className="ep-posted-success__steps">
+              <li>
+                <span className="ep-posted-success__step-num" aria-hidden>
+                  1
+                </span>
+                <div>
+                  <strong>Review matches</strong>
+                  <p>Browse candidates by skill fit.</p>
+                </div>
+              </li>
+              <li>
+                <span className="ep-posted-success__step-num" aria-hidden>
+                  2
+                </span>
+                <div>
+                  <strong>Schedule interviews</strong>
+                  <p>Invite strong profiles to talk.</p>
+                </div>
+              </li>
+              <li>
+                <span className="ep-posted-success__step-num" aria-hidden>
+                  3
+                </span>
+                <div>
+                  <strong>Move to hire</strong>
+                  <p>Update application status as you decide.</p>
+                </div>
+              </li>
+            </ol>
+          </article>
+
+          <article className="ep-posted-success__card ep-posted-success__card--hire">
+            <div>
+              <h2>Ready to hire</h2>
+              <p>Matched profiles are available for this role.</p>
+            </div>
+            <Link href={`/employer/jobs/${params.id}`} className="ep-posted-success__solid">
+              View job &amp; candidates
+            </Link>
+          </article>
+
+          <article className="ep-posted-success__card ep-posted-success__card--controls">
             <div className="ep-posted-success__controls">
-              <div className="ep-posted-success__status-btns">
-                <JobStatusActions
-                  jobId={params.id}
-                  status={status}
-                  compact
-                  onUpdated={async () => {
-                    const next = await getEmployerJob(params.id);
-                    setJob(next as JobDetail);
-                    if (typeof next.status === 'string') setStatus(next.status);
-                  }}
-                />
+              <div className="ep-posted-success__controls-left">
+                <span className="ep-posted-success__controls-label">Position controls</span>
+                <div className="ep-posted-success__status-btns">
+                  <JobStatusActions
+                    jobId={params.id}
+                    status={status}
+                    compact
+                    onUpdated={async () => {
+                      const next = await getEmployerJob(params.id);
+                      setJob(next as JobDetail);
+                      if (typeof next.status === 'string') setStatus(next.status);
+                    }}
+                  />
+                </div>
               </div>
               <div className="ep-posted-success__navlinks">
                 <Link href={`/employer/jobs/${params.id}`}>Open job details</Link>

@@ -116,7 +116,7 @@ export class TestimonialsService {
       if (prompt.source === 'DASHBOARD_SOFT_PROMPT' && prompt.dismissedAt) {
         const days =
           (Date.now() - new Date(prompt.dismissedAt).getTime()) / (1000 * 60 * 60 * 24);
-        if (days < 30) continue;
+        if (days < 20) continue;
       }
       return {
         source: prompt.source as TestimonialSource,
@@ -392,11 +392,23 @@ export class TestimonialsService {
       where: { userId_source: { userId, source: 'DASHBOARD_SOFT_PROMPT' } },
     });
     if (existing?.status === 'SUBMITTED') return;
+
+    // First login/register: create once. After dismiss, only re-show after 20 days.
     if (existing?.status === 'DISMISSED' && existing.dismissedAt) {
       const days =
         (Date.now() - new Date(existing.dismissedAt).getTime()) / (1000 * 60 * 60 * 24);
-      if (days < 30) return;
+      if (days < 20) return;
+      await this.prisma.testimonialPrompt.update({
+        where: { userId_source: { userId, source: 'DASHBOARD_SOFT_PROMPT' } },
+        data: {
+          status: 'ELIGIBLE',
+          eligibleAt: new Date(),
+          dismissedAt: null,
+        },
+      });
+      return;
     }
+
     if (existing?.status === 'ELIGIBLE') return;
 
     await this.prisma.testimonialPrompt.upsert({

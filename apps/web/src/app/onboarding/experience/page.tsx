@@ -7,15 +7,17 @@ import {
   OB,
   OnboardingActions,
   OnboardingFrame,
+  OnboardingHero,
   OnboardingQuestion,
+  OnboardingStepHeader,
   onboardingInputClass,
-  onboardingOptionButtonClass,
   onboardingPrimaryButtonClass,
 } from '@/components/OnboardingFrame';
 import { Button } from '@/components/ui/Button';
 import { patchStoredUser } from '@/lib/session';
 import { addExperience, getCandidateMe, updateCandidateMe } from '@/lib/api';
 import { useOnboardingGate } from '@/hooks/useOnboardingGate';
+import { DatePicker } from '@/features/candidate/passport/DatePicker';
 
 export default function OnboardingExperiencePage() {
   const router = useRouter();
@@ -26,6 +28,8 @@ export default function OnboardingExperiencePage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentlyWorking, setCurrentlyWorking] = useState(false);
+  const [noticePreset, setNoticePreset] = useState('');
+  const [noticeMonths, setNoticeMonths] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const gateReady = useOnboardingGate(4);
@@ -53,6 +57,16 @@ export default function OnboardingExperiencePage() {
 
   const showJobForm = hasExperience === 'YES';
 
+  function resolveNoticePeriod(): string | undefined {
+    if (!showJobForm) return undefined;
+    if (noticePreset === 'CUSTOM') {
+      const months = Number(noticeMonths.trim());
+      if (!Number.isFinite(months) || months < 1) return undefined;
+      return `${months} month${months === 1 ? '' : 's'}`;
+    }
+    return noticePreset || undefined;
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!hasExperience) {
@@ -68,22 +82,43 @@ export default function OnboardingExperiencePage() {
         setError('Enter how many years of experience you have.');
         return;
       }
+      if (!/^\d+(\.\d{1,2})?$/.test(experienceYears.trim())) {
+        setError('Years of experience must be a number (e.g. 1 or 1.5). No letters.');
+        return;
+      }
+      const yearsNum = Number(experienceYears.trim());
+      if (!Number.isFinite(yearsNum) || yearsNum < 0 || yearsNum > 50) {
+        setError('Enter a valid experience between 0 and 50 years.');
+        return;
+      }
       if (!startDate || (!currentlyWorking && !endDate)) {
         setError('Select from and to dates for your experience.');
         return;
+      }
+      if (!noticePreset) {
+        setError('Select your notice period / availability.');
+        return;
+      }
+      if (noticePreset === 'CUSTOM') {
+        const months = Number(noticeMonths.trim());
+        if (!Number.isFinite(months) || months < 1 || months > 24) {
+          setError('Enter notice period in months (1–24).');
+          return;
+        }
       }
     }
     setError('');
     setLoading(true);
     try {
+      const noticePeriod = resolveNoticePeriod();
       let profile = await updateCandidateMe({
         hasExperience,
-        experienceLevel:
-          hasExperience === 'YES' ? 'experienced' : 'fresher',
+        experienceLevel: hasExperience === 'YES' ? 'experienced' : 'fresher',
         ...(showJobForm
           ? {
               totalExperienceYears: experienceYears.trim() || '0',
               totalExperienceMonths: '0',
+              ...(noticePeriod ? { noticePeriod } : {}),
             }
           : {}),
         onboardingCompleted: true,
@@ -97,13 +132,13 @@ export default function OnboardingExperiencePage() {
           stillInCompany: currentlyWorking,
           isInternship: false,
         });
-        // Re-assert years after experience create (recompute must not drop onboarding years).
         profile = await updateCandidateMe({
           onboardingCompleted: true,
           hasExperience: 'YES',
           experienceLevel: 'experienced',
           totalExperienceYears: experienceYears.trim() || '0',
           totalExperienceMonths: '0',
+          ...(noticePeriod ? { noticePeriod } : {}),
         });
       } else if (hasExperience === 'INTERNSHIP' && (company.trim() || jobTitle.trim())) {
         profile = await addExperience({
@@ -122,7 +157,7 @@ export default function OnboardingExperiencePage() {
         firstName: profile.firstName,
         onboardingCompleted: true,
       });
-      router.replace('/onboarding/complete');
+      router.replace('/onboarding/dossier');
     } catch {
       setError('We could not save your experience right now. Please try again.');
     } finally {
@@ -130,9 +165,17 @@ export default function OnboardingExperiencePage() {
     }
   }
 
+  function selectExperience(value: string) {
+    setHasExperience(value);
+    setError('');
+  }
+
   if (!ready) {
     return (
-      <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
+      <main
+        className="flex min-h-screen items-center justify-center text-sm"
+        style={{ background: OB.bg, color: OB.muted }}
+      >
         Loading...
       </main>
     );
@@ -141,136 +184,264 @@ export default function OnboardingExperiencePage() {
   return (
     <OnboardingFrame step={4}>
       <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-4 overflow-x-hidden">
-        <OnboardingQuestion title="Work experience">
-          <div className="flex flex-wrap gap-2">
-            {EXPERIENCE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setHasExperience(option.value)}
-                className={onboardingOptionButtonClass(hasExperience === option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </OnboardingQuestion>
+        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden pb-1">
+          <OnboardingHero tone="teal">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={OB.teal800}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <rect x="2" y="7" width="20" height="14" rx="2" />
+              <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16" />
+            </svg>
+          </OnboardingHero>
 
-        {showJobForm ? (
-          <div className="space-y-4">
-            <p className="text-sm font-semibold" style={{ color: OB.ink }}>
-              Also fill below
+          <OnboardingStepHeader
+            title="Work experience"
+            subtitle="Do you have prior work experience?"
+          />
+
+          <div className="mb-1 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            {EXPERIENCE_OPTIONS.map((option) => {
+              const active = hasExperience === option.value;
+              const label =
+                option.value === 'NONE'
+                  ? 'No, fresher'
+                  : option.value === 'INTERNSHIP'
+                    ? 'Internship'
+                    : option.label;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => selectExperience(option.value)}
+                  className="flex h-auto flex-col items-center gap-1.5 rounded-[10px] border px-2 py-3.5 text-sm transition active:scale-[0.97]"
+                  style={
+                    active
+                      ? {
+                          borderColor: OB.accent,
+                          background: OB.accentTint,
+                          color: OB.accent,
+                        }
+                      : {
+                          borderColor: OB.borderStrong,
+                          background: OB.surface,
+                          color: OB.ink,
+                        }
+                  }
+                  aria-pressed={active}
+                >
+                  {option.value === 'YES' ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : option.value === 'NONE' ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                      <circle cx="8.5" cy="7" r="4" />
+                      <line x1="20" y1="8" x2="20" y2="14" />
+                      <line x1="23" y1="11" x2="17" y2="11" />
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <rect x="2" y="7" width="20" height="14" rx="2" />
+                      <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16" />
+                    </svg>
+                  )}
+                  <span className="text-center text-[13px] font-medium leading-tight">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {!hasExperience ? (
+            <p className="text-[13px]" style={{ color: OB.textMuted }}>
+              Select an option to continue.
             </p>
-            <OnboardingQuestion title="Current or most recent role">
-              <input
-                name="jobTitle"
-                required
-                value={jobTitle}
-                onChange={(event) => setJobTitle(event.target.value)}
-                placeholder="e.g. Sales executive"
-                className={onboardingInputClass}
-              />
-            </OnboardingQuestion>
-            <OnboardingQuestion title="Company">
-              <input
-                name="company"
-                required
-                value={company}
-                onChange={(event) => setCompany(event.target.value)}
-                placeholder="Company name"
-                className={onboardingInputClass}
-              />
-            </OnboardingQuestion>
-            <OnboardingQuestion title="Years of experience">
-              <input
-                name="experienceYears"
-                type="number"
-                min={0}
-                max={50}
-                required
-                value={experienceYears}
-                onChange={(event) => setExperienceYears(event.target.value)}
-                placeholder="e.g. 2"
-                className={onboardingInputClass}
-              />
-            </OnboardingQuestion>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold" style={{ color: OB.ink }}>
-                  From
-                </span>
+          ) : null}
+
+          {showJobForm ? (
+            <div className="space-y-3.5">
+              <OnboardingQuestion title="Years of experience">
                 <input
-                  type="month"
+                  name="experienceYears"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="^\d+(\.\d{1,2})?$"
                   required
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
+                  value={experienceYears}
+                  onChange={(event) => {
+                    const next = event.target.value.replace(/[^\d.]/g, '');
+                    // Allow at most one decimal point and two fraction digits
+                    const cleaned = next.replace(/(\..*)\./g, '$1').replace(/^(\d+)(\.\d{0,2})?.*$/, '$1$2');
+                    setExperienceYears(cleaned);
+                  }}
+                  placeholder="e.g. 1.5"
                   className={onboardingInputClass}
                 />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold" style={{ color: OB.ink }}>
-                  To
-                </span>
+              </OnboardingQuestion>
+              <OnboardingQuestion title="Most recent role">
                 <input
-                  type="month"
-                  required={!currentlyWorking}
-                  disabled={currentlyWorking}
-                  value={currentlyWorking ? '' : endDate}
-                  onChange={(event) => setEndDate(event.target.value)}
+                  name="jobTitle"
+                  required
+                  value={jobTitle}
+                  onChange={(event) => setJobTitle(event.target.value)}
+                  placeholder="e.g. Frontend developer"
                   className={onboardingInputClass}
                 />
+              </OnboardingQuestion>
+              <OnboardingQuestion title="Company">
+                <input
+                  name="company"
+                  required
+                  value={company}
+                  onChange={(event) => setCompany(event.target.value)}
+                  placeholder="Company name"
+                  className={onboardingInputClass}
+                />
+              </OnboardingQuestion>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px]" style={{ color: OB.muted }}>
+                    From
+                  </span>
+                  <DatePicker
+                    mode="month"
+                    value={startDate}
+                    onChange={setStartDate}
+                    placeholder="Select month"
+                    confirmLabel="Set start date"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px]" style={{ color: OB.muted }}>
+                    To
+                  </span>
+                  <DatePicker
+                    mode="month"
+                    value={currentlyWorking ? '' : endDate}
+                    onChange={setEndDate}
+                    placeholder="Select month"
+                    confirmLabel="Set end date"
+                    disabled={currentlyWorking}
+                  />
+                </label>
+              </div>
+              <label
+                className="mt-1 flex cursor-pointer items-center gap-2 text-sm font-medium"
+                style={{ color: OB.ink }}
+              >
+                <input
+                  type="checkbox"
+                  checked={currentlyWorking}
+                  onChange={(event) => {
+                    setCurrentlyWorking(event.target.checked);
+                    if (event.target.checked) setEndDate('');
+                  }}
+                  className="h-4 w-4 rounded border-[#d4d3cc] text-[#0B3D33]"
+                />
+                Currently working
               </label>
-            </div>
-            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-semibold" style={{ color: OB.ink }}>
-              <input
-                type="checkbox"
-                checked={currentlyWorking}
-                onChange={(event) => {
-                  setCurrentlyWorking(event.target.checked);
-                  if (event.target.checked) setEndDate('');
-                }}
-                className="h-4 w-4 rounded border-primary/20 text-[#0a2e2c]"
-              />
-              Currently working
-            </label>
-          </div>
-        ) : hasExperience === 'INTERNSHIP' ? (
-          <div className="space-y-4">
-            <p className="text-sm font-semibold" style={{ color: OB.ink }}>
-              Also fill below
-            </p>
-            <OnboardingQuestion title="Company / Organisation">
-              <input
-                name="company"
-                value={company}
-                onChange={(event) => setCompany(event.target.value)}
-                className={onboardingInputClass}
-              />
-            </OnboardingQuestion>
-            <OnboardingQuestion title="Role">
-              <input
-                name="jobTitle"
-                value={jobTitle}
-                onChange={(event) => setJobTitle(event.target.value)}
-                className={onboardingInputClass}
-              />
-            </OnboardingQuestion>
-          </div>
-        ) : null}
 
-        {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
+              <OnboardingQuestion title="Serving notice period / availability">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {[
+                    { value: 'Immediate', label: 'Immediate' },
+                    { value: '15 days', label: '15 days' },
+                    { value: '30 days', label: '30 days' },
+                    { value: '3 months', label: '3 months' },
+                    { value: 'CUSTOM', label: 'Other months' },
+                  ].map((opt) => {
+                    const active = noticePreset === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setNoticePreset(opt.value);
+                          if (opt.value !== 'CUSTOM') setNoticeMonths('');
+                          setError('');
+                        }}
+                        className="rounded-[10px] border px-2 py-2.5 text-[13px] font-medium transition active:scale-[0.97]"
+                        style={
+                          active
+                            ? {
+                                borderColor: OB.accent,
+                                background: OB.accentTint,
+                                color: OB.accent,
+                              }
+                            : {
+                                borderColor: OB.borderStrong,
+                                background: OB.surface,
+                                color: OB.ink,
+                              }
+                        }
+                        aria-pressed={active}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {noticePreset === 'CUSTOM' ? (
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={noticeMonths}
+                      onChange={(e) => setNoticeMonths(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                      placeholder="e.g. 2"
+                      className={`${onboardingInputClass} max-w-[7rem]`}
+                      aria-label="Notice period months"
+                    />
+                    <span className="text-sm font-medium" style={{ color: OB.ink }}>
+                      month(s)
+                    </span>
+                  </div>
+                ) : null}
+              </OnboardingQuestion>
+            </div>
+          ) : hasExperience === 'INTERNSHIP' ? (
+            <div className="space-y-3.5">
+              <OnboardingQuestion title="Company / Organisation">
+                <input
+                  name="company"
+                  value={company}
+                  onChange={(event) => setCompany(event.target.value)}
+                  placeholder="Optional"
+                  className={onboardingInputClass}
+                />
+              </OnboardingQuestion>
+              <OnboardingQuestion title="Role">
+                <input
+                  name="jobTitle"
+                  value={jobTitle}
+                  onChange={(event) => setJobTitle(event.target.value)}
+                  placeholder="e.g. Intern"
+                  className={onboardingInputClass}
+                />
+              </OnboardingQuestion>
+            </div>
+          ) : null}
+
+          {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
         </div>
 
-        <OnboardingActions>
+        <OnboardingActions step={4}>
           <Button
             type="submit"
             size="sm"
-            block={false}
+            block
             loading={loading}
             loadingLabel="Saving..."
             className={onboardingPrimaryButtonClass}
-            style={{ background: OB.moss }}
+            style={{ background: OB.accent }}
           >
             Finish
           </Button>

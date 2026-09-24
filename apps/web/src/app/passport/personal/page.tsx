@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { getCandidateMe, updateCandidateMe } from '@/lib/api';
 import { goToNextPassportStep } from '@/lib/passport-flow';
+import { DatePicker } from '@/features/candidate/passport/DatePicker';
 
 export default function PassportPersonalPage() {
   const router = useRouter();
@@ -91,14 +92,15 @@ export default function PassportPersonalPage() {
           onChange={(event) => setFullName(event.target.value.replace(/[^a-zA-Z\s.'-]/g, ''))}
         />
         <CitySelect label="Current city" required value={city} onChange={setCity} />
-        <Input
-          label="Date of birth"
-          name="dateOfBirth"
-          type="date"
-          required
-          value={dateOfBirth}
-          onChange={(event) => setDateOfBirth(event.target.value)}
-        />
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold text-slate-700">Date of birth</span>
+          <DatePicker
+            value={dateOfBirth}
+            onChange={setDateOfBirth}
+            placeholder="Select date of birth"
+            confirmLabel="Set date of birth"
+          />
+        </label>
         <label className="block" htmlFor="gender">
           <span className="mb-1.5 block text-xs font-bold text-slate-700">Gender</span>
           <select

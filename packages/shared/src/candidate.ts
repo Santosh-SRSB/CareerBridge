@@ -24,6 +24,7 @@ export type CandidateProfile = {
   about?: string | null;
   careerInterests: string[];
   hasExperience: string | null;
+  noticePeriod?: string | null;
   profileCompletion: number;
   onboardingCompleted: boolean;
   dashboardReached?: boolean;
@@ -200,8 +201,11 @@ export type UpdateCandidatePayload = {
   gender?: string;
   openToRelocating?: boolean;
   highestEducation?: string;
+  educationEnd?: string;
+  stillInCollege?: boolean;
   careerInterests?: string[];
   hasExperience?: string;
+  noticePeriod?: string;
   experienceLevel?: 'fresher' | 'experienced';
   totalExperienceYears?: string;
   totalExperienceMonths?: string;

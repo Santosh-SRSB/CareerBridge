@@ -114,6 +114,8 @@ model Candidate {
   photoUrl              String?  @map("photo_url") @db.Text
   profileLinks          String   @default("{}") @map("profile_links")
   hasExperience         String?  @map("has_experience")
+  /** Notice period / join availability from onboarding (e.g. Immediate, 15 days, 2 months). */
+  noticePeriod          String?  @map("notice_period")
   onboardingCompleted   Boolean  @default(false) @map("onboarding_completed")
   /** True once the candidate has opened the dashboard at least once. */
   dashboardReached      Boolean  @default(false) @map("dashboard_reached")
@@ -131,6 +133,7 @@ model Candidate {
   education     CandidateEducation[]
   skills        CandidateSkill[]
   experiences   CandidateExperience[]
+  careerGaps    CareerGap[]
   resumes       Resume[]
   applications  Application[]
   interviews        Interview[]
@@ -207,6 +210,45 @@ model CandidateExperience {
 
   @@index([candidateId])
   @@map("candidate_experiences")
+}
+
+enum CareerGapStatus {
+  UNEXPLAINED
+  EXPLAINED
+}
+
+enum CareerGapReason {
+  JOB_SEARCH
+  HIGHER_EDUCATION
+  CERTIFICATION_TRAINING
+  FREELANCING
+  BUSINESS
+  RELOCATION
+  PERSONAL_FAMILY
+  HEALTH_BREAK
+  OTHER
+}
+
+/** Detected gaps between career activities (>30 days). Backend is source of truth. */
+model CareerGap {
+  id                  String           @id @default(uuid())
+  candidateId         String           @map("candidate_id")
+  previousActivityId  String?          @map("previous_activity_id")
+  nextActivityId      String?          @map("next_activity_id")
+  gapStartDate        DateTime         @map("gap_start_date") @db.Date
+  gapEndDate          DateTime         @map("gap_end_date") @db.Date
+  gapDays             Int              @map("gap_days")
+  reason              CareerGapReason?
+  reasonDetails       String?          @map("reason_details") @db.Text
+  status              CareerGapStatus  @default(UNEXPLAINED)
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, gapStartDate, gapEndDate])
+  @@index([candidateId, status])
+  @@map("career_gaps")
 }
 
 model OtpRequest {

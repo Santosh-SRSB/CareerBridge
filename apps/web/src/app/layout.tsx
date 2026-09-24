@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter, Manrope, Poppins, Space_Grotesk, Space_Mono } from "next/font/google";
-import { AppLoader } from "@/components/landing/AppLoader";
+import { Fraunces, Inter, Manrope, Outfit, Poppins, Space_Grotesk, Space_Mono } from "next/font/google";
 import { AuthCookieSync } from "@/components/AuthCookieSync";
 import { PushNotificationBootstrap } from "@/components/PushNotificationBootstrap";
 import "./globals.css";
-import "./employer-pro.css";
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const outfit = Outfit({
+  variable: "--font-outfit",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -51,6 +56,11 @@ export const metadata: Metadata = {
   title: "SRSB CareerBridge | Build your career. Build your future.",
   description:
     "Create your free Career Passport, improve your skills with AI, practice interviews, and find jobs. Free for candidates.",
+  icons: {
+    icon: [{ url: "/srsb-mark.png", type: "image/png" }],
+    shortcut: ["/srsb-mark.png"],
+    apple: [{ url: "/srsb-mark.png" }],
+  },
 };
 
 export default function RootLayout({
@@ -61,12 +71,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${spaceGrotesk.variable} ${poppins.variable} ${fraunces.variable} ${manrope.variable} ${spaceMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${outfit.variable} ${spaceGrotesk.variable} ${poppins.variable} ${fraunces.variable} ${manrope.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-fog font-sans text-ink">
         <AuthCookieSync />
         <PushNotificationBootstrap />
-        <AppLoader />
         {children}
       </body>
     </html>

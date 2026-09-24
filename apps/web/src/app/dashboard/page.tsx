@@ -742,9 +742,12 @@ export default function DashboardPage() {
 
         {jobs.length === 0 ? (
           <div className="cb-boarding__empty">
-            <p>No recommended jobs yet. Browse the marketplace to explore openings.</p>
+            <p>
+              Currently no match found with your profile. We will notify you when a suitable role
+              opens up.
+            </p>
             <button type="button" className="cb-boarding__btn" onClick={() => router.push('/jobs')}>
-              Browse jobs
+              Browse all jobs
             </button>
           </div>
         ) : (

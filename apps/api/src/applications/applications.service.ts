@@ -598,6 +598,7 @@ export class ApplicationsService {
       category: string;
       requiredSkills: string;
       preferredSkills: string;
+      status: string;
       employer: { companyName: string };
     };
   }) {
@@ -624,6 +625,7 @@ export class ApplicationsService {
         category: row.job.category,
         requiredSkills: parseList(row.job.requiredSkills),
         preferredSkills: parseList(row.job.preferredSkills),
+        status: row.job.status,
       },
       timeline,
     };

@@ -48,7 +48,7 @@ export function buildQuestionCompletedLines(
   const ordinal =
     questionNumber === 1 ? 'first' : questionNumber === 2 ? 'second' : questionNumber === 3 ? 'third' : `${questionNumber}th`;
   return {
-    primary: `Great job, ${name}! You have completed your ${ordinal} question.`,
+    primary: `Well done, ${name}! You have completed your ${ordinal} question.`,
     secondary: "Let's move on to the next question.",
   };
 }

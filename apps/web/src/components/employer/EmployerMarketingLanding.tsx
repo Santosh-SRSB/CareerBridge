@@ -6,7 +6,6 @@ import Link from 'next/link';
 
 const REGISTER_HREF = '/employer/register';
 const LOGIN_HREF = '/login?role=employer';
-const JOBSEEKER_HREF = '/register?role=candidate';
 
 const HIRE_STEPS = [
   {
@@ -341,7 +340,7 @@ export function EmployerMarketingLanding() {
       <header className="cb-emkt-nav">
         <div className="cb-emkt-nav__inner">
           <Link
-          href="/employer/register"
+          href="/employer/welcome"
             className="cb-emkt-nav__brand"
             aria-label="CareerBridge for Employers"
           >
@@ -366,7 +365,7 @@ export function EmployerMarketingLanding() {
           </nav>
 
           <div className="cb-emkt-nav__actions">
-            <Link href="/#signin" className="cb-emkt-nav__help">
+            <Link href="/support" className="cb-emkt-nav__help">
               Help
             </Link>
             <Link href={LOGIN_HREF} className="cb-emkt-nav__ghost">
@@ -375,7 +374,7 @@ export function EmployerMarketingLanding() {
             <Link href={REGISTER_HREF} className="cb-emkt-nav__solid cb-emkt-shimmer">
               Post a job
             </Link>
-            <Link href={JOBSEEKER_HREF} className="cb-emkt-nav__seeker">
+            <Link href="/" className="cb-emkt-nav__seeker">
               For jobseekers
             </Link>
           </div>
@@ -584,7 +583,7 @@ export function EmployerMarketingLanding() {
               </p>
               <div className="cb-emkt-resources__links">
                 <Link href="/#signin">Employer Help Centre →</Link>
-                <Link href="/#employers">Employer Resource Library →</Link>
+                <Link href="#resources">Employer Resource Library →</Link>
               </div>
             </div>
           </div>
@@ -698,17 +697,17 @@ export function EmployerMarketingLanding() {
             <h2>We&apos;re here to help</h2>
             <p>Visit our Help Centre for answers to common questions or contact us directly.</p>
             <div className="cb-emkt-foot__btns">
-              <Link href="/#signin">Help Centre</Link>
-              <Link href="/#signin">Contact support</Link>
+              <Link href="/support">Help Centre</Link>
+              <Link href="/support">Contact support</Link>
             </div>
           </div>
           <div className="cb-emkt-foot__cols">
             <div>
               <h3>CareerBridge</h3>
               <Link href="/">About</Link>
-              <Link href="/#signin">Security</Link>
-              <Link href="/#signin">Terms</Link>
-              <Link href="/#signin">Privacy</Link>
+              <Link href="/support">Security</Link>
+              <Link href="/terms">Terms</Link>
+              <Link href="/privacy">Privacy</Link>
             </div>
             <div>
               <h3>Employers</h3>
@@ -719,9 +718,9 @@ export function EmployerMarketingLanding() {
             </div>
             <div>
               <h3>Resources</h3>
-              <Link href="/#employers">How to hire</Link>
-              <Link href="/#employers">Job descriptions</Link>
-              <Link href="/#employers">Interview guides</Link>
+              <a href="#hire">How to hire</a>
+              <a href="#features">Job descriptions</a>
+              <a href="#resources">Interview guides</a>
               <Link href={LOGIN_HREF}>Sign in</Link>
             </div>
           </div>

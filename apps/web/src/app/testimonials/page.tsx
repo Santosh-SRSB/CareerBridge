@@ -101,7 +101,20 @@ export default function TestimonialsPage() {
                 <span className="rounded-full bg-[#e7f3ef] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#0a2e2c]">
                   {row.audience === 'CANDIDATE' ? 'Candidate' : 'Employer'}
                 </span>
-                <span className="text-sm font-extrabold text-[#0a2e2c]">{'★'.repeat(row.rating)}</span>
+                <span
+                  className="inline-flex items-center gap-1.5 text-[1.35rem] leading-none tracking-wide text-amber-500"
+                  aria-label={`${row.rating} out of 5 stars`}
+                >
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <span
+                      key={i}
+                      className={i < row.rating ? 'text-amber-400 drop-shadow-sm' : 'text-slate-200'}
+                      aria-hidden
+                    >
+                      ★
+                    </span>
+                  ))}
+                </span>
               </div>
               <p className="mt-4 text-[15px] font-semibold leading-relaxed text-[#0a2e2c]">
                 “{row.quote}”

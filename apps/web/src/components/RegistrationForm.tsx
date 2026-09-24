@@ -142,23 +142,31 @@ export function RegistrationForm() {
     event.preventDefault();
     setError('');
 
-    if (!agreedToTerms) {
-      setError('Please agree to the Terms and Privacy Policy.');
+    const country = COUNTRIES.find((item) => item.dial === dial) || DEFAULT_COUNTRY;
+
+    if (!fullName.trim()) {
+      setError('Name is required');
       return;
     }
-
-    const country = COUNTRIES.find((item) => item.dial === dial) || DEFAULT_COUNTRY;
+    if (fullName.trim().length < 2) {
+      setError('Name is required');
+      return;
+    }
+    if (!national.trim()) {
+      setError('Mobile number is required');
+      return;
+    }
     if (!isValidNational(country.maxLength, national)) {
-      setError('Enter a valid mobile number.');
+      setError('Please enter a valid mobile number');
       return;
     }
     const emailProblem = validateEmailAddress(email.trim(), true);
     if (emailProblem) {
-      setError(emailProblem);
+      setError('Please enter a valid email');
       return;
     }
-    if (fullName.trim().length < 2) {
-      setError('Enter your full name.');
+    if (!agreedToTerms) {
+      setError('You must accept Terms and Privacy Policy');
       return;
     }
     const passwordProblem = registrationPasswordError(password);

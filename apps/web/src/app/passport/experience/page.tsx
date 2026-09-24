@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { addExperience, getCandidateMe, removeExperience, updateCandidateMe } from '@/lib/api';
 import { goToNextPassportStep } from '@/lib/passport-flow';
+import { DatePicker } from '@/features/candidate/passport/DatePicker';
 
 function formatRange(start?: string | null, end?: string | null) {
   if (!start && !end) return '';
@@ -185,15 +186,25 @@ export default function PassportExperiencePage() {
             <Input label="Company" name="company" value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Company or organisation" />
             <Input label="Job title" name="jobTitle" value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="Full Stack, Sales Associate" />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input label="Start date" name="startDate" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-              <Input
-                label="End date"
-                name="endDate"
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                disabled={currentRole}
-              />
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold text-slate-700">Start date</span>
+                <DatePicker
+                  value={startDate}
+                  onChange={setStartDate}
+                  placeholder="Select start date"
+                  confirmLabel="Set start date"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold text-slate-700">End date</span>
+                <DatePicker
+                  value={currentRole ? '' : endDate}
+                  onChange={setEndDate}
+                  placeholder="Select end date"
+                  confirmLabel="Set end date"
+                  disabled={currentRole}
+                />
+              </label>
             </div>
             <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
               <input

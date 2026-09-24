@@ -20,6 +20,7 @@ import { JobLocationFields } from '@/components/marketplace/JobLocationFields';
 import { JobSearchFilters } from '@/components/marketplace/JobSearchFilters';
 import { JobsOlxFilters } from '@/components/marketplace/JobsOlxFilters';
 import { Button } from '@/components/ui/Button';
+import { CitySelect } from '@/components/ui/CitySelect';
 import { Input } from '@/components/ui/Input';
 import { formatJobType } from '@/lib/match';
 import { searchNearbyJobs } from '@/lib/candidate-marketplace-api';
@@ -214,6 +215,8 @@ function JobsSearchContent() {
   });
   const [activeFilter, setActiveFilter] = useState<JobFilterChip | null>(null);
   const [showDesktopSearch, setShowDesktopSearch] = useState(true);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const [pickerCity, setPickerCity] = useState('');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [savingId, setSavingId] = useState('');
 
@@ -619,28 +622,41 @@ function JobsSearchContent() {
 
         <div className="flex items-center justify-between gap-3 rounded-xl bg-[#f4f4ec] px-4 py-[13px]">
           {locStatus === 'asking' ? (
-            <p className="text-[13.5px] font-semibold text-[var(--jobs-ink-soft)]">
-              Allow location access to see jobs near you.
-            </p>
+            <>
+              <p className="min-w-0 flex-1 text-[13.5px] font-semibold text-[var(--jobs-ink-soft)]">
+                Allow location access to see jobs near you.
+              </p>
+              <button
+                type="button"
+                onClick={() => void tryUseGps()}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[var(--jobs-dark)] px-3.5 py-2 text-xs font-bold text-white shadow-sm"
+              >
+                <PinIcon stroke="#fff" className="h-4 w-4" />
+                Grant location
+              </button>
+            </>
           ) : null}
           {locStatus === 'denied' && !origin ? (
-            <div className="w-full space-y-2">
-              <p className="text-[13.5px] font-semibold">Location access is unavailable.</p>
-              <p className="text-[13px] text-[var(--jobs-muted)]">Use your preferred city or try again.</p>
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0 space-y-1">
+                <p className="text-[13.5px] font-semibold">Location access is unavailable.</p>
+                <p className="text-[13px] text-[var(--jobs-muted)]">Use your preferred city or grant location.</p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={usePreferredCity}
-                  className="rounded-full bg-[var(--jobs-dark)] px-3 py-1.5 text-xs font-bold text-white"
+                  className="rounded-full border border-[var(--jobs-hair)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--jobs-ink)]"
                 >
                   Use preferred location
                 </button>
                 <button
                   type="button"
                   onClick={() => void tryUseGps()}
-                  className="rounded-full border border-[var(--jobs-hair)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--jobs-ink)]"
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--jobs-dark)] px-3.5 py-2 text-xs font-bold text-white"
                 >
-                  Try location again
+                  <PinIcon stroke="#fff" className="h-4 w-4" />
+                  Grant location
                 </button>
               </div>
             </div>
@@ -659,7 +675,11 @@ function JobsSearchContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowDesktopSearch(true)}
+                onClick={() => {
+                  setPickerCity(filters.city || origin?.label?.split('·')[0]?.trim() || '');
+                  setLocationPickerOpen(true);
+                  setShowDesktopSearch(true);
+                }}
                 className="inline-flex shrink-0 items-center gap-1.5 border-0 bg-transparent p-0 text-[13px] font-bold text-[var(--jobs-dark)] transition hover:opacity-65"
               >
                 Change
@@ -689,6 +709,80 @@ function JobsSearchContent() {
         ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+        {locationPickerOpen ? (
+          <div
+            className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Change location"
+          >
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-base font-extrabold text-[var(--jobs-dark)]">Choose location</h2>
+                <button
+                  type="button"
+                  className="text-sm font-bold text-[var(--jobs-muted)]"
+                  onClick={() => setLocationPickerOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <CitySelect
+                label="Search city"
+                value={pickerCity}
+                onChange={setPickerCity}
+                required
+              />
+              <p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Popular</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {POPULAR_CITIES.map((item) => (
+                  <button
+                    key={item.city}
+                    type="button"
+                    onClick={() => setPickerCity(item.city)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
+                      pickerCity === item.city
+                        ? 'border-[var(--jobs-dark)] bg-[var(--jobs-dark)] text-white'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    {item.city}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  className="flex-1"
+                  disabled={!pickerCity.trim()}
+                  onClick={() => {
+                    const city = pickerCity.trim();
+                    const match = POPULAR_CITIES.find((c) => c.city === city);
+                    updateFilters({ city, state: match?.state || filters.state });
+                    const next = originFromCity(city, 'manual');
+                    if (next) resetFeed(next);
+                    setLocationPickerOpen(false);
+                    setShowDesktopSearch(false);
+                  }}
+                >
+                  Use this city
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setLocationPickerOpen(false);
+                    void tryUseGps();
+                  }}
+                >
+                  Use GPS
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {origin ? (
           <div className="space-y-5">
@@ -813,7 +907,8 @@ function JobsSearchContent() {
 
             {!loading && totalShown === 0 && locStatus === 'ready' ? (
               <p className="rounded-[14px] border border-dashed border-[var(--jobs-hair)] bg-white p-5 text-sm text-[var(--jobs-muted)]">
-                No published jobs found near this location with the current filters.
+                Currently no match found with your profile. We will notify you when a suitable role
+                opens up near this location.
               </p>
             ) : null}
 

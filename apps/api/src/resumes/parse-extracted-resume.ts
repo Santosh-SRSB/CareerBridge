@@ -394,6 +394,18 @@ function headingKey(line: string): SectionKey | null {
     return null;
   }
 
+  // "Education MCA …" / "Academic Qualifications B.Tech …" — heading with inline body.
+  // Do not treat "Academic Projects" as education.
+  if (/^education\b/i.test(trimmed)) {
+    return 'education';
+  }
+  if (
+    /^(?:academic(?:\s+(?:profile|details|background|qualifications?))?|qualifications?)\b/i.test(trimmed) &&
+    !/\bprojects?\b/i.test(trimmed)
+  ) {
+    return 'education';
+  }
+
   const key = trimmed
     .replace(/[:\s]+$/g, '')
     .replace(/[•·|_/\\-]+/g, ' ')
@@ -429,6 +441,27 @@ function headingKey(line: string): SectionKey | null {
   if (/^PERSONAL\b|^CONTACT\b/.test(key)) return 'personal';
   if (/^DECLARATION|^REFERENCE|^HOBB|^INTEREST/.test(key)) return 'skip';
   return null;
+}
+
+function rescueOrphanEducationLines(lines: string[], sections: Map<SectionKey, string[]>) {
+  const existing = sections.get('education') || [];
+  const blob = existing.join('\n').toLowerCase();
+  const extras: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^education\b/i.test(trimmed)) {
+      const rest = trimmed.replace(/^education\s*[:\-–]?\s*/i, '').trim();
+      if (rest && !blob.includes(rest.toLowerCase().slice(0, 40))) extras.push(rest || trimmed);
+      continue;
+    }
+    if (DEGREE_PATTERN.test(trimmed) && /university|college|institute|vtu|brabu|bachelor|master|applications?/i.test(trimmed)) {
+      if (!blob.includes(trimmed.toLowerCase().slice(0, 40))) extras.push(trimmed);
+    }
+  }
+  if (!extras.length) return;
+  if (!sections.has('education')) sections.set('education', []);
+  sections.get('education')!.push(...extras);
 }
 
 function looksLikePageMarker(line: string) {
@@ -1534,6 +1567,15 @@ export function parseExtractedResumeText(rawText: string): ResumeContent {
       current = key;
       if (key !== 'skip' && !sections.has(key)) sections.set(key, []);
       detected.push({ section: key, preview: line.slice(0, 80) });
+      // Inline heading+body: "Education MCA (Master of …) August 2010…"
+      if (key === 'education') {
+        const inline = line.match(
+          /^(?:education|academic(?:\s+(?:profile|details|background|qualifications?))?|qualifications?)\s*[:\-–]?\s+(.+)$/i,
+        );
+        if (inline?.[1]?.trim() && !/^(history|details|background|profile)$/i.test(inline[1].trim())) {
+          sections.get('education')!.push(inline[1].trim());
+        }
+      }
       continue;
     }
     if (current === 'skip') continue;
@@ -1556,6 +1598,10 @@ export function parseExtractedResumeText(rawText: string): ResumeContent {
   if (detected.filter((d) => !d.section.startsWith('inferred') && d.section !== 'header').length < 2) {
     inferMissingSectionsFromBody(lines, sections, header);
   }
+
+  // Always rescue degree lines that never landed in an education bucket (common when
+  // "Education MCA …" is longer than a bare heading and other sections already dominate).
+  rescueOrphanEducationLines(lines, sections);
 
   debugLog('detected-sections', detected);
 

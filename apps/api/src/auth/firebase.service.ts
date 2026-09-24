@@ -68,10 +68,20 @@ export class FirebaseService {
     if (!this.app) {
       throw new ServiceUnavailableException({
         code: 'INTERNAL_ERROR',
-        message: 'We could not verify your number right now. Please try again.',
+        message:
+          'Phone OTP verification is not available on the server. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_* in apps/api/.env, then restart the API.',
       });
     }
-    return this.app.auth().verifyIdToken(idToken);
+    try {
+      return await this.app.auth().verifyIdToken(idToken);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`verifyIdToken failed: ${msg}`);
+      throw new ServiceUnavailableException({
+        code: 'UNAUTHORIZED',
+        message: 'We could not verify your OTP with Firebase. Request a new OTP and try again.',
+      });
+    }
   }
 
   /**

@@ -1,22 +1,18 @@
 'use client';
 
+import { DatePicker } from '@/features/candidate/passport/DatePicker';
 import { formatMonthRange, formatEducationYearRange } from '@/lib/resume-dates';
 
 const fieldStyles = `
-  .cb-date-field input[type="month"] {
+  .cb-date-field .date-picker-trigger {
     border: 2px solid #7A8270;
     border-radius: 0.5rem;
+    min-height: 44px;
     padding: 10px 12px;
     font-size: 14px;
     font-family: var(--font-inter), Inter, sans-serif;
-    width: 100%;
-    box-sizing: border-box;
-    color: #241C15;
-    background: #fff;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  .cb-date-field input[type="month"]:focus {
-    outline: none;
+  .cb-date-field .date-picker-trigger.is-open {
     border-color: #0A2E2C;
     box-shadow: 0 0 0 3px rgba(10, 46, 44, 0.25);
   }
@@ -55,7 +51,14 @@ export function MonthField({
     <div className="cb-date-field cb-field">
       <style dangerouslySetInnerHTML={{ __html: fieldStyles }} />
       <label htmlFor={id}>{label}</label>
-      <input id={id} type="month" value={value} onChange={(e) => onChange(e.target.value)} />
+      <DatePicker
+        mode="month"
+        value={value}
+        onChange={onChange}
+        placeholder="Select month"
+        confirmLabel={label.toLowerCase().includes('end') ? 'Set end date' : 'Set start date'}
+        disabled={false}
+      />
     </div>
   );
 }
@@ -88,11 +91,24 @@ export function MonthRangeFields({
       <style dangerouslySetInnerHTML={{ __html: fieldStyles }} />
       <div className="cb-field">
         <label>{startLabel}</label>
-        <input type="month" value={start} onChange={(e) => onStartChange(e.target.value)} />
+        <DatePicker
+          mode="month"
+          value={start}
+          onChange={onStartChange}
+          placeholder="Select month"
+          confirmLabel="Set start date"
+        />
       </div>
       <div className="cb-field">
         <label>{endLabel}</label>
-        <input type="month" value={end} onChange={(e) => onEndChange(e.target.value)} disabled={isCurrent} />
+        <DatePicker
+          mode="month"
+          value={isCurrent ? '' : end}
+          onChange={onEndChange}
+          placeholder="Select month"
+          confirmLabel="Set end date"
+          disabled={isCurrent}
+        />
       </div>
       {showPresent && (
         <label className="cb-present-row">

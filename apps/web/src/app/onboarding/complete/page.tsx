@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { OB, OnboardingFrame, onboardingPrimaryButtonClass } from '@/components/OnboardingFrame';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
-import { getCandidateMe, retryResumeProcessing, uploadResumeFile } from '@/lib/api';
+import { getCandidateMe, getResumeProcessingStatus, retryResumeProcessing, uploadResumeFile } from '@/lib/api';
 import {
   markResumePendingParse,
   markResumeBuildPath,
@@ -134,9 +134,27 @@ export default function OnboardingCompletePage() {
       fullName: guessed || stored?.firstName || '',
     });
     setStatus('reading');
+    setUploadCelebration('loading');
+
+    // Keep the “reading” overlay up until Document AI / Gemini finishes (or times out).
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline) {
+      try {
+        const result = await getResumeProcessingStatus(resumeId);
+        if (result.processingStatus === 'COMPLETED') break;
+        if (result.processingStatus === 'FAILED') {
+          setFailedResumeId(resumeId);
+          throw new Error(result.processingError || 'We could not read this resume. Please retry.');
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('could not read')) throw err;
+        // Soft-continue on transient network errors while still showing the reading UI.
+      }
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+
     setUploadCelebration('success');
-    // Keep celebration under ~1s total after upload — never wait for Gemini here.
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 450));
     rememberReturnTo('/onboarding/complete');
     router.push('/resume?from=autofill');
   }
@@ -221,7 +239,7 @@ export default function OnboardingCompletePage() {
         showProgress={false}
         showBack
         hideHeader
-        backHref="/onboarding/experience"
+        backHref="/onboarding/dossier"
       >
         <div className="cb-ob-complete cb-ob-hide-scrollbar flex min-h-0 flex-1 flex-col justify-center py-2">
           <h2
@@ -359,13 +377,19 @@ export default function OnboardingCompletePage() {
           loadingTitle={
             status === 'uploading'
               ? 'Your resume is uploading'
-              : 'Uploaded successfully'
+              : status === 'reading'
+                ? 'We are reading your resume'
+                : 'Uploaded successfully'
           }
           loadingSubtitle={
-            status === 'uploading' ? 'Please wait a moment…' : 'Opening your resume wizard…'
+            status === 'uploading'
+              ? 'Please wait a moment…'
+              : status === 'reading'
+                ? 'Extracting your education, skills and experience…'
+                : 'Opening your resume wizard…'
           }
-          successTitle="Uploaded successfully"
-          successSubtitle="Opening your resume wizard…"
+          successTitle="Resume ready"
+          successSubtitle="Opening your combined profile wizard…"
         />
       ) : null}
 

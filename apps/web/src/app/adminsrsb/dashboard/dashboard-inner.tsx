@@ -1277,18 +1277,10 @@ export default function SuperAdminDashboardInner() {
 
             {tab === 'employers' && !listLoading && rows.length > 0 && (
               <div className="grid gap-3 md:grid-cols-2">
-                {canImpersonateEmployer(staffRole) ? (
-                  <p className="md:col-span-2 rounded-lg border border-[#c8eadb] bg-[#f3fbf7] px-4 py-3 text-sm text-[#0c332c]">
-                    <strong>Full employer access:</strong> use <em>Open workspace</em> or{' '}
-                    <em>Post a job</em> to act as that company — jobs, candidates, applications,
-                    interviews, and profile.
-                  </p>
-                ) : null}
                 {rows.map((row) => {
                   const id = String(row.id ?? '');
                   const status = String(row.accountStatus ?? '');
                   const verified = Boolean(row.verified);
-                  const impersonating = busyId === `impersonate-${id}`;
                   return (
                     <article key={id} className="flex overflow-hidden border border-[#c8eadb] bg-white">
                       <div className="w-1.5 shrink-0" style={{ backgroundColor: verified ? '#28b779' : '#ffb848' }} />
@@ -1304,38 +1296,6 @@ export default function SuperAdminDashboardInner() {
                           {verified ? 'Verified employer' : 'Pending verification'} · {cell(row.jobs)} jobs
                         </p>
                         <div className="mt-3 flex flex-wrap gap-1.5">
-                          {canImpersonateEmployer(staffRole) ? (
-                            <>
-                              <ActionBtn
-                                accent="#0c332c"
-                                disabled={!id || impersonating || status === 'SUSPENDED' || status === 'INACTIVE'}
-                                onClick={() => void openEmployerWorkspace(id, '/employer')}
-                              >
-                                {impersonating ? 'Opening…' : 'Open workspace'}
-                              </ActionBtn>
-                              <ActionBtn
-                                accent="#0f766e"
-                                disabled={!id || impersonating || status === 'SUSPENDED' || status === 'INACTIVE'}
-                                onClick={() => void openEmployerWorkspace(id, '/employer/jobs/new')}
-                              >
-                                Post a job
-                              </ActionBtn>
-                              <ActionBtn
-                                accent="#1f9d8a"
-                                disabled={!id || impersonating || status === 'SUSPENDED' || status === 'INACTIVE'}
-                                onClick={() => void openEmployerWorkspace(id, '/employer/candidates')}
-                              >
-                                Candidates
-                              </ActionBtn>
-                              <ActionBtn
-                                accent="#147a6e"
-                                disabled={!id || impersonating || status === 'SUSPENDED' || status === 'INACTIVE'}
-                                onClick={() => void openEmployerWorkspace(id, '/employer/interviews')}
-                              >
-                                Interviews
-                              </ActionBtn>
-                            </>
-                          ) : null}
                           <ActionBtn accent="#28b779" onClick={() => void openDetail('employers', id)}>
                             View
                           </ActionBtn>

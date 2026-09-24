@@ -56,11 +56,11 @@ export default function VerifyOtpPage() {
     setSecondsLeft(Math.max(0, Math.ceil((flow.expiresAt - Date.now()) / 1000)));
     setReady(true);
 
-    // Send Firebase SMS only if not already started on the previous screen.
+    // Reuse an existing Firebase SMS session when possible (avoids a second slow send).
     let cancelled = false;
     async function ensureFirebaseSms() {
       if (flow.channel === 'EMAIL' || isDevOtpEnabled()) return;
-      if (!flow.phone || hasFirebaseOtpConfirmation()) return;
+      if (!flow.phone || hasFirebaseOtpConfirmation(flow.phone)) return;
       try {
         if (!isFirebaseConfigured()) {
           throw new Error('Firebase OTP is not configured yet.');

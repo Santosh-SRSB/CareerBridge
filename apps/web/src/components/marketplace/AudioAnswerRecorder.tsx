@@ -49,10 +49,17 @@ export const AudioAnswerRecorder = forwardRef<
     /** Fires while speaking so the parent can show live captions in a text box. */
     onLiveTranscript?: (text: string) => void;
     onRecordingChange?: (recording: boolean) => void;
+    /** Live bar heights + whether voice energy is above the silent floor. */
+    onLevelsChange?: (levels: number[], voiceActive: boolean) => void;
+    /** Gated mic amplitude 0–1 (noise-floor aware). Prefer for canvas visualizers. */
+    onAmplitudeChange?: (amplitude: number) => void;
+    onElapsedChange?: (elapsedSec: number) => void;
     /** Hide the manual "Record Answer" button (guided flow starts recording externally). */
     hideIdleButton?: boolean;
     /** Hide the built-in 1-2-3 countdown UI (parent owns the immersive countdown). */
     hideInternalCountdown?: boolean;
+    /** Hide all built-in chrome — parent renders its own dark/immersive UI. */
+    hideUi?: boolean;
   }
 >(function AudioAnswerRecorder(
   {
@@ -61,8 +68,12 @@ export const AudioAnswerRecorder = forwardRef<
     onClear,
     onLiveTranscript,
     onRecordingChange,
+    onLevelsChange,
+    onAmplitudeChange,
+    onElapsedChange,
     hideIdleButton = false,
     hideInternalCountdown = false,
+    hideUi = false,
   },
   ref,
 ) {
@@ -90,7 +101,13 @@ export const AudioAnswerRecorder = forwardRef<
   const speechRef = useRef<SpeechRecognition | null>(null);
   const onLiveTranscriptRef = useRef(onLiveTranscript);
   const onRecordingChangeRef = useRef(onRecordingChange);
+  const onLevelsChangeRef = useRef(onLevelsChange);
+  const onAmplitudeChangeRef = useRef(onAmplitudeChange);
+  const onElapsedChangeRef = useRef(onElapsedChange);
   const recordingRef = useRef(false);
+  const hideUiRef = useRef(hideUi);
+  const timeDataRef = useRef<Uint8Array | null>(null);
+  const ampSmoothRef = useRef(0);
 
   useEffect(() => {
     onLiveTranscriptRef.current = onLiveTranscript;
@@ -99,6 +116,22 @@ export const AudioAnswerRecorder = forwardRef<
   useEffect(() => {
     onRecordingChangeRef.current = onRecordingChange;
   }, [onRecordingChange]);
+
+  useEffect(() => {
+    onLevelsChangeRef.current = onLevelsChange;
+  }, [onLevelsChange]);
+
+  useEffect(() => {
+    onAmplitudeChangeRef.current = onAmplitudeChange;
+  }, [onAmplitudeChange]);
+
+  useEffect(() => {
+    onElapsedChangeRef.current = onElapsedChange;
+  }, [onElapsedChange]);
+
+  useEffect(() => {
+    hideUiRef.current = hideUi;
+  }, [hideUi]);
 
   function publishTranscript(text: string) {
     transcriptRef.current = text;
@@ -154,52 +187,81 @@ export const AudioAnswerRecorder = forwardRef<
     audioContextRef.current = null;
     analyserRef.current = null;
     dataRef.current = null;
-    setLevels(buildIdleLevels());
-    levelsRef.current = buildIdleLevels();
+    timeDataRef.current = null;
+    ampSmoothRef.current = 0;
+    onAmplitudeChangeRef.current?.(0);
+    if (!hideUiRef.current) {
+      setLevels(buildIdleLevels());
+      levelsRef.current = buildIdleLevels();
+    }
   }
 
   function startVisualizer(stream: MediaStream) {
     const audioContext = new AudioContext();
     const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 128;
-    analyser.smoothingTimeConstant = 0.65;
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.55;
 
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(analyser);
 
-    const data = new Uint8Array(analyser.frequencyBinCount);
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+    const timeData = new Uint8Array(new ArrayBuffer(analyser.fftSize));
     audioContextRef.current = audioContext;
     analyserRef.current = analyser;
-    dataRef.current = data;
+    dataRef.current = freqData;
+    timeDataRef.current = timeData;
+
+    const NOISE_FLOOR = 0.018;
+    const SENS = 2.4;
 
     const tick = () => {
       const node = analyserRef.current;
-      const buffer = dataRef.current;
-      if (!node || !buffer) return;
+      const freq = dataRef.current;
+      const timeBuf = timeDataRef.current;
+      if (!node || !freq || !timeBuf) return;
 
-      node.getByteFrequencyData(buffer);
-      const step = Math.max(1, Math.floor(buffer.length / BAR_COUNT));
-      let peak = 0;
-      const rawLevels = Array.from({ length: BAR_COUNT }, (_, index) => {
-        const sample = buffer[index * step] ?? 0;
-        peak = Math.max(peak, sample);
-        const normalized = sample / 255;
-        // Emphasize louder speech so spikes track volume clearly.
-        const boosted = Math.pow(normalized, 0.55);
-        return Math.max(SILENT_FLOOR, Math.min(96, SILENT_FLOOR + boosted * 86));
-      });
+      // Time-domain RMS for speech volume (more accurate than peak bins alone).
+      node.getByteTimeDomainData(timeBuf);
+      let sumSq = 0;
+      for (let i = 0; i < timeBuf.length; i += 1) {
+        const v = (timeBuf[i] - 128) / 128;
+        sumSq += v * v;
+      }
+      const rms = Math.sqrt(sumSq / timeBuf.length);
+      const gated = rms < NOISE_FLOOR ? 0 : Math.min(1, ((rms - NOISE_FLOOR) / (1 - NOISE_FLOOR)) * SENS);
+      // Light pre-smooth so consumers see stable samples; visualizer also has attack/release.
+      ampSmoothRef.current += (gated - ampSmoothRef.current) * (gated > ampSmoothRef.current ? 0.45 : 0.18);
+      const amplitude = ampSmoothRef.current < 0.01 ? 0 : ampSmoothRef.current;
+      onAmplitudeChangeRef.current?.(amplitude);
 
-      // Stay flat when quiet — only spike when there is real voice energy.
-      const nextLevels = peak < VOICE_THRESHOLD ? buildIdleLevels() : rawLevels;
+      // Keep legacy bar levels for non-dark recorder UI only.
+      if (!hideUiRef.current || onLevelsChangeRef.current) {
+        node.getByteFrequencyData(freq);
+        const step = Math.max(1, Math.floor(freq.length / BAR_COUNT));
+        let peak = 0;
+        const rawLevels = Array.from({ length: BAR_COUNT }, (_, index) => {
+          const sample = freq[index * step] ?? 0;
+          peak = Math.max(peak, sample);
+          const normalized = sample / 255;
+          const boosted = Math.pow(normalized, 0.55);
+          return Math.max(SILENT_FLOOR, Math.min(96, SILENT_FLOOR + boosted * 86));
+        });
+        const voiceActive = amplitude > 0.04 || peak >= VOICE_THRESHOLD;
+        const nextLevels = voiceActive ? rawLevels : buildIdleLevels();
+        levelsRef.current = nextLevels;
+        if (!hideUiRef.current) setLevels(nextLevels);
+        onLevelsChangeRef.current?.(nextLevels, voiceActive);
+      }
 
-      setLevels(nextLevels);
-      levelsRef.current = nextLevels;
       rafRef.current = requestAnimationFrame(tick);
     };
 
     rafRef.current = requestAnimationFrame(tick);
     timerRef.current = window.setInterval(() => {
-      setElapsedSec(Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000)));
+      const next = Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000));
+      setElapsedSec(next);
+      onElapsedChangeRef.current?.(next);
     }, 250);
   }
 
@@ -352,12 +414,23 @@ export const AudioAnswerRecorder = forwardRef<
     isRecording: () => recordingRef.current,
   }));
 
-  const showIdleButton = !hideIdleButton && !recording && recordedSec === 0 && countdown == null;
-  const showCountdown = !hideInternalCountdown && countdown != null && !recording;
-  const showRecordingBar = recording;
+  const showIdleButton =
+    !hideUi && !hideIdleButton && !recording && recordedSec === 0 && countdown == null;
+  const showCountdown =
+    !hideUi && !hideInternalCountdown && countdown != null && !recording;
+  const showRecordingBar = !hideUi && recording;
+  const showSaved = !hideUi && !recording && recordedSec > 0;
 
   return (
-    <div ref={rootRef} className="space-y-2 scroll-mt-16 sm:space-y-3 sm:scroll-mt-24">
+    <div
+      ref={rootRef}
+      className={
+        hideUi
+          ? 'sr-only'
+          : 'space-y-2 scroll-mt-16 sm:space-y-3 sm:scroll-mt-24'
+      }
+      aria-hidden={hideUi || undefined}
+    >
       {showCountdown ? (
         <div
           className="flex min-h-[88px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 sm:min-h-[140px] sm:gap-3 sm:px-4 sm:py-5"
@@ -417,7 +490,7 @@ export const AudioAnswerRecorder = forwardRef<
         </div>
       ) : null}
 
-      {!recording && recordedSec > 0 ? (
+      {showSaved ? (
         <div className="cb-audio-recorder-box is-saved">
           <div className="cb-audio-recorder-box__head">
             <span className="cb-audio-recorder-box__status is-saved">Audio saved</span>

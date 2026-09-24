@@ -29,6 +29,7 @@ import {
   CertificationDto,
   ProjectDto,
   AnalyzeCareerGapDto,
+  ExplainCareerGapDto,
 } from './dto/update-candidate.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -55,6 +56,30 @@ export class CandidatesController {
   @Post('me/career-gap/analyze')
   analyzeCareerGap(@CurrentUser() user: { id: string }, @Body() dto: AnalyzeCareerGapDto) {
     return this.candidates.analyzeCareerGap(user.id, dto || {});
+  }
+
+  @Get('me/career-gaps')
+  listCareerGaps(@CurrentUser() user: { id: string }) {
+    return this.candidates.listCareerGaps(user.id);
+  }
+
+  @Post('me/career-gaps/sync')
+  syncCareerGaps(@CurrentUser() user: { id: string }) {
+    return this.candidates.syncTimelineCareerGaps(user.id);
+  }
+
+  @Patch('me/career-gaps')
+  explainAllCareerGaps(@CurrentUser() user: { id: string }, @Body() dto: ExplainCareerGapDto) {
+    return this.candidates.explainAllCareerGaps(user.id, dto);
+  }
+
+  @Patch('me/career-gaps/:id')
+  explainCareerGap(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: ExplainCareerGapDto,
+  ) {
+    return this.candidates.explainCareerGap(user.id, id, dto);
   }
 
   @Put(['me', 'profile'])

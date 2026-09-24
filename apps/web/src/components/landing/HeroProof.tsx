@@ -1,39 +1,48 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getPlatformStats } from "@/lib/api";
 
-const beats = [
-  {
-    value: 150,
-    label: "Passports",
-    title: "Career Passports",
-    detail: "No fees for candidates",
-  },
-  {
-    value: 15,
-    label: "Cities",
-    title: "From cities",
-    detail: "Candidates across the map",
-  },
-  {
-    value: 480,
-    label: "Jobs",
-    title: "Open jobs",
-    detail: "AI that suggests, never invents",
-  },
-] as const;
+const FALLBACK = {
+  passports: 150,
+  cities: 15,
+  jobs: 480,
+} as const;
+
+type LiveStats = {
+  passports: number;
+  cities: number;
+  jobs: number;
+};
+
+function buildBeats(stats: LiveStats) {
+  return [
+    {
+      value: Math.max(0, stats.passports),
+      label: "Passports",
+      title: "Career Passports",
+      detail: "No fees for candidates",
+    },
+    {
+      value: Math.max(0, stats.cities),
+      label: "Cities",
+      title: "From cities",
+      detail: "Candidates across the map",
+    },
+    {
+      value: Math.max(0, stats.jobs),
+      label: "Jobs",
+      title: "Open jobs",
+      detail: "Live roles hiring now",
+    },
+  ] as const;
+}
 
 type Phase = 0 | 1 | 2 | 3;
 
 function CheerBoy() {
   return (
-    <svg
-      className="cheer-boy"
-      viewBox="0 0 88 96"
-      width="72"
-      height="78"
-      aria-hidden="true"
-    >
+    <svg className="cheer-boy" viewBox="0 0 88 96" width="72" height="78" aria-hidden="true">
       <ellipse cx="44" cy="90" rx="18" ry="4" fill="rgba(10,46,44,0.12)" />
       <path
         className="cheer-arm-l"
@@ -57,10 +66,7 @@ function CheerBoy() {
       <rect x="34" y="76" width="8" height="14" rx="3" fill="#1e3a36" />
       <rect x="46" y="76" width="8" height="14" rx="3" fill="#1e3a36" />
       <circle cx="44" cy="32" r="14" fill="#f4b183" />
-      <path
-        d="M30 30 C32 16 56 16 58 30 C50 24 38 24 30 30"
-        fill="#3b2416"
-      />
+      <path d="M30 30 C32 16 56 16 58 30 C50 24 38 24 30 30" fill="#3b2416" />
       <circle cx="39" cy="33" r="1.6" fill="#1a120c" />
       <circle cx="49" cy="33" r="1.6" fill="#1a120c" />
       <path
@@ -75,11 +81,38 @@ function CheerBoy() {
 }
 
 export function HeroProof() {
+  const [stats, setStats] = useState<LiveStats | null>(null);
   const [phase, setPhase] = useState<Phase>(0);
   const [shown, setShown] = useState(0);
   const [leaving, setLeaving] = useState(false);
+  const statsRef = useRef<LiveStats>({ ...FALLBACK });
 
   useEffect(() => {
+    let cancelled = false;
+    void getPlatformStats()
+      .then((data) => {
+        if (cancelled) return;
+        const next = {
+          passports: Number(data.passports) || FALLBACK.passports,
+          cities: Number(data.cities) || FALLBACK.cities,
+          jobs: Number(data.jobs) || FALLBACK.jobs,
+        };
+        statsRef.current = next;
+        setStats(next);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        statsRef.current = { ...FALLBACK };
+        setStats({ ...FALLBACK });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!stats) return;
+
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
       setPhase(3);
@@ -109,6 +142,7 @@ export function HeroProof() {
 
     const runBeat = (index: Phase) => {
       if (cancelled) return;
+      const beats = buildBeats(statsRef.current);
       setLeaving(false);
       setPhase(index);
       setShown(0);
@@ -134,16 +168,24 @@ export function HeroProof() {
       cancelAnimationFrame(raf);
       timers.forEach((id) => window.clearTimeout(id));
     };
-  }, []);
+  }, [stats]);
 
-  const beat = phase < 3 ? (beats as readonly { value: number; label: string; title: string; detail: string }[])[phase] : null;
+  if (!stats) {
+    return (
+      <div className="hero-proof">
+        <div className="hero-proof-box" aria-busy="true">
+          <p className="hero-proof-kicker">Loading live stats…</p>
+        </div>
+      </div>
+    );
+  }
+
+  const beats = buildBeats(stats);
+  const beat = phase < 3 ? beats[phase] : null;
 
   return (
     <div className="hero-proof">
-      <div
-        className={`hero-proof-box${phase === 3 ? " is-finale" : ""}`}
-        aria-live="polite"
-      >
+      <div className={`hero-proof-box${phase === 3 ? " is-finale" : ""}`} aria-live="polite">
         {beat ? (
           <div className={`hero-proof-beat${leaving ? " is-leaving" : ""}`}>
             <div className="hero-proof-copy">
@@ -158,9 +200,7 @@ export function HeroProof() {
         ) : (
           <div className="hero-proof-finale">
             <CheerBoy />
-            <p className="hero-proof-finale-text">
-              We are the best place to get hired or hiring.
-            </p>
+            <p className="hero-proof-finale-text">Every career has a next step. Find yours.</p>
           </div>
         )}
       </div>

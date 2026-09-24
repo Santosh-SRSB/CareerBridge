@@ -390,6 +390,60 @@ export class ResumesService {
     };
   }
 
+  /** User-triggered retry after FAILED (or stuck PENDING/PROCESSING). */
+  async retryProcessing(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    if (!resume.sourceStoragePath) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'This resume has no file in Cloud Storage. Please upload the file again.',
+      });
+    }
+    await this.prisma.resume.update({
+      where: { id: resume.id },
+      data: { processingStatus: 'PENDING', processingError: null },
+    });
+    await this.cloudTasks.enqueueResumeProcessing(resume.id, userId, () =>
+      this.processor.processUploadedResume(resume.id, userId),
+    );
+    return {
+      id: resume.id,
+      processingStatus: 'PENDING',
+      processingError: null,
+      message: 'Resume queued for reprocessing.',
+    };
+  }
+
+  /** Signed Cloud Storage URL for viewing the original uploaded file (or generated PDF). */
+  async getViewUrl(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const objectPath = resume.sourceStoragePath || resume.pdfStoragePath;
+    if (!objectPath) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'No resume file is stored in Cloud Storage for this record.',
+      });
+    }
+    if (!this.storage.isConfigured()) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: this.storage.getConfigurationError() || 'Cloud Storage is not configured.',
+      });
+    }
+    const url = await this.storage.getSignedUrl(objectPath, {
+      action: 'read',
+      expiresInMinutes: 30,
+    });
+    return {
+      id: resume.id,
+      url,
+      fileName: resume.sourceFileName || `${resume.title}.pdf`,
+      mimeType: resume.sourceMimeType || 'application/pdf',
+      storagePath: objectPath,
+      expiresInMinutes: 30,
+    };
+  }
+
   async processWorker(payload: { resumeId: string; userId: string }) {
     return this.processor.processUploadedResume(payload.resumeId, payload.userId);
   }

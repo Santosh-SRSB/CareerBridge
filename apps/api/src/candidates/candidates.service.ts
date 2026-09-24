@@ -10,6 +10,10 @@ import {
   optionalUrlError,
   yearNumberError,
   computeCareerGapAfterHighestEducation,
+  computeTimelineCareerGaps,
+  formatGapDurationFromDays,
+  formatGapDateRange,
+  CAREER_GAP_REASONS,
   deriveExperienceFlags,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,7 +32,9 @@ import {
   CertificationDto,
   ProjectDto,
   AnalyzeCareerGapDto,
+  ExplainCareerGapDto,
 } from './dto/update-candidate.dto';
+import { CareerGapReason, CareerGapStatus } from '../prisma/client';
 
 type CandidateRecord = Awaited<ReturnType<CandidatesService['loadCandidate']>>;
 
@@ -192,6 +198,240 @@ export class CandidatesService {
     };
   }
 
+  /**
+   * Recalculate timeline gaps between employment/internship activities and sync DB idempotently.
+   * Preserves explanations when the same start/end dates still exist.
+   */
+  async syncTimelineCareerGaps(userId: string) {
+    const candidate = await this.loadCandidate(userId);
+    const toDateStr = (value: Date | string | null | undefined) => {
+      if (!value) return null;
+      if (value instanceof Date) return value.toISOString().slice(0, 10);
+      return String(value).slice(0, 10);
+    };
+
+    const eduRow = candidate.education[0];
+    const educationEndDate =
+      candidate.stillInCollege
+        ? null
+        : candidate.educationEnd ||
+          eduRow?.endDate ||
+          (eduRow?.yearCompleted != null ? `${eduRow.yearCompleted}-06` : null);
+
+    const analysis = computeTimelineCareerGaps({
+      activities: candidate.experiences.map((row) => ({
+        id: row.id,
+        startDate: toDateStr(row.startDate),
+        endDate: toDateStr(row.endDate),
+        stillInCompany: row.stillInCompany,
+        isCurrent: false,
+      })),
+      educationEndDate,
+      stillStudying: Boolean(candidate.stillInCollege),
+    });
+
+    const existing = await this.prisma.careerGap.findMany({
+      where: { candidateId: candidate.id },
+    });
+    const existingByKey = new Map(
+      existing.map((row) => [
+        `${toDateStr(row.gapStartDate)}|${toDateStr(row.gapEndDate)}`,
+        row,
+      ]),
+    );
+    const keepKeys = new Set<string>();
+
+    for (const gap of analysis.gaps) {
+      const key = `${gap.gapStartDate}|${gap.gapEndDate}`;
+      keepKeys.add(key);
+      const prev = existingByKey.get(key);
+      if (prev) {
+        await this.prisma.careerGap.update({
+          where: { id: prev.id },
+          data: {
+            gapDays: gap.gapDays,
+            previousActivityId: gap.previousActivityId,
+            nextActivityId: gap.nextActivityId,
+          },
+        });
+      } else {
+        await this.prisma.careerGap.create({
+          data: {
+            candidateId: candidate.id,
+            gapStartDate: new Date(gap.gapStartDate),
+            gapEndDate: new Date(gap.gapEndDate),
+            gapDays: gap.gapDays,
+            previousActivityId: gap.previousActivityId,
+            nextActivityId: gap.nextActivityId,
+            status: CareerGapStatus.UNEXPLAINED,
+          },
+        });
+      }
+    }
+
+    const staleIds = existing
+      .filter((row) => !keepKeys.has(`${toDateStr(row.gapStartDate)}|${toDateStr(row.gapEndDate)}`))
+      .map((row) => row.id);
+    if (staleIds.length) {
+      await this.prisma.careerGap.deleteMany({
+        where: { id: { in: staleIds }, candidateId: candidate.id },
+      });
+    }
+
+    // Keep legacy scalar fields in sync for passport/course nudges.
+    await this.prisma.candidate.update({
+      where: { id: candidate.id },
+      data: {
+        gapMonths: analysis.totalGaps
+          ? Math.floor(analysis.totalGapDays / 30)
+          : 0,
+        gapReason:
+          analysis.totalGaps === 0
+            ? null
+            : candidate.gapReason,
+      },
+    });
+
+    return this.listCareerGaps(userId, { skipSync: true });
+  }
+
+  async listCareerGaps(userId: string, opts?: { skipSync?: boolean }) {
+    try {
+      if (!opts?.skipSync) {
+        return await this.syncTimelineCareerGaps(userId);
+      }
+      const candidate = await this.loadCandidate(userId);
+      const rows = await this.prisma.careerGap.findMany({
+        where: { candidateId: candidate.id },
+        orderBy: { gapStartDate: 'asc' },
+      });
+      const toDateStr = (value: Date) => value.toISOString().slice(0, 10);
+      const gaps = rows.map((row) => ({
+        id: row.id,
+        startDate: toDateStr(row.gapStartDate),
+        endDate: toDateStr(row.gapEndDate),
+        dateRangeLabel: formatGapDateRange(toDateStr(row.gapStartDate), toDateStr(row.gapEndDate)),
+        gapDays: row.gapDays,
+        duration: formatGapDurationFromDays(row.gapDays),
+        reason: row.reason,
+        reasonDetails: row.reasonDetails,
+        status: row.status,
+        previousActivityId: row.previousActivityId,
+        nextActivityId: row.nextActivityId,
+      }));
+      const totalGapDays = gaps.reduce((sum, g) => sum + g.gapDays, 0);
+      return {
+        totalGaps: gaps.length,
+        totalGapDays,
+        totalGapDuration: formatGapDurationFromDays(totalGapDays),
+        gaps,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Career gap list failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return {
+        totalGaps: 0,
+        totalGapDays: 0,
+        totalGapDuration: formatGapDurationFromDays(0),
+        gaps: [],
+      };
+    }
+  }
+
+  async explainCareerGap(userId: string, gapId: string, dto: ExplainCareerGapDto) {
+    const candidate = await this.loadCandidate(userId);
+    const gap = await this.prisma.careerGap.findFirst({
+      where: { id: gapId, candidateId: candidate.id },
+    });
+    if (!gap) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'Career gap was not found',
+      });
+    }
+
+    await this.applyGapExplanation(candidate.id, [gap.id], dto);
+    return this.listCareerGaps(userId, { skipSync: true });
+  }
+
+  /** Apply one shared reason to every current career gap for this candidate. */
+  async explainAllCareerGaps(userId: string, dto: ExplainCareerGapDto) {
+    const candidate = await this.loadCandidate(userId);
+    await this.syncTimelineCareerGaps(userId);
+    const gaps = await this.prisma.careerGap.findMany({
+      where: { candidateId: candidate.id },
+      select: { id: true },
+    });
+    if (!gaps.length) {
+      return this.listCareerGaps(userId, { skipSync: true });
+    }
+    await this.applyGapExplanation(
+      candidate.id,
+      gaps.map((g) => g.id),
+      dto,
+    );
+    return this.listCareerGaps(userId, { skipSync: true });
+  }
+
+  private async applyGapExplanation(
+    candidateId: string,
+    gapIds: string[],
+    dto: ExplainCareerGapDto,
+  ) {
+    const reason = dto.reason as CareerGapReason;
+    if (!CAREER_GAP_REASONS.includes(dto.reason as (typeof CAREER_GAP_REASONS)[number])) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Please select a valid reason for this career gap.',
+      });
+    }
+    const details = dto.reasonDetails?.trim() || '';
+    if (reason === CareerGapReason.OTHER && details.length < 2) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Please specify details when the reason is Other.',
+      });
+    }
+    if (details.length > 1000) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Additional details must be under 1000 characters.',
+      });
+    }
+
+    await this.prisma.careerGap.updateMany({
+      where: { id: { in: gapIds }, candidateId },
+      data: {
+        reason,
+        reasonDetails: details || null,
+        status: CareerGapStatus.EXPLAINED,
+      },
+    });
+
+    const explained = await this.prisma.careerGap.findMany({
+      where: { candidateId, status: CareerGapStatus.EXPLAINED },
+      orderBy: { gapStartDate: 'asc' },
+    });
+    const reasonLabel = dto.reason;
+    const summary =
+      explained.length === 0
+        ? null
+        : explained.length === 1
+          ? `${formatGapDateRange(
+              explained[0].gapStartDate.toISOString().slice(0, 10),
+              explained[0].gapEndDate.toISOString().slice(0, 10),
+            )} — ${reasonLabel}`
+          : `${explained.length} career gaps (${formatGapDurationFromDays(
+              explained.reduce((s, g) => s + g.gapDays, 0),
+            )}) — ${reasonLabel}${details ? `: ${details}` : ''}`;
+
+    await this.prisma.candidate.update({
+      where: { id: candidateId },
+      data: { gapReason: summary },
+    });
+  }
+
   async listEducation(userId: string) {
     return (await this.me(userId)).education;
   }
@@ -240,8 +480,15 @@ export class CandidatesService {
         ...(dto.gender !== undefined ? { gender: dto.gender || null } : {}),
         ...(dto.openToRelocating !== undefined ? { openToRelocating: dto.openToRelocating } : {}),
         ...(dto.highestEducation !== undefined ? { highestEducation: dto.highestEducation } : {}),
+        ...(dto.educationEnd !== undefined
+          ? { educationEnd: dto.educationEnd?.trim() || null }
+          : {}),
+        ...(dto.stillInCollege !== undefined ? { stillInCollege: dto.stillInCollege } : {}),
         ...(careerInterests !== undefined ? { careerInterests } : {}),
         ...(dto.hasExperience !== undefined ? { hasExperience: dto.hasExperience } : {}),
+        ...(dto.noticePeriod !== undefined
+          ? { noticePeriod: dto.noticePeriod?.trim() || null }
+          : {}),
         ...(dto.experienceLevel !== undefined ? { experienceLevel: dto.experienceLevel } : {}),
         ...(dto.totalExperienceYears !== undefined
           ? { totalExperienceYears: Number.parseInt(dto.totalExperienceYears, 10) || 0 }
@@ -811,6 +1058,7 @@ export class CandidatesService {
       about: candidate.about || null,
       careerInterests: parseInterests(candidate.careerInterests),
       hasExperience: candidate.hasExperience,
+      noticePeriod: candidate.noticePeriod ?? null,
       profileCompletion: candidate.profileCompletion,
       onboardingCompleted: candidate.onboardingCompleted,
       dashboardReached: candidate.dashboardReached,

@@ -8,6 +8,7 @@ import { canOpenAdminTab, roleLabel, type SuperAdminNavId } from '@/lib/admin-po
 import { TAB_THEME } from '@/components/super-admin/admin-tab-ui';
 import { logout } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
+import '@/components/super-admin/super-admin-shell.css';
 
 export type { SuperAdminNavId };
 

@@ -17,12 +17,20 @@ export function EmployerBand() {
             flow. Candidates stay free. You pay for hiring value.
           </p>
         </div>
-        <Link
-          href="/employer/welcome"
-          className="inline-flex rounded-full bg-white px-7 py-3.5 text-sm font-bold text-navy shadow-lg transition hover:-translate-y-0.5 hover:bg-fog"
-        >
-          Post Your First Job
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/employer/welcome"
+            className="inline-flex rounded-full bg-white px-7 py-3.5 text-sm font-bold text-navy shadow-lg transition hover:-translate-y-0.5 hover:bg-fog"
+          >
+            Explore for Employers
+          </Link>
+          <Link
+            href="/employer/register"
+            className="inline-flex rounded-full border border-white/40 bg-transparent px-7 py-3.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/10"
+          >
+            Post Your First Job
+          </Link>
+        </div>
       </div>
     </section>
   );

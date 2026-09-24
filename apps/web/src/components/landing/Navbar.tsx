@@ -9,14 +9,13 @@ import { getStoredUser, homePathForUser } from "@/lib/session";
 import type { AuthUser } from "@careerbridge/shared";
 
 const links = [
-  { href: "#how-it-works", label: "How it works" },
-  { href: "#passport", label: "Career Passport" },
-  { href: "#jobs", label: "Jobs" },
-  { href: "/testimonials", label: "Testimonials" },
-  { href: "/employer/welcome", label: "Employers" },
+  { href: "/", label: "Home" },
+  { href: "/employer/welcome", label: "Employer" },
+  { href: "/#candidates", label: "Candidate" },
+  { href: "/testimonials", label: "Testimonial" },
 ];
 
-const DEFAULT_LINK = "Jobs";
+const DEFAULT_LINK = "Home";
 
 export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
   const router = useRouter();
@@ -71,9 +70,9 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
           <Image
             src="/srsb-mark.png"
             alt="SRSB"
-            width={88}
-            height={88}
-            className="h-10 w-10 object-contain bg-transparent sm:h-11 sm:w-11"
+            width={280}
+            height={80}
+            className="h-12 w-auto max-w-[90vw] object-contain bg-transparent sm:h-14 md:h-16"
             unoptimized
             priority
           />

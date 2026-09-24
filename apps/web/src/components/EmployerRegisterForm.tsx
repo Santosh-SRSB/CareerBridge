@@ -186,7 +186,7 @@ export function EmployerRegisterForm() {
       }
     }
     if (!isValidNational(country.maxLength, national)) {
-      setError('Enter a valid mobile number.');
+      setError('Please enter a valid mobile number');
       return;
     }
     const passwordProblem = registrationPasswordError(password);
@@ -203,7 +203,7 @@ export function EmployerRegisterForm() {
       return;
     }
     if (!agreeTerms) {
-      setError('You must agree to Terms & Privacy Policy to continue.');
+      setError('You must accept Terms and Privacy Policy');
       return;
     }
 

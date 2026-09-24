@@ -57,7 +57,7 @@ export function resolveCandidateResumePath(profile: OnboardingResumeProfile): st
 }
 
 export function nextOnboardingStepPath(step: OnboardingStep): string {
-  if (step >= 4) return '/onboarding/complete';
+  if (step >= 4) return '/onboarding/dossier';
   const paths: Record<Exclude<OnboardingStep, 4>, string> = {
     1: ONBOARDING_STEP_PATHS[1],
     2: ONBOARDING_STEP_PATHS[2],

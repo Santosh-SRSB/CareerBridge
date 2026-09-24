@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Navbar } from '@/components/landing/Navbar';
+import { StarRating } from '@/components/StarRating';
 import { Button } from '@/components/ui/Button';
 import { dismissTestimonialPrompt, getTestimonialPrompt, submitTestimonial } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
@@ -85,23 +86,9 @@ export default function FeedbackPage() {
           className="mt-6 space-y-4 rounded-[22px] border border-[#d7eef6] bg-white p-5 shadow-[0_12px_28px_rgba(10,46,44,0.08)] sm:p-6"
         >
           <div>
-            <p className="mb-2 text-sm font-bold text-[#0a2e2c]">Rating</p>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setRating(value)}
-                  className={`h-10 w-10 rounded-full text-sm font-extrabold transition ${
-                    rating >= value
-                      ? 'bg-[#0a2e2c] text-white'
-                      : 'border border-[#d7eef6] bg-[#f7fcfe] text-[#0a2e2c]'
-                  }`}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
+            <p className="mb-3 text-sm font-bold text-[#0a2e2c]">Your rating</p>
+            <StarRating value={rating} onChange={setRating} size="lg" />
+            <p className="mt-2 text-xs font-semibold text-amber-700">{rating} / 5 golden stars</p>
           </div>
 
           <div>

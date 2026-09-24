@@ -12,6 +12,7 @@ import { getCandidateMe, scheduleHumanMock } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { SkillMascot } from '@/components/SkillMascot';
 import { humanInterviewPaid } from '@/lib/human-interview-pay';
+import { DatePicker } from '@/features/candidate/passport/DatePicker';
 
 function pad(value: number) {
   return String(value).padStart(2, '0');
@@ -159,7 +160,12 @@ export default function ScheduleHumanMockPage() {
               <div className="cb-hire-split">
                 <label className="cb-hire-whenbox">
                   Date
-                  <input type="date" required value={date} onChange={(event) => setDate(event.target.value)} />
+                  <DatePicker
+                    value={date}
+                    onChange={setDate}
+                    placeholder="Select date"
+                    confirmLabel="Set interview date"
+                  />
                 </label>
                 <label className="cb-hire-whenbox">
                   Time

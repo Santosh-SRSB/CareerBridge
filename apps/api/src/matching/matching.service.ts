@@ -208,29 +208,50 @@ export class MatchingService {
       gaps: string[];
     }> = [];
     for (const candidate of candidates) {
+      const jobLanguages = parseList(job.benefits).flatMap((line) => {
+        const match = line.match(/^languages:\s*(.+)$/i);
+        if (!match) return [];
+        return match[1]
+          .split(/[,/|]/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      });
+      const candidateLanguages = [
+        ...(candidate.preferredLanguage ? [candidate.preferredLanguage] : []),
+      ];
+      const years =
+        (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
       const base = this.intelligence.match(
         {
           city: candidate.city,
           careerInterests: parseList(candidate.careerInterests),
           skills: candidate.skills.map((item) => item.name),
           hasExperience: candidate.hasExperience,
+          experienceYears: years,
+          hasEducation: Boolean(candidate.highestEducation),
+          highestEducation: candidate.highestEducation,
+          hasResume: candidate.resumes.length > 0,
+          languages: candidateLanguages,
         },
         {
           city: job.city,
           category: job.category,
           requiredSkills,
           experience: job.experience,
+          languages: jobLanguages,
         },
       );
-      const years =
-        (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
-      const skillsScore = Math.min(40, Math.round((base.skillScore / 100) * 40));
+      // Handbook Vol.3 deterministic points: Skills 40, Experience 20, Location 15, Language 15, Education 10.
+      const skillsScore = Math.round((base.skillScore / 100) * 40);
       const experienceScore =
-        experienceYearsMin <= 0
-          ? Math.min(30, Math.round((base.experienceScore / 100) * 30))
-          : years >= experienceYearsMin
-            ? 30
-            : Math.round((years / experienceYearsMin) * 30);
+        experienceYearsMin > 0
+          ? years >= experienceYearsMin
+            ? 20
+            : Math.round((years / experienceYearsMin) * 20)
+          : Math.round((base.experienceScore / 100) * 20);
+      const locationScore = Math.round((base.locationScore / 100) * 15);
+      const languageScore = Math.round((base.languageScore / 100) * 15);
+      const educationScore = Math.round((base.educationScore / 100) * 10);
       const interviewReadinessScore = this.intelligence.interviewReadinessScore({
         interviewScores: candidate.interviews
           .map((item) => item.score)
@@ -240,7 +261,7 @@ export class MatchingService {
       });
       const ruleScore = Math.min(
         100,
-        skillsScore + experienceScore + Math.round(interviewReadinessScore * 0.3),
+        skillsScore + experienceScore + locationScore + languageScore + educationScore,
       );
 
       const fromPg = pgScores.get(candidate.id);

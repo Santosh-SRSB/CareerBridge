@@ -87,13 +87,20 @@ export function mapAtsSectionToWizardStep(sectionKeyOrLabel: string): string {
   const key = sectionKeyOrLabel.toLowerCase();
   if (key === 'education' || key.includes('educat')) return 'Education';
   if (key === 'experience' || key.includes('experience') || key.includes('work')) return 'Experience';
-  if (key === 'skills' || key.includes('skill')) return 'Skills';
-  if (key === 'projects' || key.includes('project')) return 'Projects';
-  if (key === 'achievements' || key.includes('achiev')) return 'Achievements';
-  if (key === 'certifications' || key.includes('cert')) return 'Certifications';
+  if (key === 'skills' || key.includes('skill') || key.includes('language')) return 'Skills';
+  if (key === 'projects' || key.includes('project')) return 'Credentials';
+  if (key === 'achievements' || key.includes('achiev')) return 'Credentials';
+  if (key === 'certifications' || key.includes('cert')) return 'Credentials';
   if (key === 'formatting' || key.includes('format')) return 'Review';
   if (key === 'summary' || key.includes('summary')) return 'Personal';
-  if (key === 'contact' || key.includes('contact') || key.includes('link')) return 'Links';
+  if (
+    key === 'contact' ||
+    key.includes('contact') ||
+    key.includes('link') ||
+    key.includes('preference')
+  ) {
+    return 'Links';
+  }
   if (key === 'gap' || key.includes('gap')) return 'Career Gap';
   return 'Personal';
 }

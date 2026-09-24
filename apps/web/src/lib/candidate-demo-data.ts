@@ -6,6 +6,7 @@ const demoMatch = (score: number) => ({
   experienceScore: Math.max(0, score - 3),
   educationScore: Math.max(0, score - 1),
   locationScore: Math.max(0, score - 2),
+  languageScore: Math.max(0, score - 2),
   preferredSkillScore: Math.max(0, score - 4),
   resumeQualityScore: Math.max(0, score - 5),
   categoryScore: Math.max(0, score - 1),

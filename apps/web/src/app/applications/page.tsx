@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import type { ApplicationRecord } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { ApplicationProgressTrack } from '@/components/marketplace/ApplicationProgressTrack';
@@ -9,6 +9,11 @@ import { fetchApplications } from '@/lib/candidate-marketplace-api';
 
 function formatAppliedDate(value: string) {
   return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
+function jobInactive(item: ApplicationRecord) {
+  const status = (item.job.status || '').toUpperCase();
+  return Boolean(status) && status !== 'PUBLISHED';
 }
 
 export default function ApplicationsPage() {
@@ -38,22 +43,36 @@ export default function ApplicationsPage() {
         ) : null}
 
         <div className="space-y-4">
-          {items.map((item) => (
-            <Link
-              key={item.id}
-              href={`/applications/${item.id}`}
-              className="block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-[#0a2e2c]/30"
-            >
-              <h2 className="text-base font-extrabold text-slate-900">{item.job.title}</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-600">{item.job.companyName}</p>
-              <p className="mt-2 text-xs font-semibold text-slate-500">
-                Applied: {formatAppliedDate(item.createdAt)}
-              </p>
-              <div className="mt-4">
-                <ApplicationProgressTrack application={item} />
-              </div>
-            </Link>
-          ))}
+          {items.map((item) => {
+            const inactive = jobInactive(item);
+            return (
+              <Link
+                key={item.id}
+                href={`/applications/${item.id}`}
+                className={`relative block overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-[#0a2e2c]/30 ${
+                  inactive ? 'pointer-events-auto' : ''
+                }`}
+              >
+                <div className={inactive ? 'blur-[2px] opacity-55' : undefined}>
+                  <h2 className="text-base font-extrabold text-slate-900">{item.job.title}</h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">{item.job.companyName}</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    Applied: {formatAppliedDate(item.createdAt)}
+                  </p>
+                  <div className="mt-4">
+                    <ApplicationProgressTrack application={item} />
+                  </div>
+                </div>
+                {inactive ? (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/35">
+                    <p className="rounded-full bg-white/90 px-4 py-2 text-sm font-extrabold text-red-600 shadow-sm">
+                      Job is no more Active
+                    </p>
+                  </div>
+                ) : null}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </CandidateAppShell>

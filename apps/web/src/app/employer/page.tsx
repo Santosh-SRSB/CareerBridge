@@ -64,8 +64,12 @@ function PerformanceChart({
             : 'No applications in the last six months'
         }
       >
-        {bars.map((bar) => (
-          <div key={`${bar.label}-${bar.count}`} className="ep-saas-bars__col" title={`${bar.label}: ${bar.count}`}>
+        {bars.map((bar, index) => (
+          <div
+            key={`perf-bar-${index}-${bar.label}`}
+            className="ep-saas-bars__col"
+            title={`${bar.label}: ${bar.count}`}
+          >
             <span className="ep-saas-bars__value">{bar.count}</span>
             <div className="ep-saas-bars__plot">
               <div className="ep-saas-bars__bar" style={{ height: `${bar.heightPct}%` }} />

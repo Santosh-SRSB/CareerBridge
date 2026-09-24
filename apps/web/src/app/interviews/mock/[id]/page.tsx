@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { InterviewSession } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { DarkRecordingStage } from '@/components/interviews/DarkRecordingStage';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import {
   AudioAnswerRecorder,
@@ -89,7 +90,9 @@ export default function MockInterviewQuestionPage() {
   const [error, setError] = useState('');
   const [thinkRemaining, setThinkRemaining] = useState(THINK_SECONDS);
   const [thinkProgress, setThinkProgress] = useState(1);
-  const [countdownNum, setCountdownNum] = useState<number | null>(null);
+  const [recordElapsedSec, setRecordElapsedSec] = useState(0);
+  const thinkAutoStartedRef = useRef<number | null>(null);
+  const amplitudeRef = useRef(0);
 
   useEffect(() => subscribeAiSpeech((s) => setAiSpeaking(s.speaking)), []);
 
@@ -138,6 +141,8 @@ export default function MockInterviewQuestionPage() {
     setError('');
     setAnswerMethod(null);
     answerMethodRef.current = null;
+    amplitudeRef.current = 0;
+    setRecordElapsedSec(0);
   }, []);
 
   function chooseAnswerMethod(method: AnswerMethod) {
@@ -145,11 +150,17 @@ export default function MockInterviewQuestionPage() {
     setAnswerMethod(method);
     cancelGuidedSpeech();
     if (method === 'recording') {
+      amplitudeRef.current = 0;
+      setRecordElapsedSec(0);
       setPhase('RECORDING_COUNTDOWN');
     } else {
       setPhase('TYPING_ACTIVE');
     }
   }
+
+  const finishRecordingIntro = useCallback(() => {
+    setPhase('RECORDING_ACTIVE');
+  }, []);
 
   const goResult = useCallback(
     async (next: InterviewSession) => {
@@ -172,7 +183,7 @@ export default function MockInterviewQuestionPage() {
   const recordingArmedForIndex = useRef<number | null>(null);
   const armRunId = useRef(0);
 
-  // Arm mic + speak once when entering RECORDING_ACTIVE (recorder is mounted).
+  // Arm mic once when entering RECORDING_ACTIVE (dark stage + hidden recorder mounted).
   useEffect(() => {
     if (phase !== 'RECORDING_ACTIVE' || !session) return;
     if (recordingArmedForIndex.current === session.questionIndex) return;
@@ -181,10 +192,7 @@ export default function MockInterviewQuestionPage() {
 
     async function arm() {
       recordingArmedForIndex.current = qIndex;
-      const startLine = buildRecordStartLine();
-      setCaption(startLine);
-      await speakGuided(startLine);
-      if (runId !== armRunId.current) return;
+      setCaption(buildRecordStartLine());
       await new Promise((r) => requestAnimationFrame(() => r(undefined)));
       const ok = await recorderRef.current?.startImmediate();
       if (runId !== armRunId.current) return;
@@ -198,6 +206,43 @@ export default function MockInterviewQuestionPage() {
       armRunId.current += 1;
     };
   }, [phase, session]);
+
+  // Warm mic permission during the dark intro card animation.
+  useEffect(() => {
+    if (phase !== 'RECORDING_COUNTDOWN') return;
+    let cancelled = false;
+    void navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        // Keep tracks briefly warm, then release — startImmediate will re-acquire.
+        window.setTimeout(() => {
+          stream.getTracks().forEach((t) => t.stop());
+        }, 2600);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, session?.questionIndex]);
+
+  // After think time ends, default into recording (dark mode) unless they already chose typing.
+  useEffect(() => {
+    if (phase !== 'QUESTION_THINKING') return;
+    if (thinkRemaining > 0) return;
+    const qIndex = session?.questionIndex ?? -1;
+    if (thinkAutoStartedRef.current === qIndex) return;
+    if (answerMethodRef.current) return;
+    thinkAutoStartedRef.current = qIndex;
+    const t = window.setTimeout(() => {
+      if (answerMethodRef.current) return;
+      chooseAnswerMethod('recording');
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [phase, thinkRemaining, session?.questionIndex]);
 
   // Dedicated think-time countdown — keeps the bar decreasing smoothly.
   useEffect(() => {
@@ -293,31 +338,21 @@ export default function MockInterviewQuestionPage() {
         if (phase === 'RECORDING_COUNTDOWN') {
           cancelGuidedSpeech();
           setCaption('Get ready…');
-          for (const n of [3, 2, 1] as const) {
-            if (!alive()) return;
-            setCountdownNum(n);
-            await new Promise((r) => setTimeout(r, 900));
-          }
-          if (!alive()) return;
-          setCountdownNum(null);
-          setPhase('RECORDING_ACTIVE');
+          // DarkRecordingStage drives the 3→2→speak card intro, then advances.
           return;
         }
 
         if (phase === 'QUESTION_COMPLETED') {
           const doneNum = completedQuestionNumber.current || qNum;
           const lines = buildQuestionCompletedLines(name, doneNum, total);
+          // Caption + primary TTS already kicked off in submitAnswer — keep copy visible.
           setCaption(lines.primary);
 
-          // Cherish on screen immediately; save finishes in parallel with voice.
           const savePromise = savePromiseRef.current;
-          const speakPrimary = speakGuided(lines.primary);
-
           const saveResult = savePromise
             ? await savePromise
             : ({ ok: false, error: 'Could not save your answer. Please try again.' } as const);
 
-          await speakPrimary;
           if (!alive()) return;
 
           if (!saveResult.ok) {
@@ -348,6 +383,7 @@ export default function MockInterviewQuestionPage() {
             return;
           }
           recordingArmedForIndex.current = null;
+          thinkAutoStartedRef.current = null;
           setPhase('QUESTION_DISPLAY');
           return;
         }
@@ -391,6 +427,16 @@ export default function MockInterviewQuestionPage() {
     // Provisional — confirmed after save returns.
     pendingNextPhase.current =
       justFinishedNumber >= session.totalQuestions ? 'FINAL_PROCESSING' : 'QUESTION_DISPLAY';
+
+    // Celebrate immediately (no silent wait after leaving dark mode).
+    const celebrate = buildQuestionCompletedLines(
+      session.candidateName,
+      justFinishedNumber,
+      session.totalQuestions,
+    );
+    cancelGuidedSpeech();
+    setCaption(celebrate.primary);
+    void speakGuided(celebrate.primary).catch(() => undefined);
 
     const answerMode: 'TEXT' | 'AUDIO' = textAnswer.length >= 8 ? 'TEXT' : 'AUDIO';
     const payloadText = textAnswer || '(audio answer recorded)';
@@ -447,18 +493,21 @@ export default function MockInterviewQuestionPage() {
     phase === 'INTRO_GREETING' ||
     phase === 'INTRODUCTION' ||
     phase === 'INTRO_START' ||
-    phase === 'RECORDING_COUNTDOWN' ||
     phase === 'QUESTION_COMPLETED' ||
     phase === 'FINAL_PROCESSING';
+
+  const darkRecording =
+    phase === 'RECORDING_COUNTDOWN' || phase === 'RECORDING_ACTIVE';
 
   const showQuestionWorkspace =
     phase === 'QUESTION_DISPLAY' ||
     phase === 'QUESTION_THINKING' ||
-    phase === 'RECORDING_ACTIVE' ||
     phase === 'TYPING_ACTIVE';
 
   const thinkPct = Math.max(0, Math.min(100, thinkProgress * 100));
-  const thinkRing = 2 * Math.PI * 42;
+  const thinkRing = 2 * Math.PI * 23;
+  const thinkColor =
+    thinkProgress > 0.6 ? '#16a34a' : thinkProgress > 0.3 ? '#f59e0b' : '#dc2626';
 
   return (
     <CandidateAppShell activeTab="interviews" maxWidth="max-w-3xl">
@@ -539,15 +588,6 @@ export default function MockInterviewQuestionPage() {
               <InterviewBotFace size="xl" speaking={aiSpeaking || phase === 'FINAL_PROCESSING'} />
               {aiSpeaking ? <VoiceWave /> : null}
 
-              {phase === 'RECORDING_COUNTDOWN' && countdownNum != null ? (
-                <p
-                  key={countdownNum}
-                  className="cb-guided-count text-6xl font-black tabular-nums text-[#0a2e2c] sm:text-7xl"
-                >
-                  {countdownNum}
-                </p>
-              ) : null}
-
               {phase === 'QUESTION_COMPLETED' || phase === 'FINAL_PROCESSING' ? (
                 <div className="cb-guided-check" aria-hidden>
                   ✓
@@ -570,7 +610,10 @@ export default function MockInterviewQuestionPage() {
               <div className="flex items-start gap-3 sm:gap-4">
                 <InterviewBotFace
                   size="md"
-                  speaking={phase === 'QUESTION_DISPLAY' && aiSpeaking}
+                  speaking={
+                    phase === 'QUESTION_THINKING' ||
+                    (phase === 'QUESTION_DISPLAY' && aiSpeaking)
+                  }
                   className="mt-0.5 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
@@ -592,181 +635,99 @@ export default function MockInterviewQuestionPage() {
 
             <div className="space-y-4 p-4 sm:p-5">
               {phase === 'QUESTION_THINKING' ? (
-                <div className="space-y-4">
-                  <div
-                    className="relative overflow-hidden rounded-[20px] border border-[#d7eef6] bg-gradient-to-b from-[#f7fcfe] to-white p-5 text-center sm:p-6"
-                    role="timer"
-                  >
-                    <div
-                      className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-[#9fd9ec]/25 blur-2xl"
-                      aria-hidden
-                    />
-                    <p className="text-sm font-extrabold text-[#0a2e2c]">Think Time</p>
-                    <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-[#5a7a82]">
-                      {buildThinkLine()}
-                    </p>
+                <div className="relative space-y-4">
+                  <img
+                    src="/think-brain.png"
+                    alt=""
+                    aria-hidden
+                    className="cb-think-brain pointer-events-none absolute -right-1 -top-3 z-10 h-14 w-14 select-none sm:h-16 sm:w-16"
+                  />
 
-                    <div className="relative mx-auto mt-5 h-[108px] w-[108px]">
-                      <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden>
-                        <circle cx="50" cy="50" r="42" fill="none" stroke="#e2eef2" strokeWidth="8" />
+                  <div
+                    className="flex items-center gap-4 rounded-xl border border-[#e3e6ea] bg-[#fafbfb] px-4 py-3.5"
+                    role="timer"
+                    aria-label={`${thinkRemaining} seconds of think time remaining`}
+                  >
+                    <div className="relative h-14 w-14 shrink-0">
+                      <svg className="h-full w-full -rotate-90" viewBox="0 0 56 56" aria-hidden>
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="#e4e8ea" strokeWidth="6" />
                         <circle
-                          cx="50"
-                          cy="50"
-                          r="42"
+                          cx="28"
+                          cy="28"
+                          r="23"
                           fill="none"
-                          stroke="#0a2e2c"
-                          strokeWidth="8"
+                          stroke={thinkColor}
+                          strokeWidth="6"
                           strokeLinecap="round"
                           strokeDasharray={thinkRing}
                           strokeDashoffset={thinkRing * (1 - thinkPct / 100)}
-                          style={{ transition: 'none' }}
+                          style={{ transition: 'stroke 0.3s ease' }}
                         />
                       </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <p className="text-3xl font-black tabular-nums leading-none text-[#0a2e2c]">
-                          {thinkRemaining}
-                        </p>
-                        <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-[#7a9aa3]">
-                          sec
-                        </p>
+                      <div className="absolute inset-0 flex items-center justify-center text-lg font-extrabold tabular-nums text-[#1c2530]">
+                        {thinkRemaining}
                       </div>
                     </div>
 
-                    <div className="mx-auto mt-4 h-2 w-full max-w-xs overflow-hidden rounded-full bg-[#e2eef2]">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#0a2e2c] to-[#1a5c58]"
-                        style={{
-                          width: `${thinkPct}%`,
-                          transition: 'none',
-                        }}
-                      />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-[13px] font-bold text-[#1c2530]">
+                        <span>
+                          {thinkRemaining > 0
+                            ? 'Thinking time — get ready'
+                            : 'Choose how you want to answer'}
+                        </span>
+                        {thinkRemaining > 0 ? (
+                          <span className="cb-think-dots inline-flex gap-[3px]" aria-hidden>
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-[5px] bg-[#e4e8ea]">
+                        <div
+                          className="h-full rounded-[5px]"
+                          style={{
+                            width: `${thinkPct}%`,
+                            backgroundColor: thinkColor,
+                            transition: 'background-color 0.3s ease',
+                          }}
+                        />
+                      </div>
                     </div>
-                    <p className="mt-2 text-xs font-semibold text-[#5a7a82]">
-                      {thinkRemaining > 0 ? 'seconds remaining' : 'Choose how you want to answer'}
-                    </p>
                   </div>
 
                   <div>
-                    <p className="mb-2.5 text-center text-xs font-bold uppercase tracking-[0.12em] text-[#5a7a82]">
+                    <p className="mb-2.5 text-xs font-bold uppercase tracking-[0.06em] text-[#6b7684]">
                       Choose way of answering
                     </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <button
                         type="button"
                         onClick={() => chooseAnswerMethod('recording')}
-                        className="group flex items-start gap-3 rounded-2xl border border-[#d7eef6] bg-white px-4 py-4 text-left shadow-[0_6px_16px_rgba(47,143,173,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-[#0a2e2c] hover:shadow-[0_12px_24px_rgba(10,46,44,0.14)]"
+                        className="relative flex items-center gap-2.5 rounded-xl border-2 border-[#0f8b8d] bg-[#eefaf9] px-3.5 py-3 text-left transition hover:border-[#0b6668]"
                       >
-                        <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#0a2e2c] text-white shadow-sm transition group-hover:scale-105">
-                          <MicIcon className="h-5 w-5" />
+                        <span className="absolute -top-2 right-2.5 rounded-lg bg-[#0f8b8d] px-2 py-0.5 text-[9.5px] font-bold tracking-wide text-white">
+                          Default
                         </span>
-                        <span className="min-w-0">
-                          <span className="block text-base font-extrabold text-[#0a2e2c]">With recording</span>
-                          <span className="mt-1 block text-xs font-medium leading-relaxed text-[#5a7a82]">
-                            3–2–1 countdown, then speak your answer
-                          </span>
+                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[#123c34] text-white">
+                          <MicIcon className="h-4 w-4" />
                         </span>
+                        <span className="text-sm font-bold text-[#0b6668]">Recording</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => chooseAnswerMethod('typing')}
-                        className="group flex items-start gap-3 rounded-2xl border border-[#d7eef6] bg-white px-4 py-4 text-left shadow-[0_6px_16px_rgba(47,143,173,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-[#0a2e2c] hover:shadow-[0_12px_24px_rgba(10,46,44,0.14)]"
+                        className="flex items-center gap-2.5 rounded-xl border-2 border-[#e3e6ea] bg-white px-3.5 py-3 text-left transition hover:border-[#bcd8d6]"
                       >
-                        <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#e8f6fb] text-[#0a2e2c] transition group-hover:scale-105 group-hover:bg-[#0a2e2c] group-hover:text-white">
-                          <KeyboardIcon className="h-5 w-5" />
+                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[#d7ebe9] text-[#0f8b8d]">
+                          <KeyboardIcon className="h-4 w-4" />
                         </span>
-                        <span className="min-w-0">
-                          <span className="block text-base font-extrabold text-[#0a2e2c]">With typing</span>
-                          <span className="mt-1 block text-xs font-medium leading-relaxed text-[#5a7a82]">
-                            Type your answer — mic available if you want
-                          </span>
-                        </span>
+                        <span className="text-sm font-bold text-[#1c2530]">Typing</span>
                       </button>
                     </div>
                   </div>
                 </div>
-              ) : null}
-
-              {phase === 'RECORDING_ACTIVE' ? (
-                <>
-                  <div>
-                    <label htmlFor="mock-answer" className="mb-1.5 block text-xs font-bold text-slate-800 sm:text-sm">
-                      Your answer
-                    </label>
-                    <textarea
-                      id="mock-answer"
-                      value={answer}
-                      onChange={(e) => {
-                        setAnswer(e.target.value);
-                        answerRef.current = e.target.value;
-                      }}
-                      onPaste={blockClipboardPaste}
-                      onDrop={blockClipboardPaste}
-                      autoComplete="off"
-                      spellCheck
-                      placeholder={
-                        isRecording
-                          ? 'Listening… speech appears here live'
-                          : 'Speak clearly — your words appear here.'
-                      }
-                      rows={4}
-                      disabled={loading}
-                      className={`min-h-[100px] w-full resize-y rounded-xl border bg-[#fbfcfc] px-3 py-2.5 text-sm leading-6 text-slate-800 outline-none transition focus:bg-white focus:ring-2 disabled:opacity-60 ${
-                        isRecording
-                          ? 'border-red-200 ring-2 ring-red-100'
-                          : 'border-slate-200 focus:ring-[#0a2e2c]/30'
-                      }`}
-                    />
-                  </div>
-
-                  <AudioAnswerRecorder
-                    key={`recorder-q-${session.questionIndex}`}
-                    ref={recorderRef}
-                    disabled={loading}
-                    hideIdleButton
-                    hideInternalCountdown
-                    onRecordingChange={setIsRecording}
-                    onRecorded={({ durationSec, transcript }) => {
-                      setHasAudio(true);
-                      hasAudioRef.current = true;
-                      setAudioDurationSec(durationSec);
-                      audioDurationRef.current = durationSec;
-                      if (transcript?.trim()) {
-                        setAnswer(transcript.trim());
-                        answerRef.current = transcript.trim();
-                      }
-                    }}
-                    onClear={() => {
-                      setHasAudio(false);
-                      hasAudioRef.current = false;
-                      setAudioDurationSec(undefined);
-                      audioDurationRef.current = undefined;
-                    }}
-                    onLiveTranscript={(text) => {
-                      setAnswer(text);
-                      answerRef.current = text;
-                    }}
-                  />
-
-                  {error ? (
-                    <p className="rounded-xl bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-600 sm:text-sm">
-                      {error}
-                    </p>
-                  ) : null}
-
-                  <Button
-                    type="button"
-                    loading={loading}
-                    loadingLabel="Saving…"
-                    onClick={() => void submitAnswer()}
-                    className="w-full !rounded-full"
-                  >
-                    {(() => {
-                      const isLast = questionNumber >= totalQuestions;
-                      if (isRecording) return isLast ? 'Stop & Finish' : 'Stop & Next';
-                      return isLast ? 'Finish' : 'Next';
-                    })()}
-                  </Button>
-                </>
               ) : null}
 
               {phase === 'TYPING_ACTIVE' ? (
@@ -890,6 +851,58 @@ export default function MockInterviewQuestionPage() {
         ) : null}
       </div>
       </div>
+
+      {darkRecording ? (
+        <>
+          <DarkRecordingStage
+            mode={phase === 'RECORDING_COUNTDOWN' ? 'intro' : 'recording'}
+            questionNumber={questionNumber}
+            questionText={questionText}
+            transcript={answer}
+            amplitudeRef={amplitudeRef}
+            elapsedSec={recordElapsedSec}
+            isRecording={isRecording}
+            loading={loading}
+            error={error || undefined}
+            isLast={questionNumber >= totalQuestions}
+            onIntroComplete={finishRecordingIntro}
+            onStopAndSubmit={() => void submitAnswer()}
+          />
+          <AudioAnswerRecorder
+            key={`recorder-q-${session.questionIndex}`}
+            ref={recorderRef}
+            disabled={loading}
+            hideUi
+            hideIdleButton
+            hideInternalCountdown
+            onRecordingChange={setIsRecording}
+            onAmplitudeChange={(amp) => {
+              amplitudeRef.current = amp;
+            }}
+            onElapsedChange={setRecordElapsedSec}
+            onRecorded={({ durationSec, transcript }) => {
+              setHasAudio(true);
+              hasAudioRef.current = true;
+              setAudioDurationSec(durationSec);
+              audioDurationRef.current = durationSec;
+              if (transcript?.trim()) {
+                setAnswer(transcript.trim());
+                answerRef.current = transcript.trim();
+              }
+            }}
+            onClear={() => {
+              setHasAudio(false);
+              hasAudioRef.current = false;
+              setAudioDurationSec(undefined);
+              audioDurationRef.current = undefined;
+            }}
+            onLiveTranscript={(text) => {
+              setAnswer(text);
+              answerRef.current = text;
+            }}
+          />
+        </>
+      ) : null}
     </CandidateAppShell>
   );
 }
@@ -999,6 +1012,28 @@ const guidedStyles = `
     background: #0a2e2c;
     animation: cb-voice-bar 0.9s ease-in-out infinite;
   }
+  .cb-think-brain {
+    animation: cb-think-brain-float 2.2s ease-in-out infinite;
+    filter: drop-shadow(0 4px 10px rgba(15, 139, 141, 0.22));
+  }
+  .cb-think-dots span {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #0f8b8d;
+    animation: cb-think-bounce 1.2s ease-in-out infinite;
+  }
+  .cb-think-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .cb-think-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes cb-think-brain-float {
+    0%, 100% { transform: translateY(0) rotate(-4deg) scale(1); }
+    40% { transform: translateY(-7px) rotate(3deg) scale(1.05); }
+    70% { transform: translateY(-3px) rotate(-2deg) scale(1.02); }
+  }
+  @keyframes cb-think-bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
   @keyframes cb-guided-fade {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: none; }
@@ -1016,7 +1051,8 @@ const guidedStyles = `
     50% { height: 20px; opacity: 1; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .cb-guided-panel, .cb-guided-count, .cb-guided-check, .cb-voice-wave span, .cb-guided-spinner {
+    .cb-guided-panel, .cb-guided-count, .cb-guided-check, .cb-voice-wave span, .cb-guided-spinner,
+    .cb-think-brain, .cb-think-dots span {
       animation: none;
     }
   }

@@ -1,0 +1,87 @@
+/* Super Admin shell — landing-navbar colors (#0a2e2c → #062120) */
+
+.role-shell {
+  background: #f3f6f5;
+  color: #3d4a47;
+}
+
+.role-shell__aside {
+  background: linear-gradient(180deg, #0a2e2c 0%, #062120 100%);
+  color: #eaf5f1;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 4px 0 24px rgba(6, 33, 32, 0.18);
+}
+
+.role-shell__brand {
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.role-shell__brand-title {
+  color: #f7f1e8;
+}
+
+.role-shell__brand-role {
+  color: #e0a100;
+}
+
+.role-shell__brand-email {
+  color: rgba(234, 245, 241, 0.65);
+}
+
+.role-shell__nav-link {
+  color: rgba(234, 245, 241, 0.82);
+}
+
+.role-shell__nav-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.role-shell__nav-link--active {
+  box-shadow: inset 3px 0 0 #e0a100;
+}
+
+.role-shell__header {
+  background: linear-gradient(135deg, #0a2e2c, #062120);
+  color: #eaf5f1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.role-shell__header-label {
+  color: #eaf5f1;
+}
+
+.role-shell__public {
+  color: #eaf5f1;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.role-shell__public:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e0a100;
+}
+
+.role-shell__menu-btn {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.role-shell__burger {
+  background: #eaf5f1;
+}
+
+.role-shell__avatar {
+  background: #e0a100;
+  color: #1a1300 !important;
+}
+
+.role-shell__scrim {
+  background: rgba(6, 33, 32, 0.45);
+}
+
+.role-shell__main {
+  background: #f3f6f5;
+}

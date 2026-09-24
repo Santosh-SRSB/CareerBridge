@@ -65,18 +65,17 @@ export function validateWizardStep(step: string, input: WizardStepValidationInpu
       if (input.skills.length === 0) {
         errors.push('Add at least one skill.');
       }
-      break;
-    case 'Languages':
       if (input.languages.length === 0) {
         errors.push('Select at least one language.');
       }
       break;
-    case 'Preferences':
+    case 'Credentials':
+      // Optional combined section — no hard requirements
+      break;
+    case 'Links': {
       if (!input.preferredRole.trim()) {
         errors.push('Preferred role is required.');
       }
-      break;
-    case 'Links': {
       const linkedinErr = profileLinkError('linkedin', input.linkedin);
       const githubErr = profileLinkError('github', input.github);
       const portfolioErr = profileLinkError('portfolio', input.portfolio);

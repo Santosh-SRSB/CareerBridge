@@ -5,19 +5,42 @@ import Link from 'next/link';
 
 export const ONBOARDING_TOTAL_STEPS = 4;
 
-/** Profile Builder Growth palette */
+/** Onboarding card palette — matches Profile Builder reference */
 export const OB = {
-  ink: '#241C15',
+  ink: '#1c1c1a',
   clay: '#B4592A',
-  moss: '#0A2E2C',
+  moss: '#0B3D33',
+  accent: '#0B3D33',
+  accentDark: '#062019',
+  accentTint: '#E3F2ED',
+  accentTintStrong: '#A9D6C7',
   gold: '#D9A441',
-  bg: '#EEF2E9',
-  muted: '#6B6355',
-  line: '#9CA392',
-  lineSoft: '#E4E7DC',
+  bg: '#f4f4f2',
+  surface: '#ffffff',
+  surfaceTint: '#f6f6f4',
+  muted: '#6b6a63',
+  textMuted: '#a3a299',
+  border: '#e4e3de',
+  borderStrong: '#d4d3cc',
+  line: '#d4d3cc',
+  lineSoft: '#e4e3de',
+  green50: '#E3F2ED',
+  green100: '#A9D6C7',
+  green200: '#6FB89E',
+  green400: '#1F6E58',
+  green800: '#0B3D33',
+  amber50: '#FAEEDA',
+  amber100: '#FAC775',
+  amber800: '#633806',
+  teal50: '#E1F5EE',
+  teal100: '#9FE1CB',
+  teal800: '#085041',
+  purple50: '#EEEDFE',
+  purple100: '#CECBF6',
+  purple800: '#3C3489',
 } as const;
 
-const BACK_HREF: Record<number, string | undefined> = {
+export const BACK_HREF: Record<number, string | undefined> = {
   1: undefined,
   2: '/onboarding',
   3: '/onboarding/name',
@@ -25,56 +48,23 @@ const BACK_HREF: Record<number, string | undefined> = {
 };
 
 export const onboardingPrimaryButtonClass =
-  'rounded-full px-7 py-2.5 text-sm font-semibold text-white transition disabled:opacity-40';
+  'inline-flex h-11 w-full items-center justify-center rounded-[10px] border-0 px-5 text-sm font-semibold text-white transition hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0';
 
 export const onboardingOptionButtonClass = (active: boolean) =>
-  `rounded-full border px-3 py-1.5 text-xs font-medium transition sm:text-sm ${
+  `rounded-full border px-3.5 py-2 text-xs font-medium transition sm:text-sm ${
     active
-      ? 'border-[#0A2E2C] bg-[#0A2E2C] text-white'
-      : 'border-[#7A8270] bg-white text-[#5C5546] hover:border-[#0A2E2C]'
+      ? 'border-[#0B3D33] bg-[#0B3D33] text-white'
+      : 'border-[#d4d3cc] bg-white text-[#6b6a63] hover:border-[#0B3D33]'
   }`;
 
 export const onboardingSkipButtonClass =
-  'inline-flex items-center gap-1 text-xs font-medium text-[#0A2E2C] hover:opacity-80 transition sm:text-sm';
+  'inline-flex items-center gap-1 text-xs font-medium text-[#0B3D33] hover:opacity-80 transition sm:text-sm';
 
 export const onboardingInputClass =
-  'w-full rounded-lg border-2 border-[#7A8270] bg-white px-3.5 py-2.5 text-sm text-[#241C15] transition focus:border-[#0A2E2C] focus:outline-none focus:ring-2 focus:ring-[#0A2E2C]/25 sm:py-3';
+  'h-10 w-full rounded-[10px] border border-[#d4d3cc] bg-[#f6f6f4] px-3 text-sm text-[#1c1c1a] outline-none transition focus:border-[#0B3D33] focus:shadow-[0_0_0_3px_#E3F2ED]';
 
 export const onboardingLabelClass =
-  'mb-2 block text-base font-semibold text-[#241C15] sm:text-[1.05rem]';
-
-function Milestone({ reached }: { reached: boolean }) {
-  return (
-    <div
-      key={reached ? 'reached' : 'pending'}
-      className={reached ? 'cb-ob-sprout' : undefined}
-      style={{
-        width: 18,
-        height: 18,
-        borderRadius: '50%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: reached ? OB.gold : OB.lineSoft,
-        border: `2px solid ${reached ? OB.moss : OB.line}`,
-        transition: 'background 400ms ease, border-color 400ms ease',
-      }}
-    >
-      {reached ? (
-        <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden>
-          <path
-            d="M2 6 L5 9 L10 3"
-            fill="none"
-            stroke={OB.moss}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : null}
-    </div>
-  );
-}
+  'mb-1.5 block text-[13px] font-medium text-[#6b6a63]';
 
 export function OnboardingFrame({
   step,
@@ -90,118 +80,162 @@ export function OnboardingFrame({
   children: ReactNode;
   title?: string;
   subtitle?: string;
-  /** Hide milestone bar (e.g. post-onboarding choice screen). */
+  /** Hide progress dots (e.g. post-onboarding choice screen). */
   showProgress?: boolean;
   showBack?: boolean;
   /** Render children only — useful for custom complete screens. */
   hideHeader?: boolean;
   backHref?: string;
 }) {
-  const backHref = showBack ? (backHrefOverride ?? BACK_HREF[step]) : undefined;
-  const percent = (step / ONBOARDING_TOTAL_STEPS) * 100;
-  const milestones = [25, 50, 75, 100];
+  const backHref = backHrefOverride ?? BACK_HREF[step];
+  const canGoBack = showBack && Boolean(backHref);
 
   return (
     <main
-      className="box-border flex h-dvh max-h-dvh w-full items-center justify-center overflow-hidden px-3 py-3 sm:px-6 sm:py-4"
-      style={{ background: OB.bg, fontFamily: 'var(--font-inter), Inter, sans-serif' }}
+      className="box-border flex h-dvh max-h-dvh w-full items-center justify-center overflow-hidden px-4 py-6 sm:px-6 sm:py-8"
+      style={{
+        background: OB.bg,
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        color: OB.ink,
+      }}
     >
       <div
-        className={`relative flex max-h-[min(94dvh,720px)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white px-5 py-5 sm:rounded-3xl sm:px-7 sm:py-6 ${
+        className={`relative flex max-h-[min(94dvh,720px)] w-full max-w-[360px] flex-col overflow-hidden rounded-[20px] border bg-white px-5 py-5 ${
           hideHeader
             ? 'h-[min(90dvh,680px)] sm:h-[620px] sm:py-8'
-            : 'h-[min(88dvh,620px)] sm:h-[560px]'
+            : 'h-[min(88dvh,640px)] sm:h-[580px]'
         }`}
         style={{
-          boxShadow: '0 1px 2px rgba(36,28,21,0.06), 0 12px 32px rgba(63,91,58,0.08)',
+          borderColor: OB.border,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
         }}
       >
-        {backHref ? (
-          <Link
-            href={backHref}
-            className="absolute right-3 top-3 z-10 inline-flex items-center gap-0.5 rounded-full border bg-white px-2 py-0.5 text-[11px] font-medium shadow-sm transition hover:border-[#0A2E2C] hover:text-[#0A2E2C] sm:right-4 sm:top-4"
-            style={{ borderColor: '#7A8270', color: '#5C5546' }}
-            aria-label="Go back"
-          >
-            ← Back
-          </Link>
-        ) : null}
-
-        {!hideHeader ? (
-          <div className={`shrink-0 ${backHref ? 'pt-5 sm:pt-5' : ''}`}>
-            <h1
-              className="text-[1.4rem] leading-tight sm:text-[1.65rem]"
-              style={{
-                fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
-                fontWeight: 600,
-                color: OB.ink,
-              }}
+        {canGoBack ? (
+          <div className="mb-2 shrink-0">
+            <Link
+              href={backHref!}
+              className="inline-flex items-center gap-1 text-sm font-semibold transition hover:opacity-80"
+              style={{ color: OB.moss }}
             >
-              {title || "Let's build your profile"}
-            </h1>
-            <p className="mt-1.5 text-xs sm:text-sm" style={{ color: OB.muted }}>
-              {subtitle || 'A few quick questions to get you matched with work.'}
-            </p>
+              ← Back
+            </Link>
           </div>
         ) : null}
 
-        {showProgress ? (
-          <>
-            <div className="mb-2 mt-4 shrink-0 text-[11px] font-medium sm:mt-5 sm:text-xs" style={{ color: OB.muted }}>
-              Step {step} of {ONBOARDING_TOTAL_STEPS}
-            </div>
-
-            <div className="relative mb-4 h-7 shrink-0 sm:mb-5">
-              <svg
-                className="absolute left-0 right-0"
-                style={{ top: '50%', transform: 'translateY(-50%)', width: '100%' }}
-                height="4"
-                viewBox="0 0 100 4"
-                preserveAspectRatio="none"
-                aria-hidden
-              >
-                <line
-                  x1="0"
-                  y1="2"
-                  x2="100"
-                  y2="2"
-                  stroke={OB.line}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <line
-                  x1="0"
-                  y1="2"
-                  x2={percent}
-                  y2="2"
-                  stroke={OB.moss}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  style={{ transition: 'x2 600ms ease' }}
-                />
-              </svg>
-              {milestones.map((m) => (
-                <div
-                  key={m}
-                  className="absolute"
-                  style={{ top: '50%', left: `${m}%`, transform: 'translate(-50%, -50%)' }}
-                >
-                  <Milestone reached={percent >= m} />
-                </div>
-              ))}
-            </div>
-          </>
+        {!hideHeader && (title || subtitle) ? (
+          <div className="mb-3 shrink-0">
+            {title ? (
+              <h1 className="m-0 text-lg font-semibold leading-tight" style={{ color: OB.ink }}>
+                {title}
+              </h1>
+            ) : null}
+            {subtitle ? (
+              <p className="mt-1 text-sm leading-snug" style={{ color: OB.muted }}>
+                {subtitle}
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         <div
           className={`flex min-h-0 flex-1 flex-col overflow-hidden [&>*]:flex [&>*]:min-h-0 [&>*]:flex-1 [&>*]:flex-col ${
             hideHeader ? '' : 'cb-ob-panel-in'
           }`}
+          data-ob-progress={showProgress ? '1' : '0'}
         >
           {children}
         </div>
       </div>
     </main>
+  );
+}
+
+type HeroTone = 'green' | 'amber' | 'teal' | 'purple';
+
+const HERO_TONE: Record<
+  HeroTone,
+  { bg: string; circle: string; stroke: string; deco?: string; decoSoft?: string }
+> = {
+  green: {
+    bg: OB.green50,
+    circle: OB.green100,
+    stroke: OB.green800,
+    deco: OB.green400,
+    decoSoft: OB.green200,
+  },
+  amber: { bg: OB.amber50, circle: OB.amber100, stroke: OB.amber800 },
+  teal: { bg: OB.teal50, circle: OB.teal100, stroke: OB.teal800 },
+  purple: { bg: OB.purple50, circle: OB.purple100, stroke: OB.purple800 },
+};
+
+export function OnboardingHero({
+  tone,
+  children,
+  deco = false,
+}: {
+  tone: HeroTone;
+  children: ReactNode;
+  deco?: boolean;
+}) {
+  const t = HERO_TONE[tone];
+  return (
+    <div
+      className="cb-ob-hero relative mb-[18px] mt-1 flex h-[110px] items-center justify-center overflow-hidden rounded-2xl sm:h-[120px]"
+      style={{ background: t.bg }}
+    >
+      <div
+        className="cb-ob-hero-circle flex h-[68px] w-[68px] items-center justify-center rounded-full sm:h-[72px] sm:w-[72px]"
+        style={{ background: t.circle }}
+      >
+        {children}
+      </div>
+      {deco && t.deco ? (
+        <>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill={t.deco}
+            className="absolute right-7 top-4"
+            aria-hidden
+          >
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+          </svg>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill={t.decoSoft}
+            className="absolute bottom-3.5 left-6"
+            aria-hidden
+          >
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+          </svg>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+export function OnboardingStepHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="mb-[18px]">
+      <h3 className="m-0 text-lg font-semibold leading-tight" style={{ color: OB.ink }}>
+        {title}
+      </h3>
+      {subtitle ? (
+        <p className="mt-1 mb-0 text-sm leading-relaxed" style={{ color: OB.muted }}>
+          {subtitle}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -215,11 +249,11 @@ export function OnboardingQuestion({
   hint?: string;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div>
         <label className={onboardingLabelClass}>{title}</label>
         {hint ? (
-          <p className="-mt-0.5 mb-1.5 text-xs" style={{ color: OB.muted }}>
+          <p className="-mt-0.5 mb-1.5 text-xs" style={{ color: OB.textMuted }}>
             {hint}
           </p>
         ) : null}
@@ -229,20 +263,61 @@ export function OnboardingQuestion({
   );
 }
 
+function OnboardingDots({ step }: { step: number }) {
+  return (
+    <div className="mb-3.5 mt-4 flex justify-center gap-1.5" aria-hidden>
+      {Array.from({ length: ONBOARDING_TOTAL_STEPS }, (_, i) => {
+        const index = i + 1;
+        const active = index === step;
+        const done = index < step;
+        return (
+          <div
+            key={index}
+            className="h-1.5 rounded-[3px] transition-all duration-250"
+            style={{
+              width: active ? 20 : 6,
+              background: active ? OB.accent : done ? OB.accentTintStrong : OB.border,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export function OnboardingActions({
   children,
+  step,
+  backHref,
   onSkip,
   skipLabel = 'Skip for now',
 }: {
   children: ReactNode;
+  /** When set, renders progress dots above the nav row. */
+  step?: number;
+  backHref?: string;
   onSkip?: () => void;
   skipLabel?: string;
-  /** @deprecated Top back is handled by OnboardingFrame */
+  /** @deprecated Top back is handled by nav row */
   onBack?: () => void;
 }) {
+  const resolvedBack = backHref ?? (step != null ? BACK_HREF[step] : undefined);
+
   return (
-    <div className="mt-auto shrink-0 border-t border-[#EEF0E8] pt-3 sm:pt-4">
-      <div className="flex justify-center">{children}</div>
+    <div className="mt-auto shrink-0 pt-2">
+      {step != null ? <OnboardingDots step={step} /> : null}
+      <div className="flex gap-2.5">
+        {resolvedBack ? (
+          <Link
+            href={resolvedBack}
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-[10px] border bg-white text-sm font-medium transition hover:-translate-y-px"
+            style={{ borderColor: OB.borderStrong, color: OB.ink }}
+          >
+            Back
+          </Link>
+        ) : null}
+        <div className={resolvedBack ? 'flex-[2]' : 'w-full'}>{children}</div>
+      </div>
       {onSkip ? (
         <div className="mt-1.5 flex justify-end">
           <button type="button" onClick={onSkip} className={onboardingSkipButtonClass}>
@@ -251,5 +326,17 @@ export function OnboardingActions({
         </div>
       ) : null}
     </div>
+  );
+}
+
+export function OnboardingFieldIcon({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"
+      style={{ color: OB.textMuted }}
+      aria-hidden
+    >
+      {children}
+    </span>
   );
 }

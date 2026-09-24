@@ -6,8 +6,11 @@ import { EDUCATION_LEVELS } from '@careerbridge/shared';
 import {
   OB,
   OnboardingActions,
+  OnboardingFieldIcon,
   OnboardingFrame,
+  OnboardingHero,
   OnboardingQuestion,
+  OnboardingStepHeader,
   onboardingInputClass,
   onboardingPrimaryButtonClass,
 } from '@/components/OnboardingFrame';
@@ -69,7 +72,6 @@ export default function OnboardingEducationPage() {
   function onQualificationChange(next: string) {
     setQualification(next);
     if (next !== 'Other') setOtherEducation('');
-    // Reset field when qualification changes — options are different
     setFieldSelect('');
     setCustomField('');
     setError('');
@@ -117,7 +119,10 @@ export default function OnboardingEducationPage() {
 
   if (!ready) {
     return (
-      <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
+      <main
+        className="flex min-h-screen items-center justify-center text-sm"
+        style={{ background: OB.bg, color: OB.muted }}
+      >
         Loading...
       </main>
     );
@@ -126,15 +131,37 @@ export default function OnboardingEducationPage() {
   return (
     <OnboardingFrame step={3}>
       <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-4 overflow-x-hidden">
-          <OnboardingQuestion title="Highest qualification">
+        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden pb-1">
+          <OnboardingHero tone="amber">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={OB.amber800}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M12 3L2 8l10 5 10-5-10-5z" />
+              <path d="M6 10.5V16c0 1.5 2.5 3 6 3s6-1.5 6-3v-5.5" />
+            </svg>
+          </OnboardingHero>
+
+          <OnboardingStepHeader
+            title="Your education"
+            subtitle="Tell us your highest qualification."
+          />
+
+          <OnboardingQuestion title="Highest education">
             <select
               required
               value={qualification}
               onChange={(event) => onQualificationChange(event.target.value)}
               className={onboardingInputClass}
             >
-              <option value="">Select one</option>
+              <option value="">Select degree</option>
               {EDUCATION_LEVELS.map((level) => (
                 <option key={level} value={level}>
                   {level}
@@ -153,34 +180,51 @@ export default function OnboardingEducationPage() {
             ) : null}
           </OnboardingQuestion>
 
-          <OnboardingQuestion title="Field of study">
-            <select
-              required
-              value={fieldSelect}
-              onChange={(event) => {
-                setFieldSelect(event.target.value);
-                if (event.target.value !== OTHER_FIELD) setCustomField('');
-                setError('');
-              }}
-              disabled={!qualification}
-              className={onboardingInputClass}
-            >
-              <option value="">
-                {qualification ? 'Select field of study' : 'Select qualification first'}
-              </option>
-              {fieldOptions.map((field) => (
-                <option key={field} value={field}>
-                  {field}
+          <OnboardingQuestion title="Stream / field">
+            <div className="relative">
+              <OnboardingFieldIcon>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+                </svg>
+              </OnboardingFieldIcon>
+              <select
+                required
+                value={fieldSelect}
+                onChange={(event) => {
+                  setFieldSelect(event.target.value);
+                  if (event.target.value !== OTHER_FIELD) setCustomField('');
+                  setError('');
+                }}
+                disabled={!qualification}
+                className={`${onboardingInputClass} pl-[34px]`}
+              >
+                <option value="">
+                  {qualification ? 'Select field of study' : 'Select qualification first'}
                 </option>
-              ))}
-            </select>
+                {fieldOptions.map((field) => (
+                  <option key={field} value={field}>
+                    {field}
+                  </option>
+                ))}
+              </select>
+            </div>
             {fieldSelect === OTHER_FIELD ? (
               <input
                 name="customFieldOfStudy"
                 required
                 value={customField}
                 onChange={(event) => setCustomField(event.target.value)}
-                placeholder="Type your field of study"
+                placeholder="e.g. Computer science"
                 className={`${onboardingInputClass} mt-3`}
               />
             ) : null}
@@ -189,15 +233,15 @@ export default function OnboardingEducationPage() {
           {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
         </div>
 
-        <OnboardingActions>
+        <OnboardingActions step={3}>
           <Button
             type="submit"
             size="sm"
-            block={false}
+            block
             loading={loading}
             loadingLabel="Saving..."
             className={onboardingPrimaryButtonClass}
-            style={{ background: OB.moss }}
+            style={{ background: OB.accent }}
           >
             Continue
           </Button>

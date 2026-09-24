@@ -8,7 +8,7 @@ export default function EmployerRegisterPage() {
     <AuthShell
       title="USER REGISTER"
       subtitle=""
-      backHref="/employer/welcome"
+      backHref="/login?role=employer"
       scene="employer"
       mode="register"
       signInHref="/login?role=employer"

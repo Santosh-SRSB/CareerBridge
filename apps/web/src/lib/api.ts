@@ -213,6 +213,53 @@ export async function analyzeCareerGap(
   });
 }
 
+export type CareerGapItem = {
+  id: string;
+  startDate: string;
+  endDate: string;
+  dateRangeLabel: string;
+  gapDays: number;
+  duration: string;
+  reason: string | null;
+  reasonDetails: string | null;
+  status: 'UNEXPLAINED' | 'EXPLAINED';
+  previousActivityId?: string | null;
+  nextActivityId?: string | null;
+};
+
+export type CareerGapsResponse = {
+  totalGaps: number;
+  totalGapDays: number;
+  totalGapDuration: string;
+  gaps: CareerGapItem[];
+};
+
+/** Recalculates and returns timeline career gaps (backend source of truth). */
+export async function getCareerGaps() {
+  return request<CareerGapsResponse>('/candidates/me/career-gaps');
+}
+
+export async function explainCareerGap(
+  id: string,
+  payload: { reason: string; reasonDetails?: string },
+) {
+  return request<CareerGapsResponse>(`/candidates/me/career-gaps/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** One shared explanation applied to every detected career gap. */
+export async function explainAllCareerGaps(payload: {
+  reason: string;
+  reasonDetails?: string;
+}) {
+  return request<CareerGapsResponse>('/candidates/me/career-gaps', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateCandidateMe(payload: UpdateCandidatePayload) {
   return request<CandidateProfile>('/candidates/me', {
     method: 'PATCH',
@@ -1609,6 +1656,15 @@ export async function listPublicTestimonials(audience?: 'CANDIDATE' | 'EMPLOYER'
       createdAt: string;
     }>
   >(`/testimonials${q}`, { auth: false });
+}
+
+export async function getPlatformStats() {
+  return request<{
+    passports: number;
+    jobs: number;
+    cities: number;
+    updatedAt: string;
+  }>('/platform/stats', { auth: false });
 }
 
 export async function getTestimonialPrompt() {

@@ -105,6 +105,17 @@ export class UpdateCandidateDto {
   @IsString()
   highestEducation?: string;
 
+  @ApiPropertyOptional({ description: 'Education completion date YYYY-MM or YYYY-MM-DD' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  educationEnd?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  stillInCollege?: boolean;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsArray()
@@ -116,6 +127,15 @@ export class UpdateCandidateDto {
   @IsString()
   @IsIn(EXPERIENCE_OPTIONS.map((item) => item.value))
   hasExperience?: string;
+
+  @ApiPropertyOptional({
+    example: 'Immediate',
+    description: 'Join availability / notice period from onboarding',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  noticePeriod?: string;
 
   @ApiPropertyOptional({ enum: ['fresher', 'experienced'] })
   @IsOptional()
@@ -558,4 +578,25 @@ export class AnalyzeCareerGapDto {
   @IsOptional()
   @IsBoolean()
   persist?: boolean;
+}
+
+export class ExplainCareerGapDto {
+  @IsString()
+  @IsIn([
+    'JOB_SEARCH',
+    'HIGHER_EDUCATION',
+    'CERTIFICATION_TRAINING',
+    'FREELANCING',
+    'BUSINESS',
+    'RELOCATION',
+    'PERSONAL_FAMILY',
+    'HEALTH_BREAK',
+    'OTHER',
+  ])
+  reason!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  reasonDetails?: string;
 }

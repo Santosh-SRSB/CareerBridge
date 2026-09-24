@@ -27,7 +27,7 @@ type NavItem = {
 const MOBILE_SWITCH_KEY = 'cb.mobileLastResumeTab';
 
 function iconClass(_active: boolean) {
-  return 'h-4 w-4 stroke-current';
+  return 'h-[5vw] w-[5vw] max-h-[18px] max-w-[18px] min-h-[14px] min-w-[14px] stroke-current';
 }
 
 const NAV_HOME: NavItem = {
@@ -631,12 +631,12 @@ export function CandidateAppShell({
         ) : null}
       </header>
 
-      <main className="flex-1 pb-[4.5rem] pt-4 sm:pt-6 md:pb-12 md:pt-7">
+      <main className="flex-1 pb-[3.25rem] pt-4 sm:pt-6 md:pb-12 md:pt-7">
         <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${maxWidth}`}>{children}</div>
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 w-full border-t border-white/10 bg-[#0a2e2c] md:hidden">
-        <div className="flex w-full items-end justify-between px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1">
+        <div className="flex w-full items-end justify-between px-0.5 pb-[max(0.2rem,env(safe-area-inset-bottom))] pt-0.5">
           {mobileNavItems.map((item) => {
             const isActive = currentTab === item.id;
             const isJobsCenter = item.id === 'jobs';
@@ -648,12 +648,12 @@ export function CandidateAppShell({
                   <button
                     type="button"
                     onClick={onMobileJobsFilter}
-                    className="flex w-full flex-col items-center gap-0.5 py-1 text-[10px] font-semibold text-white"
+                    className="flex w-full flex-col items-center gap-0 py-0.5 text-[9px] font-semibold leading-tight text-white"
                     aria-label="Open filters"
                   >
-                    <span className="flex h-10 w-10 -mt-2 items-center justify-center rounded-full bg-white text-[#0a2e2c] shadow-md">
+                    <span className="flex h-[5vw] w-[5vw] max-h-[22px] max-w-[22px] min-h-[16px] min-w-[16px] items-center justify-center rounded-full bg-white text-[#0a2e2c] shadow-sm">
                       <svg
-                        className="h-4 w-4"
+                        className="h-[55%] w-[55%]"
                         viewBox="0 0 24 24"
                         fill="currentColor"
                         aria-hidden
@@ -671,15 +671,15 @@ export function CandidateAppShell({
               <div key={item.id} className="relative flex flex-1 flex-col items-center">
                 <Link
                   href={item.href}
-                  className={`flex w-full flex-col items-center gap-0.5 py-1 text-[10px] font-semibold ${
+                  className={`flex w-full flex-col items-center gap-0 py-0.5 text-[9px] font-semibold leading-tight ${
                     isActive ? 'text-white' : 'text-white/65'
                   }`}
                 >
                   <span
                     className={`flex items-center justify-center rounded-full ${
                       isJobsCenter
-                        ? `h-10 w-10 -mt-2 shadow-md ${isActive ? 'bg-white text-[#0a2e2c]' : 'bg-white/15 text-white ring-2 ring-white/35'}`
-                        : `h-7 w-7 ${isActive ? 'bg-white text-[#0a2e2c]' : ''}`
+                        ? `h-[5vw] w-[5vw] max-h-[22px] max-w-[22px] min-h-[16px] min-w-[16px] shadow-sm ${isActive ? 'bg-white text-[#0a2e2c]' : 'bg-white/15 text-white ring-1 ring-white/35'}`
+                        : `h-[5vw] w-[5vw] max-h-[18px] max-w-[18px] min-h-[14px] min-w-[14px] ${isActive ? 'bg-white text-[#0a2e2c]' : ''}`
                     }`}
                   >
                     {item.icon(isActive)}
@@ -695,7 +695,7 @@ export function CandidateAppShell({
             <Link
               href={mobileCarouselItem.href}
               onClick={onMobileResumeAtsClick}
-              className={`flex w-full flex-col items-center py-1 text-[10px] font-semibold ${
+              className={`flex w-full flex-col items-center py-0.5 text-[9px] font-semibold leading-tight ${
                 currentTab === 'resumes' || currentTab === 'ats'
                   ? 'text-white'
                   : 'text-white/65'
@@ -706,10 +706,10 @@ export function CandidateAppShell({
             >
               <span
                 key={carouselTick}
-                className="cb-nav-swipe flex flex-col items-center gap-0.5"
+                className="cb-nav-swipe flex flex-col items-center gap-0"
               >
                 <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                  className={`flex h-[5vw] w-[5vw] max-h-[18px] max-w-[18px] min-h-[14px] min-w-[14px] items-center justify-center rounded-full ${
                     currentTab === mobileCarouselItem.id ? 'bg-white text-[#0a2e2c]' : ''
                   }`}
                 >
@@ -718,14 +718,14 @@ export function CandidateAppShell({
                 <span>{mobileCarouselItem.label}</span>
               </span>
             </Link>
-            <span className="mt-0.5 flex gap-1" aria-hidden>
+            <span className="mt-0.5 flex gap-0.5" aria-hidden>
               <span
-                className={`h-1 w-1 rounded-full ${
+                className={`h-0.5 w-0.5 rounded-full ${
                   mobileCarousel === 'resumes' ? 'bg-white' : 'bg-white/35'
                 }`}
               />
               <span
-                className={`h-1 w-1 rounded-full ${
+                className={`h-0.5 w-0.5 rounded-full ${
                   mobileCarousel === 'ats' ? 'bg-white' : 'bg-white/35'
                 }`}
               />

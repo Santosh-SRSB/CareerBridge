@@ -416,17 +416,6 @@ function EmployerLayout({
           menuOpen={menuOpen}
           setMenuOpen={setMenuOpen}
         />
-        {impersonation ? (
-          <div className="ep-impersonation-banner" role="status">
-            <p>
-              Super admin mode · Acting as <strong>{impersonation.companyName}</strong>. Full employer
-              access (jobs, candidates, interviews, profile).
-            </p>
-            <button type="button" onClick={exitToAdmin}>
-              Exit to admin
-            </button>
-          </div>
-        ) : null}
         <div className="ep-content">{children}</div>
       </div>
       <EmployerMobileNav />

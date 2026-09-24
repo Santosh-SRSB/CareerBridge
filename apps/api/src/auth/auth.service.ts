@@ -256,7 +256,7 @@ export class AuthService {
 
     if (!request) {
       throw new HttpException(
-        { code: ErrorCode.INVALID_OTP, message: 'Incorrect OTP. Please check the code and try again.' },
+        { code: ErrorCode.INVALID_OTP, message: 'Verification rejected' },
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -304,7 +304,7 @@ export class AuthService {
 
     if (request.phone && phone !== request.phone) {
       throw new HttpException(
-        { code: ErrorCode.INVALID_OTP, message: 'Incorrect OTP. Please check the code and try again.' },
+        { code: ErrorCode.INVALID_OTP, message: 'Verification rejected' },
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -356,13 +356,23 @@ export class AuthService {
           message: 'We could not verify your number right now. Please try again.',
         });
       }
+      const normalize = (value: string) => value.replace(/[^\d+]/g, '');
+      if (request.phone && normalize(phone) !== normalize(request.phone)) {
+        throw new HttpException(
+          {
+            code: ErrorCode.INVALID_OTP,
+            message: 'This OTP does not match the mobile number used for this request.',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
       const kind = parseRegistration(request.payloadJson)?.accountType;
       const role = kind === 'EMPLOYER' ? 'EMPLOYER' : 'CANDIDATE';
-      return { firebaseUid: `${decoded.uid}_${role}`, phone };
+      return { firebaseUid: `${decoded.uid}_${role}`, phone: request.phone || phone };
     }
 
     throw new HttpException(
-      { code: ErrorCode.INVALID_OTP, message: 'Incorrect OTP. Please check the code and try again.' },
+      { code: ErrorCode.INVALID_OTP, message: 'Verification rejected' },
       HttpStatus.BAD_REQUEST,
     );
   }
@@ -697,7 +707,7 @@ export class AuthService {
       throw new HttpException(
         {
           code: ErrorCode.INVALID_OTP,
-          message: 'Incorrect OTP. Please check the code and try again.',
+          message: 'Verification rejected',
         },
         HttpStatus.BAD_REQUEST,
       );

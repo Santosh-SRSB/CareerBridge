@@ -49,7 +49,18 @@ export function AuthShell({
           <h1 className="mt-8 text-2xl sm:text-3xl font-black tracking-tight text-primary">{title}</h1>
           {subtitle ? <p className="mt-2 text-sm text-muted">{subtitle}</p> : null}
           <div className="mt-6 rounded-2xl bg-white p-6 sm:p-8 shadow-xl border border-primary/10">{children}</div>
-          <div id="recaptcha-container" />
+          <div
+            id="recaptcha-container"
+            style={{
+              position: 'fixed',
+              left: '-9999px',
+              bottom: 0,
+              width: 1,
+              height: 1,
+              opacity: 0,
+              overflow: 'hidden',
+            }}
+          />
         </div>
       </main>
     );
@@ -101,7 +112,18 @@ export function AuthShell({
           </div>
         </div>
       </div>
-      <div id="recaptcha-container" />
+      <div
+        id="recaptcha-container"
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          bottom: 0,
+          width: 1,
+          height: 1,
+          opacity: 0,
+          overflow: 'hidden',
+        }}
+      />
     </main>
   );
 }

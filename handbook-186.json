@@ -1,0 +1,1490 @@
+[
+  {
+    "id": "UT-C01",
+    "module": "Registration",
+    "name": "Validate name is mandatory",
+    "input": "Empty name field",
+    "expected": "Error: \"Name is required\"",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C02",
+    "module": "Registration",
+    "name": "Validate mobile is mandatory",
+    "input": "Empty mobile field",
+    "expected": "Error: \"Mobile number is required\"",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C03",
+    "module": "Registration",
+    "name": "Validate mobile format",
+    "input": "Invalid mobile (e.g., \"12345\")",
+    "expected": "Error: \"Please enter a valid mobile number\"",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C04",
+    "module": "Registration",
+    "name": "Validate email format",
+    "input": "Invalid email (e.g., \"abc@\")",
+    "expected": "Error: \"Please enter a valid email\"",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C05",
+    "module": "Registration",
+    "name": "Validate terms acceptance required",
+    "input": "Terms checkbox unchecked",
+    "expected": "Error: \"You must accept Terms and Privacy Policy\"",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C06",
+    "module": "Registration",
+    "name": "Successful registration",
+    "input": "Valid name, mobile, email, terms accepted",
+    "expected": "POST /auth/register called; account created",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C07",
+    "module": "OTP Verification",
+    "name": "Verify valid OTP",
+    "input": "Correct 6-digit OTP",
+    "expected": "POST /auth/verify succeeds; user authenticated",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C08",
+    "module": "OTP Verification",
+    "name": "Reject invalid OTP",
+    "input": "Incorrect OTP",
+    "expected": "Error: \"Verification rejected\"",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C09",
+    "module": "OTP Verification",
+    "name": "Resend OTP",
+    "input": "Click \"Resend OTP\" after timer expires",
+    "expected": "POST /auth/resend-otp called; new OTP sent",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C10",
+    "module": "OTP Verification",
+    "name": "Timer countdown display",
+    "input": "OTP screen loaded",
+    "expected": "Countdown timer visible (e.g., 00:42)",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C11",
+    "module": "Onboarding",
+    "name": "Progressive step navigation",
+    "input": "Complete Step 1 of 4",
+    "expected": "Step 2 loads; progress bar updates to 50%",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C12",
+    "module": "Onboarding",
+    "name": "Skip onboarding step",
+    "input": "Click \"Skip for now\"",
+    "expected": "Next step or dashboard loads",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C13",
+    "module": "Dashboard",
+    "name": "Display profile completion %",
+    "input": "Profile 80% complete",
+    "expected": "Progress bar shows \"80%\"",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C14",
+    "module": "Dashboard",
+    "name": "Display recommended jobs",
+    "input": "GET /candidate/dashboard returns jobs",
+    "expected": "Job cards rendered with title, company, salary, match %",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C15",
+    "module": "Dashboard",
+    "name": "Display upcoming interview",
+    "input": "Interview scheduled",
+    "expected": "Interview card shows job title, date, time",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C16",
+    "module": "Profile",
+    "name": "Load profile data",
+    "input": "GET /candidate/profile",
+    "expected": "All sections (Personal, Education, Experience, Skills, Preferences) displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C17",
+    "module": "Profile",
+    "name": "Save profile changes",
+    "input": "Edit and save profile",
+    "expected": "PUT /candidate/profile called; success toast shown",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C18",
+    "module": "Skills",
+    "name": "Search for a skill",
+    "input": "Type \"Communication\"",
+    "expected": "Matching skills displayed in suggestions",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C19",
+    "module": "Skills",
+    "name": "Add a skill",
+    "input": "Click [+] on suggested skill",
+    "expected": "Skill added to \"My Skills\" list",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C20",
+    "module": "Skills",
+    "name": "Remove a skill",
+    "input": "Click [x] on selected skill",
+    "expected": "Skill removed from \"My Skills\" list",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C21",
+    "module": "Skills",
+    "name": "Save skills",
+    "input": "Click \"Save\"",
+    "expected": "PUT /candidate/skills called; skills persisted",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C22",
+    "module": "Resume Builder",
+    "name": "Wizard step navigation",
+    "input": "Complete Personal > Education > Experience > Skills > Languages > Preferences > Review",
+    "expected": "Each step loads correctly; progress tracked",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C23",
+    "module": "Resume Builder",
+    "name": "Create resume",
+    "input": "Fill all sections and save",
+    "expected": "POST /resume called; resume created",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C24",
+    "module": "Resume Builder",
+    "name": "Edit resume",
+    "input": "Modify existing resume",
+    "expected": "PUT /resume/:id called; changes saved",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C25",
+    "module": "Resume Preview",
+    "name": "Render resume preview",
+    "input": "GET /resume/:id",
+    "expected": "Resume displayed with all sections (Summary, Skills, Experience, Education)",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C26",
+    "module": "Resume Preview",
+    "name": "Download resume",
+    "input": "Click \"Download\"",
+    "expected": "Resume file downloaded",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C27",
+    "module": "AI Resume Guidance",
+    "name": "Generate AI suggestions",
+    "input": "Click \"Improve with AI\"",
+    "expected": "POST /ai/resume/analyze called; suggestions displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C28",
+    "module": "AI Resume Guidance",
+    "name": "Accept AI suggestion",
+    "input": "Click \"Accept\" on suggestion",
+    "expected": "Original text replaced with AI suggestion",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C29",
+    "module": "AI Resume Guidance",
+    "name": "Reject AI suggestion",
+    "input": "Click \"Ignore\" on suggestion",
+    "expected": "Original text preserved",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C30",
+    "module": "AI Resume Guidance",
+    "name": "Regenerate suggestion",
+    "input": "Click \"Try Again\"",
+    "expected": "New AI suggestion generated",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C31",
+    "module": "AI Resume Guidance",
+    "name": "Never auto-overwrite candidate data",
+    "input": "AI suggestion generated",
+    "expected": "Original information preserved until explicit accept",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C32",
+    "module": "Job Search",
+    "name": "Search by keyword",
+    "input": "Enter \"Customer Service\"",
+    "expected": "GET /jobs called; relevant jobs displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C33",
+    "module": "Job Search",
+    "name": "Filter by location",
+    "input": "Select \"Chennai\"",
+    "expected": "Jobs filtered to Chennai only",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C34",
+    "module": "Job Search",
+    "name": "Filter by salary/experience/type/skills",
+    "input": "Apply multiple filters",
+    "expected": "Results filtered correctly",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C35",
+    "module": "Job Search",
+    "name": "Display result count",
+    "input": "Search executed",
+    "expected": "\"124 jobs found\" displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C36",
+    "module": "Job Details",
+    "name": "Display job information",
+    "input": "GET /jobs/:id",
+    "expected": "Title, company, salary, type, description, requirements, match % shown",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C37",
+    "module": "Job Details",
+    "name": "Display match percentage",
+    "input": "Candidate views job",
+    "expected": "\"Your match: 86%\" displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C38",
+    "module": "Apply",
+    "name": "Submit application",
+    "input": "Click \"Apply Now\"",
+    "expected": "POST /applications called; confirmation screen shown",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C39",
+    "module": "Application Confirmation",
+    "name": "Display confirmation",
+    "input": "Application submitted",
+    "expected": "\"Application Submitted\" with job title and navigation options",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C40",
+    "module": "Applications",
+    "name": "List all applications",
+    "input": "GET /applications",
+    "expected": "Applications listed with job title, company, date, status pipeline",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C41",
+    "module": "Applications",
+    "name": "Display status pipeline",
+    "input": "Application in \"Shortlisted\" state",
+    "expected": "Pipeline shows: Applied > Shortlisted > Interview",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C42",
+    "module": "Interview Dashboard",
+    "name": "Display upcoming interviews",
+    "input": "GET /interviews",
+    "expected": "Interview cards with job title, date, time, status",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C43",
+    "module": "Interview",
+    "name": "Confirm interview",
+    "input": "Click \"Confirm\"",
+    "expected": "POST /interviews/:id/confirm called; status = Confirmed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-C44",
+    "module": "Interview",
+    "name": "Request reschedule",
+    "input": "Click \"Request Reschedule\"",
+    "expected": "POST /interviews/:id/reschedule called; request recorded",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C45",
+    "module": "Mock Interview",
+    "name": "Select job role and start",
+    "input": "Choose role, question count, click \"Start\"",
+    "expected": "POST /ai/interview/start called; first question displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C46",
+    "module": "Mock Interview",
+    "name": "Submit text answer",
+    "input": "Type answer and click \"Submit\"",
+    "expected": "POST /ai/interview/:id/answer called; next question loads",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C47",
+    "module": "Mock Interview",
+    "name": "Display results",
+    "input": "All questions answered",
+    "expected": "Scores (Communication, Relevance, Clarity, Confidence) and feedback displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-C48",
+    "module": "Navigation",
+    "name": "Bottom navigation renders 5 items",
+    "input": "Mobile view",
+    "expected": "Home, Jobs, Applications, Interviews, Profile visible",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E01",
+    "module": "Registration",
+    "name": "Validate all mandatory fields",
+    "input": "Empty form submission",
+    "expected": "Errors for Name, Company, Email, Mobile, Password, Terms",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E02",
+    "module": "Registration",
+    "name": "Successful registration",
+    "input": "Valid data + terms accepted",
+    "expected": "POST /employer/register called; account created",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E03",
+    "module": "Verification",
+    "name": "Verify OTP",
+    "input": "Correct OTP entered",
+    "expected": "Account verified",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E04",
+    "module": "Company Profile",
+    "name": "Save company profile",
+    "input": "Fill all fields (logo, name, industry, size, location, about, website)",
+    "expected": "GET/PUT /employer/profile; profile saved",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E05",
+    "module": "Dashboard",
+    "name": "Display summary metrics",
+    "input": "GET /employer/dashboard",
+    "expected": "Active Jobs, Applications, Shortlisted, Interviews counts shown",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E06",
+    "module": "Dashboard",
+    "name": "Display recent applications",
+    "input": "Dashboard loaded",
+    "expected": "Table with Candidate, Job, Status columns",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E07",
+    "module": "Create Job - Step 1",
+    "name": "Job basics form",
+    "input": "Enter title, department, type, location",
+    "expected": "Fields validated; \"Continue\" navigates to Step 2",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E08",
+    "module": "Create Job - Step 2",
+    "name": "Job requirements form",
+    "input": "Add experience, skills, education, languages",
+    "expected": "Skills selector works; \"Continue\" navigates to Step 3",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E09",
+    "module": "Create Job - Step 3",
+    "name": "Compensation & description",
+    "input": "Enter salary range, description, benefits",
+    "expected": "Fields saved; \"Continue\" navigates to preview",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E10",
+    "module": "Job Preview",
+    "name": "Preview before publish",
+    "input": "All steps completed",
+    "expected": "Full job preview rendered; \"Edit\" and \"Publish Job\" buttons available",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E11",
+    "module": "Publish Job",
+    "name": "Publish job",
+    "input": "Click \"Publish Job\"",
+    "expected": "POST /jobs/:id/publish called; job status = Active",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E12",
+    "module": "Job Management",
+    "name": "List all jobs",
+    "input": "GET /employer/jobs",
+    "expected": "Jobs listed with title, status, application count",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E13",
+    "module": "Job Management",
+    "name": "Pause/Close job",
+    "input": "Click \"Pause\" or \"Close\"",
+    "expected": "Job status updated accordingly",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-E14",
+    "module": "Applications",
+    "name": "View applications for a job",
+    "input": "GET /jobs/:id/applications",
+    "expected": "Candidates listed with name, experience, match %, status",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E15",
+    "module": "Applications",
+    "name": "Filter applications",
+    "input": "Apply Experience/Location/Skills filters",
+    "expected": "Results filtered correctly",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-E16",
+    "module": "Candidate Search",
+    "name": "Search candidates",
+    "input": "Enter keywords + filters",
+    "expected": "GET /candidates/search; results displayed with match %",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E17",
+    "module": "Candidate Search",
+    "name": "Display search results",
+    "input": "Search executed",
+    "expected": "Candidate cards with name, location, experience, skills, match %, actions",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E18",
+    "module": "Candidate Profile",
+    "name": "View candidate profile",
+    "input": "GET /candidates/:id",
+    "expected": "Name, location, match %, skills, experience, education, resume link shown",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E19",
+    "module": "Candidate Matching",
+    "name": "Deterministic match score",
+    "input": "Job requirements vs candidate profile",
+    "expected": "Score: Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-E20",
+    "module": "Shortlisting",
+    "name": "Shortlist candidate",
+    "input": "Click \"Shortlist\" + optional note",
+    "expected": "POST /applications/:id/shortlist called; confirmation modal shown",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E21",
+    "module": "Interview Scheduling",
+    "name": "Schedule interview",
+    "input": "Fill date, time, duration, type, location, notification preferences",
+    "expected": "POST /interviews called; interview created",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E22",
+    "module": "Interview Scheduling",
+    "name": "WhatsApp notification checkbox",
+    "input": "Check \"Notify candidate on WhatsApp\"",
+    "expected": "WhatsApp notification triggered via event system",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E23",
+    "module": "Interview Management",
+    "name": "List interviews",
+    "input": "GET /interviews",
+    "expected": "Table with Candidate, Job, Date, Status; actions: View, Reschedule, Cancel",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E24",
+    "module": "Interview Details",
+    "name": "View interview details",
+    "input": "Select interview",
+    "expected": "Full details with status, reschedule/cancel options, notes field",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E25",
+    "module": "Interview Outcome",
+    "name": "Record outcome",
+    "input": "Select Selected/Rejected/Further Interview/On Hold + notes",
+    "expected": "POST /interviews/:id/outcome called; recruitment loop closed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-E26",
+    "module": "Billing",
+    "name": "Display credits remaining",
+    "input": "GET /employer/billing",
+    "expected": "Plan name, credits remaining (progress bar), usage stats shown",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-A01",
+    "module": "Dashboard",
+    "name": "Display platform metrics",
+    "input": "GET /admin/dashboard",
+    "expected": "Candidates, Employers, Active Jobs, Applications, Interviews, Hires, AI Usage counts shown",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A02",
+    "module": "Dashboard",
+    "name": "Display recent activity feed",
+    "input": "Dashboard loaded",
+    "expected": "Timestamped activity entries (registrations, job posts, interviews, shortlists)",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A03",
+    "module": "Dashboard",
+    "name": "Display system health status",
+    "input": "Dashboard loaded",
+    "expected": "API, Database, AI Gateway, WhatsApp, Storage statuses shown (Healthy/Unhealthy)",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A04",
+    "module": "Candidate Mgmt",
+    "name": "Search candidates",
+    "input": "Search by Name/Mobile/Email/ID",
+    "expected": "GET /admin/candidates; matching results displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A05",
+    "module": "Candidate Mgmt",
+    "name": "Filter candidates",
+    "input": "Apply Location/Status/Skills/Date filters",
+    "expected": "Results filtered correctly",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-A06",
+    "module": "Candidate Mgmt",
+    "name": "View candidate details",
+    "input": "GET /admin/candidates/:id",
+    "expected": "Full profile with ID, status, profile, skills, resume, applications, interviews",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A07",
+    "module": "Candidate Mgmt",
+    "name": "Suspend candidate",
+    "input": "Click \"Suspend Account\"",
+    "expected": "PUT /admin/candidates/:id/status; status = Suspended; audit event logged",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A08",
+    "module": "Candidate Mgmt",
+    "name": "Activate candidate",
+    "input": "Click \"Activate\"",
+    "expected": "PUT /admin/candidates/:id/status; status = Active; audit event logged",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A09",
+    "module": "Employer Mgmt",
+    "name": "Search employers",
+    "input": "Search by Company/Email/ID",
+    "expected": "GET /admin/employers; matching results displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A10",
+    "module": "Employer Mgmt",
+    "name": "View employer details",
+    "input": "GET /admin/employers/:id",
+    "expected": "Company info, jobs, applications, interviews, hires, plan, credits shown",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A11",
+    "module": "Employer Mgmt",
+    "name": "Suspend employer",
+    "input": "Click \"Suspend\"",
+    "expected": "PUT /admin/employers/:id/status; audit event ADMIN_EMPLOYER_SUSPENDED",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A12",
+    "module": "Employer Mgmt",
+    "name": "Verify employer",
+    "input": "Click \"Verify\"",
+    "expected": "Status = Verified; audit event ADMIN_EMPLOYER_VERIFIED",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A13",
+    "module": "Job Moderation",
+    "name": "List jobs with status filter",
+    "input": "GET /admin/jobs",
+    "expected": "Jobs listed with title, company, status; actions: View, Approve, Reject, Pause",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A14",
+    "module": "Job Moderation",
+    "name": "Approve job",
+    "input": "Click \"Approve\"",
+    "expected": "POST /admin/jobs/:id/approve; status = Published; audit event ADMIN_JOB_APPROVED",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A15",
+    "module": "Job Moderation",
+    "name": "Reject job",
+    "input": "Click \"Reject\"",
+    "expected": "POST /admin/jobs/:id/reject; status = Rejected; audit event ADMIN_JOB_REJECTED",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A16",
+    "module": "Application Monitoring",
+    "name": "View application pipeline",
+    "input": "GET /admin/applications",
+    "expected": "Applied, Shortlisted, Interview, Selected, Rejected counts displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A17",
+    "module": "Interview Monitoring",
+    "name": "View today's interviews",
+    "input": "GET /admin/interviews",
+    "expected": "Table with Candidate, Employer, Time, Status",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A18",
+    "module": "Skills Mgmt",
+    "name": "Add new skill",
+    "input": "Fill name, category, description, synonyms, proficiency levels",
+    "expected": "POST /admin/skills; skill created; audit event ADMIN_SKILL_CREATED",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A19",
+    "module": "Skills Mgmt",
+    "name": "Edit skill",
+    "input": "Modify skill details",
+    "expected": "PUT /admin/skills/:id; audit event ADMIN_SKILL_MODIFIED",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-A20",
+    "module": "Skills Mgmt",
+    "name": "Deactivate skill",
+    "input": "Click \"Deactivate\"",
+    "expected": "POST /admin/skills/:id/deactivate; skill deactivated",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-A21",
+    "module": "Skills Mgmt",
+    "name": "Merge duplicate skills",
+    "input": "Click \"Merge\"",
+    "expected": "Skills consolidated; candidates updated",
+    "priority": "P2"
+  },
+  {
+    "id": "UT-A22",
+    "module": "AI Usage",
+    "name": "Display AI usage metrics",
+    "input": "GET /admin/ai/usage",
+    "expected": "Requests, Input/Output Tokens, Estimated Cost, Feature breakdown shown",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-A23",
+    "module": "WhatsApp Monitoring",
+    "name": "Display delivery metrics",
+    "input": "GET /admin/notifications",
+    "expected": "Messages Sent, Delivered, Failed, Delivery Rate, Recent Failures shown",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-A24",
+    "module": "Business Dashboard",
+    "name": "Display recruitment funnel",
+    "input": "Reports loaded",
+    "expected": "Candidates > Applications > Shortlisted > Interviews > Hires with counts",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-A25",
+    "module": "Revenue Dashboard",
+    "name": "Display employer revenue",
+    "input": "Revenue page loaded",
+    "expected": "Revenue, Paying Employers, New Employers, Credits Consumed shown",
+    "priority": "P2"
+  },
+  {
+    "id": "UT-A26",
+    "module": "RBAC",
+    "name": "SUPER_ADMIN access",
+    "input": "Login as SUPER_ADMIN",
+    "expected": "All admin features accessible",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A27",
+    "module": "RBAC",
+    "name": "ADMIN access",
+    "input": "Login as ADMIN",
+    "expected": "Candidates, Employers, Jobs, Skills, Reports accessible; Settings restricted",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-A28",
+    "module": "RBAC",
+    "name": "OPERATIONS access",
+    "input": "Login as OPERATIONS",
+    "expected": "Candidates, Employers, Applications, Interviews accessible; Skills/Reports restricted",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS01",
+    "module": "Button",
+    "name": "Primary button renders",
+    "input": "type=\"primary\"",
+    "expected": "Styled as primary action button",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS02",
+    "module": "Button",
+    "name": "All states render correctly",
+    "input": "Normal, Hover, Focus, Pressed, Disabled, Loading",
+    "expected": "Each state visually distinct and accessible",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS03",
+    "module": "Button",
+    "name": "Loading state shows spinner",
+    "input": "isLoading=true",
+    "expected": "Button text changes (e.g., \"Creating...\") with spinner; click disabled",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS04",
+    "module": "Button",
+    "name": "Danger variant renders",
+    "input": "type=\"danger\"",
+    "expected": "Styled as danger/destructive action",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS05",
+    "module": "Input",
+    "name": "Required field validation",
+    "input": "Empty required field on submit",
+    "expected": "Error message \"Please enter a valid [field]\" displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS06",
+    "module": "Input",
+    "name": "Helper text displays",
+    "input": "helperText provided",
+    "expected": "Helper text visible below input",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS07",
+    "module": "Input",
+    "name": "Error state renders",
+    "input": "Validation fails",
+    "expected": "Red border + error message displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS08",
+    "module": "Select",
+    "name": "Dropdown opens and selects",
+    "input": "Click select > choose option",
+    "expected": "Selected value displayed; dropdown closes",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS09",
+    "module": "Select",
+    "name": "Searchable select works",
+    "input": "Type in search field",
+    "expected": "Options filtered by search term",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS10",
+    "module": "Skill Selector",
+    "name": "Search skills",
+    "input": "Type \"Comm\"",
+    "expected": "Matching skills shown in suggestions",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS11",
+    "module": "Skill Selector",
+    "name": "Add/remove skills",
+    "input": "Click [+] / [x]",
+    "expected": "Skill added to / removed from selected list",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS12",
+    "module": "Match Badge",
+    "name": "Excellent match (90-100%)",
+    "input": "score=91",
+    "expected": "Green \"Excellent\" badge displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS13",
+    "module": "Match Badge",
+    "name": "Good match (75-89%)",
+    "input": "score=82",
+    "expected": "\"Good\" badge displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS14",
+    "module": "Match Badge",
+    "name": "Moderate match (50-74%)",
+    "input": "score=60",
+    "expected": "\"Moderate\" badge displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS15",
+    "module": "Match Badge",
+    "name": "Low match (<50%)",
+    "input": "score=40",
+    "expected": "\"Low\" badge displayed",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS16",
+    "module": "Match Badge",
+    "name": "Label says \"Profile match\"",
+    "input": "Any score",
+    "expected": "Label reads \"Profile match\" (not \"Candidate suitability\")",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS17",
+    "module": "Status Badge",
+    "name": "All statuses render",
+    "input": "ACTIVE, INACTIVE, PENDING, APPROVED, REJECTED, SHORTLISTED, INTERVIEW, SELECTED, CLOSED, SUSPENDED",
+    "expected": "Each badge renders with correct styling",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS18",
+    "module": "Card",
+    "name": "Candidate card renders",
+    "input": "Candidate data provided",
+    "expected": "Name, location, experience, skills, match %, actions displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS19",
+    "module": "Card",
+    "name": "Job card renders",
+    "input": "Job data provided",
+    "expected": "Title, company, location, salary, type displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS20",
+    "module": "Table",
+    "name": "Sorting works",
+    "input": "Click column header",
+    "expected": "Rows sorted ascending/descending",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS21",
+    "module": "Table",
+    "name": "Pagination works",
+    "input": ">10 rows",
+    "expected": "Pagination controls visible and functional",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS22",
+    "module": "Table",
+    "name": "Empty state renders",
+    "input": "No data",
+    "expected": "\"No [items] found\" message with CTA button",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS23",
+    "module": "Table",
+    "name": "Loading state renders",
+    "input": "Data loading",
+    "expected": "Skeleton/spinner displayed",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS24",
+    "module": "Modal",
+    "name": "Confirmation modal renders",
+    "input": "Trigger destructive action",
+    "expected": "Modal with message, Cancel, and Confirm buttons",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS25",
+    "module": "Modal",
+    "name": "Cancel dismisses modal",
+    "input": "Click \"Cancel\"",
+    "expected": "Modal closes; no action taken",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS26",
+    "module": "Toast",
+    "name": "Success toast displays",
+    "input": "Action succeeds",
+    "expected": "Green toast: \"Profile saved successfully\" (auto-dismiss)",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS27",
+    "module": "Toast",
+    "name": "Error toast displays",
+    "input": "Action fails",
+    "expected": "Red toast: \"Unable to [action]. Please try again.\"",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS28",
+    "module": "Empty State",
+    "name": "Candidate no applications",
+    "input": "Zero applications",
+    "expected": "\"You haven't applied for any jobs yet.\" + [Find Jobs] button",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS29",
+    "module": "Empty State",
+    "name": "Employer no jobs",
+    "input": "Zero jobs",
+    "expected": "\"Create your first job to start receiving applications.\" + [Create Job] button",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS30",
+    "module": "Loading State",
+    "name": "Skeleton loading renders",
+    "input": "API in progress",
+    "expected": "Skeleton placeholder blocks visible",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS31",
+    "module": "Error State",
+    "name": "Generic error renders",
+    "input": "API failure",
+    "expected": "\"Something went wrong. We couldn't load the information.\" + [Try Again]",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS32",
+    "module": "Error State",
+    "name": "No technical errors exposed",
+    "input": "500/ECONNRESET/timeout",
+    "expected": "User sees friendly message; technical details in logs only",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS33",
+    "module": "Error Boundary",
+    "name": "Unhandled error caught",
+    "input": "React error thrown",
+    "expected": "User-friendly message + Error ID displayed; error logged",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS34",
+    "module": "Navigation",
+    "name": "Candidate mobile nav",
+    "input": "Mobile viewport",
+    "expected": "5 items: Home, Jobs, Applications, Interviews, Profile",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS35",
+    "module": "Navigation",
+    "name": "Employer desktop nav",
+    "input": "Desktop viewport",
+    "expected": "Dashboard, Jobs, Candidates, Interviews, Reports, Notifications, Company",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS36",
+    "module": "Navigation",
+    "name": "Admin sidebar nav",
+    "input": "Admin login",
+    "expected": "Dashboard, Candidates, Employers, Jobs, Applications, Interviews, Skills, AI Usage, Reports, Settings",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS37",
+    "module": "Responsive",
+    "name": "Mobile breakpoint",
+    "input": "Viewport < 768px",
+    "expected": "Mobile layout renders correctly",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS38",
+    "module": "Responsive",
+    "name": "Tablet breakpoint",
+    "input": "Viewport 768-1023px",
+    "expected": "Tablet layout renders correctly",
+    "priority": "P1"
+  },
+  {
+    "id": "UT-DS39",
+    "module": "Responsive",
+    "name": "Desktop breakpoint",
+    "input": "Viewport >= 1024px",
+    "expected": "Desktop layout renders correctly",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS40",
+    "module": "Accessibility",
+    "name": "Keyboard navigation",
+    "input": "Tab through form",
+    "expected": "All interactive elements focusable in logical order",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS41",
+    "module": "Accessibility",
+    "name": "Visible focus state",
+    "input": "Tab to element",
+    "expected": "Focus ring/outline visible",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS42",
+    "module": "Accessibility",
+    "name": "Input labels present",
+    "input": "Form rendered",
+    "expected": "All inputs have associated labels",
+    "priority": "P0"
+  },
+  {
+    "id": "UT-DS43",
+    "module": "Accessibility",
+    "name": "Sufficient contrast",
+    "input": "All text elements",
+    "expected": "Text meets WCAG contrast ratio requirements",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-01",
+    "module": "Candidate registration to application",
+    "name": "Register > Verify OTP > Complete profile > Add skills > Build resume > Search jobs > View job > Apply",
+    "steps": "Register > Verify OTP > Complete profile > Add skills > Build resume > Search jobs > View job > Apply",
+    "expected": "Application created; appears in \"My Applications\" with status \"Applied\"",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-02",
+    "module": "Candidate receives interview and confirms",
+    "name": "Employer shortlists > schedules interview > WhatsApp sent > Candidate confirms on portal",
+    "steps": "Employer shortlists > schedules interview > WhatsApp sent > Candidate confirms on portal",
+    "expected": "Interview status = Confirmed; employer sees confirmation",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-03",
+    "module": "Candidate reschedules interview",
+    "name": "Interview scheduled > Candidate clicks \"Request Reschedule\"",
+    "steps": "Interview scheduled > Candidate clicks \"Request Reschedule\"",
+    "expected": "Reschedule request recorded; status = RESCHEDULE_REQUESTED; employer notified",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-04",
+    "module": "AI Resume improvement flow",
+    "name": "Candidate creates resume > clicks \"Improve with AI\" > accepts suggestion > saves",
+    "steps": "Candidate creates resume > clicks \"Improve with AI\" > accepts suggestion > saves",
+    "expected": "Resume updated with AI suggestion; original preserved until accept",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-05",
+    "module": "Mock Interview full flow",
+    "name": "Select role > Start > Answer 5 questions > View results",
+    "steps": "Select role > Start > Answer 5 questions > View results",
+    "expected": "Scores for Communication, Relevance, Clarity, Confidence displayed with feedback",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-06",
+    "module": "Employer registration to job publish",
+    "name": "Register > Verify > Create company profile > Create job (3 steps) > Preview > Publish",
+    "steps": "Register > Verify > Create company profile > Create job (3 steps) > Preview > Publish",
+    "expected": "Job visible to candidates in search results",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-07",
+    "module": "Employer shortlists and schedules interview",
+    "name": "Candidate applies > Employer views application > Shortlists > Schedules interview with WhatsApp notification",
+    "steps": "Candidate applies > Employer views application > Shortlists > Schedules interview with WhatsApp notification",
+    "expected": "Interview created; WhatsApp notification sent to candidate",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-08",
+    "module": "Employer completes hiring loop",
+    "name": "Shortlist > Interview > Record outcome \"Selected\"",
+    "steps": "Shortlist > Interview > Record outcome \"Selected\"",
+    "expected": "Candidate status = Selected; recruitment loop closed",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-09",
+    "module": "Employer candidate search and matching",
+    "name": "Employer searches by skills/location/experience",
+    "steps": "Employer searches by skills/location/experience",
+    "expected": "Candidates returned with deterministic match scores (Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%)",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-10",
+    "module": "SHORTLISTED > INTERVIEW_PROPOSED",
+    "name": "Employer initiates interview for shortlisted candidate",
+    "steps": "Employer initiates interview for shortlisted candidate",
+    "expected": "State transitions to INTERVIEW_PROPOSED",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-11",
+    "module": "INTERVIEW_PROPOSED > INTERVIEW_SCHEDULED",
+    "name": "Employer sets date/time",
+    "steps": "Employer sets date/time",
+    "expected": "State transitions to INTERVIEW_SCHEDULED",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-12",
+    "module": "INTERVIEW_SCHEDULED > CONFIRMED",
+    "name": "Candidate confirms",
+    "steps": "Candidate confirms",
+    "expected": "State transitions to CONFIRMED",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-13",
+    "module": "INTERVIEW_SCHEDULED > RESCHEDULE_REQUESTED",
+    "name": "Candidate requests reschedule",
+    "steps": "Candidate requests reschedule",
+    "expected": "State transitions to RESCHEDULE_REQUESTED",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-14",
+    "module": "CONFIRMED > COMPLETED",
+    "name": "Interview conducted",
+    "steps": "Interview conducted",
+    "expected": "State transitions to COMPLETED",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-15",
+    "module": "COMPLETED > SELECTED / REJECTED",
+    "name": "Employer records outcome",
+    "steps": "Employer records outcome",
+    "expected": "State transitions to SELECTED or REJECTED",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-16",
+    "module": "WhatsApp notification delivery",
+    "name": "Interview created with WhatsApp enabled",
+    "steps": "Interview created with WhatsApp enabled",
+    "expected": "Notification Service > WhatsApp Provider > Candidate receives message with Confirm/Reschedule buttons",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-17",
+    "module": "WhatsApp webhook confirmation",
+    "name": "Candidate clicks \"Confirm\" in WhatsApp",
+    "steps": "Candidate clicks \"Confirm\" in WhatsApp",
+    "expected": "Webhook > Notification Service > Interview Service > Status updated to Confirmed",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-18",
+    "module": "WhatsApp delivery failure + retry",
+    "name": "WhatsApp delivery fails",
+    "steps": "WhatsApp delivery fails",
+    "expected": "Retry mechanism triggered; failure logged; Admin WhatsApp monitoring shows failure",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-19",
+    "module": "AI calls routed through backend",
+    "name": "Frontend requests AI resume analysis",
+    "steps": "Frontend requests AI resume analysis",
+    "expected": "Next.js > NestJS > AI Gateway > Gemini/AI Provider (never direct frontend > AI)",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-20",
+    "module": "AI usage tracking",
+    "name": "AI resume analysis performed",
+    "steps": "AI resume analysis performed",
+    "expected": "Request count, tokens (input/output), estimated cost recorded",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-21",
+    "module": "AI cost controls enforced",
+    "name": "Usage exceeds threshold",
+    "steps": "Usage exceeds threshold",
+    "expected": "Rate limiting or alerts triggered",
+    "priority": "P2"
+  },
+  {
+    "id": "ST-22",
+    "module": "Admin suspends candidate",
+    "name": "Admin searches candidate > clicks Suspend",
+    "steps": "Admin searches candidate > clicks Suspend",
+    "expected": "Candidate status = Suspended; audit event logged; candidate cannot login",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-23",
+    "module": "Admin approves employer job",
+    "name": "Employer submits job > Admin reviews > Approves",
+    "steps": "Employer submits job > Admin reviews > Approves",
+    "expected": "Job status = Published; visible to candidates; audit event logged",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-24",
+    "module": "Admin rejects employer job",
+    "name": "Admin reviews job > Rejects",
+    "steps": "Admin reviews job > Rejects",
+    "expected": "Job status = Rejected; not visible to candidates; audit event logged",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-25",
+    "module": "Admin manages skills taxonomy",
+    "name": "Admin adds skill with category, synonyms, proficiency levels",
+    "steps": "Admin adds skill with category, synonyms, proficiency levels",
+    "expected": "Skill available in Candidate Profile, Resume Builder, Employer Job Creation, Candidate Search",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-26",
+    "module": "Admin views recruitment funnel",
+    "name": "Admin opens Business Dashboard",
+    "steps": "Admin opens Business Dashboard",
+    "expected": "Funnel: Candidates > Applications > Shortlisted > Interviews > Hires with conversion rates",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-27",
+    "module": "Full marketplace loop",
+    "name": "Candidate registers + applies > Employer shortlists > Interview > WhatsApp > Confirm > Hire",
+    "steps": "Candidate registers + applies > Employer shortlists > Interview > WhatsApp > Confirm > Hire",
+    "expected": "Complete business loop from registration to placement",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-28",
+    "module": "Candidate profile visible to employer",
+    "name": "Candidate completes profile with skills",
+    "steps": "Candidate completes profile with skills",
+    "expected": "Employer search returns candidate with correct match score",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-29",
+    "module": "Job published by employer visible to candidate",
+    "name": "Employer publishes job",
+    "steps": "Employer publishes job",
+    "expected": "Candidate job search returns the job with correct details and match %",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-30",
+    "module": "Application status sync",
+    "name": "Employer shortlists candidate",
+    "steps": "Employer shortlists candidate",
+    "expected": "Candidate's \"My Applications\" shows status updated to \"Shortlisted\"",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-31",
+    "module": "POST /auth/register",
+    "name": "Valid registration payload",
+    "steps": "Valid registration payload",
+    "expected": "201 Created; user account returned",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-32",
+    "module": "POST /auth/verify",
+    "name": "Valid OTP",
+    "steps": "Valid OTP",
+    "expected": "200 OK; authentication token returned",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-33",
+    "module": "POST /applications",
+    "name": "Valid jobId + resumeId",
+    "steps": "Valid jobId + resumeId",
+    "expected": "201 Created; {id, status: \"APPLIED\"} returned",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-34",
+    "module": "POST /interviews",
+    "name": "Valid candidateId, jobId, date, startTime, durationMinutes, type, location",
+    "steps": "Valid candidateId, jobId, date, startTime, durationMinutes, type, location",
+    "expected": "201 Created; InterviewCreated event published",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-35",
+    "module": "GET /admin/dashboard",
+    "name": "Admin authenticated",
+    "steps": "Admin authenticated",
+    "expected": "200 OK; all platform metrics returned",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-36",
+    "module": "Candidate journey on mobile",
+    "name": "Complete full candidate journey on < 768px viewport",
+    "steps": "Complete full candidate journey on < 768px viewport",
+    "expected": "All screens functional; bottom navigation works; forms usable",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-37",
+    "module": "Employer journey on desktop",
+    "name": "Complete full employer journey on >= 1024px viewport",
+    "steps": "Complete full employer journey on >= 1024px viewport",
+    "expected": "All screens functional; top navigation works",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-38",
+    "module": "Keyboard-only navigation",
+    "name": "Navigate entire candidate registration + profile flow using keyboard only",
+    "steps": "Navigate entire candidate registration + profile flow using keyboard only",
+    "expected": "All elements reachable; focus states visible; forms submittable",
+    "priority": "P1"
+  },
+  {
+    "id": "ST-39",
+    "module": "API failure on job search",
+    "name": "Backend returns 500",
+    "steps": "Backend returns 500",
+    "expected": "User sees \"Something went wrong\" + \"Try Again\"; no technical error exposed",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-40",
+    "module": "Network timeout on resume save",
+    "name": "Request times out",
+    "steps": "Request times out",
+    "expected": "Error toast displayed; data not lost; retry possible",
+    "priority": "P0"
+  },
+  {
+    "id": "ST-41",
+    "module": "AI Gateway unavailable",
+    "name": "AI service down",
+    "steps": "AI service down",
+    "expected": "Graceful degradation; user informed; core features still work",
+    "priority": "P1"
+  }
+]

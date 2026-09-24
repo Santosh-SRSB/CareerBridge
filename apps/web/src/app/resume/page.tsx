@@ -131,12 +131,8 @@ const WIZARD_STEPS = [
   'Education',
   'Experience',
   'Skills',
-  'Projects',
-  'Certifications',
-  'Achievements',
+  'Credentials',
   'Links',
-  'Languages',
-  'Preferences',
   'Career Gap',
   'Review',
 ];
@@ -145,13 +141,9 @@ const STEP_SECTION_LABELS: Record<string, string> = {
   Personal: 'Personal details',
   Education: 'Education details',
   Experience: 'Experience details',
-  Skills: 'Skills section',
-  Projects: 'Project details',
-  Certifications: 'Certification details',
-  Achievements: 'Achievement details',
-  Links: 'Profile links',
-  Languages: 'Language details',
-  Preferences: 'Job preference details',
+  Skills: 'Skills & languages',
+  Credentials: 'Projects, certifications & achievements',
+  Links: 'Links & preferences',
   'Career Gap': 'Career gap explanation',
   Review: 'Review details',
 };
@@ -892,7 +884,7 @@ function ResumePageInner() {
 
   function nextWizardIndex(from: number) {
     const step = WIZARD_STEPS[from];
-    if (step === 'Preferences') {
+    if (step === 'Links') {
       if (localGap.hasGap) return WIZARD_STEPS.indexOf('Career Gap');
       return WIZARD_STEPS.indexOf('Review');
     }
@@ -903,9 +895,9 @@ function ResumePageInner() {
     const step = WIZARD_STEPS[from];
     if (step === 'Review') {
       if (localGap.hasGap) return WIZARD_STEPS.indexOf('Career Gap');
-      return WIZARD_STEPS.indexOf('Preferences');
+      return WIZARD_STEPS.indexOf('Links');
     }
-    if (step === 'Career Gap') return WIZARD_STEPS.indexOf('Preferences');
+    if (step === 'Career Gap') return WIZARD_STEPS.indexOf('Links');
     return Math.max(0, from - 1);
   }
 
@@ -950,10 +942,10 @@ function ResumePageInner() {
       return;
     }
     setValidationErrors([]);
-    if (currentStep === 'Preferences' || currentStep === 'Career Gap') {
+    if (currentStep === 'Links' || currentStep === 'Career Gap') {
       void (async () => {
         const result = await refreshGapFromBackend(currentStep === 'Career Gap');
-        if (currentStep === 'Preferences') {
+        if (currentStep === 'Links') {
           setWizardIndex(
             result.hasGap
               ? WIZARD_STEPS.indexOf('Career Gap')
@@ -2178,8 +2170,11 @@ function ResumePageInner() {
                 </div>
               )}
 
-              {currentStep === 'Projects' && (
+              {currentStep === 'Credentials' && (
                 <div>
+                  <p className="cb-section-label" style={{ marginTop: 0 }}>
+                    Projects
+                  </p>
                   {projectList.map((proj) => (
                     <div key={proj.id} className="cb-entry-card">
                       <div>
@@ -2266,7 +2261,7 @@ function ResumePageInner() {
                 </div>
               )}
 
-              {currentStep === 'Certifications' && (
+              {currentStep === 'Credentials' && (
                 <div>
                   <p className="cb-section-label" style={{ marginTop: 0 }}>
                     Certifications
@@ -2348,7 +2343,7 @@ function ResumePageInner() {
                 </div>
               )}
 
-              {currentStep === 'Achievements' && (
+              {currentStep === 'Credentials' && (
                 <div>
                   <p className="cb-section-label" style={{ marginTop: 0 }}>
                     Achievements
@@ -2540,7 +2535,7 @@ function ResumePageInner() {
                 </div>
               )}
 
-              {currentStep === 'Languages' && (
+              {currentStep === 'Skills' && (
                 <div>
                   <p className="cb-section-label" style={{ marginTop: 0 }}>
                     Languages you speak
@@ -2578,7 +2573,7 @@ function ResumePageInner() {
                 </div>
               )}
 
-              {currentStep === 'Preferences' && (
+              {currentStep === 'Links' && (
                 <div className="cb-field-grid">
                   <div className="cb-field">
                     <label>Preferred role</label>
@@ -2869,7 +2864,7 @@ function ResumePageInner() {
                         onClick={() => {
                           setEditingId(proj.id);
                           setActiveForm('project');
-                          setWizardIndex(WIZARD_STEPS.indexOf('Projects'));
+                          setWizardIndex(WIZARD_STEPS.indexOf('Credentials'));
                         }}
                       >
                         Edit
@@ -2995,7 +2990,7 @@ function ResumePageInner() {
                         onClick={() => {
                           setEditingId(cert.id);
                           setActiveForm('certification');
-                          setWizardIndex(WIZARD_STEPS.indexOf('Certifications'));
+                          setWizardIndex(WIZARD_STEPS.indexOf('Credentials'));
                         }}
                       >
                         Edit
@@ -3048,7 +3043,7 @@ function ResumePageInner() {
                         onClick={() => {
                           setEditingId(ach.id);
                           setActiveForm('achievement');
-                          setWizardIndex(WIZARD_STEPS.indexOf('Achievements'));
+                          setWizardIndex(WIZARD_STEPS.indexOf('Credentials'));
                         }}
                       >
                         Edit

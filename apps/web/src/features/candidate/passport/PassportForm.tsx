@@ -231,6 +231,7 @@ export function PassportForm({ initial }: { initial: PassportDraft }) {
               value={educationStart}
               emptyClass={emptyClass(educationStart)}
               onChange={setEducationStart}
+              confirmLabel="Set start date"
             />
           </label>
           <label className="passport-current-check">
@@ -252,6 +253,7 @@ export function PassportForm({ initial }: { initial: PassportDraft }) {
                 value={educationEnd}
                 emptyClass={emptyClass(educationEnd)}
                 onChange={setEducationEnd}
+                confirmLabel="Set end date"
               />
             </label>
           )}
@@ -371,6 +373,7 @@ export function PassportForm({ initial }: { initial: PassportDraft }) {
                   value={row.startDate}
                   emptyClass={emptyClass(row.startDate)}
                   onChange={(next) => updateJob(index, { startDate: next })}
+                  confirmLabel="Set start date"
                 />
               </label>
               <label className="passport-current-check">
@@ -393,6 +396,7 @@ export function PassportForm({ initial }: { initial: PassportDraft }) {
                     value={row.endDate}
                     emptyClass={emptyClass(row.endDate)}
                     onChange={(next) => updateJob(index, { endDate: next })}
+                    confirmLabel="Set end date"
                   />
                 </label>
               )}

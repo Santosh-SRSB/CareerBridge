@@ -90,6 +90,10 @@ interface SkillSearchComboboxProps {
   onRemove: (skill: string) => void;
   placeholder?: string;
   label?: string;
+  /** Domain-specific pool; defaults to all curated skills. */
+  options?: string[];
+  /** Hide chip list when parent already renders chips. */
+  hideChips?: boolean;
 }
 
 export function SkillSearchCombobox({
@@ -98,6 +102,8 @@ export function SkillSearchCombobox({
   onRemove,
   placeholder = 'Search technologies or type to add…',
   label = 'Skills',
+  options: optionsProp,
+  hideChips = false,
 }: SkillSearchComboboxProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -117,19 +123,21 @@ export function SkillSearchCombobox({
     return out;
   }, [selected]);
 
+  const skillPool = optionsProp?.length ? optionsProp : ALL_SKILL_OPTIONS;
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const selectedLower = new Set(uniqueSelected.map((s) => s.toLowerCase()));
-    const pool = ALL_SKILL_OPTIONS.filter((s) => !selectedLower.has(s.toLowerCase()));
+    const pool = skillPool.filter((s) => !selectedLower.has(s.toLowerCase()));
     if (!q) return pool.slice(0, 12);
     return pool.filter((s) => s.toLowerCase().includes(q)).slice(0, 12);
-  }, [query, uniqueSelected]);
+  }, [query, uniqueSelected, skillPool]);
 
   const trimmed = query.trim();
   const canAddCustom =
     trimmed.length > 0 &&
     !uniqueSelected.some((s) => s.toLowerCase() === trimmed.toLowerCase()) &&
-    !ALL_SKILL_OPTIONS.some((s) => s.toLowerCase() === trimmed.toLowerCase());
+    !skillPool.some((s) => s.toLowerCase() === trimmed.toLowerCase());
 
   const options = canAddCustom
     ? [...filtered, `__add__:${trimmed}`]
@@ -237,7 +245,7 @@ export function SkillSearchCombobox({
         </ul>
       )}
 
-      {uniqueSelected.length > 0 && (
+      {!hideChips && uniqueSelected.length > 0 && (
         <div className="cb-skill-chips">
           {uniqueSelected.map((s, index) => (
             <button

@@ -161,8 +161,8 @@ export default function NewJobPage() {
   const [workMode, setWorkMode] = useState<(typeof WORK_MODES)[number]>('HYBRID');
   const [jobType, setJobType] = useState<(typeof JOB_TYPES)[number]>('FULL_TIME');
   const [experience, setExperience] = useState<(typeof JOB_EXPERIENCE_RANGES)[number]>('2 - 4 Years');
-  const [salaryMin, setSalaryMin] = useState('18000');
-  const [salaryMax, setSalaryMax] = useState('22000');
+  const [salaryMin, setSalaryMin] = useState('');
+  const [salaryMax, setSalaryMax] = useState('');
   const [languages, setLanguages] = useState<string[]>(['English', 'Tamil']);
   const [benefits, setBenefits] = useState<string[]>([]);
   const [benefitDraft, setBenefitDraft] = useState('');

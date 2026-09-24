@@ -8,6 +8,7 @@ import { normalizeHttpUrl } from '@careerbridge/shared';
 import { listEmployerApplications, listEmployerJobs, scheduleEmployerInterview } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { Button } from '@/components/ui/Button';
+import { DatePicker } from '@/features/candidate/passport/DatePicker';
 
 const MODES = [
   { value: 'VIDEO', label: 'Video call', hint: 'Meet / Zoom link' },
@@ -19,12 +20,6 @@ const DURATION_OPTIONS = [15, 30, 45, 60, 90];
 
 function candidateName(app: EmployerApplication) {
   return [app.candidate.firstName, app.candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
-}
-
-function todayISODate() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function formatTimingPreview(date: string, time: string) {
@@ -216,12 +211,11 @@ export default function EmployerScheduleInterviewPage() {
               <div className="ep-schedule__timing">
                 <label className="ep-schedule__field">
                   <span>Date</span>
-                  <input
-                    type="date"
-                    min={todayISODate()}
+                  <DatePicker
                     value={interviewDate}
-                    onChange={(e) => setInterviewDate(e.target.value)}
-                    required
+                    onChange={setInterviewDate}
+                    placeholder="Select date"
+                    confirmLabel="Set interview date"
                   />
                 </label>
                 <label className="ep-schedule__field">

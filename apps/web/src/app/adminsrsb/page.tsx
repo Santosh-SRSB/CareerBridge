@@ -144,9 +144,7 @@ export default function SrsbAdminLoginPage() {
               Sign in
             </Button>
             <p className="text-[11px] leading-relaxed text-slate-500">
-              Operator: <code>ops@careerbridge.local</code> / <code>Operator@12345</code>
-              <br />
-              Admin: <code>admin@careerbridge.local</code> / <code>Admin@12345</code>
+              Use your staff email and password. Contact Super Admin if you need access.
             </p>
           </form>
         )}

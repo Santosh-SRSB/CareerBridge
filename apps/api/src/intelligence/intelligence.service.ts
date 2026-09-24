@@ -25,6 +25,8 @@ export type MatchCandidate = {
   /** Latest resume ATS readiness score 0–100. */
   resumeScore?: number | null;
   certifications?: string[];
+  /** Spoken languages (e.g. English, Tamil). */
+  languages?: string[];
 };
 
 export type MatchJob = {
@@ -34,6 +36,8 @@ export type MatchJob = {
   preferredSkills?: string[];
   experience: string | null;
   title?: string;
+  /** Languages required or preferred for the role. */
+  languages?: string[];
 };
 
 const QUESTIONS: Record<string, string[]> = {
@@ -136,17 +140,29 @@ export class IntelligenceService {
       resumeQualityScore = resumeScore > 0 ? Math.max(40, Math.min(100, resumeScore)) : 55;
     }
 
-    // PDF hybrid weights: skills 35, experience 20, education 10, location 10,
-    // preferred/job-specific 15, resume quality 10.
+    const jobLanguages = (job.languages || []).map((item) => item.toLowerCase()).filter(Boolean);
+    const candidateLanguages = (candidate.languages || []).map((item) => item.toLowerCase()).filter(Boolean);
+    let languageScore = 70;
+    if (jobLanguages.length && candidateLanguages.length) {
+      const langOverlap = jobLanguages.filter((lang) =>
+        candidateLanguages.some((item) => item.includes(lang) || lang.includes(item)),
+      );
+      languageScore = Math.round((langOverlap.length / jobLanguages.length) * 100);
+    } else if (jobLanguages.length && !candidateLanguages.length) {
+      languageScore = 25;
+    } else if (candidateLanguages.length) {
+      languageScore = 85;
+    }
+
+    // Handbook Vol.3: Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%.
     const score = Math.min(
       100,
       Math.round(
-        skillScore * 0.35 +
+        skillScore * 0.4 +
           experienceScore * 0.2 +
-          educationScore * 0.1 +
-          locationScore * 0.1 +
-          preferredSkillScore * 0.15 +
-          resumeQualityScore * 0.1,
+          locationScore * 0.15 +
+          languageScore * 0.15 +
+          educationScore * 0.1,
       ),
     );
 
@@ -163,6 +179,7 @@ export class IntelligenceService {
       locationScore === 100 ? 'Location matches the job' : '',
       categoryScore === 100 ? job.category : '',
       educationScore === 100 ? 'Education on file' : '',
+      languageScore >= 80 ? 'Language fit' : '',
       hasExp && experienceScore >= 80 ? 'Relevant experience' : '',
       hasResume && resumeQualityScore >= 70 ? 'Resume quality' : '',
       preferredOverlap.length
@@ -188,6 +205,7 @@ export class IntelligenceService {
       experienceScore,
       educationScore,
       locationScore,
+      languageScore,
       preferredSkillScore,
       resumeQualityScore,
       categoryScore,

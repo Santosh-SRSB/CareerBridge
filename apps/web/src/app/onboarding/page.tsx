@@ -6,8 +6,11 @@ import { INDIAN_CITIES } from '@careerbridge/shared';
 import {
   OB,
   OnboardingActions,
+  OnboardingFieldIcon,
   OnboardingFrame,
+  OnboardingHero,
   OnboardingQuestion,
+  OnboardingStepHeader,
   onboardingInputClass,
   onboardingPrimaryButtonClass,
 } from '@/components/OnboardingFrame';
@@ -77,7 +80,6 @@ function cityMatchesQuery(city: string, query: string): boolean {
   if (c.includes(query)) return true;
   const aliases = CITY_SEARCH_ALIASES[query] || [];
   if (aliases.some((a) => c.includes(a) || a.includes(query))) return true;
-  // Also match if query is an alias of this city name
   for (const [key, alts] of Object.entries(CITY_SEARCH_ALIASES)) {
     if (c === key || c.includes(key)) {
       if (alts.some((a) => a.includes(query) || query.includes(a))) return true;
@@ -119,7 +121,6 @@ export default function OnboardingLocationPage() {
     const notSelected = (city: string) =>
       !workCities.some((w) => w.toLowerCase() === city.toLowerCase());
 
-    // Empty / short focus: show popular places first
     if (q.length < 1) {
       return POPULAR_WORK_CITIES.filter(notSelected).slice(0, 16);
     }
@@ -204,7 +205,10 @@ export default function OnboardingLocationPage() {
 
   if (!ready) {
     return (
-      <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
+      <main
+        className="flex min-h-screen items-center justify-center text-sm"
+        style={{ background: OB.bg, color: OB.muted }}
+      >
         Loading...
       </main>
     );
@@ -213,15 +217,55 @@ export default function OnboardingLocationPage() {
   return (
     <OnboardingFrame step={1}>
       <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 space-y-3.5 overflow-x-hidden cb-ob-hide-scrollbar sm:space-y-4">
-          <OnboardingQuestion title="Which state are you in?">
+        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden pb-1">
+          <OnboardingHero tone="green" deco>
+            <svg
+              width="30"
+              height="30"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={OB.green800}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+          </OnboardingHero>
+
+          <OnboardingStepHeader
+            title="Where are you based?"
+            subtitle="This helps us match jobs near you."
+          />
+
+          <OnboardingQuestion title="Current location">
             <div className="relative">
+              <OnboardingFieldIcon>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="8" />
+                  <line x1="12" y1="2" x2="12" y2="4" />
+                  <line x1="12" y1="20" x2="12" y2="22" />
+                  <line x1="2" y1="12" x2="4" y2="12" />
+                  <line x1="20" y1="12" x2="22" y2="12" />
+                </svg>
+              </OnboardingFieldIcon>
               <select
                 id="current-state"
                 required
                 value={state}
                 onChange={(event) => setState(event.target.value)}
-                className={onboardingInputClass}
+                className={`${onboardingInputClass} pl-[34px]`}
               >
                 <option value="">Select state</option>
                 {INDIA_STATES.map((item) => (
@@ -233,26 +277,54 @@ export default function OnboardingLocationPage() {
             </div>
           </OnboardingQuestion>
 
-          <OnboardingQuestion title="Where would you like to work?">
+          <OnboardingQuestion title="Preferred location">
             {workCities.length > 0 ? (
-              <div className="mb-2 flex flex-wrap gap-1.5">
+              <div className="mb-2.5 flex flex-wrap gap-2">
                 {workCities.map((city) => (
                   <button
                     key={city}
                     type="button"
                     onClick={() => toggleCity(city)}
-                    className="inline-flex items-center gap-0.5 rounded-full border px-2.5 py-1 text-xs font-medium text-white"
-                    style={{ background: OB.moss, borderColor: OB.moss }}
+                    className="inline-flex h-auto items-center gap-1.5 rounded-full border-0 px-2.5 py-1.5 text-[13px] text-white transition active:scale-95"
+                    style={{ background: OB.accent }}
                     aria-label={`Remove ${city}`}
                   >
                     {city}
-                    <span aria-hidden>×</span>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
                   </button>
                 ))}
               </div>
             ) : null}
 
-            <div className="relative mb-2.5 shrink-0">
+            <div className="relative mb-3.5 shrink-0">
+              <OnboardingFieldIcon>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </OnboardingFieldIcon>
               <input
                 id="custom-work-city"
                 type="text"
@@ -274,28 +346,28 @@ export default function OnboardingLocationPage() {
                   }
                   if (e.key === 'Escape') setSearchOpen(false);
                 }}
-                placeholder="Search city (e.g. Lucknow, Bangalore)…"
-                className={onboardingInputClass}
+                placeholder="Search city (e.g. Lucknow, Bangalore)..."
+                className={`${onboardingInputClass} pl-[34px]`}
                 autoComplete="off"
               />
               {searchOpen && citySuggestions.length > 0 ? (
                 <ul
-                  className="cb-ob-hide-scrollbar absolute z-30 mt-1 max-h-44 w-full rounded-lg border bg-white py-1 shadow-lg"
-                  style={{ borderColor: OB.line }}
+                  className="cb-ob-hide-scrollbar absolute z-30 mt-1 max-h-44 w-full rounded-[10px] border bg-white py-1 shadow-lg"
+                  style={{ borderColor: OB.border }}
                 >
                   {!customCity.trim() ? (
                     <li
                       className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide"
-                      style={{ color: OB.muted }}
+                      style={{ color: OB.textMuted }}
                     >
-                      Popular places
+                      Popular places (<strong style={{ color: OB.ink }}>you can choose many</strong>)
                     </li>
                   ) : null}
                   {citySuggestions.map((city) => (
                     <li key={city}>
                       <button
                         type="button"
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-[#EEF2E9]"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-[#E3F2ED]"
                         style={{ color: OB.ink }}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
@@ -318,17 +390,17 @@ export default function OnboardingLocationPage() {
                     setSearchOpen(false);
                   }}
                   className="mt-1.5 text-xs font-semibold"
-                  style={{ color: OB.moss }}
+                  style={{ color: OB.accent }}
                 >
                   Add “{customCity.trim()}”
                 </button>
               ) : null}
             </div>
 
-            <p className="mb-1.5 text-xs font-semibold" style={{ color: OB.muted }}>
-              Popular places
+            <p className="mb-2 text-xs" style={{ color: OB.textMuted }}>
+              Popular places (<strong style={{ color: OB.ink }}>you can choose many</strong>)
             </p>
-            <div className="flex flex-wrap gap-1.5 pb-1">
+            <div className="flex flex-wrap gap-2 pb-1">
               {POPULAR_WORK_CITIES.map((city) => {
                 const selected = workCities.some((c) => c.toLowerCase() === city.toLowerCase());
                 return (
@@ -336,11 +408,15 @@ export default function OnboardingLocationPage() {
                     key={city}
                     type="button"
                     onClick={() => toggleCity(city)}
-                    className="rounded-full border px-2.5 py-1 text-xs font-medium transition"
+                    className="h-auto rounded-full border px-3.5 py-2 text-[13px] transition active:scale-95"
                     style={
                       selected
-                        ? { background: OB.moss, color: '#fff', borderColor: OB.moss }
-                        : { background: '#fff', color: '#3D3A33', borderColor: '#7A8270' }
+                        ? { background: OB.accent, color: '#fff', borderColor: OB.accent }
+                        : {
+                            background: OB.surface,
+                            color: OB.ink,
+                            borderColor: OB.borderStrong,
+                          }
                     }
                     aria-pressed={selected}
                   >
@@ -354,15 +430,15 @@ export default function OnboardingLocationPage() {
           {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
         </div>
 
-        <OnboardingActions>
+        <OnboardingActions step={1}>
           <Button
             type="submit"
             size="sm"
-            block={false}
+            block
             loading={loading}
             loadingLabel="Saving..."
             className={onboardingPrimaryButtonClass}
-            style={{ background: OB.moss }}
+            style={{ background: OB.accent }}
           >
             Continue
           </Button>

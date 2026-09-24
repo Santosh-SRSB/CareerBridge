@@ -8,20 +8,67 @@ import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import { JobRoleCombobox } from '@/components/marketplace/JobRoleCombobox';
 import { createLiveInterview, getCandidateMe, startLiveInterview } from '@/lib/api';
 
-const DEFAULT_JOB_ROLES = [
-  'Full Stack Developer',
-  'Frontend Developer',
-  'Backend Developer',
-  'Software Developer',
-  'Data Analyst',
-  'Customer Service Executive',
-  'Front Office Executive',
-  'Retail Associate',
-  'Sales Executive',
-  'HR Executive',
-  'Marketing Executive',
-  'Business Analyst',
-];
+const ROLE_CATALOG: Record<string, string[]> = {
+  IT: [
+    'Full Stack Developer',
+    'Frontend Developer',
+    'Backend Developer',
+    'Software Developer',
+    'Software Engineer',
+    'Data Analyst',
+    'DevOps Engineer',
+    'QA Engineer',
+    'Mobile App Developer',
+    'React Developer',
+    'Java Developer',
+    'Python Developer',
+  ],
+  FINANCE: [
+    'Accountant',
+    'Financial Analyst',
+    'Accounts Executive',
+    'Auditor',
+    'Tax Consultant',
+    'Finance Executive',
+  ],
+  HR: [
+    'HR Executive',
+    'Talent Acquisition',
+    'HR Generalist',
+    'People Operations',
+    'Recruiter',
+  ],
+  SALES: [
+    'Sales Executive',
+    'Business Development Executive',
+    'Account Manager',
+    'Retail Associate',
+  ],
+  MARKETING: [
+    'Marketing Executive',
+    'Digital Marketing Executive',
+    'Content Marketer',
+    'Brand Executive',
+  ],
+  GENERAL: [
+    'Customer Service Executive',
+    'Front Office Executive',
+    'Business Analyst',
+    'Operations Executive',
+  ],
+};
+
+const OTHER_OPTION = 'Other (type your role)';
+
+function detectCategory(interests: string[]): keyof typeof ROLE_CATALOG {
+  const blob = interests.join(' ').toLowerCase();
+  if (/\b(it|software|developer|engineer|tech|data|qa|devops)\b/.test(blob)) return 'IT';
+  if (/\b(finance|account|caf|tax|audit|banking)\b/.test(blob)) return 'FINANCE';
+  if (/\b(hr|human resource|talent|recruit)\b/.test(blob)) return 'HR';
+  if (/\b(sales|bdm|business development|retail)\b/.test(blob)) return 'SALES';
+  if (/\b(market|digital|seo|content|brand)\b/.test(blob)) return 'MARKETING';
+  return 'GENERAL';
+}
 
 const QUESTION_COUNTS = [5, 8, 10];
 
@@ -74,38 +121,47 @@ export default function MockInterviewSetupPage() {
   const searchParams = useSearchParams();
   const roleFromUrl = searchParams.get('role')?.trim() || '';
 
-  const [jobRole, setJobRole] = useState(roleFromUrl || DEFAULT_JOB_ROLES[0]);
+  const [jobRole, setJobRole] = useState(roleFromUrl || ROLE_CATALOG.IT[0]);
+  const [customRole, setCustomRole] = useState('');
   const [interviewType, setInterviewType] = useState<'GENERIC' | 'ROLE'>(roleFromUrl ? 'ROLE' : 'GENERIC');
   const [questionCount, setQuestionCount] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [roleOptions, setRoleOptions] = useState(DEFAULT_JOB_ROLES);
+  const [roleOptions, setRoleOptions] = useState([...ROLE_CATALOG.IT, OTHER_OPTION]);
 
   useEffect(() => {
     void getCandidateMe()
       .then((profile) => {
         const fromProfile = (profile.careerInterests || []).filter(Boolean);
-        const merged = [...new Set([roleFromUrl, ...fromProfile, ...DEFAULT_JOB_ROLES].filter(Boolean))];
+        const category = detectCategory(fromProfile);
+        const catalog = ROLE_CATALOG[category] || ROLE_CATALOG.GENERAL;
+        const merged = [
+          ...new Set([roleFromUrl, ...fromProfile, ...catalog, OTHER_OPTION].filter(Boolean)),
+        ];
         setRoleOptions(merged);
         if (roleFromUrl) {
           setJobRole(roleFromUrl);
         } else if (fromProfile[0]) {
           setJobRole(fromProfile[0]);
+        } else {
+          setJobRole(catalog[0]);
         }
       })
       .catch(() => {
-        setRoleOptions(roleFromUrl ? [roleFromUrl, ...DEFAULT_JOB_ROLES] : DEFAULT_JOB_ROLES);
+        const fallback = [...ROLE_CATALOG.GENERAL, OTHER_OPTION];
+        setRoleOptions(roleFromUrl ? [roleFromUrl, ...fallback] : fallback);
         if (roleFromUrl) setJobRole(roleFromUrl);
       });
   }, [roleFromUrl]);
 
   const durationLimitMin = useMemo(() => Math.max(45, questionCount * 6), [questionCount]);
+  const pickingOther = jobRole === OTHER_OPTION;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const role = jobRole.trim();
+    const role = (pickingOther ? customRole : jobRole).trim();
     if (role.length < 2) {
-      setError('Please enter a job role.');
+      setError(pickingOther ? 'Type your job role.' : 'Please enter a job role.');
       return;
     }
 
@@ -192,9 +248,21 @@ export default function MockInterviewSetupPage() {
             <JobRoleCombobox
               value={jobRole}
               options={roleOptions}
-              onChange={setJobRole}
+              onChange={(next) => {
+                setJobRole(next);
+                if (next !== OTHER_OPTION) setCustomRole('');
+              }}
               showHint={false}
             />
+            {pickingOther ? (
+              <input
+                className="mt-3 w-full rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm font-semibold text-[#0a2e2c] outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/20"
+                value={customRole}
+                onChange={(e) => setCustomRole(e.target.value)}
+                placeholder="Type your job role"
+                required
+              />
+            ) : null}
 
             <fieldset>
               <legend className="mb-2.5 text-sm font-bold text-[#0a2e2c]">Interview Type</legend>

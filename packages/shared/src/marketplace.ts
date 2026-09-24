@@ -320,7 +320,9 @@ export type JobMatch = {
   experienceScore: number;
   educationScore: number;
   locationScore: number;
-  /** Preferred / job-specific skills (0–100). */
+  /** Spoken / job languages fit (0–100). */
+  languageScore: number;
+  /** Preferred / job-specific skills (0–100). Kept for list ranking compatibility. */
   preferredSkillScore: number;
   resumeQualityScore: number;
   /** Career-interest / category fit (0–100). Kept for list ranking compatibility. */
@@ -346,14 +348,13 @@ export const ATS_MATCH_BANDS: Array<{
   { band: 'LOW', min: 0, label: 'Low Match' },
 ];
 
-/** PDF factor weights (points toward 100). */
+/** Handbook Vol.3 match weights (points toward 100). */
 export const ATS_JOB_MATCH_WEIGHTS = {
-  skills: 35,
+  skills: 40,
   experience: 20,
+  location: 15,
+  language: 15,
   education: 10,
-  location: 10,
-  preferred: 15,
-  resumeQuality: 10,
 } as const;
 
 export function atsMatchBand(score: number): AtsMatchBand {
@@ -392,11 +393,10 @@ export type AtsMatchBreakdown = {
 
 export function toAtsMatchBreakdown(match: JobMatch): AtsMatchBreakdown {
   const w = ATS_JOB_MATCH_WEIGHTS;
-  const preferredPct = match.preferredSkillScore ?? match.categoryScore ?? 0;
   const factors: AtsMatchFactor[] = [
     {
       key: 'skills',
-      label: 'Required Skills',
+      label: 'Skills',
       pct: match.skillScore,
       max: w.skills,
       score: Math.round((match.skillScore / 100) * w.skills),
@@ -409,13 +409,6 @@ export function toAtsMatchBreakdown(match: JobMatch): AtsMatchBreakdown {
       score: Math.round((match.experienceScore / 100) * w.experience),
     },
     {
-      key: 'education',
-      label: 'Education',
-      pct: match.educationScore,
-      max: w.education,
-      score: Math.round((match.educationScore / 100) * w.education),
-    },
-    {
       key: 'location',
       label: 'Location',
       pct: match.locationScore,
@@ -423,18 +416,18 @@ export function toAtsMatchBreakdown(match: JobMatch): AtsMatchBreakdown {
       score: Math.round((match.locationScore / 100) * w.location),
     },
     {
-      key: 'preferred',
-      label: 'Job-specific skills',
-      pct: preferredPct,
-      max: w.preferred,
-      score: Math.round((preferredPct / 100) * w.preferred),
+      key: 'language',
+      label: 'Language',
+      pct: match.languageScore ?? 0,
+      max: w.language,
+      score: Math.round(((match.languageScore ?? 0) / 100) * w.language),
     },
     {
-      key: 'resumeQuality',
-      label: 'Resume quality',
-      pct: match.resumeQualityScore,
-      max: w.resumeQuality,
-      score: Math.round((match.resumeQualityScore / 100) * w.resumeQuality),
+      key: 'education',
+      label: 'Education',
+      pct: match.educationScore,
+      max: w.education,
+      score: Math.round((match.educationScore / 100) * w.education),
     },
   ];
   return {
@@ -469,6 +462,8 @@ export type JobCard = {
   saved?: boolean;
   /** True when the current candidate has already applied to this job. */
   applied?: boolean;
+  /** Job posting status when included on application records (PUBLISHED, CLOSED, DRAFT…). */
+  status?: string;
 };
 
 export type JobDetail = JobCard & {

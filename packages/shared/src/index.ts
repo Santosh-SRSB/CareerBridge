@@ -9,5 +9,6 @@ export * from './resume-data';
 export * from './resume-dates';
 export * from './city-centroids';
 export * from './career-gap';
+export * from './career-timeline-gaps';
 export * from './experience-status';
 export * from './testimonials';

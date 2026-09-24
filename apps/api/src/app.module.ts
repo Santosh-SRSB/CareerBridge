@@ -26,6 +26,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
+import { PlatformController } from './platform/platform.controller';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RequestIdInterceptor } from './common/interceptors/request-id.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -63,7 +64,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     NotificationsModule,
     TestimonialsModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, PlatformController],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: RequestIdInterceptor },

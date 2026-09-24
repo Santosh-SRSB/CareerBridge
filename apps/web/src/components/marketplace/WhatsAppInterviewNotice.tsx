@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import type { ScheduledJobInterview } from '@/lib/candidate-marketplace-api';
+import { DatePicker } from '@/features/candidate/passport/DatePicker';
 
 function todayInputValue() {
   const d = new Date();
@@ -176,13 +177,11 @@ export function WhatsAppInterviewNotice({
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-xs font-bold text-slate-600">
                 Date
-                <input
-                  type="date"
-                  min={minDate}
-                  required
+                <DatePicker
                   value={preferredDate}
-                  onChange={(e) => setPreferredDate(e.target.value)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800"
+                  onChange={setPreferredDate}
+                  placeholder="Select date"
+                  confirmLabel="Set preferred date"
                 />
               </label>
               <label className="grid gap-1 text-xs font-bold text-slate-600">

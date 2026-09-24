@@ -12,7 +12,7 @@ const LINKS = [
   { href: '/#how-it-works', label: 'How it works' },
   { href: '/#passport', label: 'Career Passport' },
   { href: '/#jobs', label: 'Jobs' },
-  { href: '/employer/welcome', label: 'Employers' },
+  { href: '/employer/register', label: 'Employers' },
 ];
 
 export function SiteHeader({ compact = false }: { compact?: boolean }) {

@@ -380,6 +380,21 @@ export function ResumePreviewScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recheckNonce]);
 
+  // After Improve with AI, land on the suggestions panel (top), not the resume below.
+  useEffect(() => {
+    if (phase !== 'improve') return;
+    const scrollUp = () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('ai-improve-panel')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    };
+    scrollUp();
+    const t = window.setTimeout(scrollUp, 80);
+    return () => window.clearTimeout(t);
+  }, [phase]);
+
   async function startImproveWithAi() {
     setPhase('improve');
     setAiLoading(true);
@@ -793,7 +808,7 @@ export function ResumePreviewScreen({
       ) : null}
 
       {phase === 'improve' ? (
-        <div className="space-y-4">
+        <div id="ai-improve-panel" className="space-y-4 scroll-mt-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-extrabold text-slate-900">Suggested improvements</h2>
             <p className="mt-1 text-sm text-slate-600">
