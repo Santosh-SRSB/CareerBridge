@@ -1,13 +1,14 @@
-import { PrismaClient } from "@prisma/client";
-
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+/**
+ * Web no longer uses a local Prisma DB — all persistence goes through the Nest API.
+ * Kept as a stub so accidental imports fail clearly at runtime without breaking `next build`.
+ */
+export const prisma = new Proxy(
+  {},
+  {
+    get() {
+      throw new Error(
+        "Local Prisma is disabled on the web app. Call the Nest API (NEXT_PUBLIC_API_URL) instead.",
+      );
+    },
+  },
+) as never;
