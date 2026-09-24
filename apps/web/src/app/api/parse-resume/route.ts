@@ -3,13 +3,35 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE =
-  process.env.API_INTERNAL_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://127.0.0.1:3001/api/v1';
+function resolveApiBase(): string {
+  const fromEnv = (
+    process.env.API_INTERNAL_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    ''
+  )
+    .trim()
+    .replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV !== 'production') {
+    return 'http://127.0.0.1:3001/api/v1';
+  }
+  return '';
+}
+
+const API_BASE = resolveApiBase();
 
 export async function POST(req: NextRequest) {
   try {
+    if (!API_BASE) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'API_INTERNAL_URL or NEXT_PUBLIC_API_URL must be set in the deployed environment.',
+        },
+        { status: 500 },
+      );
+    }
     const contentType = req.headers.get('content-type') || '';
     const auth = req.headers.get('authorization');
     const upstreamUrl = `${API_BASE.replace(/\/$/, '')}/parse-resume`;

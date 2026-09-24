@@ -6,7 +6,12 @@ import { toPassportDraft } from "@/lib/parse-resume";
  * Never calls OpenAI or any local heuristic LLM substitute from the Next.js layer.
  */
 export async function structureResumeText(rawText: string): Promise<PassportDraft> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+  const apiUrl =
+    (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/$/, "") ||
+    (process.env.NODE_ENV !== "production" ? "http://localhost:3001/api/v1" : "");
+  if (!apiUrl) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured for this environment.");
+  }
 
   const response = await fetch(`${apiUrl}/resumes/structure-text`, {
     method: "POST",

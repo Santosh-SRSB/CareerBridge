@@ -25,16 +25,39 @@ export class FirebaseService {
       fromFile?.private_key || this.config.get<string>('FIREBASE_PRIVATE_KEY') || ''
     ).replace(/\\n/g, '\n');
 
+    if (admin.apps.length) {
+      this.app = admin.app();
+      this.logger.log(`Firebase Admin reusing existing app for project ${projectId || 'default'}`);
+      return;
+    }
+
     if (projectId && clientEmail && privateKey) {
-      this.app = admin.apps.length
-        ? admin.app()
-        : admin.initializeApp({
-            credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
-          });
-      this.logger.log(`Firebase Admin initialized for project ${projectId}`);
-    } else {
+      this.app = admin.initializeApp({
+        credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+      });
+      this.logger.log(`Firebase Admin initialized with service-account cert for ${projectId}`);
+      return;
+    }
+
+    // Cloud Run / GCE: prefer Application Default Credentials (runtime SA).
+    const gcpProject =
+      this.config.get<string>('GCP_PROJECT_ID') ||
+      this.config.get<string>('FIREBASE_PROJECT_ID') ||
+      process.env.GCLOUD_PROJECT ||
+      process.env.GOOGLE_CLOUD_PROJECT;
+    try {
+      this.app = admin.initializeApp({
+        credential: admin.credential.applicationDefault(),
+        ...(gcpProject ? { projectId: gcpProject } : {}),
+      });
+      this.logger.log(
+        `Firebase Admin initialized with Application Default Credentials${gcpProject ? ` (${gcpProject})` : ''}`,
+      );
+    } catch (err) {
+      this.app = null;
       this.logger.warn(
-        'Firebase Admin is not configured. Set FIREBASE_* or FIREBASE_SERVICE_ACCOUNT_PATH.',
+        `Firebase Admin is not configured (${err instanceof Error ? err.message : String(err)}). ` +
+          'Set FIREBASE_* / FIREBASE_SERVICE_ACCOUNT_PATH, or run on GCP with a runtime service account.',
       );
     }
   }

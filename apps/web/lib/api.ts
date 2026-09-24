@@ -25,12 +25,26 @@ import type {
 } from '@careerbridge/shared';
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './session';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+function resolveApiUrl(): string {
+  const fromEnv = (process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV !== 'production') {
+    return 'http://localhost:3001/api/v1';
+  }
+  return '';
+}
+
+const API_URL = resolveApiUrl();
 
 async function request<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
+  if (!API_URL) {
+    throw new Error(
+      'NEXT_PUBLIC_API_URL is not set. Configure the deployed API base URL (…/api/v1).',
+    );
+  }
   const headers = new Headers(options.headers);
   headers.set('Content-Type', 'application/json');
   if (options.auth !== false) {

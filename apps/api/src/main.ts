@@ -47,6 +47,11 @@ async function bootstrap() {
     }),
   );
 
+  // Cloud Run / load-balancer probe (no API prefix). Also available at /api/v1/health.
+  app.getHttpAdapter().get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
   const swagger = new DocumentBuilder()
     .setTitle('CareerBridge API')
     .setDescription('Youth Employability & Talent Platform')
@@ -55,9 +60,9 @@ async function bootstrap() {
     .build();
   SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swagger));
 
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
-  console.log(`API running on http://localhost:${port}/api/v1`);
+  const port = Number(process.env.PORT) || 3001;
+  await app.listen(port, '0.0.0.0');
+  console.log(`API listening on 0.0.0.0:${port} (prefix /api/v1, health /health)`);
 }
 
 bootstrap();

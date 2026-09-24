@@ -40,7 +40,16 @@ import type {
 } from '@careerbridge/shared';
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './session';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+function resolveApiUrl(): string {
+  const fromEnv = (process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV !== 'production') {
+    return 'http://localhost:3001/api/v1';
+  }
+  return '';
+}
+
+const API_URL = resolveApiUrl();
 
 async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
   let lastError: unknown;
@@ -57,13 +66,18 @@ async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Pro
   }
   throw lastError instanceof Error
     ? lastError
-    : new Error('Cannot reach the CareerBridge API. Make sure it is running on port 3001.');
+    : new Error('Cannot reach the CareerBridge API. Check NEXT_PUBLIC_API_URL and that the API is running.');
 }
 
 async function request<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
+  if (!API_URL) {
+    throw new Error(
+      'NEXT_PUBLIC_API_URL is not set. Configure the deployed API base URL (…/api/v1) for this environment.',
+    );
+  }
   const headers = new Headers(options.headers);
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   if (!isFormData) headers.set('Content-Type', 'application/json');
@@ -76,7 +90,9 @@ async function request<T>(
     ...options,
     headers,
   }).catch(() => {
-    throw new Error('Cannot reach the CareerBridge API. Make sure it is running on port 3001.');
+    throw new Error(
+      'Cannot reach the CareerBridge API. Check your connection and NEXT_PUBLIC_API_URL.',
+    );
   });
 
   const body = (await response.json()) as ApiResponse<T>;
