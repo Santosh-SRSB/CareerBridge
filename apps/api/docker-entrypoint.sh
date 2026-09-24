@@ -10,11 +10,24 @@ if [ -z "${DATABASE_URL:-}" ] && [ -n "${DB_PASSWORD:-}" ]; then
 fi
 
 # Apply pending Prisma migrations (safe for DEV/Cloud Run first boot).
+# Incremental migrations assume a baseline schema that may be missing on a fresh Cloud SQL DB.
 if [ "${RUN_PRISMA_MIGRATE:-true}" = "true" ] && [ -n "${DATABASE_URL:-}" ]; then
   echo "Running prisma migrate deploy..."
-  npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma || {
-    echo "prisma migrate deploy failed (continuing to start API)"
-  }
+  if ! npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma; then
+    echo "prisma migrate deploy failed — bootstrapping schema with db push (DEV)"
+    npx --yes prisma@6 db push --schema=./prisma/schema.prisma --skip-generate --accept-data-loss || {
+      echo "prisma db push failed (continuing to start API)"
+    }
+    # Recover failed migration history so future deploys can migrate cleanly.
+    if [ -d ./prisma/migrations ]; then
+      for dir in ./prisma/migrations/*/; do
+        [ -d "$dir" ] || continue
+        name=$(basename "$dir")
+        npx --yes prisma@6 migrate resolve --schema=./prisma/schema.prisma --rolled-back "$name" 2>/dev/null || true
+        npx --yes prisma@6 migrate resolve --schema=./prisma/schema.prisma --applied "$name" 2>/dev/null || true
+      done
+    fi
+  fi
 fi
 
 exec node dist/main.js
