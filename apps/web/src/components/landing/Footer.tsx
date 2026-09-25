@@ -97,7 +97,6 @@ export function Footer() {
             <Link href="/support">Support</Link>
             <Link href="/privacy">Privacy and Policy</Link>
             <Link href="/terms">Terms and Conditions</Link>
-            <a href={SOCIAL.email}>Srsbhr25@gmail.com</a>
           </div>
         </div>
         <div className="day-orbit-foot__socials">
