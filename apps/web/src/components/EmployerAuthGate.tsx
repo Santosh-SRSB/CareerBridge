@@ -19,7 +19,8 @@ function isPublicEmployerPath(pathname: string) {
 export function EmployerAuthGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
+  // Public marketing/welcome routes must render immediately (no flash of "Checking…").
+  const [allowed, setAllowed] = useState(() => isPublicEmployerPath(pathname));
 
   useEffect(() => {
     if (isPublicEmployerPath(pathname)) {
