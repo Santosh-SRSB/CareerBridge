@@ -8,21 +8,63 @@
 .welcome-nav__bar {
   max-width: 1180px;
   margin: 0 auto;
-  height: 68px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 24px;
+  gap: 18px;
+  padding: 10px 24px;
+  flex-wrap: wrap;
 }
 
-.welcome-nav__logo {
+.welcome-nav__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  text-decoration: none;
+  color: inherit;
+  max-width: min(280px, 42vw);
+}
+
+.welcome-nav__mark {
+  height: 34px;
+  width: auto;
+  max-width: 110px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.welcome-nav__word {
   font-family: var(--font-poppins), system-ui, sans-serif;
   font-weight: 800;
-  font-size: 22px;
+  font-size: 16px;
   color: #e0a100;
   letter-spacing: -0.02em;
-  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.welcome-nav__center {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+}
+
+.welcome-nav__home {
+  font-weight: 700;
+  font-size: 14px;
+  color: #eaf5f1;
+  padding: 7px 12px;
+  border-radius: 999px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.welcome-nav__home:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0a100;
 }
 
 .welcome-nav__switch {
@@ -48,11 +90,13 @@
 
 .welcome-nav__auth {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .welcome-nav__auth a {
@@ -62,6 +106,16 @@
 
 .welcome-nav__auth a:hover {
   color: #e0a100;
+}
+
+.welcome-nav__email {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c8e6d4 !important;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .welcome-nav__auth i {
@@ -89,24 +143,29 @@
   max-width: 1100px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 120px 1fr 1fr 1fr;
-  gap: 36px;
+  /* Wider first column + gap so logo never overlaps link columns */
+  grid-template-columns: minmax(120px, 160px) 1fr 1fr 1fr;
+  column-gap: 48px;
+  row-gap: 28px;
   align-items: start;
 }
 
 .welcome-foot__logo {
-  width: 108px;
-  height: 108px;
-  border-radius: 50%;
-  background: #eef6f1;
-  color: #0d2e2c;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  font-family: var(--font-poppins), system-ui, sans-serif;
-  font-weight: 800;
-  font-size: 13px;
-  line-height: 1.2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 140px;
+  background: transparent;
+  border-radius: 0;
+  text-decoration: none;
+}
+
+.welcome-foot__logo-img {
+  width: auto;
+  height: 52px; /* ~30% smaller than prior 72–88px mark */
+  max-width: 140px;
+  object-fit: contain;
 }
 
 .welcome-foot h4 {
@@ -137,21 +196,21 @@
 }
 
 .welcome-foot__socials a {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   background: #16382c;
+  border: 1px solid rgba(200, 230, 212, 0.35);
   display: grid;
   place-items: center;
-  font-size: 12px;
-  font-weight: 800;
   color: #d5e0d9;
   padding: 0;
-  transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease;
+  transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
 }
 
 .welcome-foot__socials a:hover {
   background: #e0a100;
+  border-color: #e0a100;
   color: #1a1300;
   transform: translateY(-3px);
 }
@@ -160,6 +219,33 @@
   text-align: center;
   font-size: 12px;
   color: #9db8b3;
+}
+
+@media (max-width: 900px) {
+  .welcome-nav__word {
+    display: none;
+  }
+
+  .welcome-nav__email {
+    display: none;
+  }
+
+  .welcome-nav__center {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  .welcome-foot__main {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 28px;
+  }
+}
+
+@media (max-width: 560px) {
+  .welcome-foot__main {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* —— Candidate: warm paper magazine —— */

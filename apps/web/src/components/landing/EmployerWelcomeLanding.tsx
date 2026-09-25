@@ -12,7 +12,7 @@ const BANDS = [
     title: 'Create job requirements',
     body: 'Define the role, skills and experience once, in a structured form. Every candidate you see is measured against the same clear brief.',
     tags: ['Skills', 'Experience', 'Role details'],
-    img: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=80',
+    img: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
   },
   {
     tone: 'c2',
@@ -20,7 +20,7 @@ const BANDS = [
     title: 'AI-powered matching',
     body: 'Get matched with candidates by skills, experience and role fit, so your first look is already your best look.',
     tags: ['Skill match', 'Role fit'],
-    img: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80',
+    img: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1200&q=80',
   },
   {
     tone: 'c3',
@@ -28,7 +28,7 @@ const BANDS = [
     title: 'Structured candidate profiles',
     body: 'Review standardized profiles with verified information and AI insights, and compare people side by side on equal terms.',
     tags: ['Verified information', 'AI insights'],
-    img: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80',
+    img: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=1200&q=80',
   },
   {
     tone: 'c4',
@@ -36,7 +36,7 @@ const BANDS = [
     title: 'Candidate shortlisting',
     body: 'Shortlist the most relevant candidates faster, with AI doing the first sort and you making the final call.',
     tags: ['AI-assisted', 'Faster decisions'],
-    img: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80',
+    img: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80',
   },
   {
     tone: 'c5',
@@ -44,7 +44,7 @@ const BANDS = [
     title: 'Interview management',
     body: 'Schedule interviews, share updates and keep candidates informed, all without leaving the platform.',
     tags: ['Scheduling', 'Updates', 'Communication'],
-    img: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=1200&q=80',
+    img: 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=1200&q=80',
   },
   {
     tone: 'c6',
@@ -52,7 +52,7 @@ const BANDS = [
     title: 'Hiring pipeline',
     body: 'Track every candidate across every stage. Bring your team in, and use talent insights on skills and role suitability to decide together.',
     tags: ['Pipeline stages', 'Talent insights', 'Team collaboration'],
-    img: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=1200&q=80',
+    img: 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&w=1200&q=80',
   },
 ] as const;
 
