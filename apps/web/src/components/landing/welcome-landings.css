@@ -50,8 +50,7 @@
   align-items: center;
   margin: 0;
   padding: 0;
-  /* Optical align with mark (mark has built-in transparent padding) */
-  transform: translateY(0.5px);
+  transform: translateY(20px);
 }
 
 .welcome-nav__center {

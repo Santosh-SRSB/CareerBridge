@@ -76,7 +76,7 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
             unoptimized
             priority
           />
-          <span className="font-[family-name:var(--font-poppins),system-ui,sans-serif] text-[clamp(13px,3.2vw,17px)] font-extrabold leading-none tracking-tight text-[#e0a100]">
+          <span className="translate-y-5 font-[family-name:var(--font-poppins),system-ui,sans-serif] text-[clamp(13px,3.2vw,17px)] font-extrabold leading-none tracking-tight text-[#e0a100]">
             Career Bridge
           </span>
         </Link>
