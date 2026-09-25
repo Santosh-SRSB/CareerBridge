@@ -66,16 +66,19 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
   return (
     <header className="site-navbar sticky top-0 z-50">
       <nav className="mx-auto flex h-[72px] max-w-[1280px] items-center justify-between gap-6 px-5 sm:h-[84px] sm:px-10">
-        <Link href={signedIn ? homeHref : "/"} className="logo-mark shrink-0">
+        <Link href={signedIn ? homeHref : "/"} className="logo-mark shrink-0 inline-flex items-center gap-2.5 no-underline">
           <Image
             src="/srsb-mark.png"
             alt="SRSB"
             width={280}
             height={80}
-            className="h-12 w-auto max-w-[90vw] object-contain bg-transparent sm:h-14 md:h-16"
+            className="h-10 w-auto max-w-[120px] object-contain bg-transparent sm:h-11 md:h-12"
             unoptimized
             priority
           />
+          <span className="font-[family-name:var(--font-poppins),system-ui,sans-serif] text-[clamp(13px,3.2vw,17px)] font-extrabold leading-none tracking-tight text-[#e0a100]">
+            Career Bridge
+          </span>
         </Link>
 
         {landingLinks ? (

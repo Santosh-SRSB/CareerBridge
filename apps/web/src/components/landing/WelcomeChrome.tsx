@@ -93,10 +93,6 @@ export function WelcomeRoleNav({ role }: { role: WelcomeRole }) {
         </div>
 
         <div className="welcome-nav__auth">
-          <a className="welcome-nav__email" href={SOCIAL.email}>
-            Srsbhr25@gmail.com
-          </a>
-          <i aria-hidden="true" />
           <Link href={loginHref}>Login</Link>
           <i aria-hidden="true" />
           <Link href={signupHref}>Signup</Link>
@@ -139,7 +135,6 @@ export function WelcomeFoot({ role }: { role: WelcomeRole }) {
           <Link href="/support">Support</Link>
           <Link href="/privacy">Privacy and Policy</Link>
           <Link href="/terms">Terms and Conditions</Link>
-          <a href={SOCIAL.email}>Srsbhr25@gmail.com</a>
         </div>
       </div>
       <div className="welcome-foot__socials">

@@ -30,7 +30,7 @@ export default function SupportPage() {
     const body = encodeURIComponent(
       `Name: ${name}\nEmail: ${email}\nTopic: ${topic}\n\n${message}`,
     );
-    window.location.href = `mailto:support@srsbcareerbridge.org?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:Srsbhr25@gmail.com?subject=${subject}&body=${body}`;
     setSent(true);
   }
 
@@ -63,6 +63,9 @@ export default function SupportPage() {
             </a>
             <a href="#form" className="text-[#d5e0d9] no-underline hover:border-b hover:border-[#A9812F]">
               Submit a request
+            </a>
+            <a href="#contact" className="text-[#d5e0d9] no-underline hover:border-b hover:border-[#A9812F]">
+              Contact
             </a>
             <Link href="/" className="text-[#d5e0d9] no-underline hover:border-b hover:border-[#A9812F]">
               Home
@@ -170,8 +173,8 @@ export default function SupportPage() {
             {sent ? (
               <p className="rounded-md border border-[#A9812F]/40 bg-[#F6F5F1] p-4 text-sm font-semibold text-[#0a2e2c]">
                 Your mail client should open with the request. If it doesn&apos;t, email{' '}
-                <a className="underline" href="mailto:support@srsbcareerbridge.org">
-                  support@srsbcareerbridge.org
+                <a className="underline" href="mailto:Srsbhr25@gmail.com">
+                  Srsbhr25@gmail.com
                 </a>
                 .
               </p>
@@ -234,6 +237,65 @@ export default function SupportPage() {
           </div>
         </section>
       </div>
+
+      <section
+        id="contact"
+        className="border-t border-[#C9C4B4] bg-gradient-to-b from-[#EDEBE3] to-[#F6F5F1] px-5 py-12 sm:px-7"
+        aria-labelledby="contact-heading"
+      >
+        <div className="mx-auto max-w-[960px]">
+          <div className="overflow-hidden rounded-2xl border border-[#0a2e2c]/12 bg-white shadow-[0_12px_40px_rgba(10,46,44,0.08)]">
+            <div className="grid gap-0 md:grid-cols-[1.1fr_0.9fr]">
+              <div className="p-7 sm:p-9">
+                <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-[#A9812F]">
+                  Direct contact
+                </p>
+                <h2
+                  id="contact-heading"
+                  className="mt-2 font-[family-name:var(--font-fraunces),Georgia,serif] text-[clamp(22px,3vw,28px)] font-bold text-[#0a2e2c]"
+                >
+                  For any query, contact us
+                </h2>
+                <p className="mt-3 max-w-[42ch] text-[15px] leading-relaxed text-[#4A5262]">
+                  Reach the SRSB Career Bridge team by email. We typically respond within one
+                  business day.
+                </p>
+                <a
+                  href="mailto:Srsbhr25@gmail.com"
+                  className="mt-6 inline-flex items-center gap-3 rounded-full bg-[#0a2e2c] px-5 py-3 text-sm font-bold text-white no-underline transition hover:-translate-y-0.5 hover:bg-[#16382c]"
+                >
+                  <span
+                    className="grid h-8 w-8 place-items-center rounded-full bg-[#e0a100] text-[#1a1300]"
+                    aria-hidden="true"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="5" width="18" height="14" rx="2" />
+                      <path d="M3 7l9 7 9-7" />
+                    </svg>
+                  </span>
+                  Srsbhr25@gmail.com
+                </a>
+              </div>
+              <div className="relative flex flex-col justify-center gap-4 border-t border-[#E6E1D4] bg-[#0a2e2c] p-7 text-[#eaf5f1] sm:p-9 md:border-l md:border-t-0">
+                <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-[#e0a100]/15 blur-2xl" aria-hidden="true" />
+                <p className="relative text-[12px] font-bold uppercase tracking-[0.16em] text-[#e0a100]">
+                  Prefer email?
+                </p>
+                <p className="relative text-[15px] leading-relaxed text-[#c8e6d4]">
+                  Write to us with your account email and a short description of your question.
+                  We&apos;ll route it to the right team.
+                </p>
+                <a
+                  href="mailto:Srsbhr25@gmail.com?subject=CareerBridge%20query"
+                  className="relative inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#e0a100] underline-offset-4 hover:underline"
+                >
+                  Open mail app →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <footer className="bg-[#0a2e2c] py-9 text-[13px] text-[#c8e6d4]">
         <div className="mx-auto flex max-w-[960px] flex-wrap justify-between gap-4 px-5 sm:px-7">

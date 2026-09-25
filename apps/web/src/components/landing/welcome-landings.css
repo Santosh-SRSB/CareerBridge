@@ -24,7 +24,8 @@
   flex-shrink: 0;
   text-decoration: none;
   color: inherit;
-  max-width: min(280px, 42vw);
+  max-width: min(320px, 70vw);
+  line-height: 1;
 }
 
 .welcome-nav__mark {
@@ -32,16 +33,25 @@
   width: auto;
   max-width: 110px;
   object-fit: contain;
+  object-position: center;
   flex-shrink: 0;
+  display: block;
 }
 
 .welcome-nav__word {
   font-family: var(--font-poppins), system-ui, sans-serif;
   font-weight: 800;
-  font-size: 16px;
+  font-size: clamp(13px, 3.4vw, 16px);
   color: #e0a100;
   letter-spacing: -0.02em;
   white-space: nowrap;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  /* Optical align with mark (mark has built-in transparent padding) */
+  transform: translateY(0.5px);
 }
 
 .welcome-nav__center {
@@ -106,16 +116,6 @@
 
 .welcome-nav__auth a:hover {
   color: #e0a100;
-}
-
-.welcome-nav__email {
-  font-size: 13px;
-  font-weight: 600;
-  color: #c8e6d4 !important;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .welcome-nav__auth i {
@@ -222,14 +222,6 @@
 }
 
 @media (max-width: 900px) {
-  .welcome-nav__word {
-    display: none;
-  }
-
-  .welcome-nav__email {
-    display: none;
-  }
-
   .welcome-nav__center {
     order: 3;
     flex: 1 1 100%;
