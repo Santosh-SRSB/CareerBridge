@@ -11,13 +11,16 @@ export function WelcomeRoleNav({ role }: { role: WelcomeRole }) {
   return (
     <nav className="welcome-nav" aria-label="Primary">
       <div className="welcome-nav__bar">
-        <Link className="welcome-nav__logo" href={role === 'candidate' ? '/' : '/employer/welcome'}>
+        <Link
+          className="welcome-nav__logo"
+          href={role === 'candidate' ? '/welcome' : '/employer/welcome'}
+        >
           CareerBridge
         </Link>
         <div className="welcome-nav__switch" role="tablist" aria-label="Audience">
           <Link
             className={role === 'candidate' ? 'on' : undefined}
-            href="/"
+            href="/welcome"
             role="tab"
             aria-selected={role === 'candidate'}
           >
@@ -54,7 +57,9 @@ export function WelcomeFoot({ role }: { role: WelcomeRole }) {
         <div>
           <h4>Candidate</h4>
           <Link href="/login?role=candidate">Candidate Login</Link>
-          <Link href={role === 'candidate' ? '#features' : '/#features'}>Candidate Features</Link>
+          <Link href={role === 'candidate' ? '#features' : '/welcome#features'}>
+            Candidate Features
+          </Link>
         </div>
         <div>
           <h4>Employer</h4>

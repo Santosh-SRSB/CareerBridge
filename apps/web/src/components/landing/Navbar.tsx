@@ -11,7 +11,7 @@ import type { AuthUser } from "@careerbridge/shared";
 const links = [
   { href: "/", label: "Home" },
   { href: "/employer/welcome", label: "Employer" },
-  { href: "/#candidates", label: "Candidate" },
+  { href: "/welcome", label: "Candidate" },
   { href: "/testimonials", label: "Testimonial" },
 ];
 

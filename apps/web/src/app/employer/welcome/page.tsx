@@ -1,6 +1,6 @@
-import { EmployerMarketingLanding } from '@/components/employer/EmployerMarketingLanding';
+import { EmployerWelcomeLanding } from '@/components/landing/EmployerWelcomeLanding';
 
-/** Friend's employer marketing UI (cb-emkt) — public entry for employers. */
+/** Public employer welcome — forest/gold landing (not the old marketing shell). */
 export default function EmployerWelcomePage() {
-  return <EmployerMarketingLanding />;
+  return <EmployerWelcomeLanding />;
 }

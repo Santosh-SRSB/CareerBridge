@@ -43,7 +43,7 @@ export function Footer() {
           <div>
             <h4>Candidate</h4>
             <Link href="/login?role=candidate">Candidate Login</Link>
-            <Link href="/#candidates">Candidate Features</Link>
+            <Link href="/welcome#features">Candidate Features</Link>
           </div>
           <div>
             <h4>Employer</h4>
