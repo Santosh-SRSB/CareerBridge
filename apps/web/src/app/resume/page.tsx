@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -266,7 +266,7 @@ export default function ResumePage() {
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
-          Loading…
+          Loadingâ€¦
         </main>
       }
     >
@@ -384,7 +384,7 @@ function ResumePageInner() {
         });
       }
 
-      // ATS dashboard → edit one section only (do not restart full creation wizard)
+      // ATS dashboard â†’ edit one section only (do not restart full creation wizard)
       const pendingAtsEdit = peekAtsSectionEdit();
       if (pendingAtsEdit?.resumeId) {
         try {
@@ -414,7 +414,7 @@ function ResumePageInner() {
         }
       }
 
-      // Path A: seed from uploaded resume → open Personal step (skip choose screen)
+      // Path A: seed from uploaded resume â†’ open Personal step (skip choose screen)
       const autofillSeed = peekResumeAutofillSeed();
       const fromAutofill = Boolean(autofillSeed || peekResumeFromAutofill() || fromAutofillQuery);
       if (fromAutofill) {
@@ -451,8 +451,10 @@ function ResumePageInner() {
             preferredRole: seedFields.preferredRole || '',
             preferredLocation: seedFields.preferredLocation || '',
             expectedSalary: seedFields.expectedSalary || '',
+            pendingParseId: pendingParse && resumeId ? resumeId : null,
+            savedResumeId: resumeId || null,
           });
-          // Clear seed only — keep from-autofill flag for Strict Mode remount.
+          // Clear seed only â€” keep from-autofill flag for Strict Mode remount.
           clearResumeAutofillSeed();
           setFlowPhase('wizard');
           setWizardIndex(0);
@@ -463,6 +465,14 @@ function ResumePageInner() {
               ...draft,
               flowPhase: draft.flowPhase === 'choose' ? 'wizard' : draft.flowPhase,
             });
+            if (draft.pendingParseId) {
+              setPendingParseId(draft.pendingParseId);
+              setSavedResumeId(draft.pendingParseId);
+              setParseBusy(true);
+              setParseError('');
+            } else if (draft.savedResumeId) {
+              setSavedResumeId(draft.savedResumeId);
+            }
           } else {
             setFlowPhase('wizard');
             setWizardIndex(0);
@@ -681,6 +691,8 @@ function ResumePageInner() {
       preferredRole,
       preferredLocation,
       expectedSalary,
+      pendingParseId: pendingParseId || null,
+      savedResumeId: savedResumeId || null,
     });
   }, [
     draftReady,
@@ -706,6 +718,8 @@ function ResumePageInner() {
     preferredRole,
     preferredLocation,
     expectedSalary,
+    pendingParseId,
+    savedResumeId,
   ]);
 
   const masterResume = useMemo(
@@ -1050,7 +1064,7 @@ function ResumePageInner() {
   function handleApplyAiSuggestion(suggestion: ResumeAiSuggestion, improvedText: string) {
     const lines = improvedText
       .split(/\n+/)
-      .map((line) => line.replace(/^[-•*]\s*/, '').trim())
+      .map((line) => line.replace(/^[-â€¢*]\s*/, '').trim())
       .filter(Boolean);
 
     switch (suggestion.section) {
@@ -1096,9 +1110,9 @@ function ResumePageInner() {
                 id: `edu-${Date.now()}`,
                 degree: improvedText.split(' in ')[0] || improvedText,
                 field: improvedText.includes(' in ')
-                  ? improvedText.split(' in ')[1]?.split(' — ')[0] || ''
+                  ? improvedText.split(' in ')[1]?.split(' â€” ')[0] || ''
                   : '',
-                institution: improvedText.split(' — ')[1]?.replace(/\s*\(.*\)$/, '') || '',
+                institution: improvedText.split(' â€” ')[1]?.replace(/\s*\(.*\)$/, '') || '',
                 location: '',
                 startDate: '',
                 endDate: '',
@@ -1109,12 +1123,12 @@ function ResumePageInner() {
             ];
           }
           const next = [...prev];
-          const degreeMatch = improvedText.match(/^([^—]+?)(?:\s+in\s+([^—]+))?/);
+          const degreeMatch = improvedText.match(/^([^â€”]+?)(?:\s+in\s+([^â€”]+))?/);
           next[0] = {
             ...next[0],
             degree: degreeMatch?.[1]?.trim() || next[0].degree,
             field: degreeMatch?.[2]?.trim() || next[0].field,
-            institution: improvedText.split(' — ')[1]?.replace(/\s*\(.*\)$/, '').trim() || next[0].institution,
+            institution: improvedText.split(' â€” ')[1]?.replace(/\s*\(.*\)$/, '').trim() || next[0].institution,
           };
           return next;
         });
@@ -1125,7 +1139,7 @@ function ResumePageInner() {
 
         for (const line of lines) {
           if (/certification|certificate|certified/i.test(line)) {
-            const name = line.replace(/\s*—\s*Udemy\s*$/i, '').trim() || line;
+            const name = line.replace(/\s*â€”\s*Udemy\s*$/i, '').trim() || line;
             certEntries.push({
               id: `cert-${Date.now()}-${certEntries.length}`,
               name,
@@ -1300,14 +1314,14 @@ function ResumePageInner() {
       leaveResumeFlow('/onboarding/complete');
       return;
     }
-    // Step 0: leave wizard back to where the user came from (View Resume, ATS, dashboard…)
+    // Step 0: leave wizard back to where the user came from (View Resume, ATS, dashboardâ€¦)
     leaveResumeFlow('/dashboard');
   }
 
   if (!draftReady) {
     return (
       <div className="cb-resume-flow-root flex min-h-screen items-center justify-center bg-[#f3f4ee]">
-        <p className="text-sm font-medium text-[#43526b]">Loading your resume…</p>
+        <p className="text-sm font-medium text-[#43526b]">Loading your resumeâ€¦</p>
       </div>
     );
   }
@@ -1693,7 +1707,7 @@ function ResumePageInner() {
                 style={{ borderColor: '#7A8270', color: '#5C5546' }}
                 aria-label="Go back"
               >
-                ← Back
+                â† Back
               </button>
 
               <h1
@@ -1768,7 +1782,7 @@ function ResumePageInner() {
                   className="w-full rounded-full border-2 bg-white py-2.5 text-sm font-semibold transition hover:bg-[#F5F7F0] sm:py-3"
                   style={{ marginTop: 50, borderColor: OB.ink, color: OB.ink }}
                 >
-                  Continue to dashboard →
+                  Continue to dashboard â†’
                 </button>
               </div>
             </div>
@@ -1817,7 +1831,7 @@ function ResumePageInner() {
                     Reading your resume
                   </p>
                   <p className="m-0 mt-0.5 text-xs" style={{ color: '#6b7789' }}>
-                    You can keep editing — details will fill in automatically.
+                    You can keep editing â€” details will fill in automatically.
                   </p>
                 </div>
               </div>
@@ -1866,11 +1880,11 @@ function ResumePageInner() {
             <button type="button" className="cb-flow-back-btn" onClick={handleBack}>
               {atsEditStep
                 ? atsEditReturnTo === 'ats'
-                  ? '← Back to ATS'
-                  : '← Back'
+                  ? 'â† Back to ATS'
+                  : 'â† Back'
                 : getResumeUpdateReturnTo() || peekReturnTo()
-                  ? '← Back'
-                  : 'Back ←'}
+                  ? 'â† Back'
+                  : 'Back â†'}
             </button>
           </div>
           <div className="desc">
@@ -1880,7 +1894,7 @@ function ResumePageInner() {
                 ? 'Fill in the gaps so your profile is ready.'
                 : isBuildPath
                   ? 'Fill each section, then check ATS score and improve with AI before you save.'
-                  : 'One strong profile — ready for every application.'}
+                  : 'One strong profile â€” ready for every application.'}
           </div>
         </div>
 
@@ -1927,7 +1941,7 @@ function ResumePageInner() {
                 <div className="cb-field-grid">
                   {highlightMissingPersonal ? (
                     <p className="cb-field full" style={{ margin: 0, fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>
-                      Empty fields are highlighted in red — fill them to complete your profile.
+                      Empty fields are highlighted in red â€” fill them to complete your profile.
                     </p>
                   ) : null}
                   <div className={`cb-field${highlightMissingPersonal && !fullName.trim() ? ' cb-field-missing' : ''}`}>
@@ -1982,8 +1996,8 @@ function ResumePageInner() {
                           {edu.field ? ` in ${edu.field}` : ''}
                         </div>
                         <div className="meta">
-                          {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' · ')}
-                          {edu.grade ? ` · ${edu.gradeType || 'Grade'}: ${edu.grade}` : ''}
+                          {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' Â· ')}
+                          {edu.grade ? ` Â· ${edu.gradeType || 'Grade'}: ${edu.grade}` : ''}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2080,10 +2094,10 @@ function ResumePageInner() {
                     <div key={exp.id} className="cb-entry-card">
                       <div>
                         <div className="role">
-                          {exp.role} — {exp.company}
+                          {exp.role} â€” {exp.company}
                         </div>
                         <div className="meta">
-                          {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' · ')}
+                          {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' Â· ')}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2181,7 +2195,7 @@ function ResumePageInner() {
                       <div>
                         <div className="role">{proj.name}</div>
                         <div className="meta">
-                          {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}
+                          {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' Â· ')}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2268,14 +2282,14 @@ function ResumePageInner() {
                     Certifications
                   </p>
                   <p className="mb-3 text-sm text-[#5b6b7c]">
-                    Optional for many roles — add any certificates that strengthen your profile.
+                    Optional for many roles â€” add any certificates that strengthen your profile.
                   </p>
                   {certificationList.map((cert) => (
                     <div key={cert.id} className="cb-entry-card">
                       <div>
                         <div className="role">{cert.name}</div>
                         <div className="meta">
-                          {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}
+                          {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' Â· ')}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2359,7 +2373,7 @@ function ResumePageInner() {
                         <div className="meta">
                           {[ach.organization, formatDateForResume(ach.date), ach.description]
                             .filter(Boolean)
-                            .join(' · ')}
+                            .join(' Â· ')}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2511,7 +2525,7 @@ function ResumePageInner() {
                       rows={4}
                       value={gapReason}
                       onChange={(e) => setGapReason(e.target.value)}
-                      placeholder="e.g. Prepared for competitive exams, caregiving, health recovery, full-time upskilling…"
+                      placeholder="e.g. Prepared for competitive exams, caregiving, health recovery, full-time upskillingâ€¦"
                       style={{
                         width: '100%',
                         borderRadius: 12,
@@ -2542,7 +2556,7 @@ function ResumePageInner() {
                     Languages you speak
                   </p>
                   <p className="mb-3 text-sm text-[#5b6b7c]">
-                    Tap a language to select it. Selected languages appear dark — tap again to remove.
+                    Tap a language to select it. Selected languages appear dark â€” tap again to remove.
                     Proficiency from your profile (if any) is kept and shown on the resume.
                   </p>
                   <div className="cb-chip-wrap">
@@ -2566,7 +2580,7 @@ function ResumePageInner() {
                           onClick={() => (selected ? removeLanguage(l) : addLanguage(l))}
                         >
                           {label}{' '}
-                          <span className={selected ? undefined : 'plus'}>{selected ? '×' : '+'}</span>
+                          <span className={selected ? undefined : 'plus'}>{selected ? 'Ã—' : '+'}</span>
                         </button>
                       );
                     })}
@@ -2644,7 +2658,7 @@ function ResumePageInner() {
               >
                 {atsEditStep
                   ? saving
-                    ? 'Saving…'
+                    ? 'Savingâ€¦'
                     : 'Save & recheck ATS'
                   : 'Save & continue'}
               </button>
@@ -2652,7 +2666,7 @@ function ResumePageInner() {
           </>
         )}
 
-        {/* REVIEW SCREEN — opens after wizard when user reaches Review step */}
+        {/* REVIEW SCREEN â€” opens after wizard when user reaches Review step */}
         {isReviewStep && (
           <>
             <h2 className="cb-section-head">{getStepSectionLabel(currentStep)}</h2>
@@ -2757,10 +2771,10 @@ function ResumePageInner() {
                   <div key={exp.id} className="cb-entry-card">
                     <div>
                       <div className="role">
-                        {exp.role} — {exp.company}
+                        {exp.role} â€” {exp.company}
                       </div>
                       <div className="meta">
-                        {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' · ')}
+                        {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' Â· ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -2855,7 +2869,7 @@ function ResumePageInner() {
                     <div>
                       <div className="role">{proj.name}</div>
                       <div className="meta">
-                        {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}
+                        {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' Â· ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -2917,7 +2931,7 @@ function ResumePageInner() {
                         {edu.field ? ` in ${edu.field}` : ''}
                       </div>
                       <div className="meta">
-                        {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' · ')}
+                        {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' Â· ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -2981,7 +2995,7 @@ function ResumePageInner() {
                     <div>
                       <div className="role">{cert.name}</div>
                       <div className="meta">
-                        {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}
+                        {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' Â· ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -3034,7 +3048,7 @@ function ResumePageInner() {
                     <div>
                       <div className="role">{ach.title}</div>
                       <div className="meta">
-                        {[ach.organization, formatDateForResume(ach.date), ach.description].filter(Boolean).join(' · ')}
+                        {[ach.organization, formatDateForResume(ach.date), ach.description].filter(Boolean).join(' Â· ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -3122,7 +3136,7 @@ function ResumePageInner() {
                       rows={3}
                       value={gapReason}
                       onChange={(e) => setGapReason(e.target.value)}
-                      placeholder="Explain why this gap is OK…"
+                      placeholder="Explain why this gap is OKâ€¦"
                       style={{
                         width: '100%',
                         borderRadius: 12,
@@ -3154,7 +3168,7 @@ function ResumePageInner() {
               >
                 {atsEditStep
                   ? saving
-                    ? 'Saving…'
+                    ? 'Savingâ€¦'
                     : 'Save & recheck ATS'
                   : saving
                     ? 'Saving...'

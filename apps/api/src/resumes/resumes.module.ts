@@ -9,6 +9,7 @@ import { ParseResumePipeline } from './parse-resume.pipeline';
 import { CloudTasksService } from '../common/tasks/cloud-tasks.service';
 import { IntelligenceModule } from '../intelligence/intelligence.module';
 import { StorageModule } from '../common/storage/storage.module';
+import { ResumeProfileSyncService } from './resume-profile-sync.service';
 
 @Module({
   imports: [IntelligenceModule, StorageModule],
@@ -18,6 +19,7 @@ import { StorageModule } from '../common/storage/storage.module';
     ResumeOptimizeAi,
     ResumeExtractorService,
     ResumeProcessorService,
+    ResumeProfileSyncService,
     ParseResumePipeline,
     CloudTasksService,
   ],

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { InterviewSession } from '@careerbridge/shared';
@@ -8,39 +8,128 @@ import { downloadInterviewReport, getInterview } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { Button } from '@/components/ui/Button';
 import { ScoreRing } from '@/components/ScoreRing';
+import { InterviewLoadErrorPanel } from '@/components/interviews/InterviewLoadErrorPanel';
+import { formatInterviewAnswerDisplay, isAnsweredInterviewQuestion } from '@/lib/interview-answer-display';
+import { classifyInterviewLoadError, type InterviewLoadError } from '@/lib/interview-load-error';
+
+const REPORT_POLL_ATTEMPTS = 6;
+const REPORT_POLL_MS = 2000;
 
 export default function InterviewReportPage() {
   const params = useParams<{ id: string }>();
   const [session, setSession] = useState<InterviewSession | null>(null);
+  const [loadError, setLoadError] = useState<InterviewLoadError | null>(null);
+  const [pending, setPending] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   useEffect(() => {
-    getInterview(params.id).then(setSession);
-  }, [params.id]);
+    let cancelled = false;
+    setLoadError(null);
+    setPending(false);
+    (async () => {
+      for (let tries = 0; tries < REPORT_POLL_ATTEMPTS && !cancelled; tries += 1) {
+        try {
+          const next = await getInterview(params.id);
+          if (cancelled) return;
+          setSession(next);
+          // Report is written when the interview completes; poll briefly if it is still being generated.
+          if (next.status !== 'COMPLETED' || next.report || next.mode !== 'LIVE_AI') return;
+          setPending(true);
+          await new Promise((resolve) => setTimeout(resolve, REPORT_POLL_MS));
+        } catch (err) {
+          if (!cancelled) setLoadError(classifyInterviewLoadError(err));
+          return;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, attempt]);
+
+  if (loadError) {
+    return (
+      <CandidateShell>
+        <InterviewLoadErrorPanel error={loadError} onRetry={retry} />
+      </CandidateShell>
+    );
+  }
 
   if (!session) {
     return (
       <CandidateShell>
-        <p className="text-muted">Your interview has been completed. We are generating your detailed AI report...</p>
+        <p className="text-muted">Loading your interview report...</p>
+      </CandidateShell>
+    );
+  }
+
+  if (session.status !== 'COMPLETED') {
+    return (
+      <CandidateShell>
+        <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-10 text-center">
+          <p className="text-sm font-semibold text-slate-700">
+            This interview is still in progress. The report will be available once it ends.
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {session.mode === 'LIVE_AI' ? (
+              <Link href={`/interviews/live/${session.id}`}>
+                <Button type="button" block={false} size="md">
+                  Continue interview
+                </Button>
+              </Link>
+            ) : null}
+            <Link href="/interviews">
+              <Button type="button" variant="outline" block={false} size="md">
+                Back to interviews
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </CandidateShell>
+    );
+  }
+
+  if (!session.report && session.mode === 'LIVE_AI') {
+    return (
+      <CandidateShell>
+        <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-10 text-center">
+          <p className="text-sm font-semibold text-slate-700">
+            {pending
+              ? 'Your interview has been completed. We are generating your detailed AI report...'
+              : 'Your report is not ready yet.'}
+          </p>
+          <Button type="button" block={false} size="md" onClick={retry}>
+            Refresh
+          </Button>
+        </div>
       </CandidateShell>
     );
   }
 
   const report = session.report;
   const duration = session.durationSec || 0;
-  const answered = (session.liveQuestions || []).filter((item) => (item.answer || '').trim().length > 0);
+  const answered = (session.liveQuestions || []).filter(isAnsweredInterviewQuestion);
   const answeredCount = report?.answeredCount ?? answered.length;
   const totalPlanned = report?.totalPlanned ?? 15;
 
   async function onDownload() {
-    const file = await downloadInterviewReport(session!.id);
-    const bytes = Uint8Array.from(atob(file.pdf), (char) => char.charCodeAt(0));
-    const blob = new Blob([bytes], { type: file.mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = file.fileName;
-    link.click();
-    URL.revokeObjectURL(url);
+    setDownloadError('');
+    try {
+      const file = await downloadInterviewReport(session!.id);
+      const bytes = Uint8Array.from(atob(file.pdf), (char) => char.charCodeAt(0));
+      const blob = new Blob([bytes], { type: file.mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'Could not download the report.');
+    }
   }
 
   return (
@@ -115,7 +204,7 @@ export default function InterviewReportPage() {
             <p className="mt-3 text-xs font-bold uppercase text-teal">Question</p>
             <p className="mt-1 text-sm">{item.text}</p>
             <p className="mt-4 text-xs font-bold uppercase text-teal">Your answer</p>
-            <p className="mt-1 text-sm">{item.answer}</p>
+            <p className="mt-1 text-sm">{formatInterviewAnswerDisplay(item)}</p>
             {item.analysis ? (
               <>
                 <p className="mt-4 text-xs font-bold uppercase text-teal">What can be improved</p>
@@ -133,6 +222,7 @@ export default function InterviewReportPage() {
       <Button className="mt-6 max-w-xs" type="button" onClick={() => void onDownload()}>
         Download interview report
       </Button>
+      {downloadError ? <p className="mt-2 text-sm text-error">{downloadError}</p> : null}
     </CandidateShell>
   );
 }

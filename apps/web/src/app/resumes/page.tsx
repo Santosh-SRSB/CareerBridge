@@ -436,8 +436,16 @@ export default function ViewResumesPage() {
                       </button>
                       <button
                         type="button"
+                        disabled={failed || processing}
+                        title={
+                          failed
+                            ? 'Processing failed — retry or upload again to get an ATS score.'
+                            : processing
+                              ? 'ATS score is available once processing finishes.'
+                              : undefined
+                        }
                         onClick={() => onCheckAts(row)}
-                        className="min-w-[7.5rem] rounded-xl bg-[#0a2e2c] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#072422] sm:min-w-[8.5rem]"
+                        className="min-w-[7.5rem] rounded-xl bg-[#0a2e2c] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#072422] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#0a2e2c] sm:min-w-[8.5rem]"
                       >
                         Check ATS
                       </button>

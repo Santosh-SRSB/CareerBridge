@@ -1,4 +1,9 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { existsSync, readFileSync } from 'fs';
 import { isAbsolute, resolve } from 'path';
@@ -100,7 +105,8 @@ export class FirebaseService {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`verifyIdToken failed: ${msg}`);
-      throw new ServiceUnavailableException({
+      // Invalid/expired/malformed Firebase ID tokens are auth failures (401), not outages (503).
+      throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'We could not verify your OTP with Firebase. Request a new OTP and try again.',
       });

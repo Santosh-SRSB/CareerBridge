@@ -8,6 +8,8 @@ import { answerInterview, getInterview } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
+import { InterviewLoadErrorPanel } from '@/components/interviews/InterviewLoadErrorPanel';
+import { classifyInterviewLoadError, type InterviewLoadError } from '@/lib/interview-load-error';
 
 export default function InterviewSessionPage() {
   const params = useParams<{ id: string }>();
@@ -16,17 +18,29 @@ export default function InterviewSessionPage() {
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState<InterviewLoadError | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    getInterview(params.id).then((item) => {
-      setSession(item);
-      if (item.mode === 'LIVE_AI') {
-        router.replace(item.status === 'COMPLETED' ? `/interviews/${item.id}/report` : `/interviews/live/${item.id}`);
-        return;
-      }
-      if (item.status === 'COMPLETED') router.replace(`/interviews/${item.id}/feedback`);
-    });
-  }, [params.id, router]);
+    let cancelled = false;
+    setLoadError(null);
+    getInterview(params.id)
+      .then((item) => {
+        if (cancelled) return;
+        setSession(item);
+        if (item.mode === 'LIVE_AI') {
+          router.replace(item.status === 'COMPLETED' ? `/interviews/${item.id}/report` : `/interviews/live/${item.id}`);
+          return;
+        }
+        if (item.status === 'COMPLETED') router.replace(`/interviews/${item.id}/feedback`);
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(classifyInterviewLoadError(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, router, attempt]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -44,9 +58,19 @@ export default function InterviewSessionPage() {
         return;
       }
       setSession(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save your answer. Please try again.');
     } finally {
       setLoading(false);
     }
+  }
+
+  if (loadError) {
+    return (
+      <CandidateShell>
+        <InterviewLoadErrorPanel error={loadError} onRetry={() => setAttempt((value) => value + 1)} />
+      </CandidateShell>
+    );
   }
 
   if (!session?.currentQuestion) {

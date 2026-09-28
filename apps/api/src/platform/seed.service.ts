@@ -47,10 +47,11 @@ export class SeedService implements OnModuleInit {
       }
     } catch (err) {
       // Do not crash Cloud Run / Nest boot if schema is mid-migrate or empty.
-      console.error(
-        'SeedService skipped (database not ready or seed failed):',
-        err instanceof Error ? err.message : err,
-      );
+      const detail =
+        err instanceof Error
+          ? `${err.name}: ${err.message}${err.stack ? `\n${err.stack}` : ''}`
+          : String(err);
+      console.error('SeedService skipped (database not ready or seed failed):', detail);
     }
   }
 

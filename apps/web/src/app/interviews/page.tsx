@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
@@ -14,6 +14,16 @@ import {
 } from '@/lib/candidate-marketplace-api';
 import { mockInterviewSetupUrl } from '@/lib/mock-interview-url';
 import type { ScheduledJobInterview } from '@/lib/candidate-marketplace-api';
+import type { InterviewSession } from '@careerbridge/shared';
+import { listInterviews } from '@/lib/api';
+
+function completedHref(item: InterviewSession) {
+  return item.mode === 'LIVE_AI' ? `/interviews/${item.id}/report` : `/interviews/${item.id}/feedback`;
+}
+
+function completedScore(item: InterviewSession) {
+  return item.report?.overallScore ?? item.score ?? null;
+}
 
 function formatInterviewDate(value: string) {
   const date = new Date(value.includes('T') ? value : `${value}T00:00:00`);
@@ -31,6 +41,9 @@ export default function InterviewsHubPage() {
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [completed, setCompleted] = useState<InterviewSession[] | null>(null);
+  const [completedError, setCompletedError] = useState('');
+  const [completedLoading, setCompletedLoading] = useState(false);
 
   useEffect(() => {
     setLoadError('');
@@ -41,6 +54,23 @@ export default function InterviewsHubPage() {
         setLoadError(err instanceof Error ? err.message : 'Could not load scheduled interviews.');
       });
   }, []);
+
+  const loadCompleted = useCallback(async () => {
+    setCompletedLoading(true);
+    setCompletedError('');
+    try {
+      const rows = await listInterviews();
+      setCompleted(rows.filter((item) => item.status === 'COMPLETED'));
+    } catch (err) {
+      setCompletedError(err instanceof Error ? err.message : 'Could not load completed interviews.');
+    } finally {
+      setCompletedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCompleted();
+  }, [loadCompleted]);
 
   async function handleConfirm(id: string) {
     setBusyId(id);
@@ -147,6 +177,60 @@ export default function InterviewsHubPage() {
         </section>
 
         {message ? <p className="text-sm font-semibold text-emerald-700">{message}</p> : null}
+
+        <section className="space-y-3" aria-labelledby="completed-interviews">
+          <div className="flex items-center justify-between gap-3">
+            <p id="completed-interviews" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Completed practice interviews
+            </p>
+            <button
+              type="button"
+              className="text-xs font-bold text-teal hover:underline disabled:opacity-50"
+              onClick={() => void loadCompleted()}
+              disabled={completedLoading}
+            >
+              {completedLoading ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+          {completedError ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+              {completedError}
+            </div>
+          ) : null}
+          {!completedError && completed === null ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+              Loading completed interviews…
+            </div>
+          ) : null}
+          {!completedError && completed?.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+              No completed practice interviews yet. Finish a mock interview to see its report here.
+            </div>
+          ) : null}
+          {(completed || []).map((item) => {
+            const score = completedScore(item);
+            const endedAt = item.endAt || item.startAt;
+            return (
+              <Link
+                key={item.id}
+                href={completedHref(item)}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-teal"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-extrabold text-slate-900">{item.jobRole}</p>
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    {endedAt ? formatInterviewDate(endedAt) : 'Date unavailable'}
+                    {item.report ? ` · ${item.report.answeredCount}/${item.report.totalPlanned} answered` : ''}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-extrabold text-slate-900">{score != null ? `${score}/100` : '—'}</p>
+                  <p className="text-xs font-bold text-teal">View report →</p>
+                </div>
+              </Link>
+            );
+          })}
+        </section>
 
         <section
           className="overflow-hidden rounded-[22px] border border-[#d7eef6] p-4 shadow-[0_10px_28px_rgba(47,143,173,0.10)] sm:p-5"

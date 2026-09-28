@@ -1,5 +1,5 @@
 const RESUME_WIZARD_DRAFT_KEY = 'cb.resumeWizardDraft';
-export const RESUME_WIZARD_DRAFT_VERSION = 5;
+export const RESUME_WIZARD_DRAFT_VERSION = 6;
 
 export type ResumeWizardFlowPhase = 'choose' | 'wizard' | 'preview' | 'finish';
 
@@ -28,6 +28,9 @@ export interface ResumeWizardDraft {
   preferredRole: string;
   preferredLocation: string;
   expectedSalary: string;
+  /** Persist pending Document AI parse across Strict Mode remount / refresh. */
+  pendingParseId?: string | null;
+  savedResumeId?: string | null;
   savedAt: number;
 }
 

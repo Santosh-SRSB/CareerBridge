@@ -16,6 +16,7 @@ import {
   normalizeHttpUrl,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { USABLE_RESUME_WHERE } from '../resumes/resume-eligibility';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { MatchingService } from '../matching/matching.service';
 import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service';
@@ -464,7 +465,7 @@ export class EmployersService {
           include: {
             skills: true,
             education: { select: { id: true } },
-            resumes: { orderBy: { updatedAt: 'desc' }, take: 1, select: { id: true, score: true } },
+            resumes: { where: USABLE_RESUME_WHERE, orderBy: { updatedAt: 'desc' }, take: 1, select: { id: true, score: true } },
           },
         },
       },
@@ -502,7 +503,7 @@ export class EmployersService {
           include: {
             skills: true,
             education: { select: { id: true } },
-            resumes: { orderBy: { updatedAt: 'desc' }, take: 1, select: { id: true, score: true } },
+            resumes: { where: USABLE_RESUME_WHERE, orderBy: { updatedAt: 'desc' }, take: 1, select: { id: true, score: true } },
           },
         },
         job: true,
@@ -865,7 +866,7 @@ export class EmployersService {
       applied.resumeId ||
       (
         await this.prisma.resume.findFirst({
-          where: { candidateId },
+          where: { candidateId, ...USABLE_RESUME_WHERE },
           orderBy: { updatedAt: 'desc' },
           select: { id: true },
         })
@@ -1132,7 +1133,7 @@ export class EmployersService {
         );
       }
       scheduledAt = next;
-      // Employer-proposed new time ΓÇö candidate should confirm again.
+      // Employer-proposed new time — candidate should confirm again.
       status = 'SCHEDULED';
       confirmedAt = null;
       notes = stripRescheduleMarkers(notes) || null;

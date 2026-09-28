@@ -18,6 +18,7 @@ import {
   shouldShowBetterAnswer,
 } from '@/lib/interview-answer-display';
 import { getStoredUser } from '@/lib/session';
+import { classifyInterviewLoadError, isPermanentInterviewLoadError } from '@/lib/interview-load-error';
 
 function scoreOutOf10(score?: number) {
   if (score == null) return 0;
@@ -153,6 +154,11 @@ export default function MockInterviewResultPage() {
           await new Promise((r) => setTimeout(r, 1500));
         } catch (err) {
           if (cancelled) return;
+          if (isPermanentInterviewLoadError(err)) {
+            setLoadError(classifyInterviewLoadError(err).message);
+            setLoading(false);
+            return;
+          }
           if (attempts < 6) {
             await new Promise((r) => setTimeout(r, 1200));
             continue;

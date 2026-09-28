@@ -15,23 +15,24 @@ const FB_VID_KEY = 'cb_firebase_vid';
 const FB_PHONE_KEY = 'cb_firebase_phone';
 
 const FIREBASE_MESSAGES: Record<string, string> = {
-  'auth/invalid-verification-code': 'Incorrect OTP. Please check the code and try again.',
-  'auth/code-expired': 'This OTP has expired. Tap Resend OTP.',
+  'auth/invalid-verification-code': 'The OTP is incorrect.',
+  'auth/code-expired': 'This OTP has expired. Please request a new one.',
   'auth/invalid-verification-id': 'Please request a new OTP.',
   'auth/missing-verification-code': 'Enter the 6-digit OTP.',
-  'auth/too-many-requests': "You've reached the maximum number of attempts. Please try again later.",
+  'auth/too-many-requests': 'Too many attempts. Please wait and try again later.',
   'auth/quota-exceeded':
     'Too many OTP requests for this number. Wait a while, or add this number under Firebase → Phone → Phone numbers for testing.',
   'auth/error-code:-39':
     'Too many OTP requests for this number. Wait a while, or add this number under Firebase → Phone → Phone numbers for testing.',
-  'auth/captcha-check-failed': 'Verification check failed. Refresh the page and try again.',
+  'auth/captcha-check-failed':
+    'Verification could not be completed. Please try again.',
   'auth/invalid-phone-number': 'Enter a valid mobile number with country code.',
   'auth/missing-phone-number': 'Enter a valid mobile number.',
   'auth/network-request-failed': 'Network error. Check your connection and try again.',
   'auth/operation-not-allowed': 'Phone OTP is not enabled in Firebase Console yet.',
   'auth/billing-not-enabled':
     'Firebase Phone OTP needs Blaze billing for real SMS. Add a test phone in Firebase Console for local testing.',
-  'auth/session-expired': 'This OTP session expired. Tap Resend OTP.',
+  'auth/session-expired': 'This OTP has expired. Please request a new one.',
   'auth/invalid-app-credential':
     'Firebase blocked this browser session. Open http://127.0.0.1:3000 (not localhost), and ensure 127.0.0.1 is an Authorized domain in Firebase Authentication → Settings.',
 };

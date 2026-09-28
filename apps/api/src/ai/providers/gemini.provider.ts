@@ -35,7 +35,13 @@ export class GeminiProvider implements AiProvider {
   }
 
   getEmbeddingModel(): string {
-    return this.config.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() || 'text-embedding-004';
+    return this.config.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() || 'gemini-embedding-001';
+  }
+
+  /** Must match the vector(N) columns in profile_embeddings / embedding_chunks. */
+  getEmbeddingDimensions(): number {
+    const value = Number(this.config.get<string>('EMBEDDING_DIMENSIONS') || 768);
+    return Number.isFinite(value) && value > 0 ? value : 768;
   }
 
   private getClient(): GoogleGenAI {
@@ -248,18 +254,83 @@ export class GeminiProvider implements AiProvider {
       return { values: [], model };
     }
 
+    const expected = options?.dimensions || this.getEmbeddingDimensions();
     const response = await client.models.embedContent({
       model,
       contents: trimmed,
+      config: { outputDimensionality: expected },
     });
 
     const values = response.embeddings?.[0]?.values || [];
-    const expected = Number(this.config.get<string>('EMBEDDING_DIMENSIONS') || 768);
-    if (values.length && expected > 0 && values.length !== expected) {
+    if (values.length && values.length !== expected) {
       throw new Error(
         `Embedding length ${values.length} does not match EMBEDDING_DIMENSIONS=${expected}. Align the model and the vector(N) column before storing.`,
       );
     }
-    return { values: [...values], model };
+    return { values: normalizeVector(values), model };
   }
+
+  /**
+   * Batch embedding for indexing: one request per 100 texts instead of one per chunk. Retries rate limits
+   * with backoff because indexing runs in the background worker; interview-time retrieval uses embed().
+   */
+  async embedMany(
+    texts: string[],
+    options?: { retries?: number; backoffMs?: number },
+  ): Promise<{ vectors: number[][]; model: string; requests: number }> {
+    const model = this.getEmbeddingModel();
+    const expected = this.getEmbeddingDimensions();
+    const retries = options?.retries ?? 3;
+    const backoffMs = options?.backoffMs ?? 5000;
+    const vectors: number[][] = [];
+    let requests = 0;
+    for (let start = 0; start < texts.length; start += 100) {
+      const slice = texts.slice(start, start + 100).map((text) => text.trim().slice(0, 8000));
+      if (slice.some((text) => !text)) throw new Error('Cannot embed empty text');
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          requests += 1;
+          const response = await this.getClient().models.embedContent({
+            model,
+            contents: slice,
+            config: { outputDimensionality: expected },
+          });
+          const list = response.embeddings || [];
+          if (list.length !== slice.length) {
+            throw new Error(`Embedding provider returned ${list.length} vectors for ${slice.length} texts`);
+          }
+          for (const item of list) {
+            const values = item.values || [];
+            if (values.length !== expected) {
+              throw new Error(
+                `Embedding length ${values.length} does not match EMBEDDING_DIMENSIONS=${expected}. Align the model and the vector(N) column before storing.`,
+              );
+            }
+            vectors.push(normalizeVector(values));
+          }
+          break;
+        } catch (err) {
+          if (attempt < retries && isRateLimited(err)) {
+            await new Promise((resolve) => setTimeout(resolve, backoffMs * (attempt + 1)));
+            continue;
+          }
+          throw err;
+        }
+      }
+    }
+    return { vectors, model, requests };
+  }
+}
+
+function isRateLimited(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  const message = err instanceof Error ? err.message : String(err);
+  return status === 429 || /\b429\b|RESOURCE_EXHAUSTED|rate limit/i.test(message);
+}
+
+/** Truncated gemini-embedding-001 outputs are not unit length; normalize so dot product equals cosine. */
+export function normalizeVector(values: number[]): number[] {
+  const norm = Math.sqrt(values.reduce((sum, value) => sum + value * value, 0));
+  if (!Number.isFinite(norm) || norm === 0) return [...values];
+  return values.map((value) => value / norm);
 }

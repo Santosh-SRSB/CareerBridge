@@ -102,6 +102,20 @@ export default function EmployerInterviewsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('scheduled') === '1') {
+      const wa = params.get('wa');
+      setMessage(
+        wa === 'queued'
+          ? 'Interview scheduled. WhatsApp notification queued.'
+          : 'Interview scheduled.',
+      );
+      window.history.replaceState({}, '', '/employer/interviews');
+    }
+  }, []);
+
   const upcomingCount = useMemo(() => items.filter((item) => isUpcoming(item.status)).length, [items]);
   const completedCount = useMemo(() => items.filter((item) => isCompletedTab(item.status)).length, [items]);
 

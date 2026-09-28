@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { FirebaseService } from './firebase.service';
 import { EmailService } from './email.service';
 import { JwtStrategy } from './jwt.strategy';
+import { requireJwtAccessSecret } from './jwt-secrets';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { JwtStrategy } from './jwt.strategy';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_ACCESS_SECRET') || 'dev-access-secret',
+        secret: requireJwtAccessSecret(config),
         signOptions: { expiresIn: config.get('JWT_ACCESS_EXPIRES') || '7d' },
       }),
     }),

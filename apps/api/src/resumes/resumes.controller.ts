@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Patch, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
@@ -234,11 +234,15 @@ export class ResumesController {
     return this.resumes.uploadFile(user.id, file, body?.targetJobTitle);
   }
 
-  /** Cloud Tasks / local worker callback */
+  /** Cloud Tasks / local worker callback — must present RESUME_TASK_SECRET when configured. */
   @Public()
+  @Roles()
   @Post('worker/process')
-  processWorker(@Body() body: { resumeId: string; userId: string }) {
-    return this.resumes.processWorker(body);
+  processWorker(
+    @Headers('x-resume-task-secret') secret: string | undefined,
+    @Body() body: { resumeId: string; userId: string },
+  ) {
+    return this.resumes.processWorker(body, secret);
   }
 
   @Post('save-primary')

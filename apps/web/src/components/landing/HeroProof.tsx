@@ -3,17 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { getPlatformStats } from "@/lib/api";
 
-const FALLBACK = {
-  passports: 150,
-  cities: 15,
-  jobs: 480,
-} as const;
-
 type LiveStats = {
   passports: number;
   cities: number;
   jobs: number;
 };
+
+function toCount(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+}
 
 function buildBeats(stats: LiveStats) {
   return [
@@ -85,25 +84,27 @@ export function HeroProof() {
   const [phase, setPhase] = useState<Phase>(0);
   const [shown, setShown] = useState(0);
   const [leaving, setLeaving] = useState(false);
-  const statsRef = useRef<LiveStats>({ ...FALLBACK });
+  const statsRef = useRef<LiveStats>({ passports: 0, cities: 0, jobs: 0 });
 
   useEffect(() => {
     let cancelled = false;
     void getPlatformStats()
       .then((data) => {
         if (cancelled) return;
+        // Use live API counts only — never invent marketing placeholders (0 is valid).
         const next = {
-          passports: Number(data.passports) || FALLBACK.passports,
-          cities: Number(data.cities) || FALLBACK.cities,
-          jobs: Number(data.jobs) || FALLBACK.jobs,
+          passports: toCount(data.passports),
+          cities: toCount(data.cities),
+          jobs: toCount(data.jobs),
         };
         statsRef.current = next;
         setStats(next);
       })
       .catch(() => {
         if (cancelled) return;
-        statsRef.current = { ...FALLBACK };
-        setStats({ ...FALLBACK });
+        const empty = { passports: 0, cities: 0, jobs: 0 };
+        statsRef.current = empty;
+        setStats(empty);
       });
     return () => {
       cancelled = true;

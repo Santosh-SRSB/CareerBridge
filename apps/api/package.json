@@ -11,12 +11,18 @@
     "prisma:push": "prisma db push --schema prisma/schema.prisma",
     "test:gst": "node -r ts-node/register/transpile-only --test src/gst/gst.unit.test.ts",
     "test:chunking": "node -r ts-node/register/transpile-only --test src/ai/chunking/resume-chunking.test.ts",
+    "test:rag": "node -r ts-node/register/transpile-only --test src/ai/rag-retrieval.unit.test.ts src/ai/chunking/resume-chunking.test.ts",
     "test:gst:integration": "node -r ts-node/register/transpile-only --test src/gst/gst.integration.test.ts",
     "test:resume-parse": "node -r ts-node/register/transpile-only --test src/resumes/parse-extracted-resume.unit.test.ts",
     "test:resume-isolation": "node -r ts-node/register/transpile-only --test src/resumes/isolation.unit.test.ts src/resumes/content-grounding-gate.unit.test.ts",
     "test:resume-fixtures": "node -r ts-node/register/transpile-only --test src/resumes/fixture-integration.unit.test.ts",
     "test:resume-layout": "node -r ts-node/register/transpile-only --test src/resumes/layout-sanitize.unit.test.ts",
-    "test:resume": "node -r ts-node/register/transpile-only --test src/resumes/*.unit.test.ts"
+    "test:resume": "node -r ts-node/register/transpile-only --test src/resumes/*.unit.test.ts",
+    "test:whatsapp": "node --experimental-strip-types --test src/whatsapp/whatsapp.lifecycle.unit.test.ts",
+    "test:auth": "node -r ts-node/register/transpile-only --test src/auth/jwt-secrets.unit.test.ts",
+    "test:photo": "node -r ts-node/register/transpile-only --test src/candidates/profile-photo.unit.test.ts",
+    "test:interview": "node -r ts-node/register/transpile-only --test src/interviews/interview-lifecycle.unit.test.ts src/interviews/interview-evaluation.util.test.ts",
+    "test:resume-pipeline": "node -r ts-node/register/transpile-only --test src/resumes/resume-pipeline.unit.test.ts src/resumes/isolation.unit.test.ts"
   },
   "dependencies": {
     "@careerbridge/shared": "*",

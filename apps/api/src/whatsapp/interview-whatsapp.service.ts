@@ -4,7 +4,6 @@ import { CloudTasksService } from '../common/tasks/cloud-tasks.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from './whatsapp.service';
 import { WhatsAppWebhookService } from './whatsapp.webhook.service';
-import type { ReminderKind } from './whatsapp.types';
 
 /**
  * Bridge: Interview (PostgreSQL system of record) → WhatsApp communication channel.
@@ -71,7 +70,7 @@ export class InterviewWhatsAppService {
     });
 
     if (sent.ok) {
-      await this.scheduleReminders(interview.id, interview.scheduledAt);
+      // Reminders are scheduled only after CONFIRM (not on invitation) — see scheduleReminders.
       const meetingUrl =
         interview.meetingUrl ||
         (interview.location && /^https?:\/\//i.test(interview.location.trim())
@@ -134,6 +133,10 @@ export class InterviewWhatsAppService {
         .catch(() => undefined);
     }
 
+    if (sent.ok) {
+      await this.scheduleReminders(interview.id, interview.scheduledAt);
+    }
+
     return sent;
   }
 
@@ -160,19 +163,6 @@ export class InterviewWhatsAppService {
   }
 
   async scheduleReminders(interviewId: string, scheduledAt: Date) {
-    const kinds: Array<{ kind: ReminderKind; msBefore: number }> = [
-      { kind: '24h', msBefore: 24 * 60 * 60 * 1000 },
-      { kind: '2h', msBefore: 2 * 60 * 60 * 1000 },
-      { kind: '15m', msBefore: 15 * 60 * 1000 },
-    ];
-    for (const item of kinds) {
-      const runAt = new Date(scheduledAt.getTime() - item.msBefore);
-      if (runAt.getTime() <= Date.now()) continue;
-      await this.cloudTasks.enqueueWhatsAppJob(
-        { type: 'interview_reminder', interviewId, kind: item.kind },
-        () => this.webhook.sendReminderNow(interviewId, item.kind),
-        runAt,
-      );
-    }
+    return this.webhook.scheduleReminders(interviewId, scheduledAt);
   }
 }

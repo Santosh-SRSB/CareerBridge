@@ -129,3 +129,42 @@ export function slotPayload(interviewId: string, iso: string) {
 export function startPayload(interviewId: string) {
   return `START:${interviewId}`;
 }
+
+export function parseInteractivePayload(raw: string | undefined): import('./whatsapp.types').ParsedInteractivePayload {
+  if (!raw) return { action: 'UNKNOWN', raw: '' };
+  const value = raw.trim();
+  if (value.startsWith('CONFIRM:')) {
+    return { action: 'CONFIRM', interviewId: value.slice('CONFIRM:'.length), raw: value };
+  }
+  if (value.startsWith('RESCHEDULE:')) {
+    return { action: 'RESCHEDULE', interviewId: value.slice('RESCHEDULE:'.length), raw: value };
+  }
+  if (value.startsWith('DECLINE:')) {
+    return { action: 'DECLINE', interviewId: value.slice('DECLINE:'.length), raw: value };
+  }
+  if (value.startsWith('START:')) {
+    return { action: 'START', interviewId: value.slice('START:'.length), raw: value };
+  }
+  if (value.startsWith('SLOT:')) {
+    const rest = value.slice('SLOT:'.length);
+    const split = rest.indexOf(':');
+    if (split > 0) {
+      return {
+        action: 'SLOT',
+        interviewId: rest.slice(0, split),
+        slotIso: rest.slice(split + 1),
+        raw: value,
+      };
+    }
+  }
+  const lower = value.toLowerCase();
+  if (lower.includes('confirm')) return { action: 'CONFIRM', raw: value };
+  if (
+    lower.includes('reschedule') ||
+    lower.includes('another time') ||
+    lower.includes('choose another')
+  ) {
+    return { action: 'RESCHEDULE', raw: value };
+  }
+  return { action: 'UNKNOWN', raw: value };
+}

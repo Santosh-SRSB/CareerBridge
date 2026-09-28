@@ -98,10 +98,17 @@ export default function WhatsAppIntegrationTestPage() {
   }
 
   const checks = [
-    ['Meta API Connected', Boolean(connection?.configured && connection?.accessToken)],
-    ['Phone Number Configured', Boolean(connection?.phoneNumberId)],
-    ['Verify Token Set', Boolean(connection?.verifyToken)],
-    ['App Secret Set', Boolean(connection?.appSecret)],
+    ['WhatsApp configured', Boolean(connection?.configured)],
+    ['Access Token', Boolean(connection?.accessToken)],
+    ['Phone Number', Boolean(connection?.phoneNumberId)],
+    ['Verify Token', Boolean(connection?.verifyToken)],
+    [
+      connection?.requireSignature
+        ? 'Signature (required)'
+        : 'Signature (disabled in DEV)',
+      connection?.requireSignature ? Boolean(connection?.signatureReady) : true,
+    ],
+    ['App Secret', Boolean(connection?.appSecret)],
   ] as const;
 
   return (
@@ -132,6 +139,14 @@ export default function WhatsAppIntegrationTestPage() {
           Webhook: <code>{String(connection?.webhookPath || '')}</code>
           <br />
           Alias: <code>{String(connection?.webhookAliasPath || '')}</code>
+          <br />
+          Signature mode: <code>{String(connection?.signatureMode || 'unknown')}</code>
+          {!connection?.requireSignature ? (
+            <>
+              {' '}
+              — App Secret is not required while signature verification is disabled.
+            </>
+          ) : null}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button

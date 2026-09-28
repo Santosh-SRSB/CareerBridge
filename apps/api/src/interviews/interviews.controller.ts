@@ -87,6 +87,13 @@ class LiveAnswerDto {
   @IsString()
   @IsIn(['TEXT', 'AUDIO'])
   answerMode?: 'TEXT' | 'AUDIO';
+
+  /** Index of the question the client is answering; a stale index is rejected instead of answering the next one. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  questionIndex?: number;
 }
 
 class WarningDto {
@@ -131,7 +138,7 @@ export class InterviewsController {
 
   @Post(':id/answers')
   answerLive(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: LiveAnswerDto) {
-    return this.interviews.answerLive(user.id, id, dto.answer, dto.durationSec, dto.answerMode);
+    return this.interviews.answerLive(user.id, id, dto.answer, dto.durationSec, dto.answerMode, dto.questionIndex);
   }
 
   @Post(':id/warnings')

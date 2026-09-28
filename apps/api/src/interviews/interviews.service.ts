@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ErrorCode,
   type InterviewReport,
@@ -8,7 +8,9 @@ import {
   type LiveInterviewTurn,
   type ResumeContent,
 } from '@careerbridge/shared';
+import type { Interview, Prisma } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { USABLE_RESUME_WHERE } from '../resumes/resume-eligibility';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { InterviewAiService, profileFromResume, type InterviewProfile } from './interview-ai.service';
 import {
@@ -22,11 +24,35 @@ import { renderInterviewPdf } from './interview-pdf';
 import { countAnsweredQuestions, isAnsweredQuestion, isAudioPlaceholderAnswer } from './interview-answer.util';
 import { TestimonialsService } from '../testimonials/testimonials.service';
 
+/** Persisted question shape; ragChunkIds stays server-side and is stripped from API responses. */
+type StoredLiveQuestion = LiveInterviewQuestion & { ragChunkIds?: string[] };
+type AnswerScoreOptions = { answerMode: 'TEXT' | 'AUDIO'; durationSec: number; category?: string | null };
+type AnswerAnalysis = Awaited<ReturnType<InterviewAiService['analyzeAnswer']>>;
+
+const SCORING_PLACEHOLDER = 'Scoring in progress…';
+
+function isPendingScore(item: LiveInterviewQuestion) {
+  return item.score == null || !item.analysis || item.analysis === SCORING_PLACEHOLDER;
+}
+
+function alreadyAnswered() {
+  return new ConflictException({
+    code: ErrorCode.BUSINESS_RULE_VIOLATION,
+    message: 'This question was already answered. Refresh to continue with the next question.',
+  });
+}
+
+function interviewEnded() {
+  return new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'This interview has already ended.' });
+}
+
 @Injectable()
 export class InterviewsService {
   private readonly logger = new Logger(InterviewsService.name);
   /** Chains deferred Gemini scoring so endLive waits and concurrent writes don't clobber. */
   private readonly pendingScores = new Map<string, Promise<void>>();
+  private readonly endInflight = new Map<string, Promise<InterviewSession>>();
+  private readonly startInflight = new Map<string, Promise<InterviewSession>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -73,7 +99,17 @@ export class InterviewsService {
   ) {
     const candidate = await this.prisma.candidate.findUnique({
       where: { userId },
-      include: { skills: true, education: true, experiences: true, resumes: { orderBy: { updatedAt: 'desc' }, take: 1 } },
+      include: {
+        skills: true,
+        education: true,
+        experiences: true,
+        // Archived or unusable (failed / still processing) resumes must never feed interview context.
+        resumes: {
+          where: USABLE_RESUME_WHERE,
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+        },
+      },
     });
     if (!candidate) {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Candidate profile was not found' });
@@ -93,6 +129,11 @@ export class InterviewsService {
     const band = years < 1 ? 'FRESHER' : years < 2 ? 'YEAR_1' : years < 4 ? 'YEAR_2_3' : 'YEAR_4_PLUS';
     const questionLimit = dto.questionCount != null ? clampQuestionLimit(dto.questionCount) : 15;
     const interviewType = normalizeInterviewType(dto.interviewType);
+    const parsedResume = await this.prisma.resume.findFirst({
+      where: { candidateId: candidate.id, processingStatus: 'COMPLETED', archivedAt: null },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true },
+    });
     const created = await this.prisma.interview.create({
       data: {
         candidateId: candidate.id,
@@ -104,7 +145,13 @@ export class InterviewsService {
         source: dto.source,
         difficulty: dto.difficulty || band,
         durationLimitMin: dto.durationLimitMin,
-        profileJson: JSON.stringify({ ...content, experienceYears: years, questionLimit, candidateId: candidate.id }),
+        profileJson: JSON.stringify({
+          ...content,
+          experienceYears: years,
+          questionLimit,
+          candidateId: candidate.id,
+          resumeId: parsedResume?.id,
+        }),
         transcriptJson: '[]',
         warningsJson: '[]',
       },
@@ -119,9 +166,17 @@ export class InterviewsService {
     }
     if (interview.status === 'COMPLETED') return this.toSession(interview);
     if (interview.startAt) return this.toSession(interview);
+    const inflight = this.startInflight.get(interview.id);
+    if (inflight) return inflight;
+    const run = this.beginLive(interview).finally(() => this.startInflight.delete(interview.id));
+    this.startInflight.set(interview.id, run);
+    return run;
+  }
+
+  private async beginLive(interview: Interview) {
     const profile = this.profileOf(interview);
     const first = await this.ai.firstQuestion(profile, interview.interviewType);
-    const question: LiveInterviewQuestion = {
+    const question: StoredLiveQuestion = {
       id: crypto.randomUUID(),
       number: 1,
       text: first.text,
@@ -130,21 +185,26 @@ export class InterviewsService {
       askedAt: new Date().toISOString(),
       snippet: first.snippet ?? null,
       thinkSeconds: first.thinkSeconds ?? 0,
+      ragChunkIds: first.ragChunkIds || [],
     };
     const transcript: LiveInterviewTurn[] = [
       { role: 'ai', text: first.text, at: new Date().toISOString(), questionNumber: 1 },
     ];
-    const updated = await this.prisma.interview.update({
-      where: { id: interview.id },
-      data: {
-        startAt: new Date(),
-        questionsJson: JSON.stringify([question]),
-        transcriptJson: JSON.stringify(transcript),
-        questionIndex: 0,
-        status: 'IN_PROGRESS',
-      },
+    return this.lockInterview(interview.id, async (row, tx) => {
+      // Started (or ended) by a concurrent request on another instance: keep its first question.
+      if (row.startAt || row.status === 'COMPLETED') return this.toSession(row);
+      const updated = await tx.interview.update({
+        where: { id: row.id },
+        data: {
+          startAt: new Date(),
+          questionsJson: JSON.stringify([question]),
+          transcriptJson: JSON.stringify(transcript),
+          questionIndex: 0,
+          status: 'IN_PROGRESS',
+        },
+      });
+      return this.toSession(updated);
     });
-    return this.toSession(updated);
   }
 
   async answerLive(
@@ -153,154 +213,180 @@ export class InterviewsService {
     answer: string,
     durationSec = 0,
     answerMode: 'TEXT' | 'AUDIO' = 'TEXT',
+    expectedIndex?: number,
   ) {
     const interview = await this.requireInterview(userId, id);
-    if (interview.status === 'COMPLETED') {
-      throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'This interview has already ended.' });
-    }
+    if (interview.status === 'COMPLETED') throw interviewEnded();
+    if (expectedIndex != null && expectedIndex !== interview.questionIndex) throw alreadyAnswered();
     const trimmed = answer.trim();
-    const isAudioOnlyEarly =
+    const isAudioOnly =
       answerMode === 'AUDIO' || (!trimmed && durationSec > 0) || isAudioPlaceholderAnswer(trimmed);
-    const warnings = parseWarnings(interview.warningsJson);
-    const conduct = isAudioOnlyEarly ? null : detectConduct(trimmed);
-    if (conduct) {
-      // Count same-kind strikes so 3 abusive answers end the interview.
-      const prior = countConductWarnings(warnings, conduct);
-      const strike = prior + 1;
-      if (prior >= CONDUCT_MAX_WARNINGS) {
-        const questions = parseQuestions(interview.questionsJson);
-        const current = questions[interview.questionIndex];
-        if (current && !current.answer) {
-          current.answer = trimmed;
-          current.answeredAt = new Date().toISOString();
-          current.answerDurationSec = durationSec;
-          current.score = 0;
-          current.analysis =
-            conduct === 'abuse'
-              ? 'Interview ended after repeated abusive language. Behaviour scored as unprofessional.'
-              : 'Interview ended due to repeated inappropriate or meaningless responses.';
-          current.improvedAnswer =
-            'I will answer professionally without abusive or meaningless language.';
-          current.strengths = [];
-          current.weaknesses =
-            conduct === 'abuse'
-              ? ['Used abusive language after two warnings']
-              : ['Repeated conduct issue after warnings'];
-          await this.prisma.interview.update({
-            where: { id: interview.id },
-            data: { questionsJson: JSON.stringify(questions) },
-          });
-        }
-        const terminateMsg = conductTerminateMessage(conduct);
-        warnings.push({
-          type: conduct === 'abuse' ? 'ABUSE' : 'NONSENSE',
-          message: terminateMsg,
-          severity: 'HIGH',
-          at: new Date().toISOString(),
-        });
-        await this.prisma.interview.update({
-          where: { id: interview.id },
-          data: { warningsJson: JSON.stringify(warnings.slice(-40)) },
-        });
-        const ended = await this.endLive(userId, id);
-        return { ...ended, conductWarning: terminateMsg, conductTerminated: true };
-      }
-      const warnMsg = conductWarningMessage(conduct, strike);
-      warnings.push({
-        type: conduct === 'abuse' ? 'ABUSE' : 'NONSENSE',
-        message: warnMsg,
-        severity: 'HIGH',
-        at: new Date().toISOString(),
-      });
-      const updated = await this.prisma.interview.update({
-        where: { id: interview.id },
-        data: { warningsJson: JSON.stringify(warnings.slice(-40)) },
-      });
-      return { ...this.toSession(updated), conductWarning: warnMsg };
-    }
+    const conduct = isAudioOnly ? null : detectConduct(trimmed);
+    if (conduct) return this.handleConduct(userId, interview.id, conduct, trimmed, durationSec);
 
-    const questions = parseQuestions(interview.questionsJson);
-    const current = questions[interview.questionIndex];
-    if (!current || isAnsweredQuestion(current)) {
-      throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'There is no open question to answer.' });
-    }
-    const profile = this.profileOf(interview);
-    const isAudioOnly = isAudioOnlyEarly;
     const textAnswer = isAudioOnly ? '' : trimmed;
-    // Persist answer immediately; Gemini scoring runs in the background so Submit
-    // only waits on next-question generation (not evaluate + next question).
-    current.answer = textAnswer;
-    current.answerMode = isAudioOnly ? 'AUDIO' : 'TEXT';
-    current.answeredAt = new Date().toISOString();
-    current.answerDurationSec = durationSec;
-    current.analysis = 'Scoring in progress…';
-    current.improvedAnswer = undefined;
-    current.score = undefined;
-    current.strengths = [];
-    current.weaknesses = [];
-    current.whatWasGood = [];
-    current.whatWasMissing = [];
-    current.improvementSuggestion = undefined;
-    const questionId = current.id;
-    const questionText = current.text;
-    const transcript = parseTurns(interview.transcriptJson);
-    transcript.push({
-      role: 'candidate',
-      text: isAudioOnly ? '[Audio answer]' : textAnswer,
-      at: new Date().toISOString(),
-      questionNumber: current.number,
+    // Claim the open question under a row lock so a duplicate/concurrent submit can't answer it
+    // twice or trigger a second next-question generation.
+    const claim = await this.lockInterview(interview.id, async (row, tx) => {
+      if (row.status === 'COMPLETED') throw interviewEnded();
+      const questions = parseQuestions(row.questionsJson);
+      const current = questions[row.questionIndex];
+      if (!current) {
+        throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'There is no open question to answer.' });
+      }
+      if (isAnsweredQuestion(current) || (expectedIndex != null && expectedIndex !== row.questionIndex)) {
+        throw alreadyAnswered();
+      }
+      current.answer = textAnswer;
+      current.answerMode = isAudioOnly ? 'AUDIO' : 'TEXT';
+      current.answeredAt = new Date().toISOString();
+      current.answerDurationSec = durationSec;
+      current.analysis = SCORING_PLACEHOLDER;
+      current.improvedAnswer = undefined;
+      current.score = undefined;
+      current.strengths = [];
+      current.weaknesses = [];
+      current.whatWasGood = [];
+      current.whatWasMissing = [];
+      current.improvementSuggestion = undefined;
+      const transcript = parseTurns(row.transcriptJson || '[]');
+      transcript.push({
+        role: 'candidate',
+        text: isAudioOnly ? '[Audio answer]' : textAnswer,
+        at: new Date().toISOString(),
+        questionNumber: current.number,
+      });
+      const updated = await tx.interview.update({
+        where: { id: row.id },
+        data: {
+          questionsJson: JSON.stringify(questions),
+          answersJson: JSON.stringify(questions.map((item) => item.answer || '')),
+          transcriptJson: JSON.stringify(transcript),
+        },
+      });
+      return { row: updated, questions, current };
     });
 
-    const limitMin = interview.durationLimitMin || 30;
-    const elapsed = interview.startAt ? (Date.now() - interview.startAt.getTime()) / 60000 : 0;
-    const questionLimit = readQuestionLimit(interview.profileJson);
-    const answeredAfter = countAnsweredQuestions(questions);
-    const asked = questions.map((item) => item.text);
-    let nextQuestion: LiveInterviewQuestion | null = null;
-    if (elapsed < limitMin && answeredAfter < questionLimit) {
-      const follow = await this.ai.nextQuestion(
-        profile,
-        interview.interviewType,
-        interview.difficulty || 'Beginner',
-        asked,
-        { question: current.text, answer: isAudioOnly ? 'Audio answer submitted.' : textAnswer },
-      );
-      nextQuestion = {
+    const { row, questions, current } = claim;
+    const profile = this.profileOf(row);
+    this.scheduleAnswerScore(row.id, current.id, profile, current.text, textAnswer, {
+      answerMode: isAudioOnly ? 'AUDIO' : 'TEXT',
+      durationSec,
+      category: current.category,
+    });
+
+    const limitMin = row.durationLimitMin || 30;
+    const elapsed = row.startAt ? (Date.now() - row.startAt.getTime()) / 60000 : 0;
+    const questionLimit = readQuestionLimit(row.profileJson);
+    if (elapsed >= limitMin || countAnsweredQuestions(questions) >= questionLimit) {
+      return this.endLive(userId, id);
+    }
+
+    const follow = await this.ai.nextQuestion(
+      profile,
+      row.interviewType,
+      row.difficulty || 'Beginner',
+      questions.map((item) => item.text),
+      { question: current.text, answer: isAudioOnly ? 'Audio answer submitted.' : textAnswer },
+      (questions as StoredLiveQuestion[]).flatMap((item) => item.ragChunkIds || []),
+    );
+
+    return this.lockInterview(row.id, async (fresh, tx) => {
+      const latest = parseQuestions(fresh.questionsJson);
+      // Interview ended meanwhile, or the answered question is no longer the latest one.
+      if (fresh.status === 'COMPLETED' || latest[latest.length - 1]?.id !== current.id) {
+        return this.toSession(fresh);
+      }
+      const nextQuestion: StoredLiveQuestion = {
         id: crypto.randomUUID(),
-        number: questions.length + 1,
+        number: latest.length + 1,
         text: follow.text,
         category: follow.category,
-        difficulty: interview.difficulty || 'Beginner',
+        difficulty: fresh.difficulty || 'Beginner',
         askedAt: new Date().toISOString(),
         snippet: follow.snippet ?? null,
         thinkSeconds: follow.thinkSeconds ?? 0,
+        ragChunkIds: follow.ragChunkIds || [],
       };
-      questions.push(nextQuestion);
+      latest.push(nextQuestion);
+      const transcript = parseTurns(fresh.transcriptJson || '[]');
       transcript.push({
         role: 'ai',
         text: follow.text,
         at: new Date().toISOString(),
         questionNumber: nextQuestion.number,
       });
-    }
-
-    const updated = await this.prisma.interview.update({
-      where: { id: interview.id },
-      data: {
-        questionsJson: JSON.stringify(questions),
-        answersJson: JSON.stringify(questions.map((item) => item.answer || '')),
-        transcriptJson: JSON.stringify(transcript),
-        questionIndex: nextQuestion ? questions.length - 1 : interview.questionIndex,
-      },
+      const updated = await tx.interview.update({
+        where: { id: fresh.id },
+        data: {
+          questionsJson: JSON.stringify(latest),
+          answersJson: JSON.stringify(latest.map((item) => item.answer || '')),
+          transcriptJson: JSON.stringify(transcript),
+          questionIndex: latest.length - 1,
+        },
+      });
+      return this.toSession(updated);
     });
+  }
 
-    this.scheduleAnswerScore(interview.id, questionId, profile, questionText, textAnswer, {
-      answerMode: isAudioOnly ? 'AUDIO' : 'TEXT',
-      durationSec,
+  private async handleConduct(
+    userId: string,
+    interviewId: string,
+    conduct: NonNullable<ReturnType<typeof detectConduct>>,
+    trimmed: string,
+    durationSec: number,
+  ) {
+    const outcome = await this.lockInterview(interviewId, async (row, tx) => {
+      if (row.status === 'COMPLETED') throw interviewEnded();
+      const warnings = parseWarnings(row.warningsJson);
+      // Count same-kind strikes so 3 abusive answers end the interview.
+      const prior = countConductWarnings(warnings, conduct);
+      const type = conduct === 'abuse' ? 'ABUSE' : 'NONSENSE';
+      if (prior < CONDUCT_MAX_WARNINGS) {
+        const message = conductWarningMessage(conduct, prior + 1);
+        warnings.push({ type, message, severity: 'HIGH', at: new Date().toISOString() });
+        const updated = await tx.interview.update({
+          where: { id: row.id },
+          data: { warningsJson: JSON.stringify(warnings.slice(-40)) },
+        });
+        return { terminated: false as const, message, updated };
+      }
+      const questions = parseQuestions(row.questionsJson);
+      const current = questions[row.questionIndex];
+      if (current && !isAnsweredQuestion(current)) {
+        current.answer = trimmed;
+        current.answeredAt = new Date().toISOString();
+        current.answerDurationSec = durationSec;
+        current.score = 0;
+        current.analysis =
+          conduct === 'abuse'
+            ? 'Interview ended after repeated abusive language. Behaviour scored as unprofessional.'
+            : 'Interview ended due to repeated inappropriate or meaningless responses.';
+        current.improvedAnswer = 'I will answer professionally without abusive or meaningless language.';
+        current.strengths = [];
+        current.weaknesses =
+          conduct === 'abuse' ? ['Used abusive language after two warnings'] : ['Repeated conduct issue after warnings'];
+      }
+      const message = conductTerminateMessage(conduct);
+      warnings.push({ type, message, severity: 'HIGH', at: new Date().toISOString() });
+      await tx.interview.update({
+        where: { id: row.id },
+        data: { questionsJson: JSON.stringify(questions), warningsJson: JSON.stringify(warnings.slice(-40)) },
+      });
+      return { terminated: true as const, message };
     });
+    if (!outcome.terminated) return { ...this.toSession(outcome.updated), conductWarning: outcome.message };
+    const ended = await this.endLive(userId, interviewId);
+    return { ...ended, conductWarning: outcome.message, conductTerminated: true };
+  }
 
-    if (!nextQuestion) return this.endLive(userId, id);
-    return this.toSession(updated);
+  /** Serialize read-modify-write of an interview's JSON columns across requests and instances. */
+  private lockInterview<T>(id: string, fn: (row: Interview, tx: Prisma.TransactionClient) => Promise<T>) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM interviews WHERE id = ${id} FOR UPDATE`;
+      const row = await tx.interview.findUniqueOrThrow({ where: { id } });
+      return fn(row, tx);
+    });
   }
 
   /** Queue Gemini evaluation without blocking the submit response. */
@@ -310,7 +396,7 @@ export class InterviewsService {
     profile: InterviewProfile,
     questionText: string,
     textAnswer: string,
-    options: { answerMode: 'TEXT' | 'AUDIO'; durationSec: number },
+    options: AnswerScoreOptions,
   ) {
     const prev = this.pendingScores.get(interviewId) || Promise.resolve();
     const next = prev
@@ -343,47 +429,55 @@ export class InterviewsService {
     profile: InterviewProfile,
     questionText: string,
     textAnswer: string,
-    options: { answerMode: 'TEXT' | 'AUDIO'; durationSec: number },
+    options: AnswerScoreOptions,
   ) {
     const analysis = await this.ai.analyzeAnswer(profile, questionText, textAnswer, options);
-    const row = await this.prisma.interview.findUnique({ where: { id: interviewId } });
-    if (!row) return;
-    // Don't overwrite a finished report's question payload after completion.
-    if (row.status === 'COMPLETED' && row.reportJson) return;
+    await this.applyAnalyses(interviewId, new Map([[questionId, analysis]]));
+  }
 
-    const questions = parseQuestions(row.questionsJson);
-    const target = questions.find((item) => item.id === questionId);
-    if (!target) return;
-
-    target.analysis = analysis.analysis;
-    target.improvedAnswer = analysis.improvedAnswer || undefined;
-    target.score = analysis.score;
-    target.strengths = analysis.strengths;
-    target.weaknesses = analysis.weaknesses;
-    target.whatWasGood = analysis.whatWasGood;
-    target.whatWasMissing = analysis.whatWasMissing;
-    target.improvementSuggestion = analysis.improvementSuggestion;
-
-    await this.prisma.interview.update({
-      where: { id: interviewId },
-      data: { questionsJson: JSON.stringify(questions) },
+  /** Write per-question analyses under the row lock, only onto questions still awaiting a score. */
+  private applyAnalyses(interviewId: string, analyses: Map<string, AnswerAnalysis>) {
+    return this.lockInterview(interviewId, async (row, tx) => {
+      const questions = parseQuestions(row.questionsJson);
+      // Don't overwrite a finished report's question payload after completion.
+      if (row.status === 'COMPLETED' && row.reportJson) return questions;
+      let changed = false;
+      for (const target of questions) {
+        const analysis = analyses.get(target.id);
+        if (!analysis || !isPendingScore(target)) continue;
+        target.analysis = analysis.analysis;
+        target.improvedAnswer = analysis.improvedAnswer || undefined;
+        target.score = analysis.score;
+        target.strengths = analysis.strengths;
+        target.weaknesses = analysis.weaknesses;
+        target.whatWasGood = analysis.whatWasGood;
+        target.whatWasMissing = analysis.whatWasMissing;
+        target.improvementSuggestion = analysis.improvementSuggestion;
+        changed = true;
+      }
+      if (changed) {
+        await tx.interview.update({ where: { id: row.id }, data: { questionsJson: JSON.stringify(questions) } });
+      }
+      return questions;
     });
   }
 
   async addWarning(userId: string, id: string, warning: Omit<InterviewWarning, 'at'> & { at?: string }) {
     const interview = await this.requireInterview(userId, id);
-    const warnings = parseWarnings(interview.warningsJson);
-    warnings.push({
-      type: warning.type,
-      message: warning.message,
-      severity: warning.severity,
-      at: warning.at || new Date().toISOString(),
+    return this.lockInterview(interview.id, async (row, tx) => {
+      const warnings = parseWarnings(row.warningsJson);
+      warnings.push({
+        type: warning.type,
+        message: warning.message,
+        severity: warning.severity,
+        at: warning.at || new Date().toISOString(),
+      });
+      const updated = await tx.interview.update({
+        where: { id: row.id },
+        data: { warningsJson: JSON.stringify(warnings.slice(-40)) },
+      });
+      return this.toSession(updated);
     });
-    const updated = await this.prisma.interview.update({
-      where: { id: interview.id },
-      data: { warningsJson: JSON.stringify(warnings.slice(-40)) },
-    });
-    return this.toSession(updated);
   }
 
   async endLive(userId: string, id: string) {
@@ -392,19 +486,26 @@ export class InterviewsService {
       throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'This interview is not an AI live session.' });
     }
     if (interview.status === 'COMPLETED' && interview.reportJson) return this.toSession(interview);
+    // Concurrent end requests (timer + button + last answer) share one report generation.
+    const inflight = this.endInflight.get(interview.id);
+    if (inflight) return inflight;
+    const run = this.finishLive(userId, interview.id).finally(() => this.endInflight.delete(interview.id));
+    this.endInflight.set(interview.id, run);
+    return run;
+  }
+
+  private async finishLive(userId: string, interviewId: string) {
     // Finish any deferred per-answer scores before building the final report.
-    await this.awaitPendingScores(interview.id);
-    const fresh = await this.prisma.interview.findUnique({ where: { id: interview.id } });
-    const latest = fresh || interview;
+    await this.awaitPendingScores(interviewId);
+    const latest = await this.prisma.interview.findUniqueOrThrow({ where: { id: interviewId } });
     if (latest.status === 'COMPLETED' && latest.reportJson) return this.toSession(latest);
 
     const endAt = new Date();
     const startAt = latest.startAt || latest.createdAt;
     const durationSec = Math.max(1, Math.round((endAt.getTime() - startAt.getTime()) / 1000));
-    const questions = parseQuestions(latest.questionsJson);
     const warnings = parseWarnings(latest.warningsJson);
     const profile = this.profileOf(latest);
-    await this.ensureQuestionsScored(latest.id, questions, profile);
+    const questions = await this.ensureQuestionsScored(latest.id, parseQuestions(latest.questionsJson), profile);
     const integrity = {
       tabSwitches: warnings.filter((item) => item.type === 'TAB_SWITCH').length,
       faceMissing: warnings.filter((item) => item.type === 'FACE_MISSING').length,
@@ -420,33 +521,39 @@ export class InterviewsService {
       integrity,
       readQuestionLimit(latest.profileJson),
     );
-    const updated = await this.prisma.interview.update({
-      where: { id: latest.id },
-      data: {
-        status: 'COMPLETED',
-        endAt,
-        durationSec,
-        score: report.overallScore,
-        communicationScore: report.communication,
-        behaviourScore: report.behaviour,
-        listeningScore: report.listening,
-        reportJson: JSON.stringify(report),
-        feedbackJson: JSON.stringify({
+    const finished = await this.lockInterview(latest.id, async (row, tx) => {
+      // Another request/instance already finalized this interview: keep its report.
+      if (row.status === 'COMPLETED' && row.reportJson) return { row, completedNow: false };
+      const updated = await tx.interview.update({
+        where: { id: row.id },
+        data: {
+          status: 'COMPLETED',
+          endAt,
+          durationSec,
           score: report.overallScore,
-          communication: report.communication * 10,
-          structure: report.behaviour * 10,
-          relevance: report.listening * 10,
-          confidence: report.communication * 10,
-          strengths: report.strengths,
-          improvements: report.weaknesses,
-        }),
-        questionsJson: JSON.stringify(questions),
-      },
+          communicationScore: report.communication,
+          behaviourScore: report.behaviour,
+          listeningScore: report.listening,
+          reportJson: JSON.stringify(report),
+          feedbackJson: JSON.stringify({
+            score: report.overallScore,
+            communication: report.communication * 10,
+            structure: report.behaviour * 10,
+            relevance: report.listening * 10,
+            confidence: report.communication * 10,
+            strengths: report.strengths,
+            improvements: report.weaknesses,
+          }),
+        },
+      });
+      return { row: updated, completedNow: true };
     });
-    await this.testimonials
-      .markEligible(userId, 'AFTER_FIRST_MOCK_INTERVIEW')
-      .catch(() => undefined);
-    return this.toSession(updated);
+    if (finished.completedNow) {
+      await this.testimonials
+        .markEligible(userId, 'AFTER_FIRST_MOCK_INTERVIEW')
+        .catch(() => undefined);
+    }
+    return this.toSession(finished.row);
   }
 
   /** Score any answered questions still pending (background miss / process restart). */
@@ -455,35 +562,21 @@ export class InterviewsService {
     questions: LiveInterviewQuestion[],
     profile: InterviewProfile,
   ) {
-    let changed = false;
+    const analyses = new Map<string, AnswerAnalysis>();
     for (const item of questions) {
-      if (!isAnsweredQuestion(item)) continue;
-      const pending =
-        item.score == null ||
-        !item.analysis ||
-        item.analysis === 'Scoring in progress…';
-      if (!pending) continue;
+      if (!isAnsweredQuestion(item) || !isPendingScore(item)) continue;
       const textAnswer = item.answerMode === 'AUDIO' ? '' : (item.answer || '').trim();
-      const analysis = await this.ai.analyzeAnswer(profile, item.text, textAnswer, {
-        answerMode: item.answerMode === 'AUDIO' ? 'AUDIO' : 'TEXT',
-        durationSec: item.answerDurationSec || 0,
-      });
-      item.analysis = analysis.analysis;
-      item.improvedAnswer = analysis.improvedAnswer || undefined;
-      item.score = analysis.score;
-      item.strengths = analysis.strengths;
-      item.weaknesses = analysis.weaknesses;
-      item.whatWasGood = analysis.whatWasGood;
-      item.whatWasMissing = analysis.whatWasMissing;
-      item.improvementSuggestion = analysis.improvementSuggestion;
-      changed = true;
+      analyses.set(
+        item.id,
+        await this.ai.analyzeAnswer(profile, item.text, textAnswer, {
+          answerMode: item.answerMode === 'AUDIO' ? 'AUDIO' : 'TEXT',
+          durationSec: item.answerDurationSec || 0,
+          category: item.category,
+        }),
+      );
     }
-    if (changed) {
-      await this.prisma.interview.update({
-        where: { id: interviewId },
-        data: { questionsJson: JSON.stringify(questions) },
-      });
-    }
+    if (!analyses.size) return questions;
+    return this.applyAnalyses(interviewId, analyses);
   }
 
   async downloadReport(userId: string, id: string) {
@@ -522,9 +615,14 @@ export class InterviewsService {
     return this.toSession(updated);
   }
 
-  private profileOf(interview: { profileJson: string | null; jobRole: string }): InterviewProfile {
+  private profileOf(interview: { id: string; profileJson: string | null; jobRole: string }): InterviewProfile {
     const content = parseJson<
-      Partial<ResumeContent> & { experienceYears?: number; questionLimit?: number; candidateId?: string }
+      Partial<ResumeContent> & {
+        experienceYears?: number;
+        questionLimit?: number;
+        candidateId?: string;
+        resumeId?: string;
+      }
     >(interview.profileJson, {});
     const profile = profileFromResume(
       {
@@ -545,7 +643,9 @@ export class InterviewsService {
     return {
       ...profile,
       questionLimit: content.questionLimit,
-      candidateId: (content as { candidateId?: string }).candidateId,
+      candidateId: content.candidateId,
+      resumeId: content.resumeId,
+      interviewId: interview.id,
     };
   }
 
@@ -622,7 +722,7 @@ export class InterviewsService {
           : liveQuestions.length || classic.length || 8,
       currentQuestion: completed
         ? null
-        : currentLive && !currentLive.answer
+        : currentLive && !isAnsweredQuestion(currentLive)
           ? {
               index: row.questionIndex,
               prompt: currentLive.text,
@@ -644,7 +744,7 @@ export class InterviewsService {
       candidateName: profile.fullName || null,
       focusStacks,
       transcript: parseTurns(row.transcriptJson || '[]'),
-      liveQuestions,
+      liveQuestions: liveQuestions.map(({ ragChunkIds: _internal, ...item }: StoredLiveQuestion) => item),
       warnings: parseWarnings(row.warningsJson || '[]'),
       report: row.reportJson ? (JSON.parse(row.reportJson) as InterviewReport) : null,
       communicationScore: row.communicationScore ?? null,

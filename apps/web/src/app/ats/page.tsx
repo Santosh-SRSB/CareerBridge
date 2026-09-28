@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { ResumeRecord } from '@careerbridge/shared';
@@ -28,6 +28,8 @@ function AtsCheckerInner() {
   const [resumeMeta, setResumeMeta] = useState<ResumeRecord | null>(null);
   const [checking, setChecking] = useState(false);
   const [recheckNonce, setRecheckNonce] = useState(0);
+  // Checking a score is read-only; only accepted suggestions make the working copy worth saving.
+  const dirtyRef = useRef(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -57,6 +59,22 @@ function AtsCheckerInner() {
         getResume(id),
         getCandidateMe().catch(() => null),
       ]);
+      if (record.processingStatus === 'FAILED') {
+        setError(
+          `${record.processingError || 'Processing failed.'} No ATS score is available until the resume is processed successfully.`,
+        );
+        setMaster(null);
+        setResumeMeta(record);
+        setSelectedId(id);
+        return;
+      }
+      if (record.processingStatus === 'PENDING' || record.processingStatus === 'PROCESSING') {
+        setError('This resume is still processing. Check the ATS score once processing finishes.');
+        setMaster(null);
+        setResumeMeta(record);
+        setSelectedId(id);
+        return;
+      }
       const doc = buildResumeFromResumeContent(
         {
           ...record.content,
@@ -70,6 +88,7 @@ function AtsCheckerInner() {
           portfolio: profile?.links?.portfolio || profile?.links?.website,
         },
       );
+      dirtyRef.current = false;
       setMaster(doc);
       setResumeMeta(record);
       setSelectedId(id);
@@ -99,6 +118,7 @@ function AtsCheckerInner() {
 
   function applySuggestion(suggestion: ResumeAiSuggestion, improvedText: string) {
     if (!master) return;
+    dirtyRef.current = true;
     setMaster((prev) => {
       if (!prev) return prev;
       const next = structuredClone(prev);
@@ -143,16 +163,18 @@ function AtsCheckerInner() {
 
   async function ensureSaved(): Promise<string> {
     if (!master) throw new Error('No resume loaded.');
+    if (selectedId && !dirtyRef.current) return selectedId;
     const content = masterResumeToResumeContent(master);
     if (selectedId) {
       // Keep working copy updated; final Save in ATS flow creates a new version.
       await updateResume(selectedId, {
         title: resumeMeta?.title,
         targetJobTitle: resumeMeta?.targetJobTitle || undefined,
-        template: 'resume-template-01',
+        template: resumeMeta?.template || 'resume-template-01',
         summary: content.summary || undefined,
         content: content as unknown as Record<string, unknown>,
       });
+      dirtyRef.current = false;
       return selectedId;
     }
     const created = await createResume({
@@ -262,27 +284,42 @@ function AtsCheckerInner() {
           </div>
         ) : (
           <ul className="mt-6 space-y-3">
-            {items.map((row) => (
-              <li
-                key={row.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <div>
-                  <p className="font-extrabold text-slate-900">{row.title}</p>
-                  <p className="text-xs font-semibold text-slate-500">
-                    V{row.version}
-                    {row.score ? ` · Last score ${row.score}` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void openAts(row.id)}
-                  className="rounded-xl bg-[#0a2e2c] px-4 py-2 text-sm font-bold text-white hover:bg-[#072422]"
+            {items.map((row) => {
+              const failed = row.processingStatus === 'FAILED';
+              const processing = row.processingStatus === 'PENDING' || row.processingStatus === 'PROCESSING';
+              return (
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                 >
-                  Check ATS score
-                </button>
-              </li>
-            ))}
+                  <div>
+                    <p className="font-extrabold text-slate-900">{row.title}</p>
+                    <p className="text-xs font-semibold text-slate-500">
+                      V{row.version}
+                      {!failed && !processing && row.score ? ` · Last score ${row.score}` : ''}
+                    </p>
+                    {failed ? (
+                      <p className="mt-1 text-xs font-semibold text-red-600">
+                        Processing failed — no ATS score is available. Retry or re-upload it from Your Resumes.
+                      </p>
+                    ) : null}
+                    {processing ? (
+                      <p className="mt-1 text-xs font-semibold text-amber-700">
+                        Still processing — the ATS score will be available once processing completes.
+                      </p>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void openAts(row.id)}
+                    disabled={failed || processing}
+                    className="rounded-xl bg-[#0a2e2c] px-4 py-2 text-sm font-bold text-white hover:bg-[#072422] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Check ATS score
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

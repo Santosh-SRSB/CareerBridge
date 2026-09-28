@@ -1,4 +1,12 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ATS_ENHANCE_PLANS,
   ErrorCode,
@@ -16,8 +24,10 @@ import { AiGatewayService } from '../ai/ai-gateway.service';
 import { StorageService } from '../common/storage/storage.service';
 import { CloudTasksService } from '../common/tasks/cloud-tasks.service';
 import { renderResumePdf } from './resume-pdf';
+import { readOwnedProfilePhotoDataUrl } from '../candidates/profile-photo.util';
 import { ResumeOptimizeAi } from './resume-optimize-ai';
 import { ResumeProcessorService } from './resume-processor.service';
+import { publicProcessingError } from './resume-eligibility';
 import { analyzeRoleResume, rewriteRoleResume, recommendCareerRoles } from './ats-engine';
 import { resolveResumeTemplateId, CAREERBRIDGE_RESUME_TEMPLATE } from '@careerbridge/shared';
 import { extractProjectTechnologies, isPageMarkerText, isThinResumeContent, parseExtractedResumeText } from './parse-extracted-resume';
@@ -34,6 +44,7 @@ export class ResumesService {
     private readonly storage: StorageService,
     private readonly cloudTasks: CloudTasksService,
     private readonly processor: ResumeProcessorService,
+    private readonly config: ConfigService,
   ) {}
 
   async list(userId: string) {
@@ -47,6 +58,12 @@ export class ResumesService {
     // (avoids stale values like every resume stuck at 77 after an old scoring bug).
     return Promise.all(
       rows.map(async (row) => {
+        if (atsBlockedReason(row.processingStatus)) {
+          if (row.score !== 0) {
+            await this.prisma.resume.updateMany({ where: { id: row.id, score: { not: 0 } }, data: { score: 0 } });
+          }
+          return this.toRecord({ ...row, score: 0 }, undefined, row._count.applications);
+        }
         const content = hydrateResumeContent(parseContent(row.contentJson), row.rawText);
         const analysis = analyzeResumeContent(content, row.rawText || '');
         if (row.score !== analysis.score) {
@@ -324,30 +341,57 @@ export class ResumesService {
     // Flat path: resumes/{file}-{fullResumeId}.ext — never truncate id (collision risk).
     const storagePath = this.storage.resumeObjectPath(name, created.id);
     let storageUri: string | null = null;
+    const isProdLike = (this.config.get<string>('NODE_ENV') || process.env.NODE_ENV) === 'production';
     try {
-      const uploaded = await this.storage.uploadFile(storagePath, file.buffer, {
-        contentType: mime || 'application/octet-stream',
-        metadata: {
-          candidateId: candidate.id,
-          resumeId: created.id,
-          source: 'upload',
-        },
-      });
-      storageUri = uploaded.gcsUri;
+      if (!this.storage.isConfigured()) {
+        if (isProdLike) {
+          throw new Error(this.storage.getConfigurationError() || 'Cloud Storage is not configured.');
+        }
+        this.logger.warn(
+          JSON.stringify({
+            msg: 'resume_gcs_skipped_local',
+            resumeId: created.id,
+            reason: 'storage_not_configured',
+          }),
+        );
+      } else {
+        const uploaded = await this.storage.uploadFile(storagePath, file.buffer, {
+          contentType: mime || 'application/octet-stream',
+          metadata: {
+            candidateId: candidate.id,
+            resumeId: created.id,
+            source: 'upload',
+          },
+        });
+        storageUri = uploaded.gcsUri;
+        await this.prisma.resume.update({
+          where: { id: created.id },
+          data: {
+            sourceStoragePath: storagePath,
+            sourceStorageUri: uploaded.gcsUri,
+            pdfStoragePath: storagePath,
+            pdfStorageUri: uploaded.gcsUri,
+            pdfPublicUrl: uploaded.publicUrl,
+            pdfUploadedAt: new Date(),
+          },
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        JSON.stringify({ msg: 'resume_gcs_upload_failed', resumeId: created.id, error: message.slice(0, 300) }),
+      );
       await this.prisma.resume.update({
         where: { id: created.id },
         data: {
-          sourceStoragePath: storagePath,
-          sourceStorageUri: uploaded.gcsUri,
-          pdfStoragePath: storagePath,
-          pdfStorageUri: uploaded.gcsUri,
-          pdfPublicUrl: uploaded.publicUrl,
-          pdfUploadedAt: new Date(),
+          processingStatus: 'FAILED',
+          processingError: `Upload to storage failed: ${message}`.slice(0, 2000),
         },
       });
-    } catch (err) {
-      this.logger.error(`GCS upload failed for resume ${created.id}: ${(err as Error).message}`);
-      // Keep local processing with in-memory buffer even if GCS fails in local/dev.
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'We could not store your resume file. Please try again in a moment.',
+      });
     }
 
     await this.cloudTasks.enqueueResumeProcessing(created.id, userId, () =>
@@ -358,7 +402,7 @@ export class ResumesService {
     return {
       ...this.toRecord(fresh),
       processingStatus: fresh.processingStatus,
-      processingError: fresh.processingError,
+      processingError: publicProcessingError(fresh.processingError),
       sourceStorageUri: storageUri || fresh.sourceStorageUri,
     };
   }
@@ -372,16 +416,17 @@ export class ResumesService {
         this.logger.error(`Retry processing failed for ${id}: ${(err as Error).message}`);
       });
     }
+    const processingError = publicProcessingError(resume.processingError);
     return {
       id: resume.id,
       processingStatus: status,
-      processingError: resume.processingError,
+      processingError,
       score: resume.score,
       message:
         status === 'COMPLETED'
           ? 'Resume analysed successfully.'
           : status === 'FAILED'
-            ? resume.processingError || 'Processing failed.'
+            ? processingError || 'Processing failed.'
             : status === 'PROCESSING'
               ? 'Extracting text and analysing with AI…'
               : status === 'PENDING'
@@ -444,7 +489,46 @@ export class ResumesService {
     };
   }
 
-  async processWorker(payload: { resumeId: string; userId: string }) {
+  async processWorker(payload: { resumeId: string; userId: string }, providedSecret?: string) {
+    const expected = (this.config.get<string>('RESUME_TASK_SECRET') || process.env.RESUME_TASK_SECRET || '').trim();
+    // When secret is configured (DEV/prod Cloud Run), reject missing/wrong values.
+    if (expected && providedSecret !== expected) {
+      throw new ForbiddenException({
+        code: ErrorCode.UNAUTHORIZED,
+        message: 'Invalid resume worker credentials.',
+      });
+    }
+    if (!payload?.resumeId || !payload?.userId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'resumeId and userId are required.',
+      });
+    }
+    // Ownership: resume must belong to the candidate for this userId.
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { userId: payload.userId },
+      select: { id: true },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Candidate was not found' });
+    }
+    const resume = await this.prisma.resume.findFirst({
+      where: { id: payload.resumeId, candidateId: candidate.id },
+      select: { id: true },
+    });
+    if (!resume) {
+      throw new ForbiddenException({
+        code: ErrorCode.UNAUTHORIZED,
+        message: 'Resume does not belong to this user.',
+      });
+    }
+    this.logger.log(
+      JSON.stringify({
+        msg: 'resume_worker_accepted',
+        resumeId: payload.resumeId,
+        userId: payload.userId,
+      }),
+    );
     return this.processor.processUploadedResume(payload.resumeId, payload.userId);
   }
 
@@ -492,6 +576,7 @@ export class ResumesService {
           score: analysis.score,
         },
       });
+      await this.reindexAfterContentChange(current, content, userId);
       await this.persistAnalysis(row.id, content, current.rawText || '');
     } else {
       row = await this.prisma.resume.create({
@@ -557,18 +642,26 @@ export class ResumesService {
     }
     if (dto.summary !== undefined) content.summary = dto.summary;
     const analysis = analyzeResumeContent(content, resume.rawText || '');
+    const template = dto.template ? resolveResumeTemplateId(dto.template) : resume.template;
+    const unchanged =
+      JSON.stringify(content) === resume.contentJson &&
+      (dto.title ?? resume.title) === resume.title &&
+      (dto.targetJobTitle ?? resume.targetJobTitle) === resume.targetJobTitle &&
+      template === resume.template;
+    if (unchanged) return this.toRecord(resume, analysis);
     const updated = await this.prisma.resume.update({
       where: { id: resume.id },
       data: {
         title: dto.title ?? resume.title,
         targetJobTitle: dto.targetJobTitle ?? resume.targetJobTitle,
-        template: dto.template ? resolveResumeTemplateId(dto.template) : resume.template,
+        template,
         summary: content.summary,
         contentJson: JSON.stringify(content),
         score: analysis.score,
         version: resume.kind === 'ORIGINAL' ? resume.version : resume.version + 1,
       },
     });
+    await this.reindexAfterContentChange(resume, content, userId);
     await this.safeSyncPdfForResume(updated.id, userId, 'update');
     const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: updated.id } });
     return this.toRecord(fresh, analysis);
@@ -598,19 +691,44 @@ export class ResumesService {
 
   async analyze(userId: string, id: string) {
     const resume = await this.requireResume(userId, id);
-    const content = parseContent(resume.contentJson);
+    const blocked = atsBlockedReason(resume.processingStatus);
+    if (blocked) {
+      await this.clearAtsArtifacts(resume.id);
+      return { ...this.toRecord({ ...resume, score: 0 }), atsStatus: 'UNAVAILABLE' as const, atsMessage: blocked };
+    }
+    // Same content the list and the UI score, so the stored score doesn't flip between code paths.
+    const content = hydrateResumeContent(parseContent(resume.contentJson), resume.rawText);
     const analysis = await this.persistAnalysis(resume.id, content, resume.rawText || '');
-    return this.toRecord({ ...resume, score: analysis.score }, analysis);
+    return { ...this.toRecord({ ...resume, score: analysis.score }, analysis), atsStatus: 'READY' as const, atsMessage: null };
   }
 
   async issues(userId: string, id: string) {
     const record = await this.analyze(userId, id);
     return {
+      atsStatus: record.atsStatus,
+      atsMessage: record.atsMessage,
       highPriority: record.analysis?.highPriority ?? 0,
       mediumPriority: record.analysis?.mediumPriority ?? 0,
       goodSections: record.analysis?.goodSections ?? 0,
       issues: record.analysis?.issues ?? [],
     };
+  }
+
+  /** A failed or unfinished parse has no trustworthy content, so no ATS score may be shown for it. */
+  private async clearAtsArtifacts(resumeId: string) {
+    await this.prisma.$transaction([
+      this.prisma.resumeIssue.deleteMany({ where: { resumeId } }),
+      this.prisma.resumeFact.deleteMany({ where: { resumeId } }),
+      this.prisma.resumeAtsReport.deleteMany({ where: { resumeId } }),
+      this.prisma.resume.updateMany({ where: { id: resumeId, score: { not: 0 } }, data: { score: 0 } }),
+    ]);
+  }
+
+  private assertAtsEligible(resume: { processingStatus: string | null }) {
+    const blocked = atsBlockedReason(resume.processingStatus);
+    if (blocked) {
+      throw new ConflictException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: blocked });
+    }
   }
 
   async optimizationOptions(userId: string, id: string) {
@@ -629,6 +747,7 @@ export class ResumesService {
       throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Choose a valid optimization target.' });
     }
     const source = await this.requireResume(userId, id);
+    this.assertAtsEligible(source);
     const content = parseContent(source.contentJson);
     const before = analyzeResumeContent(content, source.rawText || '');
     const facts = extractFacts(content, source.rawText || '');
@@ -815,6 +934,7 @@ export class ResumesService {
     },
   ) {
     const resume = await this.requireResume(userId, id);
+    this.assertAtsEligible(resume);
     const content = parseContent(resume.contentJson);
     const targetRole = input.targetRole?.trim() || resume.targetJobTitle || 'General Professional';
 
@@ -892,6 +1012,7 @@ export class ResumesService {
     let payload = input.resume;
     if (input.resumeId) {
       const resume = await this.requireResume(userId, input.resumeId);
+      this.assertAtsEligible(resume);
       const content = parseContent(resume.contentJson);
       templateId = resolveResumeTemplateId(input.templateId || resume.template);
       // Prefer the live client payload (post-edit) so recheck reflects latest changes.
@@ -928,6 +1049,7 @@ export class ResumesService {
     let ownedId: string | null = input.resumeId || null;
     if (input.resumeId) {
       const resume = await this.requireResume(userId, input.resumeId);
+      this.assertAtsEligible(resume);
       ownedId = resume.id;
       const content = parseContent(resume.contentJson);
       templateId = resolveResumeTemplateId(input.templateId || resume.template);
@@ -949,9 +1071,23 @@ export class ResumesService {
   private async persistAnalysis(resumeId: string, content: ResumeContent, rawText: string) {
     const analysis = analyzeResumeContent(content, rawText);
     const facts = extractFacts(content, rawText);
-    await this.prisma.resumeIssue.deleteMany({ where: { resumeId } });
-    await this.prisma.resumeFact.deleteMany({ where: { resumeId } });
-    await this.prisma.resumeAtsReport.upsert({
+    // Row lock serialises concurrent analyses so replace-all never interleaves into duplicates.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM resumes WHERE id = ${resumeId} FOR UPDATE`;
+      await this.writeAnalysis(tx, resumeId, analysis, facts);
+    });
+    return analysis;
+  }
+
+  private async writeAnalysis(
+    db: Pick<PrismaService, 'resumeIssue' | 'resumeFact' | 'resumeAtsReport' | 'resume'>,
+    resumeId: string,
+    analysis: ReturnType<typeof analyzeResumeContent>,
+    facts: ReturnType<typeof extractFacts>,
+  ) {
+    await db.resumeIssue.deleteMany({ where: { resumeId } });
+    await db.resumeFact.deleteMany({ where: { resumeId } });
+    await db.resumeAtsReport.upsert({
       where: { resumeId },
       create: {
         resumeId,
@@ -978,7 +1114,7 @@ export class ResumesService {
       },
     });
     if (analysis.issues.length) {
-      await this.prisma.resumeIssue.createMany({
+      await db.resumeIssue.createMany({
         data: analysis.issues.map((item) => ({
           resumeId,
           section: item.section,
@@ -993,7 +1129,7 @@ export class ResumesService {
       });
     }
     if (facts.length) {
-      await this.prisma.resumeFact.createMany({
+      await db.resumeFact.createMany({
         data: facts.map((item) => ({
           resumeId,
           factType: item.type,
@@ -1003,8 +1139,8 @@ export class ResumesService {
         })),
       });
     }
-    await this.prisma.resume.update({ where: { id: resumeId }, data: { score: analysis.score } });
-    return analysis;
+    // Conditional so an unchanged score doesn't bump updatedAt (which picks the "latest" resume elsewhere).
+    await db.resume.updateMany({ where: { id: resumeId, score: { not: analysis.score } }, data: { score: analysis.score } });
   }
 
   private contentFromPassport(
@@ -1033,6 +1169,20 @@ export class ResumesService {
     });
   }
 
+  /** A parsed (RAG-indexed) resume whose content changed must be re-indexed so retrieval never serves stale text. */
+  private async reindexAfterContentChange(
+    before: { id: string; candidateId: string; contentJson: string; rawText: string | null; processingStatus: string | null },
+    content: ResumeContent,
+    userId: string,
+  ) {
+    if (before.processingStatus !== 'COMPLETED' || before.contentJson === JSON.stringify(content)) return;
+    try {
+      await this.processor.reindexIfStale(before.id, before.candidateId, content, before.rawText || '', userId);
+    } catch (err) {
+      this.logger.error(`Resume re-index after edit failed for ${before.id}: ${(err as Error).message}`);
+    }
+  }
+
   private async safeSyncPdfForResume(resumeId: string, userId: string, context: string) {
     try {
       return await this.syncPdfForResume(resumeId, userId);
@@ -1051,7 +1201,7 @@ export class ResumesService {
     const pdf = await renderResumePdf(
       content,
       CAREERBRIDGE_RESUME_TEMPLATE,
-      includePhoto ? candidate.photoUrl : null,
+      includePhoto ? await readOwnedProfilePhotoDataUrl(this.storage, candidate.id, candidate.photoUrl) : null,
     );
     const path = this.storage.resumeObjectPath(
       `${content.fullName || 'resume'}.pdf`,
@@ -1087,7 +1237,11 @@ export class ResumesService {
         : await this.prisma.candidate.findUniqueOrThrow({ where: { id: resume.candidateId } });
     const content = parseContent(resume.contentJson);
     const includePhoto = content.includePhoto !== false;
-    return renderResumePdf(content, CAREERBRIDGE_RESUME_TEMPLATE, includePhoto ? candidate.photoUrl : null);
+    return renderResumePdf(
+      content,
+      CAREERBRIDGE_RESUME_TEMPLATE,
+      includePhoto ? await readOwnedProfilePhotoDataUrl(this.storage, candidate.id, candidate.photoUrl) : null,
+    );
   }
 
   private async requireCandidate(userId: string) {
@@ -1168,6 +1322,10 @@ export class ResumesService {
       pdfPublicUrl?: string | null;
       pdfUploadedAt?: Date | null;
       archivedAt?: Date | null;
+      processingStatus?: string | null;
+      processingError?: string | null;
+      sourceStoragePath?: string | null;
+      sourceStorageUri?: string | null;
     },
     analysis?: ResumeAnalysis,
     applicationCount = 0,
@@ -1189,12 +1347,27 @@ export class ResumesService {
       pdfPublicUrl: row.pdfPublicUrl ?? null,
       pdfUploadedAt: row.pdfUploadedAt?.toISOString() ?? null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
+      processingStatus: row.processingStatus ?? null,
+      processingError: publicProcessingError(row.processingError),
+      sourceStoragePath: row.sourceStoragePath ?? null,
+      sourceStorageUri: row.sourceStorageUri ?? null,
       applicationCount,
       updatedAt: row.updatedAt.toISOString(),
       analysis,
       plans: ATS_ENHANCE_PLANS.map((plan) => ({ ...plan })),
     };
   }
+}
+
+/** Builder resumes are READY; uploaded ones are ATS-eligible only after a successful parse. */
+function atsBlockedReason(processingStatus: string | null | undefined): string | null {
+  if (processingStatus === 'FAILED') {
+    return 'Resume processing failed, so no ATS score is available. Retry processing or re-upload the resume.';
+  }
+  if (processingStatus === 'PENDING' || processingStatus === 'PROCESSING') {
+    return 'Resume is still being processed. The ATS score will be available once processing completes.';
+  }
+  return null;
 }
 
 function improvementLabels(changes: ResumeChangeRecord[]) {

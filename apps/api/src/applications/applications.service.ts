@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ErrorCode, type ApplicationStatus } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { USABLE_RESUME_WHERE } from '../resumes/resume-eligibility';
 import { MatchingService } from '../matching/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service';
@@ -87,8 +88,17 @@ export class ApplicationsService {
       });
     }
     const resume = resumeId
-      ? await this.prisma.resume.findFirst({ where: { id: resumeId, candidateId: candidate.id } })
-      : await this.prisma.resume.findFirst({ where: { candidateId: candidate.id }, orderBy: { updatedAt: 'desc' } });
+      ? await this.prisma.resume.findFirst({ where: { id: resumeId, candidateId: candidate.id, ...USABLE_RESUME_WHERE } })
+      : await this.prisma.resume.findFirst({
+          where: { candidateId: candidate.id, ...USABLE_RESUME_WHERE },
+          orderBy: { updatedAt: 'desc' },
+        });
+    if (resumeId && !resume) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'That resume was not found or is not ready to use. Choose another resume.',
+      });
+    }
     const application = existing
       ? await this.prisma.application.update({
           where: { id: existing.id },

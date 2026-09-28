@@ -136,7 +136,11 @@ export default function EmployerScheduleInterviewPage() {
         notifyWhatsApp,
         notifyEmail,
       });
-      router.push('/employer/interviews');
+      router.push(
+        notifyWhatsApp
+          ? '/employer/interviews?scheduled=1&wa=queued'
+          : '/employer/interviews?scheduled=1',
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not schedule interview.');
     } finally {

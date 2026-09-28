@@ -69,6 +69,8 @@ async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Pro
     : new Error('Cannot reach the CareerBridge API. Check NEXT_PUBLIC_API_URL and that the API is running.');
 }
 
+export type ApiError = Error & { code: string; status?: number };
+
 async function request<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
@@ -95,7 +97,13 @@ async function request<T>(
     );
   });
 
-  const body = (await response.json()) as ApiResponse<T>;
+  const body = (await response.json().catch(() => null)) as ApiResponse<T> | null;
+  if (!body) {
+    const error = new Error(`CareerBridge returned an unexpected response (${response.status}). Please try again.`) as ApiError;
+    error.code = 'BAD_RESPONSE';
+    error.status = response.status;
+    throw error;
+  }
 
   if (!body.success) {
     if (response.status === 401 && path !== '/auth/refresh' && getRefreshToken()) {
@@ -107,8 +115,9 @@ async function request<T>(
     if (response.status === 401 && path !== '/auth/refresh' && path !== '/auth/logout') {
       clearSession();
     }
-    const error = new Error(body.error.message) as Error & { code: string };
+    const error = new Error(body.error.message) as ApiError;
     error.code = body.error.code;
+    error.status = response.status;
     throw error;
   }
 
@@ -903,10 +912,11 @@ export async function answerLiveInterview(
   answer: string,
   durationSec?: number,
   answerMode?: 'TEXT' | 'AUDIO',
+  questionIndex?: number,
 ) {
   return request<InterviewSession>(`/interviews/${id}/answers`, {
     method: 'POST',
-    body: JSON.stringify({ answer, durationSec, answerMode }),
+    body: JSON.stringify({ answer, durationSec, answerMode, questionIndex }),
   });
 }
 

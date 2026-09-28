@@ -12,6 +12,9 @@ import {
   warnLiveInterview,
 } from '@/lib/api';
 import { clearActiveInterviewTimer, saveActiveInterviewTimer } from '@/lib/interview-timer';
+import { isAnsweredInterviewQuestion } from '@/lib/interview-answer-display';
+import { classifyInterviewLoadError, type InterviewLoadError } from '@/lib/interview-load-error';
+import { InterviewLoadErrorPanel } from '@/components/interviews/InterviewLoadErrorPanel';
 import { greetingForHour, pickFemaleVoice, setAiThinking, setAvatarMood, startAiSpeech, stopAiSpeech } from '@/features/interview/ai-speech';
 import { LOBBY_DONTS, LOBBY_DOS } from '@/features/interview/lobby-rules';
 
@@ -159,6 +162,8 @@ export default function LiveInterviewPage() {
   const [avatarThinking, setAvatarThinking] = useState(false);
   const [showDosPopup, setShowDosPopup] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [loadError, setLoadError] = useState<InterviewLoadError | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const askedAt = useRef(Date.now());
@@ -214,8 +219,8 @@ export default function LiveInterviewPage() {
   }, [params.id, router]);
 
   useEffect(() => {
-    load().catch(() => router.replace('/login'));
-  }, [load, router]);
+    load().catch((err) => setLoadError(classifyInterviewLoadError(err)));
+  }, [load, loadAttempt]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -256,10 +261,13 @@ export default function LiveInterviewPage() {
     notify('Time is up. Generating your report.');
     streamRef.current?.getTracks().forEach((track) => track.stop());
     window.speechSynthesis?.cancel();
-    void endLiveInterview(params.id).then((next) => {
-      clearActiveInterviewTimer(params.id);
-      router.replace(`/interviews/${next.id}/report`);
-    });
+    void endLiveInterview(params.id)
+      .catch(() => null)
+      .then(() => {
+        clearActiveInterviewTimer(params.id);
+        // The report page shows the report, a generating state, or the actual error.
+        router.replace(`/interviews/${params.id}/report`);
+      });
   }, [now, params.id, router, session?.durationLimitMin, session?.startAt, session?.status]);
 
   useEffect(() => {
@@ -285,10 +293,12 @@ export default function LiveInterviewPage() {
           .finally(() => {
             streamRef.current?.getTracks().forEach((track) => track.stop());
             window.speechSynthesis?.cancel();
-            void endLiveInterview(session.id).then((next) => {
-              clearActiveInterviewTimer(session.id);
-              router.replace(`/interviews/${next.id}/report`);
-            });
+            void endLiveInterview(session.id)
+              .catch(() => null)
+              .then(() => {
+                clearActiveInterviewTimer(session.id);
+                router.replace(`/interviews/${session.id}/report`);
+              });
           });
         return;
       }
@@ -298,10 +308,12 @@ export default function LiveInterviewPage() {
         type: 'TAB_SWITCH',
         message: `Please stay on this tab — Attempt ${attempt}/3`,
         severity: 'WARNING',
-      }).then((next) => {
-        setSession(next);
-        tabBusyRef.current = false;
-      });
+      })
+        .then((next) => setSession(next))
+        .catch(() => undefined)
+        .finally(() => {
+          tabBusyRef.current = false;
+        });
     };
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
@@ -800,7 +812,7 @@ export default function LiveInterviewPage() {
     const durationSec = Math.round((Date.now() - askedAt.current) / 1000);
     try {
       const [next] = await Promise.all([
-        answerLiveInterview(current.id, text, durationSec),
+        answerLiveInterview(current.id, text, durationSec, undefined, current.currentQuestion?.index),
         naturalPause(900 + Math.min(1200, text.length * 8)),
       ]);
       setAiThinking(false);
@@ -849,6 +861,24 @@ export default function LiveInterviewPage() {
       await presentQuestion(next.currentQuestion);
       setAwake(true);
       awakeRef.current = true;
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 409) {
+        // Answer already recorded (duplicate submit): resync with the server's current question.
+        const fresh = await load().catch(() => null);
+        setAnswer('');
+        answerRef.current = '';
+        if (fresh && fresh.status !== 'COMPLETED' && fresh.currentQuestion) {
+          askedAt.current = Date.now();
+          await presentQuestion(fresh.currentQuestion);
+        }
+        return;
+      }
+      setStatus(err instanceof Error ? `${err.message} Please answer again.` : 'Could not send your answer. Please answer again.');
+      startListening();
+      setListening(true);
+      listeningRef.current = true;
+      lastHeard.current = Date.now();
     } finally {
       setAiThinking(false);
       setAvatarThinking(false);
@@ -871,10 +901,21 @@ export default function LiveInterviewPage() {
       const next = await endLiveInterview(params.id);
       clearActiveInterviewTimer(params.id);
       router.replace(`/interviews/${next.id}/report`);
+    } catch (err) {
+      endingRef.current = false;
+      setStatus(err instanceof Error ? err.message : 'Could not end the interview. Please try again.');
     } finally {
       setBusy(false);
       setConfirmQuit(false);
     }
+  }
+
+  if (loadError && !session) {
+    return (
+      <div className="min-h-screen bg-white">
+        <InterviewLoadErrorPanel error={loadError} onRetry={() => setLoadAttempt((value) => value + 1)} />
+      </div>
+    );
   }
 
   if (!session) {
@@ -887,7 +928,7 @@ export default function LiveInterviewPage() {
 
   const elapsed = started ? Math.max(0, Math.round((now - new Date(session.startAt!).getTime()) / 1000)) : 0;
   const remaining = Math.max(0, (session.durationLimitMin || 15) * 60 - elapsed);
-  const qn = (session.liveQuestions?.filter((item) => item.answer).length || 0) + (session.currentQuestion ? 1 : 0);
+  const qn = (session.liveQuestions?.filter(isAnsweredInterviewQuestion).length || 0) + (session.currentQuestion ? 1 : 0);
   const lastWarning = session.warnings?.at(-1);
 
   return (

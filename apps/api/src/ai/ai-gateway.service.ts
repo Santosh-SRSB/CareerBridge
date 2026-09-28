@@ -578,7 +578,8 @@ export class AiGatewayService {
       task: 'INTERVIEW_QUESTION',
       systemPrompt: [
         prompt.system,
-        'Use retrievedChunks when present. They are the candidate resume passages most relevant to this question. Prefer a specific company, project, or technology from those passages over a generic question.',
+        'Use retrievedChunks when present. They are the candidate resume passages most relevant to this question, each prefixed with its [Section]. Prefer a specific company, project, achievement, or technology from those passages over a generic question.',
+        'Never invent projects, companies, products, metrics, or achievements. Only reference specifics that appear in retrievedChunks or profile; if retrievedChunks is empty, do not claim the resume says something.',
         'coverageFocus tells you which profile area to emphasize for THIS question — follow it, while still staying natural.',
         'Question 1 is already a fixed intro elsewhere. Never ask "tell me about yourself" or "who are you" again.',
         'Rotate topics across questions. Prefer a new profile area over repeating the same project/skill.',
@@ -590,7 +591,7 @@ export class AiGatewayService {
         'Match interviewType: TECHNICAL → tech depth; ROLE/ROLE_BASED → role fit; BEHAVIOURAL/GENERIC/HR → soft skills; RESUME → resume projects; MIXED → rotate.',
         'category one of TECHNICAL, PROJECT, EXPERIENCE, BEHAVIOURAL, ROLE, SCENARIO, FOLLOW_UP, EDUCATION.',
       ].join(' '),
-      userPrompt: JSON.stringify(input).slice(0, 12000),
+      userPrompt: buildInterviewQuestionUserPrompt(input),
       options: {
         ...options,
         promptVersion: prompt.version,
@@ -688,4 +689,25 @@ export class AiGatewayService {
       .join('\n')
       .slice(0, 6000);
   }
+}
+
+/** Resume passages go first so the 12k character cap trims the profile, never the retrieved context. */
+export function buildInterviewQuestionUserPrompt(input: {
+  interviewType: string;
+  questionNumber: number;
+  askedQuestions: string[];
+  lastExchange?: { question: string; answer: string } | null;
+  profile: unknown;
+  coverageFocus?: string;
+  retrievedChunks?: string[];
+}): string {
+  return JSON.stringify({
+    retrievedChunks: input.retrievedChunks || [],
+    coverageFocus: input.coverageFocus,
+    interviewType: input.interviewType,
+    questionNumber: input.questionNumber,
+    askedQuestions: input.askedQuestions,
+    lastExchange: input.lastExchange || null,
+    profile: input.profile,
+  }).slice(0, 12000);
 }

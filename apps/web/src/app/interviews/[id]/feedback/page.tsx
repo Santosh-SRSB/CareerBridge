@@ -1,25 +1,66 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { InterviewSession } from '@careerbridge/shared';
 import { getInterview } from '@/lib/api';
 import { CandidateShell } from '@/components/CandidatePortal';
 import { ScoreRing } from '@/components/ScoreRing';
+import { InterviewLoadErrorPanel } from '@/components/interviews/InterviewLoadErrorPanel';
+import { classifyInterviewLoadError, type InterviewLoadError } from '@/lib/interview-load-error';
 
 export default function InterviewFeedbackPage() {
   const params = useParams<{ id: string }>();
   const [session, setSession] = useState<InterviewSession | null>(null);
+  const [loadError, setLoadError] = useState<InterviewLoadError | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   useEffect(() => {
-    getInterview(params.id).then(setSession);
-  }, [params.id]);
+    let cancelled = false;
+    setLoadError(null);
+    getInterview(params.id)
+      .then((next) => {
+        if (!cancelled) setSession(next);
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(classifyInterviewLoadError(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, attempt]);
 
-  if (!session?.feedback) {
+  if (loadError) {
     return (
       <CandidateShell>
-        <p className="text-muted">Preparing your feedback...</p>
+        <InterviewLoadErrorPanel error={loadError} onRetry={retry} />
+      </CandidateShell>
+    );
+  }
+
+  if (!session) {
+    return (
+      <CandidateShell>
+        <p className="text-muted">Loading your feedback...</p>
+      </CandidateShell>
+    );
+  }
+
+  if (!session.feedback) {
+    return (
+      <CandidateShell>
+        <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-10 text-center">
+          <p className="text-sm font-semibold text-slate-700">
+            {session.status === 'COMPLETED'
+              ? 'Feedback for this interview is not available yet.'
+              : 'This interview is still in progress. Feedback appears once it is complete.'}
+          </p>
+          <Link href={session.status === 'COMPLETED' ? '/interviews' : `/interviews/${session.id}`} className="text-sm font-bold text-teal hover:underline">
+            {session.status === 'COMPLETED' ? 'Back to interviews' : 'Continue interview'}
+          </Link>
+        </div>
       </CandidateShell>
     );
   }

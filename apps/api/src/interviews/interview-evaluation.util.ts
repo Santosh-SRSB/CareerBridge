@@ -19,7 +19,29 @@ export type InterviewQuestionType =
   | 'SYSTEM_DESIGN'
   | 'HR'
   | 'FOLLOW_UP'
+  | 'EDUCATION'
   | 'GENERAL';
+
+/**
+ * Map the category stored with a generated question to an evaluation type. The stored category is
+ * authoritative; keyword classification of the text is only a fallback when it is missing/unknown.
+ */
+export function questionTypeFromCategory(category?: string | null): InterviewQuestionType | null {
+  const key = (category || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (!key || key === 'MIXED' || key === 'GENERAL') return null;
+  if (/INTRO|ABOUT_YOURSELF/.test(key)) return 'INTRO';
+  if (/FOLLOW/.test(key)) return 'FOLLOW_UP';
+  if (/BEHAVIOU?R/.test(key)) return 'BEHAVIOURAL';
+  if (/SCENARIO|SITUATION|PROBLEM/.test(key)) return 'SITUATIONAL';
+  if (/SYSTEM_DESIGN|ARCHITECTURE/.test(key)) return 'SYSTEM_DESIGN';
+  if (/CODING|ALGORITHM/.test(key)) return 'CODING';
+  if (/PROJECT/.test(key)) return 'PROJECT';
+  if (/EDUCATION|ACADEMIC/.test(key)) return 'EDUCATION';
+  if (/EXPERIENCE|RESUME|WORK|INTERNSHIP/.test(key)) return 'EXPERIENCE';
+  if (/TECHNICAL|SKILL/.test(key)) return 'TECHNICAL';
+  if (/HR|ROLE|MOTIVATION/.test(key)) return 'HR';
+  return null;
+}
 
 export function classifyQuestionType(question: string): InterviewQuestionType {
   const q = question.toLowerCase();
@@ -337,8 +359,9 @@ export function localAnalyzeCategoryAware(
   question: string,
   answer: string,
   profile: ProfileFacts,
+  typeOverride?: InterviewQuestionType | null,
 ) {
-  const type = classifyQuestionType(question);
+  const type = typeOverride || classifyQuestionType(question);
   const criteria = evaluationCriteriaFor(type);
   const words = answer.trim().split(/\s+/).filter(Boolean);
   const relevant = tokenOverlap(answer, `${question} ${profile.skills.join(' ')} ${profile.jobRole}`);
@@ -357,8 +380,8 @@ export function localAnalyzeCategoryAware(
   return {
     analysis:
       words.length < 20
-        ? `For this ${labelType(type)} question, your answer was too brief and did not cover enough of what was asked.`
-        : `For this ${labelType(type)} question, you made relevant points but the answer needs clearer structure and more specific detail.`,
+        ? `${questionLead(type)}, your answer was too brief and did not cover enough of what was asked.`
+        : `${questionLead(type)}, you made relevant points but the answer needs clearer structure and more specific detail.`,
     improvedAnswer: improved,
     strengths:
       words.length >= 20
@@ -522,8 +545,24 @@ function cleanSentence(value: string) {
   return /[.!?]$/.test(capped) ? capped : `${capped}.`;
 }
 
-function labelType(type: InterviewQuestionType) {
-  return type.replace(/_/g, ' ').toLowerCase();
+const TYPE_LABELS: Record<InterviewQuestionType, string | null> = {
+  INTRO: 'introduction',
+  PROJECT: 'project',
+  TECHNICAL: 'technical',
+  CODING: 'coding',
+  BEHAVIOURAL: 'behavioural',
+  SITUATIONAL: 'scenario-based',
+  EXPERIENCE: 'experience',
+  SYSTEM_DESIGN: 'system design',
+  HR: 'motivation and role-fit',
+  FOLLOW_UP: 'follow-up',
+  EDUCATION: 'education',
+  GENERAL: null,
+};
+
+export function questionLead(type: InterviewQuestionType) {
+  const label = TYPE_LABELS[type];
+  return label ? `For this ${label} question` : 'For this question';
 }
 
 function clamp(value: number, min: number, max: number) {

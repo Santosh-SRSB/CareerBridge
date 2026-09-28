@@ -152,9 +152,9 @@ export class UpdateCandidateDto {
   @IsString()
   totalExperienceMonths?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Only null or "" (remove photo). Upload via POST /candidates/me/photo.' })
   @IsOptional()
-  @IsString()
+  @IsIn([''], { message: 'photoUrl can only be cleared here. Upload photos via POST /candidates/me/photo.' })
   photoUrl?: string | null;
 
   @ApiPropertyOptional()

@@ -7,7 +7,11 @@ export type ChunkMetadata = {
   projectName?: string | null;
   dates?: string | null;
   sourceHash?: string | null;
+  source?: 'resume' | 'job';
+  contentHash?: string | null;
 };
+
+type Entity = { subsection: string; text: string; metadata: ChunkMetadata };
 
 export type SemanticChunk = {
   section: string;
@@ -50,18 +54,24 @@ export function chunkResumeContent(content: ResumeContent): SemanticChunk[] {
     const items = experiences
       .map((row) => {
         const dates = [row.startDate, row.isCurrent ? 'Present' : row.endDate].filter(Boolean).join(' – ');
-        const text = [
-          row.company,
-          row.jobTitle,
-          dates,
-          row.isInternship ? 'Internship' : '',
-          row.description || '',
-        ]
-          .filter(Boolean)
-          .join('\n');
+        const body = bodyLines(row.description, [
+          ...(row.responsibilities || []),
+          ...(row.achievements || []),
+        ]);
+        const hasBody = body.length > 0 || Boolean(row.technologies?.length);
         return {
+          hasBody,
           subsection: [row.company, row.jobTitle].filter(Boolean).join(' — ') || 'Role',
-          text,
+          text: [
+            row.company,
+            row.jobTitle,
+            dates,
+            row.isInternship ? 'Internship' : '',
+            ...body,
+            techLine(row.technologies),
+          ]
+            .filter(Boolean)
+            .join('\n'),
           metadata: {
             companyName: row.company || null,
             roleTitle: row.jobTitle || null,
@@ -69,8 +79,8 @@ export function chunkResumeContent(content: ResumeContent): SemanticChunk[] {
           },
         };
       })
-      .filter((item) => item.text.trim());
-    pieces.push(...expandEntities('Experience', items));
+      .filter((item) => item.hasBody || isMeaningfulTitle(item.text));
+    pieces.push(...packEntities('Experience', items));
   }
 
   const education = content.education || [];
@@ -78,27 +88,35 @@ export function chunkResumeContent(content: ResumeContent): SemanticChunk[] {
     const items = education
       .map((row) => ({
         subsection: [row.qualification, row.institution].filter(Boolean).join(' — ') || 'Education',
-        text: [row.qualification, row.institution, row.yearCompleted ? String(row.yearCompleted) : '']
+        text: [
+          row.qualification,
+          row.fieldOfStudy,
+          row.institution,
+          row.yearCompleted ? String(row.yearCompleted) : '',
+        ]
           .filter(Boolean)
           .join('\n'),
         metadata: {},
       }))
-      .filter((item) => item.text.trim());
-    pieces.push(...expandEntities('Education', items));
+      .filter((item) => hasWords(item.text));
+    pieces.push(...packEntities('Education', items));
   }
 
   const projects = content.projects || [];
   if (projects.length) {
     const items = projects
-      .map((row) => ({
-        subsection: row.name || 'Project',
-        text: [row.name, row.description || '', (row.bullets || []).join('\n'), (row.technologies || []).join(', '), row.url || '']
-          .filter(Boolean)
-          .join('\n'),
-        metadata: { projectName: row.name || null },
-      }))
-      .filter((item) => item.text.trim());
-    pieces.push(...expandEntities('Projects', items));
+      .map((row) => {
+        const body = bodyLines(row.description, [...(row.bullets || []), ...(row.responsibilities || [])]);
+        return {
+          hasBody: body.length > 0 || Boolean(row.technologies?.length),
+          subsection: row.name || 'Project',
+          text: [row.name, ...body, techLine(row.technologies), row.url || ''].filter(Boolean).join('\n'),
+          metadata: { projectName: row.name || null },
+        };
+      })
+      // A title with no description is only kept when the title itself says something.
+      .filter((item) => item.hasBody || isMeaningfulTitle(item.text));
+    pieces.push(...packEntities('Projects', items));
   }
 
   const certifications = content.certifications || [];
@@ -111,8 +129,8 @@ export function chunkResumeContent(content: ResumeContent): SemanticChunk[] {
         const text = [row.name, row.issuer, row.date].filter(Boolean).join('\n');
         return { subsection: row.name || 'Certification', text, metadata: {} };
       })
-      .filter((item) => item.text.trim());
-    pieces.push(...expandEntities('Certifications', items));
+      .filter((item) => hasWords(item.text));
+    pieces.push(...packEntities('Certifications', items));
   }
 
   const achievements = content.achievements || [];
@@ -123,8 +141,8 @@ export function chunkResumeContent(content: ResumeContent): SemanticChunk[] {
         text: [row.title, row.organization, row.date, row.description].filter(Boolean).join('\n'),
         metadata: {},
       }))
-      .filter((item) => item.text.trim());
-    pieces.push(...expandEntities('Achievements', items));
+      .filter((item) => hasWords(item.text));
+    pieces.push(...packEntities('Achievements', items));
   }
 
   return pieces.map((piece, chunkIndex) => ({
@@ -133,8 +151,45 @@ export function chunkResumeContent(content: ResumeContent): SemanticChunk[] {
     chunkIndex,
     content: piece.text,
     tokenCount: estimateTokens(piece.text),
-    metadata: piece.metadata,
+    metadata: { ...piece.metadata, source: 'resume' as const },
   }));
+}
+
+function bodyLines(description: string | null | undefined, extra: string[]): string[] {
+  const lines: string[] = [];
+  const desc = (description || '').trim();
+  if (desc) lines.push(desc);
+  const seen = desc.toLowerCase();
+  for (const raw of extra) {
+    const line = (raw || '').trim();
+    if (!line || seen.includes(line.toLowerCase()) || lines.includes(line)) continue;
+    lines.push(`- ${line}`);
+  }
+  return lines;
+}
+
+function techLine(technologies?: string[]): string {
+  const list = [...new Set((technologies || []).map((t) => t.trim()).filter(Boolean))];
+  return list.length ? `Technologies: ${list.join(', ')}` : '';
+}
+
+function wordsOf(text: string): string[] {
+  return text.match(/[\p{L}\p{N}][\p{L}\p{N}.+#&'-]*/gu) || [];
+}
+
+/** At least one real word (two or more letters/digits); rejects ":" and similar debris. */
+function hasWords(text: string): boolean {
+  return wordsOf(text).some((word) => word.replace(/[^\p{L}\p{N}]/gu, '').length >= 2);
+}
+
+/**
+ * A body-less title (e.g. "Hospital Management System") is worth indexing; parser debris such as
+ * "Male", a bare person name, or a "Personal Details:" label is not.
+ */
+export function isMeaningfulTitle(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || /:\s*$/.test(trimmed)) return false;
+  return wordsOf(trimmed).length >= 3 && trimmed.replace(/\s+/g, '').length >= 12;
 }
 
 export type JobChunkInput = {
@@ -182,25 +237,77 @@ export function chunkJobDescription(job: JobChunkInput): SemanticChunk[] {
   }));
 }
 
-function expandEntities(
-  section: string,
-  items: Array<{ subsection: string; text: string; metadata: ChunkMetadata }>,
-): Piece[] {
-  if (!items.length) return [];
-  const combined = items.map((item) => item.text).join('\n\n');
-  if (estimateTokens(combined) <= CHUNKING_POLICY.semanticMaxTokens) {
-    return [{ section, subsection: null, text: combined, metadata: {} }];
-  }
+/**
+ * One vector per substantial entity (role, project, degree) so a question about one project retrieves
+ * that project. Small entities are packed with their neighbours; anything still below minChunkChars
+ * is folded into an adjacent piece of the same section instead of becoming its own vector.
+ */
+function packEntities(section: string, items: Entity[]): Piece[] {
   const out: Piece[] = [];
+  let pack: Entity[] = [];
+  const packText = (list: Entity[]) => list.map((item) => item.text).join('\n\n');
+  const flush = () => {
+    if (!pack.length) return;
+    out.push({
+      section,
+      subsection: pack.length === 1 ? pack[0].subsection : pack.map((item) => item.subsection).join(' | ').slice(0, 200),
+      text: packText(pack),
+      metadata: pack.length === 1 ? pack[0].metadata : {},
+    });
+    pack = [];
+  };
   for (const item of items) {
-    out.push(
-      ...expandPiece({
-        section,
-        subsection: item.subsection,
-        text: item.text,
-        metadata: item.metadata,
-      }),
-    );
+    const tokens = estimateTokens(item.text);
+    if (tokens > CHUNKING_POLICY.semanticMaxTokens) {
+      flush();
+      out.push(...expandPiece({ section, subsection: item.subsection, text: item.text, metadata: item.metadata }));
+      continue;
+    }
+    if (tokens >= CHUNKING_POLICY.entityStandaloneTokens) {
+      flush();
+      out.push({ section, subsection: item.subsection, text: item.text, metadata: item.metadata });
+      continue;
+    }
+    if (pack.length && estimateTokens(packText([...pack, item])) > CHUNKING_POLICY.entityPackMaxTokens) flush();
+    pack.push(item);
+  }
+  flush();
+  return mergeTinyPieces(out);
+}
+
+function mergeTinyPieces(pieces: Piece[]): Piece[] {
+  const out: Piece[] = [];
+  for (const piece of pieces) {
+    const prev = out[out.length - 1];
+    if (
+      prev &&
+      piece.text.trim().length < CHUNKING_POLICY.minChunkChars &&
+      estimateTokens(`${prev.text}\n\n${piece.text}`) <= CHUNKING_POLICY.semanticMaxTokens
+    ) {
+      out[out.length - 1] = {
+        ...prev,
+        subsection: [prev.subsection, piece.subsection].filter(Boolean).join(' | ').slice(0, 200) || null,
+        text: `${prev.text}\n\n${piece.text}`,
+        metadata: {},
+      };
+      continue;
+    }
+    out.push(piece);
+  }
+  // A tiny first piece has no predecessor; fold it forward instead.
+  if (out.length > 1 && out[0].text.trim().length < CHUNKING_POLICY.minChunkChars) {
+    const [first, second, ...rest] = out;
+    if (estimateTokens(`${first.text}\n\n${second.text}`) <= CHUNKING_POLICY.semanticMaxTokens) {
+      return [
+        {
+          ...second,
+          subsection: [first.subsection, second.subsection].filter(Boolean).join(' | ').slice(0, 200) || null,
+          text: `${first.text}\n\n${second.text}`,
+          metadata: {},
+        },
+        ...rest,
+      ];
+    }
   }
   return out;
 }

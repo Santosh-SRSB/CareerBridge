@@ -1,22 +1,25 @@
 const FIREBASE_CODES: Record<string, string> = {
-  'auth/invalid-verification-code': 'Incorrect OTP. Please check the code and try again.',
-  'auth/code-expired': 'This OTP has expired. Tap Resend OTP.',
-  'auth/invalid-verification-id': 'Please request a new OTP.',
-  'auth/session-expired': 'This OTP session expired. Tap Resend OTP.',
-  'auth/missing-verification-code': 'Enter the 6-digit OTP.',
-  'auth/too-many-requests': "You've reached the maximum number of attempts. Please try again later.",
+  'auth/captcha-check-failed':
+    'Verification could not be completed. Please try again.',
+  'auth/invalid-verification-code': 'The OTP is incorrect.',
+  'auth/code-expired': 'This OTP has expired. Please request a new one.',
+  'auth/too-many-requests': 'Too many attempts. Please wait and try again later.',
   'auth/quota-exceeded':
-    'Too many OTP requests for this number or network. Wait 1–2 hours, or use a Firebase test phone number.',
+    'Too many OTP requests for this number. Wait a while, or use a Firebase test phone number.',
   'auth/error-code:-39':
-    'Too many OTP requests for this number or network. Wait 1–2 hours, or use a Firebase test phone number.',
-  'auth/captcha-check-failed': 'Verification check failed. Refresh the page and try again.',
+    'Too many OTP requests for this number. Wait a while, or use a Firebase test phone number.',
+  'auth/invalid-verification-id': 'Please request a new OTP.',
+  'auth/session-expired': 'This OTP has expired. Please request a new one.',
+  'auth/missing-verification-code': 'Enter the 6-digit OTP.',
   'auth/invalid-phone-number': 'Enter a valid mobile number.',
   'auth/operation-not-allowed': 'Phone OTP is not enabled in Firebase yet.',
   'auth/billing-not-enabled':
     'Firebase Phone OTP needs billing enabled for real SMS. Use a test phone number for local setup.',
   FIREBASE_NOT_CONFIGURED: 'Firebase OTP is not configured yet. Add NEXT_PUBLIC_FIREBASE_* in apps/web/.env.local.',
-  OTP_EXPIRED: 'This OTP has expired. Tap Resend OTP.',
-  INVALID_OTP: 'Incorrect OTP. Please check the code and try again.',
+  OTP_EXPIRED: 'This OTP has expired. Please request a new one.',
+  INVALID_OTP: 'The OTP is incorrect.',
+  ACCOUNT_EXISTS: 'An account already exists with this phone/email. Please sign in.',
+  DUPLICATE_RESOURCE: 'An account already exists with this phone/email. Please sign in.',
 };
 
 export function authErrorMessage(err: unknown, stage: 'request' | 'verify') {

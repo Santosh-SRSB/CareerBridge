@@ -17,16 +17,11 @@ function winAnsi(value: string) {
     .trim();
 }
 
+/** Only inline data URLs: callers resolve the candidate's own stored photo first; no network fetches. */
 async function loadPhotoBytes(photoUrl: string) {
   const dataUrl = photoUrl.match(/^data:image\/([a-zA-Z0-9+.-]+)(?:;[^,]*)?;base64,([\s\S]+)$/i);
   if (dataUrl) {
     return { mime: dataUrl[1].toLowerCase(), bytes: Buffer.from(dataUrl[2].replace(/\s+/g, ''), 'base64') };
-  }
-  if (/^https?:\/\//i.test(photoUrl)) {
-    const response = await fetch(photoUrl);
-    if (!response.ok) return null;
-    const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    return { mime, bytes: Buffer.from(await response.arrayBuffer()) };
   }
   return null;
 }
@@ -36,9 +31,11 @@ async function embedPhoto(doc: PDFDocument, photoUrl?: string | null) {
   const loaded = await loadPhotoBytes(photoUrl);
   if (!loaded) return null;
   const preferPng = loaded.mime.includes('png');
+  // Fresh copy: pdf-lib's JPEG parser ignores byteOffset, so pooled Node Buffers misparse.
+  const bytes = new Uint8Array(loaded.bytes);
   const attempts = preferPng
-    ? [() => doc.embedPng(loaded.bytes), () => doc.embedJpg(loaded.bytes)]
-    : [() => doc.embedJpg(loaded.bytes), () => doc.embedPng(loaded.bytes)];
+    ? [() => doc.embedPng(bytes), () => doc.embedJpg(bytes)]
+    : [() => doc.embedJpg(bytes), () => doc.embedPng(bytes)];
   for (const attempt of attempts) {
     try {
       return await attempt();

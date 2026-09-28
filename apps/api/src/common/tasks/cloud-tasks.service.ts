@@ -41,16 +41,23 @@ export class CloudTasksService {
     if (this.tasksClient && project && queue && workerUrl) {
       try {
         const parent = this.tasksClient.queuePath(project, location, queue);
+        const taskSecret = (this.config.get<string>('RESUME_TASK_SECRET') || '').trim();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (taskSecret) {
+          headers['X-Resume-Task-Secret'] = taskSecret;
+        }
         const task = {
           httpRequest: {
             httpMethod: 'POST' as const,
             url: workerUrl,
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: Buffer.from(JSON.stringify({ resumeId, userId })).toString('base64'),
           },
         };
         await this.tasksClient.createTask({ parent, task });
-        this.logger.log(`Enqueued Cloud Task for resume ${resumeId}`);
+        this.logger.log(
+          JSON.stringify({ msg: 'resume_task_enqueued', resumeId, userId, queue, mode: 'cloud-tasks' }),
+        );
         return { mode: 'cloud-tasks' as const };
       } catch (err) {
         this.logger.error(`Cloud Tasks enqueue failed: ${(err as Error).message}. Falling back locally.`);

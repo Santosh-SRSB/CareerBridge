@@ -7,6 +7,7 @@ import {
   type SkillAssessmentSession,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { USABLE_RESUME_WHERE } from '../resumes/resume-eligibility';
 import {
   IntelligenceService,
   skillsFromResumeText,
@@ -69,7 +70,7 @@ export class AssessmentsService {
         skills: { orderBy: { createdAt: 'asc' } },
         education: true,
         experiences: true,
-        resumes: { orderBy: { updatedAt: 'desc' }, take: 1 },
+        resumes: { where: USABLE_RESUME_WHERE, orderBy: { updatedAt: 'desc' }, take: 1 },
       },
     });
     if (!candidate) {

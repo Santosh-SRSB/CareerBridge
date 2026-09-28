@@ -14,7 +14,7 @@ export function formatInterviewAnswerDisplay(item: LiveInterviewQuestion) {
     return `${text}${audioSuffix}`;
   }
   if (item.answerMode === 'AUDIO' || audioSuffix) {
-    return `Audio answer submitted${audioSuffix}.`;
+    return `Audio answer submitted${audioSuffix} — transcript unavailable.`;
   }
   return text || 'No answer recorded.';
 }

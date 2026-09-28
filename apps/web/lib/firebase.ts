@@ -10,13 +10,14 @@ let recaptcha: RecaptchaVerifier | null = null;
 let confirmation: ConfirmationResult | null = null;
 
 const FIREBASE_MESSAGES: Record<string, string> = {
-  'auth/invalid-verification-code': 'Incorrect OTP. Please check the code and try again.',
-  'auth/code-expired': 'This OTP has expired.',
+  'auth/invalid-verification-code': 'The OTP is incorrect.',
+  'auth/code-expired': 'This OTP has expired. Please request a new one.',
   'auth/invalid-verification-id': 'Please request a new OTP.',
   'auth/missing-verification-code': 'Enter the 6-digit OTP.',
-  'auth/too-many-requests': "You've reached the maximum number of attempts. Please try again later.",
+  'auth/too-many-requests': 'Too many attempts. Please wait and try again later.',
   'auth/quota-exceeded': "We couldn't send the OTP right now. Please try again later.",
-  'auth/captcha-check-failed': 'Verification check failed. Refresh the page and try again.',
+  'auth/captcha-check-failed':
+    'Verification could not be completed. Please try again.',
   'auth/invalid-phone-number': 'Enter a valid mobile number.',
   'auth/missing-phone-number': 'Enter a valid mobile number.',
   'auth/network-request-failed': 'Network error. Check your connection and try again.',

@@ -21,6 +21,7 @@ import {
   type ParsedResumeSchema,
 } from './parsed-resume.schema';
 import { parsedSchemaToResumeContent, resumeContentToParsedSchema } from './parsed-resume-map';
+import { EXTRACTION_FAILED_MESSAGE } from './resume-eligibility';
 
 export type ParseResumeInput = {
   buffer?: Buffer;
@@ -70,7 +71,7 @@ export class ParseResumePipeline {
           },
           rawText: '',
           rawTextPreview: '',
-          error: 'Could not extract text from the resume. Try a clearer PDF or DOCX.',
+          error: EXTRACTION_FAILED_MESSAGE,
         };
       }
 

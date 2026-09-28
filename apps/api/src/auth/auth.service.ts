@@ -16,6 +16,8 @@ import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtPayload } from './jwt.strategy';
 import { hashPassword, verifyPassword } from './password.util';
+import { requireJwtAccessSecret, requireJwtRefreshSecret } from './jwt-secrets';
+import { isSafeInlinePhoto, ownedProfilePhotoPath } from '../candidates/profile-photo.util';
 
 const OTP_TTL_SECONDS = 300;
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -846,8 +848,17 @@ export class AuthService {
         user.userType === 'CANDIDATE' ? user.candidate?.onboardingCompleted ?? false : true,
       dashboardReached:
         user.userType === 'CANDIDATE' ? user.candidate?.dashboardReached ?? false : true,
-      photoUrl: user.userType === 'CANDIDATE' ? user.candidate?.photoUrl ?? null : null,
+      photoUrl: user.userType === 'CANDIDATE' ? this.sessionPhotoUrl(user.candidate) : null,
     };
+  }
+
+  /** Echo only the candidate's own stored photo reference; anything else is dropped. */
+  private sessionPhotoUrl(candidate?: { id?: string; photoUrl?: string | null } | null) {
+    const stored = candidate?.photoUrl;
+    if (!stored || !candidate?.id) return null;
+    if (isSafeInlinePhoto(stored)) return stored;
+    const bucket = this.config.get<string>('GCS_BUCKET', 'srsbbucket');
+    return ownedProfilePhotoPath(stored, candidate.id, bucket) ? stored : null;
   }
 
   async refresh(refreshToken: string) {
@@ -926,6 +937,7 @@ export class AuthService {
     phone: string;
     email?: string | null;
     candidate?: {
+      id?: string;
       onboardingCompleted: boolean;
       dashboardReached?: boolean;
       firstName: string | null;
@@ -942,13 +954,13 @@ export class AuthService {
     const refreshExpires = this.config.get('JWT_REFRESH_EXPIRES') || '30d';
     const jti = randomUUID();
     const accessToken = await this.jwt.signAsync(payload, {
-      secret: this.config.get('JWT_ACCESS_SECRET') || 'dev-access-secret',
+      secret: requireJwtAccessSecret(this.config),
       expiresIn: accessExpires,
     });
     const refreshToken = await this.jwt.signAsync(
       { sub: user.id, typ: 'refresh', jti },
       {
-        secret: this.config.get('JWT_REFRESH_SECRET') || 'dev-refresh-secret',
+        secret: requireJwtRefreshSecret(this.config),
         expiresIn: refreshExpires,
       },
     );
@@ -974,7 +986,7 @@ export class AuthService {
         firstName: user.candidate?.firstName ?? user.employer?.contactName ?? null,
         onboardingCompleted: isCandidate ? user.candidate?.onboardingCompleted ?? false : true,
         dashboardReached: isCandidate ? user.candidate?.dashboardReached ?? false : true,
-        photoUrl: isCandidate ? user.candidate?.photoUrl ?? null : null,
+        photoUrl: isCandidate ? this.sessionPhotoUrl(user.candidate) : null,
       },
     };
   }
@@ -982,7 +994,7 @@ export class AuthService {
   private async verifyRefreshToken(token: string) {
     try {
       const payload = await this.jwt.verifyAsync<{ sub: string; typ?: string; jti?: string }>(token, {
-        secret: this.config.get('JWT_REFRESH_SECRET') || 'dev-refresh-secret',
+        secret: requireJwtRefreshSecret(this.config),
       });
       if (payload.typ && payload.typ !== 'refresh') {
         return null;

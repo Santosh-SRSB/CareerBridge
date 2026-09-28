@@ -8,12 +8,15 @@ import {
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
+import { DocumentIndexService } from '../ai/document-index.service';
+import { StorageService } from '../common/storage/storage.service';
 import { applyContentGroundingGate } from './content-grounding-gate';
 import { attachComputedExperienceYears } from './experience-years';
 import { ParseResumePipeline } from './parse-resume.pipeline';
 import { sanitizeExtractedResumeText } from './layout-sanitize';
 import { parsedSchemaToResumeContent } from './parsed-resume-map';
 import { isParsedResumeSchemaMostlyEmpty } from './parsed-resume.schema';
+import { ResumeProfileSyncService } from './resume-profile-sync.service';
 
 @Injectable()
 export class ResumeProcessorService {
@@ -24,6 +27,9 @@ export class ResumeProcessorService {
     private readonly prisma: PrismaService,
     private readonly aiGateway: AiGatewayService,
     private readonly parsePipeline: ParseResumePipeline,
+    private readonly storage: StorageService,
+    private readonly profileSync: ResumeProfileSyncService,
+    private readonly documentIndex: DocumentIndexService,
   ) {}
 
   async processUploadedResume(resumeId: string, userId: string, fileBuffer?: Buffer) {
@@ -44,10 +50,40 @@ export class ResumeProcessorService {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Resume was not found' });
     }
 
+    // Idempotent skip when already completed with non-empty content (Cloud Tasks retries).
+    if (resume.processingStatus === 'COMPLETED' && resume.contentJson && !fileBuffer) {
+      try {
+        const existing = JSON.parse(resume.contentJson) as ResumeContent;
+        const thin =
+          !(existing.skills?.length || existing.education?.length || existing.experiences?.length) &&
+          (existing.summary || '').trim().length < 40;
+        if (!thin) {
+          this.logger.log(JSON.stringify({ msg: 'resume_process_skip_completed', resumeId }));
+          // Parse succeeded earlier but the index may be missing or stale (outage, new chunker, edited content).
+          if (!(await this.documentIndex.isResumeIndexCurrent(resumeId, existing))) {
+            await this.indexParsedResume(resumeId, resume.candidateId, existing, resume.rawText || '', userId);
+          }
+          return { ok: true, extractor: 'cached' as const, skipped: true };
+        }
+      } catch {
+        // continue reprocess
+      }
+    }
+
     await this.prisma.resume.update({
       where: { id: resumeId },
       data: { processingStatus: 'PROCESSING', processingError: null },
     });
+    this.logger.log(
+      JSON.stringify({
+        msg: 'resume_process_start',
+        resumeId,
+        candidateId: resume.candidateId,
+        userId,
+        hasBuffer: Boolean(fileBuffer),
+        hasStoragePath: Boolean(resume.sourceStoragePath),
+      }),
+    );
 
     try {
       let buffer = fileBuffer;
@@ -156,7 +192,34 @@ export class ResumeProcessorService {
         },
       });
 
-      await this.persistAnalysis(resumeId, content, rawText, atsScore, aiReview);
+      try {
+        await this.persistAnalysis(resumeId, content, rawText, atsScore, aiReview);
+      } catch (err) {
+        // Extraction already persisted — ATS report failure must not flip status to FAILED.
+        this.logger.warn(
+          JSON.stringify({
+            msg: 'resume_ats_persist_failed',
+            resumeId,
+            error: (err as Error).message?.slice(0, 300),
+          }),
+        );
+      }
+
+      try {
+        await this.profileSync.syncFromParsedResume({
+          candidateId: resume.candidateId,
+          content,
+          resumeId,
+        });
+      } catch (err) {
+        this.logger.warn(
+          JSON.stringify({
+            msg: 'resume_profile_sync_failed',
+            resumeId,
+            error: (err as Error).message?.slice(0, 240),
+          }),
+        );
+      }
 
       // Embeddings for hybrid matching + RAG (Gateway → Gemini only).
       try {
@@ -183,13 +246,23 @@ export class ResumeProcessorService {
         this.logger.warn(`Embedding after resume process failed: ${(err as Error).message}`);
       }
 
+      await this.indexParsedResume(resumeId, resume.candidateId, content, rawText, userId);
+
       this.logger.log(
-        `Resume ${resumeId} processing completed via ${pipelineResult.meta.extractor}/${pipelineResult.meta.layoutMode}`,
+        JSON.stringify({
+          msg: 'resume_process_completed',
+          resumeId,
+          candidateId: resume.candidateId,
+          extractor: pipelineResult.meta.extractor,
+          layoutMode: pipelineResult.meta.layoutMode,
+        }),
       );
       return { ok: true, extractor: pipelineResult.meta.extractor };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Resume ${resumeId} processing failed: ${message}`);
+      this.logger.error(
+        JSON.stringify({ msg: 'resume_process_failed', resumeId, error: message.slice(0, 500) }),
+      );
       await this.prisma.resume.update({
         where: { id: resumeId },
         data: {
@@ -201,7 +274,55 @@ export class ResumeProcessorService {
     }
   }
 
+  /** Keep the RAG index in step with edited content; unchanged chunks reuse their stored vectors. */
+  async reindexIfStale(resumeId: string, candidateId: string, content: ResumeContent, rawText: string, userId: string) {
+    if (await this.documentIndex.isResumeIndexCurrent(resumeId, content)) return;
+    await this.indexParsedResume(resumeId, candidateId, content, rawText, userId);
+  }
+
+  /** Index failures are logged only; they never change the resume's parse status. */
+  private async indexParsedResume(
+    resumeId: string,
+    candidateId: string,
+    content: ResumeContent,
+    rawText: string,
+    userId: string,
+  ) {
+    try {
+      const indexResult = await this.documentIndex.indexResume({
+        resumeId,
+        candidateId,
+        content,
+        userId,
+        city: content.city,
+        about: content.summary,
+        skills: content.skills || [],
+        experienceSummary: rawText.slice(0, 2000),
+      });
+      this.logger.log(
+        JSON.stringify({
+          msg: 'resume_index_result',
+          resumeId,
+          ok: indexResult.ok,
+          chunkCount: indexResult.chunkCount,
+          error: indexResult.error?.slice(0, 200),
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        JSON.stringify({
+          msg: 'resume_index_failed',
+          resumeId,
+          error: (err as Error).message?.slice(0, 240),
+        }),
+      );
+    }
+  }
+
   private async downloadFromGcs(path: string): Promise<Buffer> {
+    if (this.storage.isConfigured()) {
+      return this.storage.downloadFile(path);
+    }
     const { Storage } = await import('@google-cloud/storage');
     const bucketName = process.env.GCS_BUCKET || 'srsbbucket';
     const storage = new Storage({
@@ -223,38 +344,35 @@ export class ResumeProcessorService {
     const facts = extractFacts(content, rawText);
     await this.prisma.resumeIssue.deleteMany({ where: { resumeId } });
     await this.prisma.resumeFact.deleteMany({ where: { resumeId } });
-    await this.prisma.resumeAtsReport.upsert({
-      where: { resumeId },
-      create: {
-        resumeId,
-        scoreType: analysis.scoreType,
-        overallScore,
-        label: analysis.label,
-        sectionJson: JSON.stringify(analysis.sections),
-        issuesJson: JSON.stringify({
-          deterministic: analysis.issues,
-          aiReview,
-        }),
-        highPriority: analysis.highPriority,
-        mediumPriority: analysis.mediumPriority,
-        goodSections: analysis.goodSections,
-        recommendedPlanId: analysis.recommendedPlanId,
-        updatedAt: new Date(),
-      },
-      update: {
-        overallScore,
-        label: analysis.label,
-        sectionJson: JSON.stringify(analysis.sections),
-        issuesJson: JSON.stringify({
-          deterministic: analysis.issues,
-          aiReview,
-        }),
-        highPriority: analysis.highPriority,
-        mediumPriority: analysis.mediumPriority,
-        goodSections: analysis.goodSections,
-        recommendedPlanId: analysis.recommendedPlanId,
-      },
-    });
+
+    const reportData = {
+      scoreType: analysis.scoreType,
+      overallScore,
+      label: analysis.label,
+      sectionJson: JSON.stringify(analysis.sections),
+      issuesJson: JSON.stringify({
+        deterministic: analysis.issues,
+        aiReview,
+      }),
+      highPriority: analysis.highPriority,
+      mediumPriority: analysis.mediumPriority,
+      goodSections: analysis.goodSections,
+      recommendedPlanId: analysis.recommendedPlanId,
+    };
+
+    // Prefer find+update/create over upsert — DEV DB may lack the unique index Prisma expects.
+    const existing = await this.prisma.resumeAtsReport.findFirst({ where: { resumeId } });
+    if (existing) {
+      await this.prisma.resumeAtsReport.update({
+        where: { id: existing.id },
+        data: reportData,
+      });
+    } else {
+      await this.prisma.resumeAtsReport.create({
+        data: { resumeId, ...reportData },
+      });
+    }
+
     if (analysis.issues.length) {
       await this.prisma.resumeIssue.createMany({
         data: analysis.issues.map((item) => ({

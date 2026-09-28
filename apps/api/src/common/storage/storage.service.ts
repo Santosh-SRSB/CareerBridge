@@ -61,6 +61,10 @@ export class StorageService implements OnModuleInit {
     return Boolean(this.storageClient);
   }
 
+  getBucketName(): string {
+    return this.bucketName;
+  }
+
   getConfigurationError(): string | null {
     if (this.storageClient) return null;
     return (

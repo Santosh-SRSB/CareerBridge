@@ -12,6 +12,8 @@ export type StoredChunkHit = {
   chunkIndex: number;
   score: number;
   metadata: Record<string, unknown>;
+  candidateId: string | null;
+  resumeId: string | null;
 };
 
 @Injectable()
@@ -79,7 +81,34 @@ export class VectorStoreService {
     );
   }
 
-  /** Replace every chunk for this resume version. Old rows are removed, not left active. */
+  /** Active chunks of a resume with their content hash, so unchanged content is not re-embedded. */
+  async getActiveResumeChunks(
+    resumeId: string,
+    withVectors = false,
+  ): Promise<Array<{ contentHash: string | null; model: string; chunkingVersion: string; values: number[] | null }>> {
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{ hash: string | null; embedding_model: string; chunking_version: string; embedding: string | null }>
+    >(
+      `SELECT metadata->>'contentHash' AS hash, embedding_model, chunking_version,
+              ${withVectors ? 'embedding::text' : 'NULL'} AS embedding
+       FROM embedding_chunks
+       WHERE resume_id = $1 AND entity_type = 'RESUME' AND active = true
+       ORDER BY chunk_index ASC`,
+      resumeId,
+    );
+    return rows.map((row) => ({
+      contentHash: row.hash,
+      model: row.embedding_model,
+      chunkingVersion: row.chunking_version,
+      values: row.embedding ? parseVectorText(row.embedding) : null,
+    }));
+  }
+
+  /**
+   * Replace the active chunks of this resume. The previous generation is kept inactive (one generation of
+   * history); older inactive rows of the same resume are pruned. Chunks of the candidate's other resumes are
+   * deactivated so retrieval only sees the current resume.
+   */
   async replaceResumeChunks(input: {
     resumeId: string;
     candidateId: string;
@@ -87,7 +116,15 @@ export class VectorStoreService {
     chunks: Array<SemanticChunk & { values: number[] }>;
   }): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(`DELETE FROM embedding_chunks WHERE resume_id = $1`, input.resumeId);
+      await tx.$executeRawUnsafe(
+        `DELETE FROM embedding_chunks WHERE resume_id = $1 AND entity_type = 'RESUME' AND active = false`,
+        input.resumeId,
+      );
+      await tx.$executeRawUnsafe(
+        `UPDATE embedding_chunks SET active = false, updated_at = NOW()
+         WHERE resume_id = $1 AND entity_type = 'RESUME' AND active = true`,
+        input.resumeId,
+      );
       for (const chunk of input.chunks) {
         await tx.$executeRawUnsafe(
           `INSERT INTO embedding_chunks
@@ -108,6 +145,12 @@ export class VectorStoreService {
           input.model,
         );
       }
+      await tx.$executeRawUnsafe(
+        `UPDATE embedding_chunks SET active = false, updated_at = NOW()
+         WHERE entity_type = 'RESUME' AND candidate_id = $1 AND resume_id <> $2 AND active = true`,
+        input.candidateId,
+        input.resumeId,
+      );
     });
   }
 
@@ -203,11 +246,15 @@ export class VectorStoreService {
   async searchChunks(input: {
     vector: number[];
     candidateId?: string;
+    resumeId?: string;
     jobId?: string;
+    sections?: string[] | null;
     limit: number;
     minScore: number;
   }): Promise<StoredChunkHit[]> {
     if (!input.candidateId && !input.jobId) return [];
+    // A resume filter is only meaningful together with its owning candidate.
+    if (input.resumeId && !input.candidateId) return [];
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{
         id: string;
@@ -217,24 +264,30 @@ export class VectorStoreService {
         chunk_index: number;
         score: number;
         metadata: Record<string, unknown> | null;
+        candidate_id: string | null;
+        resume_id: string | null;
       }>
     >(
       `SELECT id, section, subsection, content, chunk_index,
               1 - (embedding <=> $1::vector) AS score,
-              metadata
+              metadata, candidate_id, resume_id
        FROM embedding_chunks
        WHERE active = true
          AND ($2::text IS NULL OR candidate_id = $2)
          AND ($3::text IS NULL OR job_id = $3)
+         AND ($5::text IS NULL OR resume_id = $5)
+         AND ($6::text[] IS NULL OR section = ANY($6::text[]))
        ORDER BY embedding <=> $1::vector
        LIMIT $4`,
       toVectorLiteral(input.vector),
       input.candidateId || null,
       input.jobId || null,
       input.limit,
+      input.resumeId || null,
+      input.sections?.length ? input.sections : null,
     );
-    return rows
-      .map((row) => ({
+    return filterOwnedHits(
+      rows.map((row) => ({
         id: row.id,
         section: row.section,
         subsection: row.subsection,
@@ -242,8 +295,11 @@ export class VectorStoreService {
         chunkIndex: row.chunk_index,
         score: Number(row.score),
         metadata: row.metadata || {},
-      }))
-      .filter((row) => row.score >= input.minScore);
+        candidateId: row.candidate_id,
+        resumeId: row.resume_id,
+      })),
+      input,
+    );
   }
 
   isUnavailable(err: unknown): boolean {
@@ -255,6 +311,20 @@ export class VectorStoreService {
     const message = err instanceof Error ? err.message : String(err);
     this.logger.warn(`pgvector store unavailable: ${message.slice(0, 240)}`);
   }
+}
+
+/** Defense in depth on top of the SQL filter: drop any hit not owned by the requested candidate/resume. */
+export function filterOwnedHits(
+  hits: StoredChunkHit[],
+  owner: { candidateId?: string; resumeId?: string; sections?: string[] | null; minScore: number },
+): StoredChunkHit[] {
+  return hits.filter(
+    (hit) =>
+      hit.score >= owner.minScore &&
+      (!owner.candidateId || hit.candidateId === owner.candidateId) &&
+      (!owner.resumeId || hit.resumeId === owner.resumeId) &&
+      (!owner.sections?.length || owner.sections.includes(hit.section)),
+  );
 }
 
 function toVectorLiteral(values: number[]): string {

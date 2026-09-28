@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  PayloadTooLargeException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
   ErrorCode,
@@ -35,6 +42,16 @@ import {
   ExplainCareerGapDto,
 } from './dto/update-candidate.dto';
 import { CareerGapReason, CareerGapStatus } from '../prisma/client';
+import {
+  PHOTO_VALIDATION_MESSAGES,
+  canonicalProfilePhotoPaths,
+  isSafeInlinePhoto,
+  ownedProfilePhotoPath,
+  profilePhotoPath,
+  profilePhotoUrl,
+  readOwnedProfilePhotoDataUrl,
+  validateProfilePhoto,
+} from './profile-photo.util';
 
 type CandidateRecord = Awaited<ReturnType<CandidatesService['loadCandidate']>>;
 
@@ -54,56 +71,45 @@ export class CandidatesService {
     return this.withReadablePhoto(this.toProfile(await this.loadCandidate(userId)));
   }
 
-  /** Multipart profile photo upload — avoids large JSON data-URL payloads. */
+  /** Multipart profile photo upload — the only way a photo reference is written. */
   async uploadPhotoFile(
     userId: string,
     file: { buffer: Buffer; mimetype: string; size: number; originalname?: string },
   ) {
-    const mime = (file.mimetype || '').toLowerCase();
-    if (!mime.startsWith('image/jpeg') && !mime.startsWith('image/jpg') && !mime.startsWith('image/png')) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: 'Please upload a JPG or PNG photo.',
-      });
-    }
-    if (!file.buffer?.length || file.size > 5 * 1024 * 1024) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: 'Photo must be under 5 MB.',
-      });
+    const verdict = await validateProfilePhoto(file);
+    if (!verdict.ok) {
+      const body = { code: ErrorCode.VALIDATION_ERROR, message: PHOTO_VALIDATION_MESSAGES[verdict.reason] };
+      if (verdict.reason === 'too_large') throw new PayloadTooLargeException(body);
+      throw new BadRequestException(body);
     }
 
     const candidate = await this.loadCandidate(userId);
-    const previousPath = this.gcsPathFromPhotoUrl(candidate.photoUrl);
-    const ext = mime.includes('png') ? '.png' : '.jpg';
-    let storedUrl: string;
-
-    if (this.storage.isConfigured()) {
-      try {
-        // Stable key per candidate so replace overwrites instead of leaving orphans.
-        const path = this.storage.imageObjectPath(`profile-photo${ext}`, candidate.id.slice(0, 8));
-        const uploaded = await this.storage.uploadFile(path, file.buffer, {
-          contentType: mime.includes('png') ? 'image/png' : 'image/jpeg',
-          isPublic: true,
-          metadata: { candidateId: candidate.id, source: 'profile-photo' },
-        });
-        storedUrl = uploaded.publicUrl;
-        await this.deleteReplacedProfilePhotos(candidate.id, previousPath, path);
-      } catch (err) {
-        this.logger.error(
-          `Profile photo multipart GCS upload failed for ${candidate.id}: ${(err as Error).message}`,
-        );
-        storedUrl = `data:${mime.includes('png') ? 'image/png' : 'image/jpeg'};base64,${file.buffer.toString('base64')}`;
-      }
-    } else {
-      storedUrl = `data:${mime.includes('png') ? 'image/png' : 'image/jpeg'};base64,${file.buffer.toString('base64')}`;
+    if (!this.storage.isConfigured()) {
+      this.logger.error(`Profile photo upload rejected for ${candidate.id}: storage not configured`);
+      throw new ServiceUnavailableException({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Photo storage is unavailable right now. Your existing photo was kept.',
+      });
     }
 
-    await this.prisma.candidate.update({
-      where: { userId },
-      data: { photoUrl: storedUrl },
-    });
-    this.logger.log(`Saved profile photo for candidate ${candidate.id} (${file.size} bytes)`);
+    const path = profilePhotoPath(candidate.id, verdict.type);
+    try {
+      await this.storage.uploadFile(path, file.buffer, {
+        contentType: verdict.contentType,
+        metadata: { candidateId: candidate.id, source: 'profile-photo' },
+      });
+    } catch (err) {
+      this.logger.error(`Profile photo GCS upload failed for ${candidate.id}: ${(err as Error).message}`);
+      throw new ServiceUnavailableException({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Could not save your photo right now. Your existing photo was kept.',
+      });
+    }
+
+    const photoUrl = profilePhotoUrl(this.storage.getBucketName(), candidate.id, verdict.type);
+    await this.prisma.candidate.update({ where: { id: candidate.id }, data: { photoUrl } });
+    await this.removeStaleProfilePhotos(candidate.id, candidate.photoUrl, path);
+    this.logger.log(`Saved profile photo for candidate ${candidate.id} (${file.buffer.length} bytes)`);
     return this.recompute(userId);
   }
 
@@ -451,11 +457,12 @@ export class CandidatesService {
       ? JSON.stringify(dto.careerInterests.slice(0, 3))
       : undefined;
 
-    let photoUrl = dto.photoUrl;
-    if (dto.photoUrl !== undefined && dto.photoUrl) {
-      photoUrl = await this.persistProfilePhoto(candidate.id, dto.photoUrl);
+    if (dto.photoUrl !== undefined && dto.photoUrl !== null && dto.photoUrl !== '') {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'photoUrl can only be cleared here. Upload photos via POST /candidates/me/photo.',
+      });
     }
-
     await this.prisma.candidate.update({
       where: { userId },
       data: {
@@ -496,7 +503,7 @@ export class CandidatesService {
         ...(dto.totalExperienceMonths !== undefined
           ? { totalExperienceMonths: Number.parseInt(dto.totalExperienceMonths, 10) || 0 }
           : {}),
-        ...(dto.photoUrl !== undefined ? { photoUrl: photoUrl || null } : {}),
+        ...(dto.photoUrl !== undefined ? { photoUrl: null } : {}),
         ...(dto.links !== undefined ? { profileLinks: JSON.stringify(cleanLinks(dto.links)) } : {}),
         ...(dto.onboardingCompleted !== undefined ? { onboardingCompleted: dto.onboardingCompleted } : {}),
         ...(dto.dashboardReached !== undefined ? { dashboardReached: dto.dashboardReached } : {}),
@@ -512,6 +519,9 @@ export class CandidatesService {
           : {}),
       },
     });
+    if (dto.photoUrl !== undefined) {
+      await this.removeStaleProfilePhotos(candidate.id, candidate.photoUrl, null);
+    }
 
     const profile = await this.recompute(userId);
     if (dto.onboardingCompleted === true) {
@@ -873,123 +883,48 @@ export class CandidatesService {
     return this.recompute(userId);
   }
 
-  /** Store profile photos flat under Images/ in GCS (overwrite stable key per candidate). */
-  private async persistProfilePhoto(candidateId: string, photoUrl: string): Promise<string> {
-    const dataUrl = photoUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+)(?:;[^,]*)?;base64,([\s\S]+)$/i);
-    if (!dataUrl) {
-      return photoUrl;
-    }
-    if (!this.storage.isConfigured()) {
-      return photoUrl;
-    }
-
-    try {
-      const mime = dataUrl[1].toLowerCase();
-      const ext =
-        mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : mime.includes('gif') ? '.gif' : '.jpg';
-      const buffer = Buffer.from(dataUrl[2], 'base64');
-      const previous = await this.prisma.candidate.findUnique({
-        where: { id: candidateId },
-        select: { photoUrl: true },
-      });
-      const previousPath = this.gcsPathFromPhotoUrl(previous?.photoUrl);
-      const path = this.storage.imageObjectPath(`profile-photo${ext}`, candidateId.slice(0, 8));
-      const uploaded = await this.storage.uploadFile(path, buffer, {
-        contentType: mime,
-        isPublic: true,
-        metadata: { candidateId, source: 'profile-photo' },
-      });
-      await this.deleteReplacedProfilePhotos(candidateId, previousPath, path);
-      return uploaded.publicUrl;
-    } catch (err) {
-      this.logger.error(
-        `Profile photo GCS upload failed for ${candidateId}: ${(err as Error).message}`,
-      );
-      // Keep the data URL so the photo still saves and displays if GCS fails.
-      return photoUrl;
-    }
-  }
-
-  private gcsPathFromPhotoUrl(photoUrl: string | null | undefined): string | null {
-    if (!photoUrl) return null;
-    const match = photoUrl.match(/^https?:\/\/storage\.googleapis\.com\/[^/]+\/(.+?)(?:\?|$)/i);
-    if (!match?.[1]) return null;
-    try {
-      return decodeURIComponent(match[1]);
-    } catch {
-      return match[1];
-    }
-  }
-
-  /** Remove the previous object (and jpg/png twin) when a new profile photo replaces it. */
-  private async deleteReplacedProfilePhotos(
-    candidateId: string,
-    previousPath: string | null,
-    nextPath: string,
-  ) {
+  /**
+   * Delete superseded photo objects. Only this candidate's own keys are ever deleted — never a path
+   * taken verbatim from the stored reference. A legacy 8-char key is deleted only when it was this
+   * candidate's reference and no other candidate still points at it (the short key can collide).
+   */
+  private async removeStaleProfilePhotos(candidateId: string, previousStored: string | null, keepPath: string | null) {
     if (!this.storage.isConfigured()) return;
-    const prefix = candidateId.slice(0, 8);
-    const candidates = new Set<string>();
-    if (previousPath && previousPath !== nextPath) candidates.add(previousPath);
-    // Drop the other extension on the stable key (jpg ↔ png).
-    for (const ext of ['.jpg', '.jpeg', '.png', '.webp', '.gif'] as const) {
-      const twin = this.storage.imageObjectPath(`profile-photo${ext === '.jpeg' ? '.jpg' : ext}`, prefix);
-      if (twin !== nextPath) candidates.add(twin);
+    const doomed = new Set(canonicalProfilePhotoPaths(candidateId).filter((path) => path !== keepPath));
+    const previous = ownedProfilePhotoPath(previousStored, candidateId, this.storage.getBucketName());
+    if (previous?.legacy && previous.path !== keepPath) {
+      const sharedWith = await this.prisma.candidate.count({
+        where: { id: { not: candidateId }, photoUrl: previousStored },
+      });
+      if (sharedWith === 0) doomed.add(previous.path);
     }
-    // Legacy timestamped keys: Images/photo-{ts}-{id}.ext
-    if (previousPath && /\/photo-\d+-/.test(previousPath) && previousPath !== nextPath) {
-      candidates.add(previousPath);
-    }
-    for (const path of candidates) {
+    for (const path of doomed) {
       await this.storage.deleteFile(path);
     }
   }
 
-  /** Turn private GCS object URLs into browser-readable URLs (signed, or data URL fallback). */
-  private async resolvePhotoUrl(photoUrl: string | null | undefined): Promise<string | null> {
-    if (!photoUrl) return null;
-    if (photoUrl.startsWith('data:') || photoUrl.startsWith('blob:')) return photoUrl;
-    if (!this.storage.isConfigured()) return photoUrl;
-
-    const match = photoUrl.match(
-      /^https?:\/\/storage\.googleapis\.com\/[^/]+\/(.+?)(?:\?|$)/i,
-    );
-    if (!match?.[1]) return photoUrl;
-
-    const objectPath = decodeURIComponent(match[1]);
-
-    try {
-      return await this.storage.getSignedUrl(objectPath, {
-        action: 'read',
-        expiresInMinutes: 60 * 24 * 7,
-      });
-    } catch (err) {
-      this.logger.warn(`Could not sign photo URL: ${(err as Error).message}`);
+  /** Browser-readable URL for the candidate's own photo only (signed URL, else inline data URL). */
+  private async resolvePhotoUrl(candidateId: string, stored: string | null | undefined): Promise<string | null> {
+    if (!stored) return null;
+    if (isSafeInlinePhoto(stored)) return stored;
+    if (!this.storage.isConfigured()) return null;
+    const owned = ownedProfilePhotoPath(stored, candidateId, this.storage.getBucketName());
+    if (!owned) {
+      this.logger.warn(`Ignoring non-owned photo reference for candidate ${candidateId}`);
+      return null;
     }
-
-    // Uniform bucket ACL + missing client_email → public URL 403s in the browser.
-    // Download via the same credentials that uploaded and return a data URL.
     try {
-      const buffer = await this.storage.downloadFile(objectPath);
-      const lower = objectPath.toLowerCase();
-      const mime = lower.endsWith('.png')
-        ? 'image/png'
-        : lower.endsWith('.webp')
-          ? 'image/webp'
-          : lower.endsWith('.gif')
-            ? 'image/gif'
-            : 'image/jpeg';
-      return `data:${mime};base64,${buffer.toString('base64')}`;
-    } catch (err) {
-      this.logger.warn(`Could not download photo for display: ${(err as Error).message}`);
-      return photoUrl;
+      return await this.storage.getSignedUrl(owned.path, { action: 'read', expiresInMinutes: 60 * 24 * 7 });
+    } catch {
+      // Cloud Run ADC has no signing key; fall back to an inline copy of the owned object.
     }
+    return readOwnedProfilePhotoDataUrl(this.storage, candidateId, stored);
   }
 
-  private async withReadablePhoto<T extends { photoUrl?: string | null }>(profile: T): Promise<T> {
+  private async withReadablePhoto<T extends { id: string; photoUrl?: string | null }>(profile: T): Promise<T> {
     return {
       ...profile,
-      photoUrl: await this.resolvePhotoUrl(profile.photoUrl),
+      photoUrl: await this.resolvePhotoUrl(profile.id, profile.photoUrl),
     };
   }
 

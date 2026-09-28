@@ -9,9 +9,9 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString } from 'class-validator';
-import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ParseResumePipeline } from './parse-resume.pipeline';
+import { publicProcessingError } from './resume-eligibility';
 
 class ParseResumeTextDto {
   @IsOptional()
@@ -29,7 +29,7 @@ class ParseResumeTextDto {
 export class ParseResumeController {
   constructor(private readonly pipeline: ParseResumePipeline) {}
 
-  @Public()
+  @ApiBearerAuth()
   @Post()
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({
@@ -73,7 +73,7 @@ export class ParseResumeController {
       data: result.data,
       meta: result.meta,
       rawTextPreview: result.rawTextPreview,
-      ...(result.error ? { error: result.error } : {}),
+      ...(result.error ? { error: publicProcessingError(result.error) } : {}),
     };
   }
 

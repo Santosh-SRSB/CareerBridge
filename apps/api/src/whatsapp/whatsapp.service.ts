@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppEventLog } from './whatsapp.event-log';
 import {
@@ -13,9 +12,14 @@ import {
   resolveTemplateName,
   slotPayload,
   startPayload,
+  parseInteractivePayload as parseWaInteractivePayload,
 } from './whatsapp.templates';
+import {
+  isWhatsAppSendConfigured,
+  signatureModeLabel,
+  validateWhatsAppSignature,
+} from './whatsapp-signature.util';
 import type {
-  ParsedInteractivePayload,
   ReminderKind,
   WhatsAppTemplateName,
   WhatsAppWebhookBody,
@@ -47,13 +51,21 @@ export class WhatsAppService {
     const verifyToken = Boolean(this.config.get<string>('WHATSAPP_VERIFY_TOKEN'));
     const appSecret = Boolean(this.config.get<string>('WHATSAPP_APP_SECRET'));
     const businessAccountId = Boolean(this.config.get<string>('WHATSAPP_BUSINESS_ACCOUNT_ID'));
+    const requireSignature = this.config.get<string>('WHATSAPP_REQUIRE_SIGNATURE') === 'true';
+    const requireOptIn = this.config.get<string>('WHATSAPP_REQUIRE_OPT_IN') === 'true';
+    const configured = isWhatsAppSendConfigured({ accessToken, phoneNumberId, verifyToken });
+    const signatureReady = !requireSignature || appSecret;
     return {
-      configured: accessToken && phoneNumberId && verifyToken,
+      configured,
       accessToken,
       phoneNumberId,
       verifyToken,
       appSecret,
       businessAccountId,
+      requireSignature,
+      requireOptIn,
+      signatureReady,
+      signatureMode: signatureModeLabel(requireSignature, appSecret),
       apiVersion: this.config.get<string>('WHATSAPP_API_VERSION', 'v21.0'),
       webhookPath: '/api/v1/whatsapp/webhook',
       webhookAliasPath: '/api/v1/webhooks/whatsapp',
@@ -76,21 +88,24 @@ export class WhatsAppService {
     return challenge;
   }
 
+  /**
+   * Meta webhook HMAC (x-hub-signature-256).
+   * Controlled by WHATSAPP_REQUIRE_SIGNATURE:
+   * - false (DEV): accept without App Secret / signature
+   * - true: WHATSAPP_APP_SECRET required; reject invalid/missing signatures
+   */
   validateSignature(rawBody: Buffer | string | undefined, signatureHeader: string | undefined) {
-    const appSecret = this.config.get<string>('WHATSAPP_APP_SECRET', '');
     const requireSignature = this.config.get<string>('WHATSAPP_REQUIRE_SIGNATURE') === 'true';
-    if (!appSecret) {
-      // Local/dev: allow without secret unless explicitly required
-      return !requireSignature;
+    const appSecret = this.config.get<string>('WHATSAPP_APP_SECRET', '') || '';
+    if (requireSignature && !appSecret) {
+      this.logger.error('WHATSAPP_REQUIRE_SIGNATURE=true but WHATSAPP_APP_SECRET is empty');
     }
-    if (!rawBody || !signatureHeader?.startsWith('sha256=')) return false;
-    const expected = createHmac('sha256', appSecret).update(rawBody).digest('hex');
-    const provided = signatureHeader.slice('sha256='.length);
-    try {
-      return timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
-    } catch {
-      return false;
-    }
+    return validateWhatsAppSignature({
+      requireSignature,
+      appSecret,
+      rawBody,
+      signatureHeader,
+    });
   }
 
   async testConnection() {
@@ -322,44 +337,8 @@ export class WhatsAppService {
     });
   }
 
-  parseInteractivePayload(raw: string | undefined): ParsedInteractivePayload {
-    if (!raw) return { action: 'UNKNOWN', raw: '' };
-    const value = raw.trim();
-    if (value.startsWith('CONFIRM:')) {
-      return { action: 'CONFIRM', interviewId: value.slice('CONFIRM:'.length), raw: value };
-    }
-    if (value.startsWith('RESCHEDULE:')) {
-      return { action: 'RESCHEDULE', interviewId: value.slice('RESCHEDULE:'.length), raw: value };
-    }
-    if (value.startsWith('DECLINE:')) {
-      return { action: 'DECLINE', interviewId: value.slice('DECLINE:'.length), raw: value };
-    }
-    if (value.startsWith('START:')) {
-      return { action: 'START', interviewId: value.slice('START:'.length), raw: value };
-    }
-    if (value.startsWith('SLOT:')) {
-      const rest = value.slice('SLOT:'.length);
-      const split = rest.indexOf(':');
-      if (split > 0) {
-        return {
-          action: 'SLOT',
-          interviewId: rest.slice(0, split),
-          slotIso: rest.slice(split + 1),
-          raw: value,
-        };
-      }
-    }
-    const lower = value.toLowerCase();
-    // Meta template Quick Reply payloads are usually the button label text.
-    if (lower.includes('confirm')) return { action: 'CONFIRM', raw: value };
-    if (
-      lower.includes('reschedule') ||
-      lower.includes('another time') ||
-      lower.includes('choose another')
-    ) {
-      return { action: 'RESCHEDULE', raw: value };
-    }
-    return { action: 'UNKNOWN', raw: value };
+  parseInteractivePayload(raw: string | undefined) {
+    return parseWaInteractivePayload(raw);
   }
 
   async markDeliveryStatus(whatsappMessageId: string, status: string, timestamp?: string) {
