@@ -53,6 +53,16 @@ export class CandidatesController {
     return this.candidates.completion(user.id);
   }
 
+  @Get('me/employability')
+  employability(@CurrentUser() user: { id: string }) {
+    return this.candidates.employability(user.id);
+  }
+
+  @Get('me/ai-feedback')
+  aiFeedback(@CurrentUser() user: { id: string }) {
+    return this.candidates.aiFeedback(user.id);
+  }
+
   @Post('me/career-gap/analyze')
   analyzeCareerGap(@CurrentUser() user: { id: string }, @Body() dto: AnalyzeCareerGapDto) {
     return this.candidates.analyzeCareerGap(user.id, dto || {});

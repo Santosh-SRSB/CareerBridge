@@ -96,6 +96,15 @@ class LiveAnswerDto {
   questionIndex?: number;
 }
 
+class SkipDto {
+  /** Index of the question being skipped; a stale index is rejected. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  questionIndex?: number;
+}
+
 class WarningDto {
   @IsString()
   type!: string;
@@ -139,6 +148,11 @@ export class InterviewsController {
   @Post(':id/answers')
   answerLive(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: LiveAnswerDto) {
     return this.interviews.answerLive(user.id, id, dto.answer, dto.durationSec, dto.answerMode, dto.questionIndex);
+  }
+
+  @Post(':id/skip')
+  skipLive(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: SkipDto) {
+    return this.interviews.skipLive(user.id, id, dto.questionIndex);
   }
 
   @Post(':id/warnings')

@@ -70,7 +70,8 @@ function JobPostedBody() {
   const searchParams = useSearchParams();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [title, setTitle] = useState('');
-  const [status, setStatus] = useState('PUBLISHED');
+  const [status, setStatus] = useState('');
+  const pendingReview = status === 'PENDING_REVIEW';
 
   useEffect(() => {
     const fromQuery = searchParams.get('title')?.trim() || '';
@@ -96,9 +97,14 @@ function JobPostedBody() {
           <div className="ep-posted-success__check" aria-hidden>
             ✓
           </div>
-          <h1>Job posted successfully</h1>
+          <h1>{pendingReview ? 'Job submitted for review' : 'Job posted successfully'}</h1>
           <p>
-            <strong>{title || 'Your role'}</strong> is live on CareerBridge.
+            <strong>{title || 'Your role'}</strong>
+            {pendingReview
+              ? ' is waiting for CareerBridge approval. Candidates will see it once it is approved.'
+              : status === 'PUBLISHED'
+                ? ' is live on CareerBridge.'
+                : ' has been saved.'}
           </p>
           <div className="ep-posted-success__cta">
             <Link href="/employer/jobs/new" className="ep-posted-success__btn">
@@ -237,8 +243,12 @@ function JobPostedBody() {
 
           <article className="ep-posted-success__card ep-posted-success__card--hire">
             <div>
-              <h2>Ready to hire</h2>
-              <p>Matched profiles are available for this role.</p>
+              <h2>{pendingReview ? 'Awaiting approval' : 'Ready to hire'}</h2>
+              <p>
+                {pendingReview
+                  ? 'Candidate matching starts as soon as the job is approved.'
+                  : 'Matched profiles are available for this role.'}
+              </p>
             </div>
             <Link href={`/employer/jobs/${params.id}`} className="ep-posted-success__solid">
               View job &amp; candidates

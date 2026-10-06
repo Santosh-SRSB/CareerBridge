@@ -1,9 +1,10 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -11,6 +12,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -18,9 +20,16 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  CANDIDATE_AVAILABILITY_FILTERS,
+  CANDIDATE_EDUCATION_FILTERS,
+  CANDIDATE_EXPERIENCE_FILTERS,
+  CANDIDATE_SEARCH_MAX_SKILLS,
+  CANDIDATE_SEARCH_SORTS,
+  type CandidateSearchSort,
   ErrorCode,
-  JOB_CATEGORIES,
+  JOB_DESCRIPTION_MAX,
   JOB_EXPERIENCE_RANGES,
+  LEGACY_JOB_EXPERIENCE_RANGES,
   JOB_TYPES,
   SCREENING_QUESTION_TYPES,
   WORK_MODES,
@@ -29,6 +38,19 @@ import { EmployersService } from './employers.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+
+class TalentShortlistDto {
+  @IsString()
+  @IsUUID('all', { message: 'jobId is required' })
+  jobId!: string;
+}
+
+class TalentShortlistBodyDto extends TalentShortlistDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
 
 class UpdateEmployerDto {
   @IsOptional()
@@ -59,6 +81,20 @@ class UpdateEmployerDto {
   @IsOptional()
   @IsString()
   designation?: string;
+
+  @IsOptional()
+  @IsString()
+  companySize?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  about?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  linkedinUrl?: string;
 }
 
 class SaveEmployerKycDto {
@@ -128,6 +164,7 @@ class CreateJobDto {
 
   @IsString()
   @MinLength(20, { message: 'Add a short job description.' })
+  @MaxLength(JOB_DESCRIPTION_MAX, { message: `Job description must be ${JOB_DESCRIPTION_MAX} characters or fewer.` })
   description: string;
 
   @IsString()
@@ -177,12 +214,13 @@ class CreateJobDto {
   jobType?: string;
 
   @IsString()
-  @IsIn([...JOB_CATEGORIES])
+  @MinLength(2)
+  @MaxLength(80)
   category: string;
 
   @IsOptional()
   @IsString()
-  @IsIn([...JOB_EXPERIENCE_RANGES, 'NONE'])
+  @IsIn([...JOB_EXPERIENCE_RANGES, ...LEGACY_JOB_EXPERIENCE_RANGES, 'NONE'])
   experience?: string;
 
   @IsOptional()
@@ -212,8 +250,19 @@ class CreateJobDto {
 
 class ApplicationActionDto {
   @IsString()
-  @IsIn(['REVIEW', 'SHORTLIST', 'INTERVIEW', 'SELECT', 'REJECT', 'HIRE'])
+  @IsIn(['REVIEW', 'SHORTLIST', 'INTERVIEW', 'HOLD', 'SELECT', 'REJECT', 'HIRE'])
   action: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+
+  /** Private hiring-team note; never sent to the candidate (unlike `reason`). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }
 
 class CandidateSearchQueryDto {
@@ -229,12 +278,61 @@ class CandidateSearchQueryDto {
   @IsString()
   skill?: string;
 
+  /** Comma-separated; every listed skill must be present. */
+  @IsOptional()
+  @Transform(({ value }) =>
+    (Array.isArray(value) ? value : String(value ?? '').split(','))
+      .map((item: unknown) => String(item).trim())
+      .filter(Boolean),
+  )
+  @IsArray()
+  @ArrayMaxSize(CANDIDATE_SEARCH_MAX_SKILLS, {
+    message: `You can filter by up to ${CANDIDATE_SEARCH_MAX_SKILLS} skills.`,
+  })
+  @IsString({ each: true })
+  skills?: string[];
+
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Max(50)
   experienceMin?: number;
+
+  /** Experience band such as "2-5" or "5+". */
+  @IsOptional()
+  @IsIn(CANDIDATE_EXPERIENCE_FILTERS.map((item) => item.value))
+  experience?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  language?: string;
+
+  @IsOptional()
+  @IsIn(CANDIDATE_EDUCATION_FILTERS.map((item) => item.value))
+  education?: string;
+
+  @IsOptional()
+  @IsIn(CANDIDATE_AVAILABILITY_FILTERS.map((item) => item.value))
+  availability?: string;
+
+  @IsOptional()
+  @IsIn(CANDIDATE_SEARCH_SORTS.map((item) => item.value))
+  sort?: CandidateSearchSort;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  pageSize?: number;
 
   @IsString()
   jobId: string;
@@ -291,6 +389,12 @@ class InterviewActionDto {
   @IsString()
   @MaxLength(1000)
   notes?: string;
+
+  /** Reschedule only: replaces the video meeting link. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  meetingUrl?: string;
 }
 
 @ApiTags('employers')
@@ -304,6 +408,11 @@ export class EmployersController {
   @Get('me')
   me(@CurrentUser() user: { id: string }) {
     return this.employers.me(user.id);
+  }
+
+  @Get('plan-usage')
+  planUsage(@CurrentUser() user: { id: string }) {
+    return this.employers.planUsage(user.id);
   }
 
   @Patch('me')
@@ -400,19 +509,22 @@ export class EmployersController {
     return this.employers.searchCandidates(user.id, query);
   }
 
-  @Post('candidates/:id/notify')
-  notifyCandidate(
+  @Post('candidates/:id/shortlist')
+  talentShortlist(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
-    @Body() body: { jobId?: string },
+    @Body() body: TalentShortlistBodyDto,
   ) {
-    if (!body?.jobId?.trim()) {
-      throw new BadRequestException({
-        code: 'VALIDATION_ERROR',
-        message: 'jobId is required',
-      });
-    }
-    return this.employers.notifyMatchedCandidate(user.id, id, body.jobId.trim());
+    return this.employers.setTalentShortlist(user.id, id, body.jobId.trim(), true, body.note);
+  }
+
+  @Delete('candidates/:id/shortlist')
+  removeTalentShortlist(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query() query: TalentShortlistDto,
+  ) {
+    return this.employers.setTalentShortlist(user.id, id, query.jobId.trim(), false);
   }
 
   @Get('candidates/:id')
@@ -468,6 +580,6 @@ export class EmployersController {
     @Param('id') id: string,
     @Body() dto: ApplicationActionDto,
   ) {
-    return this.employers.changeStatus(user.id, id, dto.action);
+    return this.employers.changeStatus(user.id, id, dto.action, dto.reason, dto.note);
   }
 }

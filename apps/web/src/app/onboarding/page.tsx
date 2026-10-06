@@ -6,6 +6,7 @@ import { INDIAN_CITIES } from '@careerbridge/shared';
 import {
   OB,
   OnboardingActions,
+  OnboardingError,
   OnboardingFieldIcon,
   OnboardingFrame,
   OnboardingHero,
@@ -16,9 +17,10 @@ import {
 } from '@/components/OnboardingFrame';
 import { Button } from '@/components/ui/Button';
 import { patchStoredUser } from '@/lib/session';
-import { getCandidateMe, updateCandidateMe } from '@/lib/api';
-import { nextOnboardingStepPath } from '@/lib/onboarding-flow';
+import { getCandidateMe, listAllPublicCities, listPublicStates, updateCandidateMe } from '@/lib/api';
+import { nextOnboardingStepPath, withSkippedStep } from '@/lib/onboarding-flow';
 import { useOnboardingGate } from '@/hooks/useOnboardingGate';
+import { ONBOARDING_SAVE_ERROR, useOnboardingSkip } from '@/hooks/useOnboardingSkip';
 import { INDIA_STATES, REGISTRATION_CITIES } from '@/data/india-locations';
 
 /** Quick-tap chips — also appear first in the search dropdown. */
@@ -63,17 +65,19 @@ const CITY_SEARCH_ALIASES: Record<string, string[]> = {
   vizag: ['visakhapatnam'],
 };
 
-const WORK_CITY_CATALOG = [
-  ...new Set([
-    ...POPULAR_WORK_CITIES,
-    ...INDIAN_CITIES,
-    ...REGISTRATION_CITIES,
-    'Bangalore',
-    'Gurugram',
-    'Gurgaon',
-    'New Delhi',
-  ]),
-].sort((a, b) => a.localeCompare(b));
+const BUNDLED_WORK_CITIES = [
+  ...POPULAR_WORK_CITIES,
+  ...INDIAN_CITIES,
+  ...REGISTRATION_CITIES,
+  'Bangalore',
+  'Gurugram',
+  'Gurgaon',
+  'New Delhi',
+];
+
+function buildCityCatalog(apiCities: string[]): string[] {
+  return [...new Set([...apiCities, ...BUNDLED_WORK_CITIES])].sort((a, b) => a.localeCompare(b));
+}
 
 function cityMatchesQuery(city: string, query: string): boolean {
   const c = city.toLowerCase();
@@ -100,6 +104,9 @@ function parseCities(raw: string | null | undefined): string[] {
   ];
 }
 
+const MAX_WORK_CITIES = 5;
+const MAX_WORK_CITIES_MESSAGE = 'You can select up to 5 locations';
+
 function serializeCities(cities: string[]): string {
   return cities.map((c) => c.trim()).filter(Boolean).join(', ');
 }
@@ -111,10 +118,36 @@ export default function OnboardingLocationPage() {
   const [customCity, setCustomCity] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [error, setError] = useState('');
+  const [saveFailed, setSaveFailed] = useState(false);
   const [loading, setLoading] = useState(false);
   const gateReady = useOnboardingGate(1);
   const [profileReady, setProfileReady] = useState(false);
+  const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
+  const [states, setStates] = useState<string[]>([]);
+  const [apiCities, setApiCities] = useState<string[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const { skip, skipping, skipError } = useOnboardingSkip(1, skippedSteps);
   const ready = gateReady && profileReady;
+  const workCityCatalog = useMemo(() => buildCityCatalog(apiCities), [apiCities]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([listPublicStates(), listAllPublicCities()])
+      .then(([stateRows, cityRows]) => {
+        if (cancelled) return;
+        setStates(stateRows.map((row) => row.name));
+        setApiCities(cityRows.map((row) => row.name));
+      })
+      .catch(() => {
+        if (!cancelled) setStates([...INDIA_STATES]);
+      })
+      .finally(() => {
+        if (!cancelled) setLocationsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const citySuggestions = useMemo(() => {
     const q = customCity.trim().toLowerCase();
@@ -128,7 +161,7 @@ export default function OnboardingLocationPage() {
     const popularHits = POPULAR_WORK_CITIES.filter(
       (city) => notSelected(city) && cityMatchesQuery(city, q),
     );
-    const otherHits = WORK_CITY_CATALOG.filter(
+    const otherHits = workCityCatalog.filter(
       (city) =>
         notSelected(city) &&
         cityMatchesQuery(city, q) &&
@@ -136,7 +169,7 @@ export default function OnboardingLocationPage() {
     );
 
     return [...popularHits, ...otherHits].slice(0, 20);
-  }, [customCity, workCities]);
+  }, [customCity, workCities, workCityCatalog]);
 
   useEffect(() => {
     if (!gateReady) return;
@@ -144,37 +177,53 @@ export default function OnboardingLocationPage() {
       .then((profile) => {
         setState(profile.state?.trim() || '');
         setWorkCities(parseCities(profile.preferredWorkCity || profile.city));
+        setSkippedSteps(profile.onboardingSkippedSteps ?? []);
       })
       .finally(() => setProfileReady(true));
   }, [gateReady]);
 
+  function isSelected(city: string) {
+    return workCities.some((c) => c.toLowerCase() === city.toLowerCase());
+  }
+
   function toggleCity(city: string) {
+    if (isSelected(city)) {
+      setError('');
+      setWorkCities((prev) => prev.filter((c) => c.toLowerCase() !== city.toLowerCase()));
+      return;
+    }
+    if (workCities.length >= MAX_WORK_CITIES) {
+      setError(MAX_WORK_CITIES_MESSAGE);
+      return;
+    }
     setError('');
-    setWorkCities((prev) => {
-      const exists = prev.some((c) => c.toLowerCase() === city.toLowerCase());
-      if (exists) return prev.filter((c) => c.toLowerCase() !== city.toLowerCase());
-      return [...prev, city];
-    });
+    setWorkCities((prev) => [...prev, city]);
   }
 
   function addCustomCity(raw?: string) {
     const city = (raw ?? customCity).trim();
     if (city.length < 2) return;
-    setWorkCities((prev) => {
-      if (prev.some((c) => c.toLowerCase() === city.toLowerCase())) return prev;
-      return [...prev, city];
-    });
+    if (isSelected(city)) {
+      setCustomCity('');
+      return;
+    }
+    if (workCities.length >= MAX_WORK_CITIES) {
+      setError(MAX_WORK_CITIES_MESSAGE);
+      return;
+    }
+    setWorkCities((prev) => [...prev, city]);
     setCustomCity('');
     setError('');
   }
 
   async function saveAndContinue() {
+    setSaveFailed(false);
     if (!state.trim()) {
-      setError('Select your state.');
+      setError('Please select your current location');
       return false;
     }
-    if (workCities.length < 1) {
-      setError('Pick at least one place where you would like to work.');
+    if (workCities.length > MAX_WORK_CITIES) {
+      setError(MAX_WORK_CITIES_MESSAGE);
       return false;
     }
     setError('');
@@ -184,14 +233,16 @@ export default function OnboardingLocationPage() {
       const profile = await updateCandidateMe({
         state: state.trim(),
         preferredWorkCity,
-        city: workCities[0],
+        ...(workCities[0] ? { city: workCities[0] } : {}),
         openToRelocating: true,
+        onboardingSkippedSteps: withSkippedStep(skippedSteps, 1, false),
       });
       patchStoredUser({ firstName: profile.firstName });
       router.push(nextOnboardingStepPath(1));
       return true;
     } catch {
-      setError('We could not save your location right now. Please try again.');
+      setError(ONBOARDING_SAVE_ERROR);
+      setSaveFailed(true);
       return false;
     } finally {
       setLoading(false);
@@ -260,24 +311,39 @@ export default function OnboardingLocationPage() {
                   <line x1="20" y1="12" x2="22" y2="12" />
                 </svg>
               </OnboardingFieldIcon>
-              <select
-                id="current-state"
-                required
-                value={state}
-                onChange={(event) => setState(event.target.value)}
-                className={`${onboardingInputClass} pl-[34px]`}
-              >
-                <option value="">Select state</option>
-                {INDIA_STATES.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+              {locationsLoading ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  data-testid="location-skeleton"
+                  className="h-10 w-full animate-pulse rounded-[10px] bg-[#e9e8e3]"
+                >
+                  <span className="sr-only">Loading locations…</span>
+                </div>
+              ) : (
+                <select
+                  id="current-state"
+                  aria-label="Current location"
+                  aria-invalid={error === 'Please select your current location' || undefined}
+                  value={state}
+                  onChange={(event) => {
+                    setState(event.target.value);
+                    if (event.target.value) setError('');
+                  }}
+                  className={`${onboardingInputClass} pl-[34px]`}
+                >
+                  <option value="">Select state</option>
+                  {(states.includes(state) || !state ? states : [state, ...states]).map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </OnboardingQuestion>
 
-          <OnboardingQuestion title="Preferred location">
+          <OnboardingQuestion title="Preferred locations (optional, up to 5)">
             {workCities.length > 0 ? (
               <div className="mb-2.5 flex flex-wrap gap-2">
                 {workCities.map((city) => (
@@ -346,6 +412,7 @@ export default function OnboardingLocationPage() {
                   }
                   if (e.key === 'Escape') setSearchOpen(false);
                 }}
+                aria-label="Search preferred city"
                 placeholder="Search city (e.g. Lucknow, Bangalore)..."
                 className={`${onboardingInputClass} pl-[34px]`}
                 autoComplete="off"
@@ -360,7 +427,7 @@ export default function OnboardingLocationPage() {
                       className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide"
                       style={{ color: OB.textMuted }}
                     >
-                      Popular places (<strong style={{ color: OB.ink }}>you can choose many</strong>)
+                      Popular places (<strong style={{ color: OB.ink }}>choose up to {MAX_WORK_CITIES}</strong>)
                     </li>
                   ) : null}
                   {citySuggestions.map((city) => (
@@ -398,7 +465,8 @@ export default function OnboardingLocationPage() {
             </div>
 
             <p className="mb-2 text-xs" style={{ color: OB.textMuted }}>
-              Popular places (<strong style={{ color: OB.ink }}>you can choose many</strong>)
+              Popular places (<strong style={{ color: OB.ink }}>choose up to {MAX_WORK_CITIES}</strong>) ·{' '}
+              {workCities.length}/{MAX_WORK_CITIES} selected
             </p>
             <div className="flex flex-wrap gap-2 pb-1">
               {POPULAR_WORK_CITIES.map((city) => {
@@ -427,10 +495,13 @@ export default function OnboardingLocationPage() {
             </div>
           </OnboardingQuestion>
 
-          {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
+          <OnboardingError
+            message={error || skipError}
+            onRetry={saveFailed ? () => void saveAndContinue() : skipError ? () => void skip() : undefined}
+          />
         </div>
 
-        <OnboardingActions step={1}>
+        <OnboardingActions step={1} onSkip={() => void skip()} skipDisabled={skipping || loading}>
           <Button
             type="submit"
             size="sm"

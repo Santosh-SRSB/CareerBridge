@@ -1,8 +1,9 @@
 'use client';
 
-import { ButtonHTMLAttributes } from 'react';
+import { ButtonHTMLAttributes, Ref } from 'react';
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
+  ref?: Ref<HTMLButtonElement>;
   variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive' | 'ghost' | 'link' | 'outline';
   size?: 'sm' | 'md' | 'lg';
   block?: boolean;
@@ -43,11 +44,23 @@ export function Button({
     <button
       {...props}
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={`inline-flex cursor-pointer items-center justify-center transition disabled:cursor-not-allowed disabled:opacity-60 ${
         block ? 'w-full' : 'w-auto'
       } ${sizes} ${styles} ${className}`}
     >
-      {loading ? loadingLabel : children}
+      {loading ? (
+        <>
+          <span
+            aria-hidden
+            data-testid="button-spinner"
+            className="mr-2 inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+          />
+          {loadingLabel}
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 }

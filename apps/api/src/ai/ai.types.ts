@@ -1,3 +1,7 @@
+import type { AiUnavailableReason } from '@careerbridge/shared';
+
+export type { AiUnavailableReason };
+
 export type AiProviderName = 'gemini' | 'fallback';
 
 export type AiTaskType =
@@ -26,6 +30,8 @@ export interface AiRequestOptions {
   temperature?: number;
   maxOutputTokens?: number;
   timeoutMs?: number;
+  /** Cancels in-flight provider calls and pending retries when the caller stops waiting. */
+  signal?: AbortSignal;
   promptVersion?: string;
   userId?: string;
   requestId?: string;
@@ -50,6 +56,8 @@ export interface AiGenerateResponse<T = unknown> {
   latencyMs: number;
   estimatedCostUsd?: number;
   error?: string;
+  /** Set when no AI result was produced; tells the UI why instead of hiding the failure. */
+  unavailableReason?: AiUnavailableReason;
 }
 
 export interface AiInteractionRecord {

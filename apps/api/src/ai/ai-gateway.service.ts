@@ -20,17 +20,131 @@ import {
 } from './schemas/ai-response.schemas';
 import { cosineSimilarity } from './utils/vector.util';
 import { VectorStoreService } from './vector-store.service';
+import {
+  AI_SETTING_DEFAULTS,
+  type AiLimits,
+  type AiUnavailableReason,
+  aiUsageDayStart,
+  evaluateAiBudget,
+  parseAiSettings,
+} from '@careerbridge/shared';
+import { AiCircuitBreaker, classifyAiError, unavailableReasonFor } from './ai-resilience';
+
+const SETTINGS_TTL_MS = 30_000;
+const USAGE_TTL_MS = 60_000;
 
 @Injectable()
 export class AiGatewayService {
   private readonly logger = new Logger(AiGatewayService.name);
+  private readonly breaker: AiCircuitBreaker;
+  private limitsCache: { value: AiLimits; fetchedAt: number } | null = null;
+  private usageCache: { dayStart: number; requests: number; tokens: number; fetchedAt: number } | null = null;
+  private lastLimitAlert: { dayStart: number; reason: AiUnavailableReason } | null = null;
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly gemini: GeminiProvider,
     private readonly vectors: VectorStoreService,
-  ) {}
+  ) {
+    const cooldown = Number(this.config.get<string>('AI_UNAVAILABLE_COOLDOWN_MS') || 60_000);
+    this.breaker = new AiCircuitBreaker(Number.isFinite(cooldown) && cooldown >= 0 ? cooldown : 60_000);
+  }
+
+  private async loadLimits(): Promise<AiLimits> {
+    if (this.limitsCache && Date.now() - this.limitsCache.fetchedAt < SETTINGS_TTL_MS) {
+      return this.limitsCache.value;
+    }
+    try {
+      const rows = await this.prisma.platformSetting.findMany({
+        where: { key: { in: Object.keys(AI_SETTING_DEFAULTS) } },
+      });
+      const value = parseAiSettings(Object.fromEntries(rows.map((row) => [row.key, row.value])));
+      this.limitsCache = { value, fetchedAt: Date.now() };
+      return value;
+    } catch (err) {
+      this.logger.warn(`AI settings read failed, keeping last known limits: ${(err as Error).message}`);
+      return this.limitsCache?.value ?? parseAiSettings({});
+    }
+  }
+
+  private async loadUsageToday(): Promise<{ requests: number; tokens: number }> {
+    const dayStart = aiUsageDayStart().getTime();
+    const cached = this.usageCache;
+    if (cached && cached.dayStart === dayStart && Date.now() - cached.fetchedAt < USAGE_TTL_MS) {
+      return cached;
+    }
+    try {
+      const agg = await this.prisma.aiInteraction.aggregate({
+        where: { createdAt: { gte: new Date(dayStart) } },
+        _count: { _all: true },
+        _sum: { inputTokens: true, outputTokens: true },
+      });
+      const next = {
+        dayStart,
+        requests: agg._count._all,
+        tokens: (agg._sum.inputTokens ?? 0) + (agg._sum.outputTokens ?? 0),
+        fetchedAt: Date.now(),
+      };
+      this.usageCache = next;
+      return next;
+    } catch (err) {
+      this.logger.warn(`AI usage read failed: ${(err as Error).message}`);
+      return cached && cached.dayStart === dayStart ? cached : { requests: 0, tokens: 0 };
+    }
+  }
+
+  private recordUsage(tokens: number) {
+    const dayStart = aiUsageDayStart().getTime();
+    if (this.usageCache && this.usageCache.dayStart === dayStart) {
+      this.usageCache.requests += 1;
+      this.usageCache.tokens += Math.max(0, tokens);
+    }
+  }
+
+  /** Why a new AI request must not be sent right now (disabled, over the daily budget, or a known outage). */
+  async unavailableReason(options?: { ignoreOutage?: boolean }): Promise<AiUnavailableReason | null> {
+    if (!this.gemini.isConfigured()) return 'NOT_CONFIGURED';
+    const limits = await this.loadLimits();
+    if (!limits.enabled) return 'DISABLED';
+    const usage = await this.loadUsageToday();
+    const budget = evaluateAiBudget({
+      ...limits,
+      requestsToday: usage.requests,
+      tokensToday: usage.tokens,
+    });
+    if (budget) {
+      this.alertLimitReached(budget, limits, usage);
+      return budget;
+    }
+    return options?.ignoreOutage ? null : this.breaker.current();
+  }
+
+  private alertLimitReached(reason: AiUnavailableReason, limits: AiLimits, usage: { requests: number; tokens: number }) {
+    const dayStart = aiUsageDayStart().getTime();
+    if (this.lastLimitAlert?.dayStart === dayStart && this.lastLimitAlert.reason === reason) return;
+    this.lastLimitAlert = { dayStart, reason };
+    this.logger.error(
+      JSON.stringify({
+        event: 'AI_DAILY_LIMIT_REACHED',
+        reason,
+        requestsToday: usage.requests,
+        tokensToday: usage.tokens,
+        dailyRequestLimit: limits.dailyRequestLimit,
+        dailyTokenLimit: limits.dailyTokenLimit,
+      }),
+    );
+    void this.prisma.auditLog
+      .create({
+        data: {
+          action: 'AI_DAILY_LIMIT_REACHED',
+          resourceType: 'AI_USAGE',
+          resourceId: new Date(dayStart).toISOString().slice(0, 10),
+          newValue: JSON.stringify({ reason, ...usage, ...limits }),
+        },
+      })
+      .catch(() => undefined);
+  }
 
   /**
    * Gemini-only resolution (Volume 2 ADR-005). No OpenAI fallback.
@@ -75,6 +189,24 @@ export class AiGatewayService {
         promptVersion,
         latencyMs: Date.now() - startTime,
         error: 'No AI provider configured (set GEMINI_API_KEY)',
+        unavailableReason: 'NOT_CONFIGURED',
+      };
+    }
+
+    const blocked = await this.unavailableReason();
+    if (blocked) {
+      this.logger.warn(
+        JSON.stringify({ event: 'AI_REQUEST_SKIPPED', task: request.task, reason: blocked, requestId: request.options?.requestId }),
+      );
+      return {
+        success: false,
+        data: null,
+        provider: 'fallback',
+        model: 'none',
+        promptVersion,
+        latencyMs: Date.now() - startTime,
+        error: `AI unavailable: ${blocked}`,
+        unavailableReason: blocked,
       };
     }
 
@@ -86,8 +218,12 @@ export class AiGatewayService {
           model: request.options?.model,
           temperature: request.options?.temperature,
           maxOutputTokens: request.options?.maxOutputTokens,
+          timeoutMs: request.options?.timeoutMs,
+          signal: request.options?.signal,
         },
       );
+      this.breaker.close();
+      this.recordUsage(result.inputTokens + result.outputTokens);
 
       const latencyMs = Date.now() - startTime;
       const estimatedCostUsd = this.estimateCost(
@@ -145,11 +281,18 @@ export class AiGatewayService {
         outputTokens: result.outputTokens,
         latencyMs,
         estimatedCostUsd,
+        unavailableReason: result.data ? undefined : 'FAILED',
       };
     } catch (err) {
       const latencyMs = Date.now() - startTime;
       const errorMsg = (err as Error).message;
-      this.logger.error(`AI Gateway execution failed for ${request.task}: ${errorMsg}`);
+      const kind = classifyAiError(err);
+      const callerAborted = Boolean(request.options?.signal?.aborted);
+      if (!callerAborted && (kind === 'UPSTREAM_UNAVAILABLE' || kind === 'TIMEOUT')) {
+        this.breaker.open(unavailableReasonFor(kind));
+      }
+      this.recordUsage(0);
+      this.logger.error(`AI Gateway execution failed for ${request.task} (${kind}): ${errorMsg}`);
 
       try {
         await this.prisma.aiInteraction.create({
@@ -180,6 +323,7 @@ export class AiGatewayService {
         promptVersion,
         latencyMs,
         error: errorMsg,
+        unavailableReason: callerAborted ? 'TIMEOUT' : unavailableReasonFor(kind),
       };
     }
   }
@@ -195,6 +339,9 @@ export class AiGatewayService {
   }): Promise<{ ok: boolean; dimensions: number; reused: boolean }> {
     const text = input.text.trim().slice(0, 8000);
     if (!text || !this.gemini.isConfigured()) {
+      return { ok: false, dimensions: 0, reused: false };
+    }
+    if (await this.unavailableReason({ ignoreOutage: true })) {
       return { ok: false, dimensions: 0, reused: false };
     }
 
@@ -226,6 +373,7 @@ export class AiGatewayService {
         values: embedded.values,
         model: embedded.model,
       });
+      this.recordUsage(Math.ceil(text.length / 4));
 
       try {
         await this.prisma.aiInteraction.create({
@@ -279,6 +427,7 @@ export class AiGatewayService {
     if (!this.gemini.isConfigured()) return [];
     const query = input.query.trim().slice(0, 4000);
     if (!query) return [];
+    if (await this.unavailableReason({ ignoreOutage: true })) return [];
 
     try {
       const embedded = await this.gemini.embed(query);
@@ -323,6 +472,7 @@ export class AiGatewayService {
         temperature: 0,
         // Large resumes were truncating JSON mid-array (~4k tokens) and forcing retries.
         maxOutputTokens: 12288,
+        timeoutMs: options?.timeoutMs ?? 60_000,
       },
     });
     if (res.data) return res.data;
@@ -347,6 +497,7 @@ export class AiGatewayService {
         promptVersion: prompt.version,
         temperature: 0,
         maxOutputTokens: 8192,
+        timeoutMs: options?.timeoutMs ?? 60_000,
       },
     });
     return res.data;
@@ -361,6 +512,7 @@ export class AiGatewayService {
     if (!this.gemini.isConfigured() || typeof this.gemini.generateStructuredMultimodal !== 'function') {
       return null;
     }
+    if (await this.unavailableReason()) return null;
     const prompt = getPrompt('resume-parse-strict.v1');
     const startTime = Date.now();
     try {
@@ -381,8 +533,12 @@ export class AiGatewayService {
           model: options?.model,
           temperature: 0,
           maxOutputTokens: options?.maxOutputTokens ?? 8192,
+          timeoutMs: options?.timeoutMs ?? 60_000,
+          signal: options?.signal,
         },
       );
+      this.breaker.close();
+      this.recordUsage(result.inputTokens + result.outputTokens);
 
       const latencyMs = Date.now() - startTime;
       this.logger.log(
@@ -427,7 +583,11 @@ export class AiGatewayService {
 
       return result.data;
     } catch (err) {
-      this.logger.warn(`parseResumeStrictFromFile failed: ${(err as Error).message}`);
+      const kind = classifyAiError(err);
+      if (!options?.signal?.aborted && (kind === 'UPSTREAM_UNAVAILABLE' || kind === 'TIMEOUT')) {
+        this.breaker.open(unavailableReasonFor(kind));
+      }
+      this.logger.warn(`parseResumeStrictFromFile failed (${kind}): ${(err as Error).message}`);
       return null;
     }
   }
@@ -453,11 +613,70 @@ export class AiGatewayService {
     return res.data;
   }
 
+  async improveResumeSummaryWithStatus(
+    input: { summary: string; targetRole?: string; profile?: Record<string, unknown>; avoidSuggestions?: string[] },
+    options?: AiRequestOptions,
+  ): Promise<{ data: { improvedSummary: string } | null; unavailableReason?: AiUnavailableReason }> {
+    const prompt = getPrompt('resume-summary-improve.v1');
+    const res = await this.generate<{ improvedSummary?: unknown }>({
+      task: 'RESUME_REWRITE',
+      systemPrompt: prompt.system,
+      userPrompt: JSON.stringify(input).slice(0, 6000),
+      options: {
+        ...options,
+        promptVersion: prompt.version,
+        temperature: input.avoidSuggestions?.length ? 0.7 : 0.2,
+        maxOutputTokens: 400,
+      },
+    });
+    const improved = res.data && typeof res.data.improvedSummary === 'string' ? res.data.improvedSummary : null;
+    if (!improved) return { data: null, unavailableReason: res.unavailableReason ?? 'FAILED' };
+    return { data: { improvedSummary: improved } };
+  }
+
+  async improveExperienceBulletsWithStatus(
+    input: { role: string; company?: string; bullets: string[]; targetRole?: string; avoidSuggestions?: string[] },
+    options?: AiRequestOptions,
+  ): Promise<{ data: { improvedBullets: string[] } | null; unavailableReason?: AiUnavailableReason }> {
+    const prompt = getPrompt('resume-experience-improve.v1');
+    const res = await this.generate<{ improvedBullets?: unknown }>({
+      task: 'RESUME_REWRITE',
+      systemPrompt: prompt.system,
+      userPrompt: JSON.stringify(input).slice(0, 4000),
+      options: {
+        ...options,
+        promptVersion: prompt.version,
+        temperature: input.avoidSuggestions?.length ? 0.7 : 0.2,
+        maxOutputTokens: 500,
+      },
+    });
+    const raw = res.data?.improvedBullets;
+    const bullets = Array.isArray(raw)
+      ? raw
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.replace(/^[\s•\-*]+/, '').trim().slice(0, 200))
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+    if (!bullets.length) return { data: null, unavailableReason: res.unavailableReason ?? 'FAILED' };
+    return { data: { improvedBullets: bullets } };
+  }
+
   async reviewResume(
     content: unknown,
     targetRole?: string,
     options?: AiRequestOptions,
   ): Promise<ResumeReviewResult | null> {
+    return (await this.reviewResumeWithStatus(content, targetRole, options)).data;
+  }
+
+  async reviewResumeWithStatus(
+    content: unknown,
+    targetRole?: string,
+    options?: AiRequestOptions,
+  ): Promise<{ data: ResumeReviewResult | null; unavailableReason?: AiUnavailableReason }> {
+    const blocked = await this.unavailableReason();
+    if (blocked) return { data: null, unavailableReason: blocked };
     const prompt = getPrompt('resume-review.v1');
     await this.ensureBaselineKnowledge().catch(() => undefined);
     const query = `${targetRole || ''} ${JSON.stringify(content)}`.slice(0, 2000);
@@ -481,7 +700,7 @@ export class AiGatewayService {
         promptVersion: prompt.version,
       },
     });
-    return res.data;
+    return { data: res.data, unavailableReason: res.data ? undefined : res.unavailableReason ?? 'FAILED' };
   }
 
   /**

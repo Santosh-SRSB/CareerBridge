@@ -1,7 +1,7 @@
 'use client';
 
 import type { JobMatch } from '@careerbridge/shared';
-import { atsMatchBand, toAtsMatchBreakdown } from '@careerbridge/shared';
+import { PROFILE_MATCH_LABEL, atsMatchBand, atsMatchBandLabel, toAtsMatchBreakdown } from '@careerbridge/shared';
 
 type Props = {
   match: JobMatch;
@@ -12,16 +12,8 @@ type Props = {
 export function EmployerAtsBandChip({ score }: { score: number }) {
   const band = atsMatchBand(score);
   return (
-    <span className={`ep-ats-chip ep-ats-chip--${band.toLowerCase()}`}>
-      {score}/100 · {band === 'EXCELLENT'
-        ? 'Excellent Match'
-        : band === 'STRONG'
-          ? 'Strong Match'
-          : band === 'GOOD'
-            ? 'Good Match'
-            : band === 'POTENTIAL'
-              ? 'Potential Match'
-              : 'Low Match'}
+    <span className={`ep-ats-chip ep-ats-chip--${band.toLowerCase()}`} title={PROFILE_MATCH_LABEL}>
+      {PROFILE_MATCH_LABEL} {score}/100 · {atsMatchBandLabel(score)}
     </span>
   );
 }
@@ -34,7 +26,7 @@ export function EmployerAtsPanel({ match, compact = false, className = '' }: Pro
     <section className={`ep-ats-panel ${compact ? 'ep-ats-panel--compact' : ''} ${className}`.trim()}>
       <header className="ep-ats-panel__head">
         <div>
-          <p className="ep-ats-panel__eyebrow">ATS score</p>
+          <p className="ep-ats-panel__eyebrow">{PROFILE_MATCH_LABEL}</p>
           <p className="ep-ats-panel__score">
             <strong>{ats.score}</strong>
             <span>/ 100</span>
@@ -108,7 +100,7 @@ export function EmployerAtsPanel({ match, compact = false, className = '' }: Pro
       ) : null}
 
       <p className="ep-ats-panel__note">
-        ATS supports your decision — it does not auto-reject or auto-hire.
+        Profile match supports your decision — it does not auto-reject or auto-hire.
       </p>
     </section>
   );

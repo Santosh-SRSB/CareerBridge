@@ -110,6 +110,7 @@ export function SkillSearchCombobox({
   const [highlight, setHighlight] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+  const inputId = useId();
 
   const uniqueSelected = useMemo(() => {
     const seen = new Set<string>();
@@ -193,13 +194,18 @@ export function SkillSearchCombobox({
     <div className="cb-skill-combo" ref={rootRef}>
       <style dangerouslySetInnerHTML={{ __html: comboboxStyles }} />
       {label ? (
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#43526b' }}>
+        <label
+          htmlFor={inputId}
+          style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#43526b' }}
+        >
           {label}
         </label>
       ) : null}
       <div className="cb-skill-combo-input-wrap">
         <span aria-hidden style={{ opacity: 0.5 }}>⌕</span>
         <input
+          id={inputId}
+          aria-label={label ? undefined : placeholder || 'Search skills'}
           className="cb-skill-combo-input"
           value={query}
           onChange={(e) => {

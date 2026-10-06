@@ -8,6 +8,7 @@ type Props = {
   candidateName: string;
   jobTitle?: string;
   busy?: boolean;
+  error?: string;
   onCancel: () => void;
   onConfirm: (note: string) => void | Promise<void>;
 };
@@ -18,6 +19,7 @@ export function ShortlistConfirmModal({
   candidateName,
   jobTitle,
   busy = false,
+  error,
   onCancel,
   onConfirm,
 }: Props) {
@@ -62,6 +64,12 @@ export function ShortlistConfirmModal({
           />
           <em>{note.length}/500</em>
         </label>
+
+        {error ? (
+          <p className="text-sm font-semibold text-red-700" role="alert">
+            {error}
+          </p>
+        ) : null}
 
         <footer className="ep-modal__actions">
           <Button type="button" variant="secondary" block={false} disabled={busy} onClick={onCancel}>

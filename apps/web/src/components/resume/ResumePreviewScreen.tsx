@@ -24,9 +24,17 @@ import {
   downloadResume,
   enhanceResume,
   getResume,
+  improveResumeExperience,
+  improveResumeSummary,
   updateCandidateMe,
 } from '@/lib/api';
+import { userFacingError } from '@/lib/client-errors';
 import { patchStoredUser } from '@/lib/session';
+import {
+  AI_ANALYSIS_FAILED_MESSAGE,
+  aiSuggestionsUnavailableMessage,
+  isAiUnavailableReason,
+} from '@careerbridge/shared';
 import { downloadMasterResumePdf } from '@/lib/master-resume-pdf';
 import { useResumePageFit } from '@/components/resume-templates/pageFit.js';
 import '@/components/resume-templates/ats-template.css';
@@ -230,10 +238,13 @@ export function ResumePreviewScreen({
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [regeneratedTexts, setRegeneratedTexts] = useState<Record<string, string>>({});
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [regenerateNotes, setRegenerateNotes] = useState<Record<string, string>>({});
   const [gatewaySuggestions, setGatewaySuggestions] = useState<ResumeAiSuggestion[]>([]);
   const [goodSections, setGoodSections] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [aiNotice, setAiNotice] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [fileName, setFileName] = useState('ImprovedResume');
   const [savingVersion, setSavingVersion] = useState(false);
@@ -395,13 +406,20 @@ export function ResumePreviewScreen({
     return () => window.clearTimeout(t);
   }, [phase]);
 
+  async function retryImproveWithAi() {
+    improvePrefetchRef.current = null;
+    await startImproveWithAi();
+  }
+
   async function startImproveWithAi() {
     setPhase('improve');
     setAiLoading(true);
     setAiError('');
+    setAiNotice('');
     setDismissedIds(new Set());
     setAppliedIds(new Set());
     setRegeneratedTexts({});
+    setRegenerateNotes({});
     setGatewaySuggestions([]);
     setGoodSections([]);
     try {
@@ -427,6 +445,13 @@ export function ResumePreviewScreen({
         }
       }
 
+      if (!gatewayRes) {
+        setAiNotice(AI_ANALYSIS_FAILED_MESSAGE);
+      } else if (gatewayRes.aiAvailable === false || gatewayRes.provider !== 'gemini') {
+        const reason = gatewayRes.aiUnavailableReason;
+        setAiNotice(aiSuggestionsUnavailableMessage(isAiUnavailableReason(reason) ? reason : null));
+      }
+
       const built = buildAccurateImproveSuggestions(
         resumeRef.current,
         gatewayRes as Parameters<typeof buildAccurateImproveSuggestions>[1],
@@ -439,6 +464,52 @@ export function ResumePreviewScreen({
       setAiError(err instanceof Error ? err.message : 'Could not load AI improvements.');
     } finally {
       setAiLoading(false);
+    }
+  }
+
+  async function handleTryAgain(suggestion: ResumeAiSuggestion) {
+    const shown = regeneratedTexts[suggestion.id] ?? suggestion.improvedText;
+    const doc = resumeRef.current;
+    const firstJob = doc.experience?.[0];
+    setRegeneratingId(suggestion.id);
+    setRegenerateNotes((prev) => ({ ...prev, [suggestion.id]: '' }));
+    try {
+      let next: string | null = null;
+      let reason: unknown = null;
+      if (suggestion.section === 'summary') {
+        const res = await improveResumeSummary({
+          summary: doc.summary || '',
+          targetRole: firstJob?.jobTitle || undefined,
+          profile: {
+            skills: (doc.technicalSkills || []).flatMap((g) => g.skills).filter(Boolean),
+            education: (doc.education || []).map((e) => [e.degree, e.field, e.institution].filter(Boolean).join(', ')),
+            experience: (doc.experience || []).map((e) => [e.jobTitle, e.company].filter(Boolean).join(' at ')),
+          },
+          avoid: [shown],
+        });
+        if (res.aiAvailable) next = res.improvedSummary;
+        else reason = res.aiUnavailableReason;
+      } else if (suggestion.section === 'experience' && firstJob?.jobTitle) {
+        const res = await improveResumeExperience({
+          role: firstJob.jobTitle,
+          company: firstJob.company || undefined,
+          bullets: firstJob.responsibilities || [],
+          avoid: [shown],
+        });
+        if (res.aiAvailable) next = res.improvedBullets.join('\n');
+        else reason = res.aiUnavailableReason;
+      }
+      if (next) setRegeneratedTexts((prev) => ({ ...prev, [suggestion.id]: next as string }));
+      else {
+        setRegenerateNotes((prev) => ({
+          ...prev,
+          [suggestion.id]: aiSuggestionsUnavailableMessage(isAiUnavailableReason(reason) ? reason : null),
+        }));
+      }
+    } catch (err) {
+      setRegenerateNotes((prev) => ({ ...prev, [suggestion.id]: userFacingError(err, 'regenerate this suggestion') }));
+    } finally {
+      setRegeneratingId(null);
     }
   }
 
@@ -819,6 +890,22 @@ export function ResumePreviewScreen({
               <p className="mt-4 text-sm font-semibold text-[#0a2e2c]">Building improvements…</p>
             ) : null}
             {aiError ? <p className="mt-3 text-sm font-semibold text-red-600">{aiError}</p> : null}
+            {!aiLoading && aiNotice ? (
+              <div
+                role="alert"
+                data-testid="ai-unavailable"
+                className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3"
+              >
+                <p className="text-sm font-semibold text-amber-900">{aiNotice}</p>
+                <button
+                  type="button"
+                  onClick={() => void retryImproveWithAi()}
+                  className="mt-2 min-h-[44px] rounded-lg border border-amber-400 bg-white px-4 text-sm font-bold text-amber-900 hover:bg-amber-100"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : null}
 
             {!aiLoading && goodSections.length ? (
               <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
@@ -839,9 +926,11 @@ export function ResumePreviewScreen({
               <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
                 {gatewaySuggestions.length
                   ? 'All suggestions reviewed. Save this improved version.'
-                  : report?.sections.some((s) => s.status !== 'good')
-                    ? 'No auto-fix available for the remaining gaps — use Edit section on the report, then re-check ATS.'
-                    : 'No edits needed — your sections look accurate for ATS. You can save or go back.'}
+                  : aiNotice
+                    ? 'Use Edit section on the report to update your resume manually, then re-check ATS.'
+                    : report?.sections.some((s) => s.status !== 'good')
+                      ? 'No auto-fix available for the remaining gaps — use Edit section on the report, then re-check ATS.'
+                      : 'No edits needed — your sections look accurate for ATS. You can save or go back.'}
               </p>
             ) : null}
             <div className="mt-4 space-y-4">
@@ -878,7 +967,23 @@ export function ResumePreviewScreen({
                     >
                       Reject
                     </button>
+                    {suggestion.section === 'summary' || suggestion.section === 'experience' ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleTryAgain(suggestion)}
+                        disabled={regeneratingId === suggestion.id}
+                        aria-busy={regeneratingId === suggestion.id || undefined}
+                        className="rounded-lg border border-[#0a2e2c] px-3 py-2 text-xs font-bold text-[#0a2e2c] disabled:opacity-60"
+                      >
+                        {regeneratingId === suggestion.id ? 'Regenerating…' : 'Try again'}
+                      </button>
+                    ) : null}
                   </div>
+                  {regenerateNotes[suggestion.id] ? (
+                    <p role="alert" className="mt-2 text-xs font-semibold text-amber-900">
+                      {regenerateNotes[suggestion.id]}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>

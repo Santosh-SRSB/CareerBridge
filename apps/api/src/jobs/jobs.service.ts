@@ -1,8 +1,13 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ErrorCode,
+  experienceFilterRange,
+  JOB_ROLE_CATALOG,
+  jobMatchesExperienceFilter,
+  type JobRolesResponse,
   type NearbyJobsResponse,
   lookupCityCentroid,
+  uniqueRoles,
 } from '@careerbridge/shared';
 import { Prisma } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,22 +22,75 @@ import {
   type NearbyQueryInput,
 } from './jobs-nearby.util';
 
+/** Salary bounds are annual CTC in rupees, matching how jobs store salary_min / salary_max. */
+function salaryWhere(min?: number, max?: number): Prisma.JobWhereInput[] {
+  const out: Prisma.JobWhereInput[] = [];
+  if (typeof min === 'number' && Number.isFinite(min) && min > 0) {
+    out.push({
+      OR: [{ salaryMax: { gte: min } }, { salaryMax: null, salaryMin: { gte: min } }],
+    });
+  }
+  if (typeof max === 'number' && Number.isFinite(max) && max > 0) {
+    out.push({
+      OR: [{ salaryMin: { lte: max } }, { salaryMin: null, salaryMax: { lte: max } }],
+    });
+  }
+  return out;
+}
+
 @Injectable()
 export class JobsService {
+  private readonly logger = new Logger(JobsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly intelligence: IntelligenceService,
     private readonly notifications: NotificationsService,
   ) {}
 
+  /**
+   * Stored experience labels (current + legacy) whose range fits the candidate filter.
+   * Returns null when no usable filter was given.
+   */
+  private async experienceValuesMatching(filter?: string): Promise<string[] | null> {
+    const value = filter?.trim();
+    if (!value || !experienceFilterRange(value)) return null;
+    const rows = await this.prisma.job.findMany({
+      where: { status: 'PUBLISHED', experience: { not: null } },
+      distinct: ['experience'],
+      select: { experience: true },
+    });
+    return rows
+      .map((row) => row.experience)
+      .filter((label): label is string => Boolean(label) && jobMatchesExperienceFilter(label, value));
+  }
+
   async list(
-    query: { q?: string; location?: string; type?: string; category?: string; page?: number; pageSize?: number },
+    query: {
+      q?: string;
+      location?: string;
+      type?: string;
+      category?: string;
+      experience?: string;
+      salaryMin?: number;
+      salaryMax?: number;
+      sort?: string;
+      page?: number;
+      pageSize?: number;
+    },
     userId?: string,
   ) {
     const page = query.page || 1;
     const pageSize = Math.min(query.pageSize || 20, 50);
-    const where = {
+    const experienceValues = await this.experienceValuesMatching(query.experience);
+    const where: Prisma.JobWhereInput = {
       status: 'PUBLISHED' as const,
+      AND: [
+        ...(experienceValues
+          ? [{ OR: [{ experience: null }, { experience: { in: experienceValues } }] }]
+          : []),
+        ...salaryWhere(query.salaryMin, query.salaryMax),
+      ],
       ...(query.location ? { city: { contains: query.location, mode: 'insensitive' as const } } : {}),
       ...(query.type ? { jobType: query.type } : {}),
       ...(query.category ? { category: query.category } : {}),
@@ -53,7 +111,10 @@ export class JobsService {
       this.prisma.job.findMany({
         where,
         include: { employer: true },
-        orderBy: { publishedAt: 'desc' },
+        orderBy:
+          query.sort === 'salary'
+            ? [{ salaryMax: { sort: 'desc', nulls: 'last' } }, { publishedAt: 'desc' }, { id: 'asc' }]
+            : [{ publishedAt: 'desc' }, { id: 'asc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -161,8 +222,13 @@ export class JobsService {
     if (query.category?.trim()) {
       filters.push(Prisma.sql`j.category = ${query.category.trim()}`);
     }
-    if (query.experience?.trim()) {
-      filters.push(Prisma.sql`j.experience ILIKE ${`%${query.experience.trim()}%`}`);
+    const experienceValues = await this.experienceValuesMatching(query.experience);
+    if (experienceValues) {
+      filters.push(
+        experienceValues.length
+          ? Prisma.sql`(j.experience IS NULL OR j.experience IN (${Prisma.join(experienceValues)}))`
+          : Prisma.sql`j.experience IS NULL`,
+      );
     }
     if (query.workMode?.trim() && !isRemoteWorkMode(query.workMode)) {
       filters.push(Prisma.sql`j.work_mode ILIKE ${`%${query.workMode.trim()}%`}`);
@@ -277,9 +343,16 @@ export class JobsService {
     pageSize: number,
     userId?: string,
   ): Promise<NearbyJobsResponse> {
+    const experienceValues = await this.experienceValuesMatching(query.experience);
     const where: Prisma.JobWhereInput = {
       status: 'PUBLISHED',
       workMode: { contains: 'remote', mode: 'insensitive' },
+      AND: [
+        ...(experienceValues
+          ? [{ OR: [{ experience: null }, { experience: { in: experienceValues } }] }]
+          : []),
+        ...salaryWhere(query.salaryMin, query.salaryMax),
+      ],
       ...(query.q
         ? {
             OR: [
@@ -293,7 +366,6 @@ export class JobsService {
         : {}),
       ...(query.type ? { jobType: query.type } : {}),
       ...(query.category ? { category: query.category } : {}),
-      ...(query.experience ? { experience: { contains: query.experience, mode: 'insensitive' } } : {}),
     };
 
     const [totalInBucket, rows] = await this.prisma.$transaction([
@@ -346,6 +418,20 @@ export class JobsService {
     };
   }
 
+  async roles(): Promise<JobRolesResponse> {
+    const grouped = await this.prisma.job.groupBy({
+      by: ['title'],
+      where: { status: 'PUBLISHED' },
+      _count: { _all: true },
+      orderBy: { _count: { title: 'desc' } },
+      take: 100,
+    });
+    return {
+      catalog: JOB_ROLE_CATALOG,
+      fromJobs: uniqueRoles(grouped.map((row) => row.title)),
+    };
+  }
+
   async recommended(userId: string) {
     // Score against a wider published pool so recommendations reflect live employer posts.
     const result = await this.list({ page: 1, pageSize: 50 }, userId);
@@ -361,7 +447,7 @@ export class JobsService {
 
   async detail(id: string, userId?: string) {
     const job = await this.prisma.job.findUnique({ where: { id }, include: { employer: true } });
-    if (!job || job.status === 'DRAFT') {
+    if (!job) {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Job was not found' });
     }
     const candidate = userId ? await this.loadCandidate(userId) : null;
@@ -372,6 +458,10 @@ export class JobsService {
           }),
         )
       : false;
+    // Only published jobs are public; a candidate who applied can still open a paused/closed job.
+    if (job.status !== 'PUBLISHED' && !(applied && job.status !== 'DRAFT')) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Job was not found' });
+    }
     const saved = candidate
       ? Boolean(
           await this.prisma.savedJob.findUnique({
@@ -387,6 +477,15 @@ export class JobsService {
       status: job.status,
       applied,
     };
+  }
+
+  /** Counts a job-detail view. Raw SQL so the view does not bump updated_at (which orders employer job lists). */
+  async recordView(jobId: string) {
+    try {
+      await this.prisma.$executeRaw`UPDATE "jobs" SET "view_count" = "view_count" + 1 WHERE "id" = ${jobId} AND "status" = 'PUBLISHED'`;
+    } catch (err) {
+      this.logger.warn(`job view count failed for ${jobId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   async matchFor(userId: string, jobId: string) {

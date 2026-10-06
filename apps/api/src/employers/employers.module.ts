@@ -9,9 +9,13 @@ import { ResumesModule } from '../resumes/resumes.module';
 import { AuthModule } from '../auth/auth.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { TestimonialsModule } from '../testimonials/testimonials.module';
+import { GstModule } from '../gst/gst.module';
+import { CatalogModule } from '../catalog/catalog.module';
 
 @Module({
   imports: [
+    GstModule,
+    CatalogModule,
     IntelligenceModule,
     MatchingModule,
     WhatsAppModule,
@@ -23,5 +27,6 @@ import { TestimonialsModule } from '../testimonials/testimonials.module';
   ],
   controllers: [EmployersController],
   providers: [EmployersService],
+  exports: [EmployersService],
 })
 export class EmployersModule {}

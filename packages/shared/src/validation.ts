@@ -61,6 +61,18 @@ export function optionalUrlError(value: string) {
   return null;
 }
 
+export const JOB_DESCRIPTION_MAX = 5000;
+
+/** Published jobs must state both ends of the salary range; drafts may leave them empty. */
+export function jobSalaryRequiredError(
+  salaryMin: number | string | null | undefined,
+  salaryMax: number | string | null | undefined,
+): string | null {
+  if (!(Number(salaryMin) > 0)) return 'Minimum salary is required';
+  if (!(Number(salaryMax) > 0)) return 'Maximum salary is required';
+  return null;
+}
+
 export function salaryRangeError(minValue: string, maxValue: string) {
   const min = Number(minValue);
   const max = Number(maxValue);

@@ -23,12 +23,9 @@ const API_BASE = resolveApiBase();
 export async function POST(req: NextRequest) {
   try {
     if (!API_BASE) {
+      console.error('parse-resume proxy: API base URL is not configured.');
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            'API_INTERNAL_URL or NEXT_PUBLIC_API_URL must be set in the deployed environment.',
-        },
+        { success: false, error: 'Something went wrong. Please try again.' },
         { status: 500 },
       );
     }
@@ -64,11 +61,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(json, { status: upstream.status });
   } catch (err) {
+    console.error('parse-resume proxy failed:', err instanceof Error ? err.message : err);
     return NextResponse.json(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : 'parse-resume proxy failed',
-      },
+      { success: false, error: 'Unable to connect. Please check your connection and try again.' },
       { status: 502 },
     );
   }

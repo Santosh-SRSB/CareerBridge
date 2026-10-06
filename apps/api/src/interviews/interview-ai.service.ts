@@ -32,6 +32,8 @@ export type InterviewProfile = {
   focusStacks: string[];
   experienceYears: number;
   questionLimit?: number;
+  /** Beginner / Intermediate / Advanced chosen on the setup screen. */
+  requestedDifficulty?: string;
   candidateId?: string;
   resumeId?: string;
   interviewId?: string;
@@ -44,6 +46,8 @@ type BuiltQuestion = {
   thinkSeconds?: number;
   /** Resume chunks given to Gemini for this question; used to prefer fresh context next time. */
   ragChunkIds?: string[];
+  /** Prepared from the profile because AI did not return a usable question. */
+  aiFallback?: boolean;
 };
 
 @Injectable()
@@ -81,7 +85,7 @@ export class InterviewAiService {
     usedChunkIds: string[] = [],
   ): Promise<BuiltQuestion> {
     if (!this.aiGateway.isConfigured()) {
-      return emergencyProfileQuestion(profile, interviewType, asked);
+      return { ...emergencyProfileQuestion(profile, interviewType, asked), aiFallback: true };
     }
 
     const experienceYears = Number(profile.experienceYears) || 0;
@@ -146,6 +150,7 @@ export class InterviewAiService {
       focusStacks: profile.focusStacks,
       experienceYears,
       experienceLevel,
+      requestedDifficulty: profile.requestedDifficulty || null,
       summary: profile.summary?.slice(0, 800) || '',
       city: profile.city || null,
     };
@@ -181,7 +186,7 @@ export class InterviewAiService {
     }
 
     // Never block the interview: build a profile-based next question if the LLM fails.
-    return emergencyProfileQuestion(profile, interviewType, asked);
+    return { ...emergencyProfileQuestion(profile, interviewType, asked), aiFallback: true };
   }
 
   async analyzeAnswer(
@@ -198,6 +203,7 @@ export class InterviewAiService {
     whatWasMissing?: string[];
     improvementSuggestion?: string;
     score: number;
+    scoredWithoutAi?: boolean;
   }> {
     const text = answer.trim();
     const hasEvaluableText = text.length >= 8 && !isAudioPlaceholderAnswer(text);
@@ -235,7 +241,10 @@ export class InterviewAiService {
 
     const questionType = questionTypeFromCategory(options?.category) || classifyQuestionType(question);
     if (!this.aiGateway.isConfigured()) {
-      return calibrateScore(localAnalyzeCategoryAware(question, text, profile, questionType), text);
+      return {
+        ...calibrateScore(localAnalyzeCategoryAware(question, text, profile, questionType), text),
+        scoredWithoutAi: true,
+      };
     }
 
     const criteria = evaluationCriteriaFor(questionType);
@@ -258,7 +267,7 @@ export class InterviewAiService {
       },
     );
     const local = localAnalyzeCategoryAware(question, text, profile, questionType);
-    if (!fromAi) return calibrateScore(local, text);
+    if (!fromAi) return { ...calibrateScore(local, text), scoredWithoutAi: true };
 
     const whatWasMissing = (
       fromAi.whatWasMissing?.length
@@ -328,22 +337,22 @@ export class InterviewAiService {
     );
     const answeredCount = answered.length;
     if (answeredCount === 0) return zeroAnswerReport(profile, warningCounts, totalPlanned);
-    // Overall must match average of per-question scores shown after each answer (/100 and /10).
-    const overall = answered.length
-      ? Math.round(answered.reduce((sum, item) => sum + (item.score || 0), 0) / answered.length)
-      : 0;
-    const overallOutOf10 = answered.length
-      ? Math.round(
-          answered.reduce((sum, item) => sum + Math.max(0, Math.min(10, Math.round((item.score || 0) / 10))), 0) /
-            answered.length,
-        )
-      : 0;
+    // Overall must match average of per-question scores shown after each answer (/100 and /10);
+    // skipped questions count as 0 so skipping cannot raise the score.
+    const scored = questions.filter((item) => answered.includes(item) || item.answerMode === 'SKIPPED');
+    const overall = Math.round(scored.reduce((sum, item) => sum + (item.score || 0), 0) / scored.length);
+    const overallOutOf10 = Math.round(
+      scored.reduce((sum, item) => sum + Math.max(0, Math.min(10, Math.round((item.score || 0) / 10))), 0) /
+        scored.length,
+    );
     const communication = scoreCommunication(answered);
     const behaviour = scoreBehaviour(answered, warningCounts);
     const listening = scoreListening(answered);
     const technicalKnowledge = scoreByCategories(answered, /TECHNICAL|PROJECT|EDUCATION|EXPERIENCE|RESUME/i);
     const problemSolving = scoreByCategories(answered, /SCENARIO|PROBLEM|FOLLOW_UP/i);
     const roleReadiness = scoreRoleReadiness(answered, communication, technicalKnowledge, overall);
+    const relevance = scoreRelevance(answered);
+    const clarity = scoreClarity(answered);
     const hasAudioAnswers = answered.some((item) => item.answerMode === 'AUDIO');
     const confidence = hasAudioAnswers
       ? scoreConfidenceFromAudio(answered)
@@ -428,6 +437,8 @@ export class InterviewAiService {
       technicalKnowledge,
       problemSolving,
       roleReadiness,
+      relevance,
+      clarity,
       confidence,
       confidenceNote,
       recommendation,
@@ -449,6 +460,7 @@ export class InterviewAiService {
       answeredCount,
       totalPlanned,
       integrity: warningCounts,
+      aiUnavailable: !fromAi || answered.some((item) => item.scoredWithoutAi),
     };
   }
 
@@ -652,6 +664,8 @@ export function zeroAnswerReport(
     technicalKnowledge: null,
     problemSolving: null,
     roleReadiness: 0,
+    relevance: 0,
+    clarity: 0,
     confidence: null,
     confidenceNote: 'No answers were submitted, so confidence could not be measured.',
     recommendation: recFromScore(0, undefined, 0, totalPlanned, warningCounts),
@@ -890,6 +904,37 @@ function scoreRoleReadiness(
     : overall / 10;
   const tech = technical ?? Math.round(overall / 12);
   return clamp(Math.round((roleAvg + communication + tech) / 3), 1, 10);
+}
+
+/** Per-question answer quality (AI or rubric) blended with how many answers use the question's key terms. */
+export function scoreRelevance(questions: LiveInterviewQuestion[]) {
+  if (!questions.length) return 0;
+  const avgScore = questions.reduce((sum, item) => sum + (item.score || 0), 0) / questions.length;
+  const onTopic = questions.filter((item) => overlap(item.answer || '', item.text) >= 1).length / questions.length;
+  return clamp((avgScore / 10) * 0.7 + onTopic * 10 * 0.3, 1, 10);
+}
+
+const FILLER_RE = /\b(um+|uh+|like|basically|actually|you know|kind of|sort of)\b/gi;
+
+/** Sentence length, filler words and answer completeness of the typed/transcribed answers. */
+export function scoreClarity(questions: LiveInterviewQuestion[]) {
+  const texts = questions.map((item) => (item.answer || '').trim()).filter(Boolean);
+  if (!texts.length) return 0;
+  const perAnswer = texts.map((text) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    const sentences = text.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
+    const avgSentence = words.length / Math.max(sentences.length, 1);
+    const fillers = (text.match(FILLER_RE) || []).length / Math.max(words.length, 1);
+    let score = 10;
+    if (words.length < 8) score -= 5;
+    else if (words.length < 25) score -= 2;
+    if (avgSentence > 35) score -= 3;
+    else if (avgSentence > 25) score -= 1;
+    if (fillers > 0.08) score -= 3;
+    else if (fillers > 0.03) score -= 1;
+    return score;
+  });
+  return clamp(perAnswer.reduce((a, b) => a + b, 0) / perAnswer.length, 1, 10);
 }
 
 function scoreConfidenceFromAudio(questions: LiveInterviewQuestion[]) {

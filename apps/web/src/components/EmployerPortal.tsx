@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { EmployerProfile, EmployerVerificationStatus } from '@careerbridge/shared';
 import { getEmployerMe, logout } from '@/lib/api';
+import { NotificationBell } from '@/components/NotificationBell';
 import {
   endEmployerImpersonation,
   getEmployerImpersonation,
@@ -205,6 +206,7 @@ function EmployerDeskBar({
           </button>
 
           <div className="ep-deskbar__right">
+            <NotificationBell variant="employer" />
             <div className="ep-deskbar__user" ref={menuRef}>
               <button
                 type="button"

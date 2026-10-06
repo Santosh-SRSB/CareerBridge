@@ -39,6 +39,18 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
     system:
       'You improve resume wording only. Never invent companies, titles, dates, skills, metrics, certifications, team sizes, users, or achievements. Return JSON { "changes": [{ "section": string, "originalText": string, "suggestedText": string, "reason": string }] }. Each suggestion must be a wording improvement of originalText.',
   },
+  'resume-summary-improve.v1': {
+    version: 'resume-summary-improve.v1',
+    description: 'Rewrites a professional summary for clarity using only facts the candidate provided',
+    system:
+      'You are a resume editor for entry-level and early-career candidates in India. Rewrite the professional summary so it is clear, grammatical, concise and ATS-friendly, written without first-person pronouns. Use ONLY facts present in the provided summary, target role, skills, education and experience. Never invent employers, job titles, years of experience, metrics, certifications, tools or achievements. If the draft summary is empty, write one from the provided profile facts only. The result MUST be at most 480 characters and 2-4 complete sentences. If avoidSuggestions is provided, the candidate rejected those versions: write a noticeably different wording (different opening and sentence structure) with the same facts. Return JSON { "improvedSummary": string }.',
+  },
+  'resume-experience-improve.v1': {
+    version: 'resume-experience-improve.v1',
+    description: 'Rewrites work-experience bullets for clarity using only facts the candidate provided',
+    system:
+      'You are a resume editor for entry-level and early-career candidates in India. Rewrite the responsibility and achievement bullets for one work-experience entry so each is clear, grammatical, concise, ATS-friendly, starts with an action verb and has no first-person pronouns. Use ONLY facts present in the provided job title, company and bullets. Never invent employers, job titles, dates, metrics, numbers, tools, certifications or achievements. If no bullets are provided, write 2-3 generic but truthful bullets for the job title without any numbers or tools. Return at most 6 bullets, each at most 200 characters. If avoidSuggestions is provided, the candidate rejected those versions: use different action verbs and phrasing with the same facts. Return JSON { "improvedBullets": string[] }.',
+  },
   'resume-review.v1': {
     version: 'resume-review.v1',
     description: 'Accurate resume quality review: grammar, clarity, and project–skill consistency',
@@ -49,7 +61,7 @@ export const PROMPT_REGISTRY: Record<string, PromptTemplate> = {
     version: 'interview-question.v1',
     description: 'Generates progressive adaptive mock interview questions from the full candidate profile',
     system:
-      'Generate one clear, realistic interview question using the FULL candidate profile (education, skills, projects, experience, summary, job role) — do not over-focus on a single skill or project. Follow coverageFocus for topic rotation. Match difficulty by experienceLevel: FRESHER → simple basics; YEAR_1 → fundamentals; YEAR_2_3 → applied depth; YEAR_4_PLUS → harder scenarios. Never invent facts. Never ask tell-me-about-yourself as a later question. Return JSON { "question": string, "category": string, "hint": string, "thinkSeconds": number }.',
+      'Generate one clear, realistic interview question using the FULL candidate profile (education, skills, projects, experience, summary, job role) — do not over-focus on a single skill or project. Follow coverageFocus for topic rotation. Match difficulty by experienceLevel: FRESHER → simple basics; YEAR_1 → fundamentals; YEAR_2_3 → applied depth; YEAR_4_PLUS → harder scenarios. When profile.requestedDifficulty is set it overrides experienceLevel: Beginner → simple basics; Intermediate → applied depth; Advanced → harder multi-step scenarios. Never invent facts. Never ask tell-me-about-yourself as a later question. Return JSON { "question": string, "category": string, "hint": string, "thinkSeconds": number }.',
   },
   'interview-evaluation.v1': {
     version: 'interview-evaluation.v1',

@@ -3,8 +3,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  DEFAULT_LANGUAGES,
   LANGUAGE_LEVELS,
-  PREFERRED_LANGUAGES,
   parseLanguageSkills,
   serializeLanguageSkills,
   type LanguageSkill,
@@ -20,10 +20,16 @@ import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
 import { getCandidateMe, updateCandidateMe } from '@/lib/api';
 import { goToNextPassportStep } from '@/lib/passport-flow';
+import { useCatalog } from '@/hooks/useCatalog';
 
 export default function PassportLanguagesPage() {
   const router = useRouter();
   const [languages, setLanguages] = useState<LanguageSkill[]>([]);
+  const { items: languageOptions } = useCatalog('languages', DEFAULT_LANGUAGES);
+  const languageNames = [
+    ...languages.map((item) => item.name).filter((name) => !languageOptions.some((opt) => opt.label === name)),
+    ...languageOptions.map((opt) => opt.label),
+  ];
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -82,7 +88,7 @@ export default function PassportLanguagesPage() {
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="flex flex-wrap gap-1.5">
-          {PREFERRED_LANGUAGES.map((item) => (
+          {languageNames.map((item) => (
             <Chip key={item} selected={languages.some((lang) => lang.name === item)} onClick={() => toggle(item)}>
               {item}
             </Chip>

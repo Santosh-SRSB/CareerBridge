@@ -5,14 +5,13 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'crypto';
 import { describe, it } from 'node:test';
+import { consentedWhatsAppNumber, isReminderStillValid, phonesMatch } from './interview-lifecycle.util.ts';
 import {
-  buildDefaultRescheduleSlots,
-  isOfferedRescheduleSlot,
-  isReminderStillValid,
-  phonesMatch,
-} from './interview-lifecycle.util.ts';
-import {
+  buildConfirmationText,
+  CONFIRMATION_LINK_NOTE,
   confirmPayload,
+  RESCHEDULE_REQUEST_TEXT,
+  uniqueButtonTitles,
   parseInteractivePayload,
   reschedulePayload,
   resolveTemplateName,
@@ -20,6 +19,7 @@ import {
   startPayload,
 } from './whatsapp.templates.ts';
 import {
+  isOwnBusinessNumber,
   isWhatsAppSendConfigured,
   signatureModeLabel,
   validateWhatsAppSignature,
@@ -61,28 +61,39 @@ describe('Interactive payloads', () => {
   });
 });
 
-describe('Reschedule slot revalidation', () => {
-  it('accepts an offered slot', () => {
-    const base = new Date('2026-09-30T05:30:00.000Z');
-    const offered = buildDefaultRescheduleSlots(base);
-    assert.equal(offered.length, 3);
-    assert.equal(isOfferedRescheduleSlot(base, offered[1].toISOString(), base.getTime()), true);
+describe('Reply button titles', () => {
+  it('dedupes repeated titles', () => {
+    const titles = uniqueButtonTitles(['2:00 pm', '4:00 pm', '2:00 pm']);
+    assert.equal(new Set(titles).size, 3);
+    for (const title of titles) assert.ok(title.length <= 20);
   });
+});
 
-  it('rejects an arbitrary slot', () => {
-    const base = new Date('2026-09-30T05:30:00.000Z');
+describe('Reschedule and confirmation copy', () => {
+  it('reschedule request text carries no meeting link or time', () => {
     assert.equal(
-      isOfferedRescheduleSlot(base, '2026-09-30T14:00:00.000Z', base.getTime()),
-      false,
+      RESCHEDULE_REQUEST_TEXT,
+      'Your interview needs to be rescheduled. Please select another available date and the time range when you are available.',
     );
+    assert.doesNotMatch(RESCHEDULE_REQUEST_TEXT, /https?:|meet|link/i);
   });
 
-  it('rejects past slots', () => {
-    const base = new Date('2026-09-20T05:30:00.000Z');
-    const offered = buildDefaultRescheduleSlots(base);
+  it('confirmation includes the meeting link only when given', () => {
+    const scheduledAt = new Date('2026-10-03T09:30:00.000Z');
+    const withLink = buildConfirmationText({ candidateName: 'A', scheduledAt, meetingUrl: 'https://meet.google.com/new-link' });
+    assert.match(withLink, /Meeting link: https:\/\/meet\.google\.com\/new-link/);
+    assert.doesNotMatch(buildConfirmationText({ candidateName: 'A', scheduledAt }), /Meeting link/);
+  });
+
+  it('confirmation keeps its content and ends with the interview-link note', () => {
+    const scheduledAt = new Date('2026-10-03T09:30:00.000Z');
+    const text = buildConfirmationText({ candidateName: 'A', scheduledAt, meetingUrl: 'https://meet.google.com/new-link' });
+    assert.match(text, /^Great, A!\n\nYour interview is confirmed for /);
+    assert.match(text, /We'll remind you before the interview\.\n\nGood luck!\n\n/);
+    assert.ok(text.endsWith(`Good luck!\n\n${CONFIRMATION_LINK_NOTE}`));
     assert.equal(
-      isOfferedRescheduleSlot(base, offered[0].toISOString(), Date.parse('2026-09-30T12:00:00.000Z')),
-      false,
+      CONFIRMATION_LINK_NOTE,
+      'The interview link is sent via email and will also be shared here with a reminder.',
     );
   });
 });
@@ -119,15 +130,12 @@ describe('Reminder validity', () => {
     if (!result.ok) assert.equal(result.reason, 'outside_reminder_window');
   });
 
-  it('skips RESCHEDULE_REQUESTED', () => {
+  it('skips RESCHEDULE_NEEDED and RESCHEDULE_REQUESTED', () => {
     const scheduledAt = new Date(Date.now() + 15 * 60 * 1000);
-    const result = isReminderStillValid({
-      status: 'RESCHEDULE_REQUESTED',
-      scheduledAt,
-      kind: '15m',
-      now: new Date(),
-    });
-    assert.equal(result.ok, false);
+    for (const status of ['RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED']) {
+      const result = isReminderStillValid({ status, scheduledAt, kind: '15m', now: new Date() });
+      assert.equal(result.ok, false);
+    }
   });
 });
 
@@ -191,16 +199,39 @@ describe('Webhook signature (WHATSAPP_REQUIRE_SIGNATURE)', () => {
     );
   });
 
-  it('skips HMAC entirely when signature=false even if secret present', () => {
+  it('enforces HMAC whenever the App Secret is present, even if signature=false', () => {
+    const secret = 'test-app-secret';
+    const body = '{"object":"whatsapp_business_account"}';
+    const sig = createHmac('sha256', secret).update(body).digest('hex');
+    for (const signatureHeader of [undefined, 'sha256=deadbeef']) {
+      assert.equal(
+        validateWhatsAppSignature({ requireSignature: false, appSecret: secret, rawBody: body, signatureHeader }),
+        false,
+      );
+    }
     assert.equal(
-      validateWhatsAppSignature({
-        requireSignature: false,
-        appSecret: 'present-but-unused',
-        rawBody: undefined,
-        signatureHeader: undefined,
-      }),
+      validateWhatsAppSignature({ requireSignature: false, appSecret: secret, rawBody: body, signatureHeader: `sha256=${sig}` }),
       true,
     );
+    assert.equal(signatureModeLabel(false, true), 'required');
+  });
+});
+
+describe('Recipient guard (Meta #100 on self-send)', () => {
+  it('detects the business sender number in any format', () => {
+    assert.equal(isOwnBusinessNumber('919513791117', '+91 95137 91117'), true);
+    assert.equal(isOwnBusinessNumber('9513791117', '+919513791117'), true);
+    assert.equal(isOwnBusinessNumber('919800000001', '+919513791117'), false);
+    assert.equal(isOwnBusinessNumber('919513791117', null), false);
+    assert.equal(isOwnBusinessNumber('', '+919513791117'), false);
+  });
+});
+
+describe('WhatsApp consent', () => {
+  it('uses only the opted-in WhatsApp number, never the login phone', () => {
+    assert.equal(consentedWhatsAppNumber({ whatsappOptIn: false, whatsappNumber: '+919800000001' }), null);
+    assert.equal(consentedWhatsAppNumber({ whatsappOptIn: true, whatsappNumber: null }), null);
+    assert.equal(consentedWhatsAppNumber({ whatsappOptIn: true, whatsappNumber: '+919800000001' }), '+919800000001');
   });
 });
 

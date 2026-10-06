@@ -94,6 +94,10 @@ export function DatePicker({
   disabled,
   mode = 'date',
   confirmLabel = 'Set date',
+  id,
+  maxYear,
+  invalid,
+  describedBy,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -103,6 +107,11 @@ export function DatePicker({
   /** `month` stores/returns YYYY-MM; `date` stores YYYY-MM-DD. */
   mode?: 'date' | 'month';
   confirmLabel?: string;
+  id?: string;
+  /** Latest year offered in the year select (defaults to a few years ahead). */
+  maxYear?: number;
+  invalid?: boolean;
+  describedBy?: string;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -116,9 +125,10 @@ export function DatePicker({
   const [pos, setPos] = useState({ left: 0, top: 0 });
 
   const cells = useMemo(() => monthCells(viewYear, viewMonth), [viewMonth, viewYear]);
+  const lastYear = maxYear ?? YEAR_END;
   const years = useMemo(
-    () => Array.from({ length: YEAR_END - YEAR_START + 1 }, (_, index) => YEAR_START + index).reverse(),
-    [],
+    () => Array.from({ length: lastYear - YEAR_START + 1 }, (_, index) => YEAR_START + index).reverse(),
+    [lastYear],
   );
 
   const draftIso =
@@ -283,9 +293,12 @@ export function DatePicker({
     <div className="date-picker" ref={rootRef}>
       <button
         ref={triggerRef}
+        id={id}
         type="button"
         disabled={disabled}
-        className={`date-picker-trigger${emptyClass ?? ''}${open ? ' is-open' : ''}${!value ? ' is-empty' : ''}`}
+        aria-invalid={invalid ? true : undefined}
+        aria-describedby={describedBy}
+        className={`date-picker-trigger${emptyClass ?? ''}${open ? ' is-open' : ''}${!value ? ' is-empty' : ''}${invalid ? ' is-invalid' : ''}`}
         onClick={() => {
           if (!disabled) setOpen((prev) => !prev);
         }}

@@ -1,12 +1,36 @@
-import { Controller, Get } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { Body, Controller, Get, HttpCode, Logger, Post } from '@nestjs/common';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobStatus } from '../prisma/client';
 
+class ClientErrorReportDto {
+  @IsString()
+  @Matches(/^ERR-\d{8}-[A-Z0-9]{5,8}$/)
+  errorId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  message?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  digest?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  path?: string;
+}
+
 @SkipThrottle()
 @Controller('platform')
 export class PlatformController {
+  private readonly logger = new Logger('ClientError');
+
   constructor(private readonly prisma: PrismaService) {}
 
   @Public()
@@ -43,5 +67,19 @@ export class PlatformController {
       cities: citySet.size,
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  /** Error-boundary incidents from the web app, logged under the id shown to the user. */
+  @Public()
+  @SkipThrottle({ default: false })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('client-errors')
+  @HttpCode(202)
+  reportClientError(@Body() body: ClientErrorReportDto) {
+    const oneLine = (value?: string) => (value || '').replace(/[\r\n]+/g, ' ').slice(0, 500);
+    this.logger.error(
+      `errorId=${body.errorId} path=${oneLine(body.path)} digest=${oneLine(body.digest)} message=${oneLine(body.message)}`,
+    );
+    return { received: true, errorId: body.errorId };
   }
 }

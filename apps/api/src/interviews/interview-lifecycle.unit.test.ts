@@ -6,6 +6,8 @@ import {
   InterviewAiService,
   emergencyProfileQuestion,
   normalizeQuestionText,
+  scoreClarity,
+  scoreRelevance,
   zeroAnswerReport,
   type InterviewProfile,
 } from './interview-ai.service';
@@ -86,6 +88,8 @@ test('zero-answer report makes no AI call and has no artificial minimum scores',
   assert.equal(report.behaviour, 0);
   assert.equal(report.listening, 0);
   assert.equal(report.roleReadiness, 0);
+  assert.equal(report.relevance, 0);
+  assert.equal(report.clarity, 0);
   assert.equal(report.technicalKnowledge, null);
   assert.equal(report.problemSolving, null);
   assert.equal(report.answeredCount, 0);
@@ -312,4 +316,64 @@ test('last answer ends the interview without generating another question', async
   assert.equal(h.counts.nextQuestion, 0);
   assert.equal(h.counts.report, 1);
   assert.equal(h.questions()[2].score, 60);
+});
+
+/* ---------------- skip ---------------- */
+
+test('skip marks the question SKIPPED with score 0, makes no evaluation call and loads the next question', async () => {
+  const h = harness();
+  const session = await h.service.skipLive('user-a', 'iv-1', 0);
+  await h.settle();
+  const qs = h.questions();
+  assert.equal(qs[0].answerMode, 'SKIPPED');
+  assert.equal(qs[0].score, 0);
+  assert.equal(h.counts.analyze, 0);
+  assert.equal(h.counts.nextQuestion, 1);
+  assert.equal(session.currentQuestion?.index, 1);
+  await assert.rejects(h.service.skipLive('user-a', 'iv-1', 0), (err: unknown) => err instanceof ConflictException);
+});
+
+test('skipping the last question ends the interview', async () => {
+  const h = harness({ questionLimit: 3 });
+  const at = new Date().toISOString();
+  const q = h.questions();
+  Object.assign(q[0], { answer: 'a', answerMode: 'TEXT', score: 50, analysis: 'ok' });
+  q.push({ id: 'q2', number: 2, text: 'Q2?', category: 'TECHNICAL', difficulty: 'Beginner', askedAt: at, answer: 'b', answerMode: 'TEXT', score: 50, analysis: 'ok' });
+  q.push({ id: 'q3', number: 3, text: 'Q3?', category: 'SCENARIO', difficulty: 'Beginner', askedAt: at });
+  h.row.questionsJson = JSON.stringify(q);
+  h.row.questionIndex = 2;
+  const session = await h.service.skipLive('user-a', 'iv-1', 2);
+  assert.equal(session.status, 'COMPLETED');
+  assert.equal(h.counts.nextQuestion, 0);
+  assert.equal(h.counts.analyze, 0);
+  assert.equal(h.questions()[2].answerMode, 'SKIPPED');
+});
+
+test('report counts skipped questions as 0 in the overall score', async () => {
+  const gateway = { isConfigured: () => false };
+  const ai = new InterviewAiService(gateway as never, {} as never);
+  const at = new Date().toISOString();
+  const questions: LiveInterviewQuestion[] = [
+    { id: 'q1', number: 1, text: 'Q1?', category: 'TECHNICAL', difficulty: 'Beginner', askedAt: at, answer: 'A detailed answer about SQL joins.', answerMode: 'TEXT', score: 80, analysis: 'ok' },
+    { id: 'q2', number: 2, text: 'Q2?', category: 'TECHNICAL', difficulty: 'Beginner', askedAt: at, answer: '', answerMode: 'SKIPPED', score: 0, analysis: 'skipped' },
+  ];
+  const report = await ai.report(profile, questions, 60, integrity, 2);
+  assert.equal(report.overallScore, 40);
+  assert.equal(typeof report.relevance, 'number');
+  assert.equal(typeof report.clarity, 'number');
+});
+
+test('relevance rewards on-topic, well-scored answers; clarity penalises fragments and filler', () => {
+  const at = new Date().toISOString();
+  const q = (text: string, answer: string, score: number): LiveInterviewQuestion => ({
+    id: text, number: 1, text, category: 'BEHAVIOURAL', difficulty: 'Beginner', askedAt: at, answer, answerMode: 'TEXT', score,
+  });
+  const onTopic = [q('Describe handling an upset customer complaint.', 'When a customer complaint came in about a late refund, I listened, apologised and escalated the refund to finance. The customer confirmed the fix the same day.', 85)];
+  const offTopic = [q('Describe handling an upset customer complaint.', 'I like cricket and watching movies on weekends with my friends.', 20)];
+  assert.ok(scoreRelevance(onTopic) > scoreRelevance(offTopic));
+  const clear = [q('Why this role?', 'I enjoy solving customer problems. My last internship gave me daily practice with support tickets, and I want to grow that skill in a full-time role.', 70)];
+  const fragment = [q('Why this role?', 'um like basically yes', 70)];
+  assert.ok(scoreClarity(clear) > scoreClarity(fragment));
+  assert.equal(scoreRelevance([]), 0);
+  assert.equal(scoreClarity([]), 0);
 });

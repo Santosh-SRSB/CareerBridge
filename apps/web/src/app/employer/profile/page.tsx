@@ -1,9 +1,19 @@
 'use client';
 
+import { toast } from '@/components/ui/Toast';
+import { userFacingError } from '@/lib/client-errors';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { EmployerProfile } from '@careerbridge/shared';
-import { personNameError, photoFileError } from '@careerbridge/shared';
+import {
+  COMPANY_ABOUT_MAX,
+  COMPANY_INDUSTRIES,
+  COMPANY_SIZES,
+  COMPANY_SIZE_LABELS,
+  parseLinkedinUrl,
+  personNameError,
+  photoFileError,
+} from '@careerbridge/shared';
 import { getEmployerMe, updateEmployerMe, uploadEmployerLogo, listEmployerJobs } from '@/lib/api';
 import { EmployerShell, EmployerShellFallback, statusLabel } from '@/components/EmployerPortal';
 import { CitySelect } from '@/components/ui/CitySelect';
@@ -11,29 +21,86 @@ import { Button } from '@/components/ui/Button';
 import { getStoredUser } from '@/lib/session';
 import Link from 'next/link';
 import { FormEvent, useMemo } from 'react';
+
+type FieldErrors = Partial<
+  Record<'companyName' | 'industry' | 'companySize' | 'city' | 'contactName' | 'website' | 'linkedinUrl', string>
+>;
+
+function websiteError(raw: string): string | undefined {
+  const value = raw.trim();
+  if (!value) return undefined;
+  const message = 'Enter a valid website starting with http:// or https://.';
+  const scheme = value.match(/^([a-z][a-z0-9+.-]*):(?!\d)/i)?.[1]?.toLowerCase();
+  if (/\s/.test(value) || (scheme && scheme !== 'http' && scheme !== 'https')) return message;
+  try {
+    const url = new URL(scheme ? value : `https://${value}`);
+    return url.hostname.includes('.') && !url.username && !url.password ? undefined : message;
+  } catch {
+    return message;
+  }
+}
+
+function FieldLabel({ label, required }: { label: string; required?: boolean }) {
+  return (
+    <span>
+      {label}
+      {required ? (
+        <span className="text-red-700" aria-hidden>
+          {' '}
+          *
+        </span>
+      ) : (
+        <span className="font-normal text-slate-600"> (optional)</span>
+      )}
+    </span>
+  );
+}
+
+function FieldError({ id, error }: { id: string; error?: string }) {
+  if (!error) return null;
+  return (
+    <em id={`${id}-error`} className="not-italic text-sm font-semibold text-red-700" role="alert">
+      {error}
+    </em>
+  );
+}
+
 function Field({
   label,
   name,
   value,
   onChange,
   placeholder,
+  required,
+  error,
+  type = 'text',
 }: {
   label: string;
   name: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  required?: boolean;
+  error?: string;
+  type?: string;
 }) {
   return (
     <label className="ep-field" htmlFor={name}>
-      <span>{label}</span>
+      <FieldLabel label={label} required={required} />
       <input
         id={name}
         name={name}
+        type={type}
         value={value}
         placeholder={placeholder}
+        required={required}
+        aria-required={required || undefined}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${name}-error` : undefined}
+        className={error ? 'border-red-600' : undefined}
         onChange={(event) => onChange(event.target.value)}
       />
+      <FieldError id={name} error={error} />
     </label>
   );
 }
@@ -81,6 +148,7 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
   const [logoBusy, setLogoBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [events, setEvents] = useState<Array<{ title: string; meta: string; href: string }>>([]);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const user = getStoredUser();
@@ -140,22 +208,30 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
 
   const doneCount = onboarding.filter((s) => s.done).length;
 
+  function validate(): FieldErrors {
+    const next: FieldErrors = {};
+    if (profile.companyName.trim().length < 2) next.companyName = 'Company name is required.';
+    if (!(profile.industry || '').trim()) next.industry = 'Please select an industry.';
+    if (!(profile.companySize || '').trim()) next.companySize = 'Please select company size.';
+    if ((profile.city || '').trim().length < 2) next.city = 'Please select a location.';
+    const contactError = personNameError(profile.contactName || '', 'Enter the contact person name.');
+    if (contactError) next.contactName = contactError;
+    const siteError = websiteError(profile.website || '');
+    if (siteError) next.website = siteError;
+    const linkedin = parseLinkedinUrl(profile.linkedinUrl || '');
+    if (!linkedin.ok) next.linkedinUrl = linkedin.message;
+    return next;
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (profile.companyName.trim().length < 2) {
-      setError('Enter the company name.');
+    const found = validate();
+    setFieldErrors(found);
+    const first = Object.keys(found)[0];
+    if (first) {
+      setError('Please fix the highlighted fields.');
       setMessage('');
-      return;
-    }
-    if ((profile.city || '').trim().length < 2) {
-      setError('Select or enter the company location.');
-      setMessage('');
-      return;
-    }
-    const contactError = personNameError(profile.contactName || '', 'Enter the contact person name.');
-    if (contactError) {
-      setError(contactError);
-      setMessage('');
+      document.getElementById(first === 'city' ? 'company-city' : first)?.focus();
       return;
     }
     setSaving(true);
@@ -169,11 +245,17 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
         designation: profile.designation ?? undefined,
         workEmail: profile.workEmail ?? undefined,
         website: profile.website ?? undefined,
+        companySize: profile.companySize ?? undefined,
+        about: profile.about ?? '',
+        linkedinUrl: profile.linkedinUrl ?? '',
       });
       setProfile(updated);
-      setMessage('Company profile saved.');
+      setMessage('');
+      toast.success('Company profile saved successfully');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'We could not save the company profile.');
+      const text = userFacingError(err, 'save profile');
+      setError(text);
+      toast.error(text);
     } finally {
       setSaving(false);
     }
@@ -195,7 +277,7 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
       setProfile(updated);
       setMessage('Company logo updated.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update the company logo.');
+      setError(userFacingError(err, 'update the company logo'));
     } finally {
       setLogoBusy(false);
       if (logoInputRef.current) logoInputRef.current.value = '';
@@ -338,7 +420,7 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
         </>
       ) : (
         <article className="ep-card ep-settings">
-          <form onSubmit={onSubmit} className="ep-settings__form">
+          <form onSubmit={onSubmit} noValidate className="ep-settings__form">
             <div className="ep-card__head">
               <div>
                 <h2>Company Profile</h2>
@@ -376,27 +458,86 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
                 name="companyName"
                 value={profile.companyName}
                 placeholder="Your company name"
+                required
+                error={fieldErrors.companyName}
                 onChange={(companyName) => setProfile({ ...profile, companyName })}
               />
-              <Field
-                label="Industry"
-                name="industry"
-                value={profile.industry || ''}
-                placeholder="e.g. Customer Service"
-                onChange={(industry) => setProfile({ ...profile, industry })}
-              />
+              <label className="ep-field" htmlFor="industry">
+                <FieldLabel label="Industry" required />
+                <select
+                  id="industry"
+                  value={profile.industry || ''}
+                  required
+                  aria-required
+                  aria-invalid={fieldErrors.industry ? true : undefined}
+                  aria-describedby={fieldErrors.industry ? 'industry-error' : undefined}
+                  className={fieldErrors.industry ? 'border-red-600' : undefined}
+                  onChange={(e) => setProfile({ ...profile, industry: e.target.value })}
+                >
+                  <option value="">Select industry</option>
+                  {profile.industry && !(COMPANY_INDUSTRIES as readonly string[]).includes(profile.industry) ? (
+                    <option value={profile.industry}>{profile.industry}</option>
+                  ) : null}
+                  {COMPANY_INDUSTRIES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+                <FieldError id="industry" error={fieldErrors.industry} />
+              </label>
+              <label className="ep-field" htmlFor="companySize">
+                <FieldLabel label="Company size" required />
+                <select
+                  id="companySize"
+                  value={profile.companySize || ''}
+                  required
+                  aria-required
+                  aria-invalid={fieldErrors.companySize ? true : undefined}
+                  aria-describedby={fieldErrors.companySize ? 'companySize-error' : undefined}
+                  className={fieldErrors.companySize ? 'border-red-600' : undefined}
+                  onChange={(e) => setProfile({ ...profile, companySize: e.target.value })}
+                >
+                  <option value="">Select company size</option>
+                  {COMPANY_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {COMPANY_SIZE_LABELS[size]}
+                    </option>
+                  ))}
+                </select>
+                <FieldError id="companySize" error={fieldErrors.companySize} />
+              </label>
               <div className="ep-field ep-field--full">
                 <CitySelect
-                  label="Location"
+                  id="company-city"
+                  label="Location *"
                   value={profile.city || ''}
                   onChange={(city) => setProfile({ ...profile, city })}
                 />
+                <FieldError id="company-city" error={fieldErrors.city} />
               </div>
+              <label className="ep-field ep-field--full" htmlFor="about">
+                <FieldLabel label="About the company" />
+                <textarea
+                  id="about"
+                  rows={4}
+                  maxLength={COMPANY_ABOUT_MAX}
+                  value={profile.about || ''}
+                  placeholder="What does your company do? What is it like to work there?"
+                  aria-describedby="about-count"
+                  onChange={(e) => setProfile({ ...profile, about: e.target.value.slice(0, COMPANY_ABOUT_MAX) })}
+                />
+                <em id="about-count" className="not-italic text-xs text-slate-700" aria-live="polite">
+                  {(profile.about || '').length}/{COMPANY_ABOUT_MAX}
+                </em>
+              </label>
               <Field
                 label="Contact person"
                 name="contactName"
                 value={profile.contactName || ''}
                 placeholder="Primary hiring contact"
+                required
+                error={fieldErrors.contactName}
                 onChange={(contactName) => setProfile({ ...profile, contactName })}
               />
               <Field
@@ -418,7 +559,18 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
                 name="website"
                 value={profile.website || ''}
                 placeholder="https://company.com"
+                type="url"
+                error={fieldErrors.website}
                 onChange={(website) => setProfile({ ...profile, website })}
+              />
+              <Field
+                label="LinkedIn URL"
+                name="linkedinUrl"
+                value={profile.linkedinUrl || ''}
+                placeholder="https://www.linkedin.com/company/your-company"
+                type="url"
+                error={fieldErrors.linkedinUrl}
+                onChange={(linkedinUrl) => setProfile({ ...profile, linkedinUrl })}
               />
             </div>
             {error ? <p className="ep-alert ep-alert--error">{error}</p> : null}

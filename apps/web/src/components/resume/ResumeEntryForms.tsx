@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { SkillSearchCombobox } from '@/components/resume/SkillSearchCombobox';
 import {
   DegreeSelect,
@@ -8,8 +8,38 @@ import {
   InstitutionCombobox,
 } from '@/components/resume/EducationSelectors';
 import { MonthField, MonthRangeFields } from '@/components/resume/ResumeFormFields';
+import { ExperienceAiAssist } from '@/components/resume/SummaryAiAssist';
 import { formatEducationYearRange, formatMonthRange } from '@/lib/resume-dates';
 import { splitProjectFields } from '@/features/resume/project-fields';
+import {
+  hasEntryErrors,
+  validateEducationEntry,
+  validateExperienceEntry,
+  type EducationEntryField,
+  type EntryErrors,
+  type ExperienceEntryField,
+} from '@/features/resume/resume-entry-validation';
+
+/** Re-runs `attempt` whenever the parent bumps `signal` (e.g. wizard "Save & continue"). */
+function useSubmitSignal(signal: number | undefined, attempt: () => void) {
+  const attemptRef = useRef(attempt);
+  attemptRef.current = attempt;
+  const lastSignal = useRef(signal);
+  useEffect(() => {
+    if (signal === undefined || signal === lastSignal.current) return;
+    lastSignal.current = signal;
+    attemptRef.current();
+  }, [signal]);
+}
+
+function InlineFieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} className="cb-inline-field-error" role="alert">
+      {message}
+    </p>
+  );
+}
 
 const formStyles = `
   .cb-inline-form {
@@ -53,6 +83,8 @@ const formStyles = `
     box-sizing: border-box;
   }
   .cb-inline-form textarea { min-height: 72px; resize: vertical; }
+  .cb-inline-form input[aria-invalid="true"] { border-color: #b42318; }
+  .cb-inline-field-error { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: #b42318; }
   .cb-inline-form-actions {
     display: flex;
     gap: 8px;
@@ -140,13 +172,18 @@ export interface EducationFormData {
 export function EducationInlineForm({
   onSave,
   onCancel,
+  onInvalid,
   initial,
+  submitSignal,
 }: {
   onSave: (data: EducationFormData) => void;
   onCancel: () => void;
+  onInvalid?: () => void;
   initial?: Partial<EducationFormData>;
+  submitSignal?: number;
 }) {
   const editing = Boolean(initial);
+  const uid = useId();
   const [degree, setDegree] = useState(initial?.degree || '');
   const [field, setField] = useState(initial?.field || '');
   const [institution, setInstitution] = useState(initial?.institution || '');
@@ -155,31 +192,51 @@ export function EducationInlineForm({
   const [isCurrent, setIsCurrent] = useState(Boolean(initial?.isCurrent));
   const [grade, setGrade] = useState(initial?.grade || '');
   const [gradeType, setGradeType] = useState(initial?.gradeType || 'CGPA');
+  const [errors, setErrors] = useState<EntryErrors<EducationEntryField>>({});
+
+  function attemptSave() {
+    const next = validateEducationEntry({ degree, institution, startDate, endDate, isCurrent });
+    setErrors(next);
+    if (hasEntryErrors(next)) {
+      onInvalid?.();
+      return;
+    }
+    onSave({
+      degree: degree.trim(),
+      field,
+      institution: institution.trim(),
+      location: '',
+      startDate,
+      endDate: isCurrent ? '' : endDate,
+      isCurrent,
+      grade,
+      gradeType,
+    });
+  }
+
+  useSubmitSignal(submitSignal, attemptSave);
 
   return (
     <FormShell
       title={editing ? 'Edit education' : 'Add education'}
       onCancel={onCancel}
-      onSave={() =>
-        degree.trim() &&
-        onSave({ degree, field, institution, location: '', startDate, endDate, isCurrent, grade, gradeType })
-      }
-      saveLabel={degree.trim() ? (editing ? 'Save changes' : 'Add education') : 'Enter degree'}
+      onSave={attemptSave}
+      saveLabel={editing ? 'Save changes' : 'Add education'}
     >
       <div className="cb-field-grid">
         <div className="cb-field">
-          <DegreeSelect value={degree} onChange={setDegree} />
+          <DegreeSelect value={degree} onChange={setDegree} error={errors.degree} />
         </div>
         <div className="cb-field">
           <FieldOfStudySelect value={field} onChange={setField} />
         </div>
         <div className="cb-field full">
-          <InstitutionCombobox value={institution} onChange={setInstitution} />
+          <InstitutionCombobox value={institution} onChange={setInstitution} error={errors.institution} />
         </div>
         <div className="cb-field full">
           <MonthRangeFields
             startLabel="Start date"
-            endLabel="End date"
+            endLabel="Year of completion *"
             start={startDate}
             end={endDate}
             isCurrent={isCurrent}
@@ -187,15 +244,23 @@ export function EducationInlineForm({
             onEndChange={setEndDate}
             onCurrentChange={setIsCurrent}
             presentLabel="Currently studying here"
+            startError={errors.startDate}
+            endError={errors.endDate}
+            maxYear={new Date().getFullYear()}
           />
         </div>
         <div className="cb-field">
-          <label>Grade type</label>
-          <input value={gradeType} onChange={(e) => setGradeType(e.target.value)} placeholder="CGPA" />
+          <label htmlFor={`${uid}-grade-type`}>Grade type</label>
+          <input
+            id={`${uid}-grade-type`}
+            value={gradeType}
+            onChange={(e) => setGradeType(e.target.value)}
+            placeholder="CGPA"
+          />
         </div>
         <div className="cb-field">
-          <label>Grade</label>
-          <input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="8.0" />
+          <label htmlFor={`${uid}-grade`}>Grade</label>
+          <input id={`${uid}-grade`} value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="8.0" />
         </div>
       </div>
     </FormShell>
@@ -216,14 +281,20 @@ export function ExperienceInlineForm({
   defaultLocation,
   onSave,
   onCancel,
+  onInvalid,
   initial,
+  submitSignal,
 }: {
   defaultLocation?: string;
   onSave: (data: ExperienceFormData) => void;
   onCancel: () => void;
+  onInvalid?: () => void;
   initial?: Partial<ExperienceFormData>;
+  submitSignal?: number;
 }) {
   const editing = Boolean(initial);
+  const uid = useId();
+  const [errors, setErrors] = useState<EntryErrors<ExperienceEntryField>>({});
   const [role, setRole] = useState(initial?.role || '');
   const [company, setCompany] = useState(initial?.company || '');
   const [location, setLocation] = useState(initial?.location || defaultLocation || '');
@@ -238,36 +309,64 @@ export function ExperienceInlineForm({
     setResponsibilities((prev) => prev.map((b, idx) => (idx === i ? value : b)));
   }
 
+  function attemptSave() {
+    const next = validateExperienceEntry({ role, company, startDate, endDate, isCurrent });
+    setErrors(next);
+    if (hasEntryErrors(next)) {
+      onInvalid?.();
+      return;
+    }
+    onSave({
+      role: role.trim(),
+      company: company.trim(),
+      location,
+      startDate,
+      endDate: isCurrent ? '' : endDate,
+      isCurrent,
+      responsibilities: responsibilities.filter((r) => r.trim()),
+    });
+  }
+
+  useSubmitSignal(submitSignal, attemptSave);
+
   return (
     <FormShell
       title={editing ? 'Edit experience' : 'Add experience'}
       onCancel={onCancel}
-      onSave={() =>
-        role.trim() &&
-        onSave({
-          role,
-          company,
-          location,
-          startDate,
-          endDate,
-          isCurrent,
-          responsibilities: responsibilities.filter((r) => r.trim()),
-        })
-      }
-      saveLabel={role.trim() ? (editing ? 'Save changes' : 'Add experience') : 'Enter job title'}
+      onSave={attemptSave}
+      saveLabel={editing ? 'Save changes' : 'Add experience'}
     >
       <div className="cb-field-grid">
         <div className="cb-field">
-          <label>Job title *</label>
-          <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Software Developer" />
+          <label htmlFor={`${uid}-role`}>Job title *</label>
+          <input
+            id={`${uid}-role`}
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            placeholder="Software Developer"
+            aria-required="true"
+            aria-invalid={errors.role ? true : undefined}
+            aria-describedby={errors.role ? `${uid}-role-error` : undefined}
+          />
+          <InlineFieldError id={`${uid}-role-error`} message={errors.role} />
         </div>
         <div className="cb-field">
-          <label>Company</label>
-          <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company name" />
+          <label htmlFor={`${uid}-company`}>Company *</label>
+          <input
+            id={`${uid}-company`}
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Company name"
+            aria-required="true"
+            aria-invalid={errors.company ? true : undefined}
+            aria-describedby={errors.company ? `${uid}-company-error` : undefined}
+          />
+          <InlineFieldError id={`${uid}-company-error`} message={errors.company} />
         </div>
         <div className="cb-field full">
-          <label>Work location (optional)</label>
+          <label htmlFor={`${uid}-location`}>Work location (optional)</label>
           <input
+            id={`${uid}-location`}
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="e.g. Kochi, Kerala"
@@ -275,6 +374,8 @@ export function ExperienceInlineForm({
         </div>
         <div className="cb-field full">
           <MonthRangeFields
+            startLabel="Start date *"
+            endLabel="End date *"
             start={startDate}
             end={endDate}
             isCurrent={isCurrent}
@@ -282,6 +383,9 @@ export function ExperienceInlineForm({
             onEndChange={setEndDate}
             onCurrentChange={setIsCurrent}
             presentLabel="Currently working here"
+            startError={errors.startDate}
+            endError={errors.endDate}
+            maxYear={new Date().getFullYear()}
           />
         </div>
         <div className="cb-field full">
@@ -292,11 +396,13 @@ export function ExperienceInlineForm({
                 value={bullet}
                 onChange={(e) => updateBullet(i, e.target.value)}
                 placeholder="Describe a responsibility or achievement"
+                aria-label={`Responsibility ${i + 1}`}
               />
               {responsibilities.length > 1 && (
                 <button
                   type="button"
                   className="cb-bullet-remove"
+                  aria-label={`Remove responsibility ${i + 1}`}
                   onClick={() => setResponsibilities((prev) => prev.filter((_, idx) => idx !== i))}
                 >
                   ×
@@ -312,6 +418,12 @@ export function ExperienceInlineForm({
           >
             + Add bullet
           </button>
+          <ExperienceAiAssist
+            role={role}
+            company={company}
+            bullets={responsibilities}
+            onUse={(next) => setResponsibilities(next.length ? next : [''])}
+          />
         </div>
       </div>
     </FormShell>

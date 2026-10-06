@@ -1,26 +1,44 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { ApplicationRecord } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { ApplicationProgressTrack } from '@/components/marketplace/ApplicationProgressTrack';
 import { StatusBadge } from '@/components/AppNav';
+import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
 import { fetchApplication } from '@/lib/candidate-marketplace-api';
+import { userFacingError } from '@/lib/client-errors';
 
 export default function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
   const [application, setApplication] = useState<ApplicationRecord | null>(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    setError('');
+    fetchApplication(params.id)
+      .then(setApplication)
+      .catch((err) => setError(userFacingError(err, 'load this application')));
+  }, [params.id]);
 
   useEffect(() => {
-    fetchApplication(params.id).then(setApplication);
-  }, [params.id]);
+    load();
+  }, [load]);
+
+  if (error) {
+    return (
+      <CandidateAppShell activeTab="applications" maxWidth="max-w-3xl">
+        <ErrorState message={error} onRetry={load} />
+      </CandidateAppShell>
+    );
+  }
 
   if (!application) {
     return (
       <CandidateAppShell activeTab="applications">
-        <p className="text-slate-500">Loading application timeline...</p>
+        <SkeletonList rows={2} label="Loading application timeline…" />
       </CandidateAppShell>
     );
   }

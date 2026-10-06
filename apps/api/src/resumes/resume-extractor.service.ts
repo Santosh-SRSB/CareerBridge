@@ -124,10 +124,11 @@ export class ResumeExtractorService {
     const location = this.config.get<string>('DOCUMENT_AI_LOCATION', 'asia-south1');
     const processorId = this.config.get<string>('DOCUMENT_AI_PROCESSOR_ID', '');
     if (!project || !processorId) {
+      this.logger.error('Document AI is not configured (GCP_PROJECT_ID / DOCUMENT_AI_PROCESSOR_ID missing).');
       throw new ServiceUnavailableException({
         code: 'DOCUMENT_AI_NOT_CONFIGURED',
         message:
-          'Resume extraction requires Google Document AI. Set GCP_PROJECT_ID and DOCUMENT_AI_PROCESSOR_ID.',
+          'Resume upload processing is temporarily unavailable. Please try again later or build your resume manually.',
       });
     }
 

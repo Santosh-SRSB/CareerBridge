@@ -2,13 +2,14 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomUUID } from 'crypto';
-import { ErrorCode, registrationPasswordError } from '@careerbridge/shared';
+import { ErrorCode, OTP_EXPIRED_MESSAGE, registrationPasswordError } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { FirebaseService } from './firebase.service';
 import { EmailService } from './email.service';
@@ -23,8 +24,16 @@ const OTP_TTL_SECONDS = 300;
 const MAX_VERIFY_ATTEMPTS = 5;
 const DEV_OTP = '123456';
 
+function duplicateAccountMessage(hitEmail: boolean) {
+  return hitEmail
+    ? 'This email is already registered. Please login.'
+    : 'This mobile number is already registered. Please login.';
+}
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -114,10 +123,7 @@ export class AuthService {
           throw new HttpException(
             {
               code: ErrorCode.ACCOUNT_EXISTS,
-              message:
-                accountType === 'EMPLOYER'
-                  ? 'An employer account already exists with this mobile number. Please sign in.'
-                  : 'A candidate account already exists with this mobile number. Please sign in.',
+              message: duplicateAccountMessage(false),
             },
             HttpStatus.CONFLICT,
           );
@@ -131,10 +137,7 @@ export class AuthService {
           throw new HttpException(
             {
               code: ErrorCode.ACCOUNT_EXISTS,
-              message:
-                accountType === 'EMPLOYER'
-                  ? 'An employer account already exists with this email. Please sign in.'
-                  : 'A candidate account already exists with this email. Please sign in.',
+              message: duplicateAccountMessage(true),
             },
             HttpStatus.CONFLICT,
           );
@@ -160,10 +163,11 @@ export class AuthService {
     }
 
     if (channel === 'MOBILE' && !this.isDevOtp() && !this.firebase.isConfigured()) {
+      this.logger.error('Mobile OTP requested but Firebase Admin is not configured.');
       throw new HttpException(
         {
           code: ErrorCode.INTERNAL_ERROR,
-          message: 'Firebase Admin is not configured. Set FIREBASE_* in apps/api/.env.',
+          message: 'Mobile verification is temporarily unavailable. Please try again later.',
         },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
@@ -230,10 +234,11 @@ export class AuthService {
       if (!this.isDevOtp() && this.email.isConfigured()) {
         await this.email.sendOtp(email || '', otpCode);
       } else if (!this.isDevOtp() && !this.email.isConfigured() && this.config.get('NODE_ENV') === 'production') {
+        this.logger.error('Email OTP requested but SMTP credentials are not configured.');
         throw new HttpException(
           {
             code: ErrorCode.INTERNAL_ERROR,
-            message: 'Email OTP is not configured. Set SMTP_USER and SMTP_PASS in apps/api/.env.',
+            message: 'Email verification is temporarily unavailable. Please try again later.',
           },
           HttpStatus.SERVICE_UNAVAILABLE,
         );
@@ -282,7 +287,7 @@ export class AuthService {
 
     if (request.expiresAt.getTime() < Date.now()) {
       throw new HttpException(
-        { code: ErrorCode.OTP_EXPIRED, message: 'This OTP has expired.' },
+        { code: ErrorCode.OTP_EXPIRED, message: OTP_EXPIRED_MESSAGE },
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -430,13 +435,7 @@ export class AuthService {
       throw new HttpException(
         {
           code: ErrorCode.ACCOUNT_EXISTS,
-          message: isEmployer
-            ? hitEmail
-              ? 'An employer account already exists with this email. Please sign in.'
-              : 'An employer account already exists with this mobile. Please sign in.'
-            : hitEmail
-              ? 'A candidate account already exists with this email. Please sign in.'
-              : 'A candidate account already exists with this mobile. Please sign in.',
+          message: duplicateAccountMessage(hitEmail),
         },
         HttpStatus.CONFLICT,
       );
@@ -494,13 +493,7 @@ export class AuthService {
           throw new HttpException(
             {
               code: ErrorCode.ACCOUNT_EXISTS,
-              message: isEmployer
-                ? hitEmail
-                  ? 'An employer account already exists with this email. Please sign in.'
-                  : 'An employer account already exists with this mobile. Please sign in.'
-                : hitEmail
-                  ? 'A candidate account already exists with this email. Please sign in.'
-                  : 'A candidate account already exists with this mobile. Please sign in.',
+              message: duplicateAccountMessage(hitEmail),
             },
             HttpStatus.CONFLICT,
           );
@@ -681,7 +674,7 @@ export class AuthService {
 
     if (request.expiresAt.getTime() < Date.now()) {
       throw new HttpException(
-        { code: ErrorCode.OTP_EXPIRED, message: 'This OTP has expired.' },
+        { code: ErrorCode.OTP_EXPIRED, message: OTP_EXPIRED_MESSAGE },
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -780,7 +773,7 @@ export class AuthService {
       throw new HttpException(
         {
           code: ErrorCode.ACCOUNT_EXISTS,
-          message: 'An employer account already exists with this email or mobile. Please sign in.',
+          message: duplicateAccountMessage(taken.email === email),
         },
         HttpStatus.CONFLICT,
       );

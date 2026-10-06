@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
-import type { InterviewSession } from '@careerbridge/shared';
+import { AI_INTERVIEW_QUESTION_FALLBACK_MESSAGE, type InterviewSession } from '@careerbridge/shared';
 import {
   answerLiveInterview,
   endLiveInterview,
@@ -1047,6 +1047,11 @@ export default function LiveInterviewPage() {
               {statusDot(status)} {status}
             </p>
             {lastWarning ? <p className="ai-world-alert">{lastWarning.message}</p> : null}
+            {session.currentQuestion?.aiFallback ? (
+              <p role="status" data-testid="ai-unavailable" className="ai-world-alert">
+                {AI_INTERVIEW_QUESTION_FALLBACK_MESSAGE}
+              </p>
+            ) : null}
             <div className="ai-world-copy">
               {(session.currentQuestion?.prompt || 'Interview in progress').split(/\n\n+/).map((para, index) => (
                 <p key={`${index}-${para.slice(0, 12)}`}>{para}</p>

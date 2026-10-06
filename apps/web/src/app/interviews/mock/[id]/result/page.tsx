@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import type { InterviewSession, LiveInterviewQuestion } from '@careerbridge/shared';
+import {
+  AI_INTERVIEW_SCORING_FALLBACK_MESSAGE,
+  type InterviewSession,
+  type LiveInterviewQuestion,
+} from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import {
@@ -216,12 +220,19 @@ export default function MockInterviewResultPage() {
           : scaleTenToPercent(session.listeningScore ?? report.listening),
     );
 
-    const skills = [
+    const relevance = report.relevance != null ? percentToTen(scaleTenToPercent(report.relevance)) : null;
+    const clarity = report.clarity != null ? percentToTen(scaleTenToPercent(report.clarity)) : null;
+
+    const skills: FeedbackReportData['skills'] = [
       { name: 'Communication', score: communication },
+      ...(relevance != null ? [{ name: 'Relevance', score: relevance }] : []),
+      ...(clarity != null ? [{ name: 'Clarity', score: clarity }] : []),
+      confidence != null
+        ? { name: 'Confidence', score: confidence }
+        : { name: 'Confidence', score: null, note: report.confidenceNote ? 'Not measured (text answers)' : 'Not measured' },
       ...(technical != null ? [{ name: 'Technical Knowledge', score: technical }] : []),
       ...(problemSolving != null ? [{ name: 'Problem Solving', score: problemSolving }] : []),
       ...(roleReadiness != null ? [{ name: 'Role Readiness', score: roleReadiness }] : []),
-      ...(confidence != null ? [{ name: 'Confidence', score: confidence }] : []),
     ];
 
     const feedbackPoints = [
@@ -329,6 +340,11 @@ export default function MockInterviewResultPage() {
 
   const actionButtons = (
     <>
+      <Link href="/dashboard" className="w-full sm:w-auto">
+        <Button type="button" variant="outline" className="w-full !rounded-full sm:min-w-[160px]">
+          Back to Dashboard
+        </Button>
+      </Link>
       <Link href="/interviews/mock" className="w-full sm:w-auto">
         <Button type="button" variant="outline" className="w-full !rounded-full sm:min-w-[160px]">
           Try Again
@@ -353,7 +369,16 @@ export default function MockInterviewResultPage() {
 
   return (
     <CandidateAppShell activeTab="interviews" maxWidth="max-w-4xl">
-      <div ref={reportRef} className="-mx-4 bg-[#eef0f2] pb-36 sm:-mx-6 sm:pb-10 lg:-mx-8">
+      <div ref={reportRef} className="-mx-4 bg-[#eef0f2] pb-52 sm:-mx-6 sm:pb-10 lg:-mx-8">
+        {session.report?.aiUnavailable || answeredQuestions.some((item) => item.scoredWithoutAi) ? (
+          <p
+            role="status"
+            data-testid="ai-unavailable"
+            className="mx-4 mb-0 mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 sm:mx-6 lg:mx-8"
+          >
+            {AI_INTERVIEW_SCORING_FALLBACK_MESSAGE}
+          </p>
+        ) : null}
         <FeedbackReport
           data={reportData}
           footer={
@@ -370,7 +395,7 @@ export default function MockInterviewResultPage() {
       </div>
 
       <div className="fixed inset-x-0 bottom-[4.25rem] z-40 border-t border-slate-200/80 bg-white/95 px-3 py-2.5 backdrop-blur-md sm:hidden">
-        <div className="mx-auto flex max-w-2xl gap-2">{actionButtons}</div>
+        <div className="mx-auto grid max-w-2xl grid-cols-2 gap-2">{actionButtons}</div>
       </div>
     </CandidateAppShell>
   );

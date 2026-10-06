@@ -4,6 +4,9 @@ export interface ProviderGenerateOptions {
   model?: string;
   temperature?: number;
   maxOutputTokens?: number;
+  /** Per-attempt timeout; the attempt is aborted when it elapses. */
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface ProviderGenerateResult<T> {

@@ -48,7 +48,7 @@ export class ApplicationsController {
   rescheduleScheduled(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
-    @Body() body: { preferredAt?: string; preferredDate?: string; preferredTime?: string; reason?: string },
+    @Body() body: { date?: string; availableFrom?: string; availableUntil?: string; timezone?: string },
   ) {
     return this.applications.requestRescheduleInterview(user.id, id, body || {});
   }

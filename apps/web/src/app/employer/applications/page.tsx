@@ -9,15 +9,32 @@ import { listAllEmployerApplications, listEmployerJobs } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
 import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
+import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
+import { LOAD_ERROR_MESSAGE } from '@/lib/client-errors';
+import { SortableHeader } from '@/components/ui/SortableHeader';
+import { nextSort, sortRows, type SortState, type SortValue } from '@/lib/table-sort';
+
+type ApplicationSortKey = 'candidate' | 'experience' | 'location' | 'score' | 'status' | 'newest';
+
+const APPLICATION_SORT_VALUE: Record<ApplicationSortKey, (app: EmployerApplication) => SortValue> = {
+  candidate: (app) => candidateName(app),
+  experience: (app) => experienceYears(app),
+  location: (app) => app.candidate.city || null,
+  score: (app) => app.match?.score ?? null,
+  status: (app) => applicationStatusLabel(app.status),
+  newest: (app) => +new Date(app.createdAt),
+};
 
 function applicationStatusLabel(status: string) {
   if (status === 'SHORTLISTED') return 'Shortlisted';
   if (status === 'INTERVIEW') return 'Interview';
   if (status === 'APPLIED') return 'Applied';
-  if (status === 'UNDER_REVIEW' || status === 'REVIEW') return 'In review';
+  if (status === 'UNDER_REVIEW' || status === 'REVIEW') return 'Under Review';
+  if (status === 'ON_HOLD') return 'On Hold';
   if (status === 'SELECTED') return 'Selected';
   if (status === 'HIRED') return 'Hired';
-  if (status === 'REJECTED') return 'Not selected';
+  if (status === 'REJECTED') return 'Rejected';
+  if (status === 'WITHDRAWN') return 'Withdrawn';
   return status.replaceAll('_', ' ');
 }
 
@@ -59,12 +76,17 @@ function EmployerApplicationsBody() {
   const [locationFilter, setLocationFilter] = useState('all');
   const [skillFilter, setSkillFilter] = useState('all');
   const [scoreFilter, setScoreFilter] = useState('all');
-  const [sortBy, setSortBy] = useState<'score' | 'newest'>('score');
+  const [sort, setSort] = useState<SortState<ApplicationSortKey>>({ key: 'score', dir: 'desc' });
+  const onSort = (key: ApplicationSortKey) =>
+    setSort((current) => nextSort(current, key, key === 'score' || key === 'experience' ? 'desc' : 'asc'));
   const [jobs, setJobs] = useState<Array<{ id: string; title: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
+    setError('');
     void Promise.all([listAllEmployerApplications(), listEmployerJobs().catch(() => [])])
       .then(([apps, jobRows]) => {
         setItems(apps);
@@ -75,9 +97,9 @@ function EmployerApplicationsBody() {
           setJobFilter(jobRows[0].id);
         }
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load applications.'))
+      .catch(() => setError(LOAD_ERROR_MESSAGE))
       .finally(() => setLoading(false));
-  }, [jobFromQuery]);
+  }, [jobFromQuery, reloadKey]);
 
   const jobScoped = useMemo(() => {
     if (jobFilter === 'all') return items;
@@ -109,12 +131,7 @@ function EmployerApplicationsBody() {
       if (scoreFilter === 'below60' && (score < 0 || score >= 60)) return false;
       return true;
     });
-    return rows.sort((a, b) => {
-      if (sortBy === 'newest') {
-        return +new Date(b.createdAt) - +new Date(a.createdAt);
-      }
-      return (b.match?.score ?? -1) - (a.match?.score ?? -1);
-    });
+    return sortRows(rows, APPLICATION_SORT_VALUE[sort.key], sort.dir);
   }, [
     jobScoped,
     statusFilter,
@@ -122,7 +139,7 @@ function EmployerApplicationsBody() {
     locationFilter,
     skillFilter,
     scoreFilter,
-    sortBy,
+    sort,
   ]);
 
   const selectedJobTitle =
@@ -134,7 +151,7 @@ function EmployerApplicationsBody() {
         <EmployerSectionHero
           tone="applications"
           title={selectedJobTitle ? `Applications — ${selectedJobTitle}` : 'Applications'}
-          subtitle="Review inbound candidates by ATS score and status. Click View to open the full candidate profile."
+          subtitle="Review inbound candidates by Profile Match and status. Click View to open the full candidate profile."
         />
 
         <div className="ep-apps__filters" role="group" aria-label="Filters">
@@ -155,17 +172,19 @@ function EmployerApplicationsBody() {
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="all">All</option>
               <option value="APPLIED">Applied</option>
+              <option value="UNDER_REVIEW">Under Review</option>
               <option value="SHORTLISTED">Shortlisted</option>
               <option value="INTERVIEW">Interview</option>
+              <option value="ON_HOLD">On Hold</option>
               <option value="SELECTED">Selected</option>
               <option value="HIRED">Hired</option>
-              <option value="REJECTED">Not selected</option>
+              <option value="REJECTED">Rejected</option>
             </select>
           </label>
           <label>
-            <span className="sr-only">ATS score</span>
+            <span className="sr-only">Profile Match</span>
             <select value={scoreFilter} onChange={(e) => setScoreFilter(e.target.value)}>
-              <option value="all">ATS score</option>
+              <option value="all">Profile Match</option>
               <option value="90">90+ Excellent</option>
               <option value="80">80+ Strong</option>
               <option value="70">70+ Good</option>
@@ -175,9 +194,21 @@ function EmployerApplicationsBody() {
           </label>
           <label>
             <span className="sr-only">Sort</span>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'score' | 'newest')}>
-              <option value="score">Sort: ATS score</option>
+            <select
+              value={sort.key === 'score' || sort.key === 'newest' ? sort.key : 'custom'}
+              onChange={(e) => {
+                if (e.target.value === 'score' || e.target.value === 'newest') {
+                  setSort({ key: e.target.value, dir: 'desc' });
+                }
+              }}
+            >
+              <option value="score">Sort: Profile Match</option>
               <option value="newest">Sort: Newest</option>
+              {sort.key !== 'score' && sort.key !== 'newest' ? (
+                <option value="custom" disabled>
+                  Sort: column header
+                </option>
+              ) : null}
             </select>
           </label>
           <label>
@@ -213,10 +244,16 @@ function EmployerApplicationsBody() {
           </label>
         </div>
 
-        {error ? <p className="ep-apps__error">{error}</p> : null}
-        {loading ? <p className="ep-apps__empty">Loading applications…</p> : null}
+        {error && !loading ? <ErrorState message={error} onRetry={() => setReloadKey((k) => k + 1)} /> : null}
+        {loading ? <SkeletonList rows={4} label="Loading applications…" /> : null}
 
-        {!loading && filtered.length === 0 ? (
+        {!loading && !error && items.length > 0 && filtered.length === 0 ? (
+          <p className="ep-apps__empty" role="status">
+            No applications match these filters.
+          </p>
+        ) : null}
+
+        {!loading && !error && items.length === 0 ? (
           <div className="ep-polished-empty">
             <EmployerEmptyCue cue="search" />
             <div>
@@ -235,12 +272,22 @@ function EmployerApplicationsBody() {
               <table className="ep-apps__sheet-table">
                 <thead>
                   <tr>
-                    <th>Candidate</th>
-                    <th>Experience</th>
-                    <th>Location</th>
-                    <th>ATS score</th>
-                    <th>Status</th>
-                    <th>Action</th>
+                    <SortableHeader sortKey="candidate" sort={sort} onSort={onSort}>
+                      Candidate
+                    </SortableHeader>
+                    <SortableHeader sortKey="experience" sort={sort} onSort={onSort}>
+                      Experience
+                    </SortableHeader>
+                    <SortableHeader sortKey="location" sort={sort} onSort={onSort}>
+                      Location
+                    </SortableHeader>
+                    <SortableHeader sortKey="score" sort={sort} onSort={onSort}>
+                      Profile Match
+                    </SortableHeader>
+                    <SortableHeader sortKey="status" sort={sort} onSort={onSort}>
+                      Status
+                    </SortableHeader>
+                    <th scope="col">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -252,6 +299,11 @@ function EmployerApplicationsBody() {
                         <td>
                           <strong>{candidateName(item)}</strong>
                           {jobFilter === 'all' ? <em>{item.job.title}</em> : null}
+                          {item.employerNote ? (
+                            <small className="mt-1 block text-xs text-slate-600" title="Private note — not visible to the candidate">
+                              Note: {item.employerNote}
+                            </small>
+                          ) : null}
                         </td>
                         <td>{experienceLabel(experienceYears(item))}</td>
                         <td>{item.candidate.city || '—'}</td>

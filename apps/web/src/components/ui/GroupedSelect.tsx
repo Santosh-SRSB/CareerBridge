@@ -20,6 +20,7 @@ export function GroupedSelect({
   otherInputLabel = 'Enter other',
   otherPlaceholder = 'Type here',
   id,
+  disabled = false,
 }: {
   label: string;
   value: string;
@@ -32,6 +33,7 @@ export function GroupedSelect({
   otherInputLabel?: string;
   otherPlaceholder?: string;
   id: string;
+  disabled?: boolean;
 }) {
   const listed = groups.flatMap((group) => [...group.options]);
   const listedKey = listed.join('|');
@@ -62,14 +64,23 @@ export function GroupedSelect({
 
   return (
     <div ref={rootRef} className="relative min-w-0 space-y-2">
-      <p className="mb-1.5 text-sm font-semibold text-primary">{label}</p>
+      <p id={`${id}-label`} className="mb-1.5 text-sm font-semibold text-primary">
+        {label}
+        {required ? (
+          <span className="ml-0.5 text-error" aria-hidden="true">
+            *
+          </span>
+        ) : null}
+      </p>
       <button
         type="button"
         id={id}
+        aria-labelledby={`${id}-label ${id}`}
         aria-haspopup="listbox"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-primary/15 bg-[#faf8f3] px-3 py-2.5 text-left text-sm text-primary outline-none"
+        className="flex w-full items-center justify-between gap-2 rounded-md border border-primary/15 bg-[#faf8f3] px-3 py-2.5 text-left text-sm text-primary outline-none disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span className={`truncate ${value || otherMode || allowAll ? '' : 'text-muted'}`}>{display}</span>
         <span className="shrink-0 text-muted" aria-hidden="true">
@@ -133,7 +144,15 @@ export function GroupedSelect({
           placeholder={otherPlaceholder}
         />
       ) : required && !allowAll ? (
-        <input tabIndex={-1} className="sr-only" required value={value} onChange={() => undefined} />
+        <input
+          tabIndex={-1}
+          className="sr-only"
+          aria-hidden="true"
+          aria-label={label}
+          required
+          value={value}
+          onChange={() => undefined}
+        />
       ) : null}
     </div>
   );

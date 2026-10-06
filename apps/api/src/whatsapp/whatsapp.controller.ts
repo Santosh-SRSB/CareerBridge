@@ -22,6 +22,10 @@ import { WhatsAppWebhookService } from './whatsapp.webhook.service';
 import { InterviewWhatsAppService } from './interview-whatsapp.service';
 import type { ReminderKind } from './whatsapp.types';
 
+function isReminderKind(kind: string | undefined): kind is ReminderKind {
+  return kind === '24h' || kind === '2h' || kind === '15m';
+}
+
 @ApiTags('whatsapp')
 @SkipThrottle()
 @Controller()
@@ -75,16 +79,19 @@ export class WhatsAppController {
   @HttpCode(200)
   async runTask(
     @Headers('x-whatsapp-task-secret') secret: string | undefined,
-    @Body() body: { type?: string; interviewId?: string; kind?: ReminderKind },
+    @Body() body: { type?: string; interviewId?: string; kind?: string },
   ) {
     const expected = process.env.WHATSAPP_TASK_SECRET || '';
     if (expected && secret !== expected) {
       throw new ForbiddenException('Invalid task secret.');
     }
     if (body.type === 'interview_invitation' && body.interviewId) {
-      return this.interviewNotify.sendInvitationNow(body.interviewId);
+      return this.interviewNotify.sendInvitationNow(
+        body.interviewId,
+        body.kind === 'reschedule' ? 'reschedule' : 'initial',
+      );
     }
-    if (body.type === 'interview_reminder' && body.interviewId && body.kind) {
+    if (body.type === 'interview_reminder' && body.interviewId && isReminderKind(body.kind)) {
       return this.webhook.sendReminderNow(body.interviewId, body.kind);
     }
     return { ok: false, reason: 'unknown_task' };

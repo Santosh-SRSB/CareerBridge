@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { DatePicker } from '@/features/candidate/passport/DatePicker';
 import { formatMonthRange, formatEducationYearRange } from '@/lib/resume-dates';
 
@@ -16,6 +17,8 @@ const fieldStyles = `
     border-color: #0A2E2C;
     box-shadow: 0 0 0 3px rgba(10, 46, 44, 0.25);
   }
+  .cb-date-field .date-picker-trigger.is-invalid { border-color: #b42318; }
+  .cb-date-error { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #b42318; }
   .cb-date-range {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -47,11 +50,14 @@ export function MonthField({
   onChange: (v: string) => void;
   id?: string;
 }) {
+  const generatedId = useId();
+  const fieldId = id || generatedId;
   return (
     <div className="cb-date-field cb-field">
       <style dangerouslySetInnerHTML={{ __html: fieldStyles }} />
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={fieldId}>{label}</label>
       <DatePicker
+        id={fieldId}
         mode="month"
         value={value}
         onChange={onChange}
@@ -74,6 +80,9 @@ export function MonthRangeFields({
   onCurrentChange,
   showPresent = true,
   presentLabel = 'Currently working / studying here',
+  startError,
+  endError,
+  maxYear,
 }: {
   startLabel?: string;
   endLabel?: string;
@@ -85,30 +94,54 @@ export function MonthRangeFields({
   onCurrentChange: (v: boolean) => void;
   showPresent?: boolean;
   presentLabel?: string;
+  startError?: string;
+  endError?: string;
+  maxYear?: number;
 }) {
+  const baseId = useId();
+  const startId = `${baseId}-start`;
+  const endId = `${baseId}-end`;
   return (
     <div className="cb-date-range cb-date-field">
       <style dangerouslySetInnerHTML={{ __html: fieldStyles }} />
       <div className="cb-field">
-        <label>{startLabel}</label>
+        <label htmlFor={startId}>{startLabel}</label>
         <DatePicker
+          id={startId}
           mode="month"
           value={start}
           onChange={onStartChange}
           placeholder="Select month"
           confirmLabel="Set start date"
+          maxYear={maxYear}
+          invalid={Boolean(startError)}
+          describedBy={startError ? `${startId}-error` : undefined}
         />
+        {startError ? (
+          <p id={`${startId}-error`} className="cb-date-error" role="alert">
+            {startError}
+          </p>
+        ) : null}
       </div>
       <div className="cb-field">
-        <label>{endLabel}</label>
+        <label htmlFor={endId}>{endLabel}</label>
         <DatePicker
+          id={endId}
           mode="month"
           value={isCurrent ? '' : end}
           onChange={onEndChange}
           placeholder="Select month"
           confirmLabel="Set end date"
           disabled={isCurrent}
+          maxYear={maxYear}
+          invalid={Boolean(endError)}
+          describedBy={endError ? `${endId}-error` : undefined}
         />
+        {endError ? (
+          <p id={`${endId}-error`} className="cb-date-error" role="alert">
+            {endError}
+          </p>
+        ) : null}
       </div>
       {showPresent && (
         <label className="cb-present-row">

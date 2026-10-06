@@ -147,14 +147,14 @@ export function StatusPill({ status }: { status: string }) {
   const s = status.toUpperCase();
   const bg =
     ['ACTIVE', 'PUBLISHED', 'CONFIRMED', 'HIRED', 'DELIVERED', 'SELECTED', 'COMPLETED', 'SUCCESS', 'VERIFIED', 'APPROVED'].includes(s)
-      ? '#28b779'
+      ? '#1e7a50'
       : ['SUSPENDED', 'CLOSED', 'FAILED', 'REJECTED', 'CANCELLED', 'INACTIVE'].includes(s)
-        ? '#da542e'
-        : ['PAUSED', 'PENDING', 'QUEUED', 'DRAFT', 'SHORTLISTED', 'SCHEDULED', 'PROPOSED', 'RESCHEDULE_REQUESTED', 'UNDER_REVIEW'].includes(
+        ? '#b93c1c'
+        : ['PAUSED', 'PENDING', 'PENDING_REVIEW', 'QUEUED', 'DRAFT', 'SHORTLISTED', 'SCHEDULED', 'PROPOSED', 'RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED', 'UNDER_REVIEW', 'ON_HOLD'].includes(
               s,
             )
-          ? '#ffb848'
-          : '#27a9e3';
+          ? '#a35f00'
+          : '#1d6fa5';
   return (
     <span
       className="inline-flex rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
@@ -221,6 +221,7 @@ export function SearchBar({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder}
         className="min-w-[200px] flex-1 border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm outline-none focus:border-[#999]"
       />
       {filter}
@@ -369,6 +370,9 @@ export function DetailPanel({
   const employer =
     data.employer && typeof data.employer === 'object' ? (data.employer as Record<string, unknown>) : null;
   const job = data.job && typeof data.job === 'object' ? (data.job as Record<string, unknown>) : null;
+  const plan = data.plan && typeof data.plan === 'object' ? (data.plan as Record<string, unknown>) : null;
+  const credits =
+    data.credits && typeof data.credits === 'object' ? (data.credits as Record<string, unknown>) : null;
   const candidate =
     data.candidate && typeof data.candidate === 'object' ? (data.candidate as Record<string, unknown>) : null;
   const location =
@@ -460,6 +464,32 @@ export function DetailPanel({
               <Field label="Hires" value={counts?.hires} />
               <Field label="Verification" value={data.verificationStatus} />
               <Field label="City" value={data.city} />
+            </div>
+          </Section>
+        )}
+
+        {(plan || credits) && (
+          <Section title="Plan & credits">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Plan" value={plan?.name} />
+              <Field label="Billing period" value={plan?.period} />
+              <Field
+                label="Active jobs"
+                value={
+                  plan
+                    ? `${txt(plan.activeJobs)} / ${plan.activeJobLimit == null ? 'Unlimited' : txt(plan.activeJobLimit)}`
+                    : null
+                }
+              />
+              <Field label="Candidate views used" value={credits?.candidateViewsUsed} />
+              <Field
+                label="Candidate view credits"
+                value={credits ? (credits.candidateViewCredits == null ? 'Unlimited' : credits.candidateViewCredits) : null}
+              />
+              <Field
+                label="Credits remaining"
+                value={credits ? (credits.remaining == null ? 'Unlimited' : credits.remaining) : null}
+              />
             </div>
           </Section>
         )}

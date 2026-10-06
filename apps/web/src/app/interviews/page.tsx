@@ -6,12 +6,22 @@ import { useRouter } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import { Button } from '@/components/ui/Button';
-import { WhatsAppInterviewNotice } from '@/components/marketplace/WhatsAppInterviewNotice';
+import { CancelledInterviewCard } from '@/components/marketplace/CancelledInterviewCard';
+import {
+  WhatsAppInterviewNotice,
+  type CandidateAvailabilityPayload,
+} from '@/components/marketplace/WhatsAppInterviewNotice';
 import {
   confirmScheduledInterview,
   fetchScheduledInterviews,
+  isCancelledUpcomingInterview,
+  isUpcomingInterview,
   rescheduleScheduledInterview,
+  sortInterviewsByTime,
 } from '@/lib/candidate-marketplace-api';
+import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
+import { toast } from '@/components/ui/Toast';
+import { LOAD_ERROR_MESSAGE, userFacingError } from '@/lib/client-errors';
 import { mockInterviewSetupUrl } from '@/lib/mock-interview-url';
 import type { ScheduledJobInterview } from '@/lib/candidate-marketplace-api';
 import type { InterviewSession } from '@careerbridge/shared';
@@ -35,25 +45,57 @@ function formatInterviewDate(value: string) {
   });
 }
 
+function interviewStatusBadge(item: ScheduledJobInterview) {
+  if (item.status === 'CONFIRMED') return { label: 'Confirmed ✓', tone: 'bg-emerald-100 text-emerald-800' };
+  if (item.status === 'RESCHEDULE_NEEDED') return { label: 'Choose another time', tone: 'bg-amber-100 text-amber-900' };
+  if (item.status === 'RESCHEDULE_REQUESTED') {
+    return { label: 'Waiting for employer to schedule', tone: 'bg-amber-100 text-amber-900' };
+  }
+  if (item.status === 'COMPLETED') return { label: 'Completed', tone: 'bg-violet-100 text-violet-800' };
+  if (item.status === 'CANCELLED') return { label: 'Cancelled', tone: 'bg-red-100 text-red-800' };
+  return { label: 'Awaiting confirmation', tone: 'bg-slate-200 text-slate-800' };
+}
+
+function outcomeBadge(outcome: ScheduledJobInterview['outcome']) {
+  if (outcome === 'SELECTED') return { label: 'Selected', tone: 'bg-emerald-100 text-emerald-800' };
+  if (outcome === 'NOT_SELECTED') return { label: 'Not selected', tone: 'bg-red-100 text-red-800' };
+  if (outcome === 'ON_HOLD') return { label: 'On hold', tone: 'bg-amber-100 text-amber-900' };
+  if (outcome === 'WITHDRAWN') return { label: 'Withdrawn', tone: 'bg-slate-200 text-slate-800' };
+  return null;
+}
+
 export default function InterviewsHubPage() {
   const router = useRouter();
-  const [upcoming, setUpcoming] = useState<ScheduledJobInterview[]>([]);
+  const [scheduled, setScheduled] = useState<ScheduledJobInterview[] | null>(null);
   const [busyId, setBusyId] = useState('');
-  const [message, setMessage] = useState('');
   const [loadError, setLoadError] = useState('');
   const [completed, setCompleted] = useState<InterviewSession[] | null>(null);
   const [completedError, setCompletedError] = useState('');
   const [completedLoading, setCompletedLoading] = useState(false);
 
-  useEffect(() => {
+  const loadScheduled = useCallback(async () => {
     setLoadError('');
-    fetchScheduledInterviews()
-      .then(setUpcoming)
-      .catch((err) => {
-        setUpcoming([]);
-        setLoadError(err instanceof Error ? err.message : 'Could not load scheduled interviews.');
-      });
+    setScheduled(null);
+    try {
+      setScheduled(await fetchScheduledInterviews());
+    } catch {
+      setLoadError(LOAD_ERROR_MESSAGE);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadScheduled();
+  }, [loadScheduled]);
+
+  const inUpcoming = (item: ScheduledJobInterview) => isUpcomingInterview(item) || isCancelledUpcomingInterview(item);
+  const upcoming = [
+    ...sortInterviewsByTime((scheduled || []).filter((item) => isUpcomingInterview(item)), 'asc'),
+    ...sortInterviewsByTime((scheduled || []).filter((item) => isCancelledUpcomingInterview(item)), 'asc'),
+  ];
+  const history = sortInterviewsByTime(
+    (scheduled || []).filter((item) => !inUpcoming(item)),
+    'desc',
+  );
 
   const loadCompleted = useCallback(async () => {
     setCompletedLoading(true);
@@ -61,8 +103,8 @@ export default function InterviewsHubPage() {
     try {
       const rows = await listInterviews();
       setCompleted(rows.filter((item) => item.status === 'COMPLETED'));
-    } catch (err) {
-      setCompletedError(err instanceof Error ? err.message : 'Could not load completed interviews.');
+    } catch {
+      setCompletedError(LOAD_ERROR_MESSAGE);
     } finally {
       setCompletedLoading(false);
     }
@@ -72,32 +114,52 @@ export default function InterviewsHubPage() {
     void loadCompleted();
   }, [loadCompleted]);
 
+  const refreshScheduled = useCallback(async () => {
+    try {
+      setScheduled(await fetchScheduledInterviews());
+      setLoadError('');
+    } catch {
+      /* the list keeps its previous state */
+    }
+  }, []);
+
+  // Confirm / Reschedule / Cancel can happen on WhatsApp or by the employer while this tab is in the background.
+  useEffect(() => {
+    let lastRefresh = Date.now();
+    const onReturn = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastRefresh < 2000) return;
+      lastRefresh = Date.now();
+      void refreshScheduled();
+    };
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    return () => {
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+    };
+  }, [refreshScheduled]);
+
   async function handleConfirm(id: string) {
     setBusyId(id);
-    setMessage('');
     try {
       await confirmScheduledInterview(id);
-      setUpcoming(await fetchScheduledInterviews());
-      setMessage('Interview confirmed successfully.');
-    } catch {
-      setMessage('Could not confirm interview right now.');
+      toast.success('Interview confirmed successfully.');
+      await refreshScheduled();
+    } catch (err) {
+      toast.error(userFacingError(err, 'confirm interview'));
     } finally {
       setBusyId('');
     }
   }
 
-  async function handleReschedule(
-    id: string,
-    payload: { preferredDate: string; preferredTime: string; reason?: string },
-  ) {
+  async function handleReschedule(id: string, payload?: CandidateAvailabilityPayload) {
     setBusyId(id);
-    setMessage('');
     try {
       await rescheduleScheduledInterview(id, payload);
-      setUpcoming(await fetchScheduledInterviews());
-      setMessage('Reschedule request sent. Waiting for employer approval.');
+      if (payload) toast.success('Your new availability has been sent to the employer.');
+      await refreshScheduled();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Could not request reschedule right now.');
+      toast.error(userFacingError(err, 'request reschedule'));
     } finally {
       setBusyId('');
     }
@@ -113,41 +175,36 @@ export default function InterviewsHubPage() {
           </p>
         </div>
 
-        <section className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Upcoming</p>
-          {loadError ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-              {loadError}
+        <section className="space-y-3" aria-labelledby="upcoming-interviews">
+          <h2 id="upcoming-interviews" className="text-xs font-bold uppercase tracking-wide text-slate-600">
+            Upcoming
+          </h2>
+          {scheduled === null && !loadError ? (
+            <SkeletonList rows={2} label="Loading interviews…" />
+          ) : null}
+          {loadError ? <ErrorState message={loadError} onRetry={() => void loadScheduled()} /> : null}
+          {scheduled !== null && !loadError && upcoming.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-700" role="status">
+              No upcoming interviews scheduled yet. When an employer schedules an interview with you it
+              will appear here.
             </div>
           ) : null}
-          {!loadError && upcoming.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
-              No upcoming interviews scheduled yet. Employer interviews only appear for the candidate
-              account that was selected when scheduling.
-            </div>
-          ) : null}
-          {upcoming.map((interview) => (
-              <article
-                key={interview.id}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <h2 className="text-base font-extrabold text-slate-900">{interview.jobTitle}</h2>
-                <p className="mt-1 text-sm font-semibold text-slate-600">{interview.companyName}</p>
+          {upcoming.map((interview) => {
+            const badge = interviewStatusBadge(interview);
+            const cancelled = interview.status === 'CANCELLED';
+            const details = (
+              <>
+                <h3 className="text-base font-extrabold text-slate-900">{interview.jobTitle}</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-700">{interview.companyName}</p>
                 <p className="mt-3 text-sm text-slate-700">{formatInterviewDate(interview.scheduledDate)}</p>
                 <p className="text-sm font-bold text-slate-800">{interview.scheduledTime}</p>
-                <p className={`mt-2 text-sm font-semibold ${
-                  interview.status === 'CONFIRMED'
-                    ? 'text-emerald-700'
-                    : interview.status === 'RESCHEDULE_REQUESTED'
-                      ? 'text-amber-700'
-                      : 'text-slate-700'
-                }`}>
+                <p className="mt-1 text-sm text-slate-700" data-testid="interview-type-duration">
+                  {interview.mode === 'VIDEO' ? 'Online (video)' : 'In-person'}
+                  {interview.durationMin ? ` · ${interview.durationMin} min` : ''}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-800">
                   Status:{' '}
-                  {interview.status === 'CONFIRMED'
-                    ? 'Confirmed ✓'
-                    : interview.status === 'RESCHEDULE_REQUESTED'
-                      ? 'Reschedule pending'
-                      : 'Awaiting confirmation'}
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${badge.tone}`}>{badge.label}</span>
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -163,20 +220,87 @@ export default function InterviewsHubPage() {
                     Prepare for Interview
                   </Button>
                 </div>
+              </>
+            );
 
+            if (cancelled) {
+              return (
+                <CancelledInterviewCard key={interview.id} interview={interview}>
+                  {details}
+                </CancelledInterviewCard>
+              );
+            }
+
+            return (
+              <article key={interview.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                {details}
                 <div className="mt-5">
                   <WhatsAppInterviewNotice
                     interview={interview}
                     busy={busyId === interview.id}
                     onConfirm={() => void handleConfirm(interview.id)}
-                    onReschedule={(payload) => void handleReschedule(interview.id, payload)}
+                    onRequestReschedule={() => void handleReschedule(interview.id)}
+                    onSubmitAvailability={(payload) => void handleReschedule(interview.id, payload)}
                   />
                 </div>
               </article>
-            ))}
+            );
+          })}
         </section>
 
-        {message ? <p className="text-sm font-semibold text-emerald-700">{message}</p> : null}
+        {scheduled !== null && !loadError ? (
+          <section className="space-y-3" aria-labelledby="interview-history">
+            <h2 id="interview-history" className="text-xs font-bold uppercase tracking-wide text-slate-600">
+              Interview history
+            </h2>
+            {history.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-700" role="status">
+                No past employer interviews yet. Completed and cancelled interviews will appear here with
+                their outcome.
+              </div>
+            ) : null}
+            {history.map((item) => {
+              const badge = interviewStatusBadge(item);
+              const outcome = outcomeBadge(item.outcome);
+              return (
+                <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-extrabold text-slate-900">{item.jobTitle}</h3>
+                      <p className="text-sm text-slate-700">{item.companyName}</p>
+                      <p className="mt-1 text-xs text-slate-700">
+                        {formatInterviewDate(item.scheduledDate)} · {item.scheduledTime}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${badge.tone}`}>{badge.label}</span>
+                      {outcome ? (
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${outcome.tone}`}>
+                          Outcome: {outcome.label}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-700">
+                    {item.candidateFeedback
+                      ? `Your feedback: ${item.candidateFeedback.rating}/5${
+                          item.candidateFeedback.text ? ` — ${item.candidateFeedback.text}` : ''
+                        }`
+                      : item.canSubmitFeedback
+                        ? 'You have not shared feedback on this interview yet.'
+                        : ''}
+                  </p>
+                  <Link
+                    href={`/interviews/scheduled/${item.id}`}
+                    className="mt-2 inline-flex min-h-12 items-center text-sm font-bold text-teal hover:underline"
+                  >
+                    View details →
+                  </Link>
+                </article>
+              );
+            })}
+          </section>
+        ) : null}
 
         <section className="space-y-3" aria-labelledby="completed-interviews">
           <div className="flex items-center justify-between gap-3">

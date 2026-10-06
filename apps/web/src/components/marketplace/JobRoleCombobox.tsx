@@ -9,6 +9,10 @@ type JobRoleComboboxProps = {
   label?: string;
   placeholder?: string;
   showHint?: boolean;
+  required?: boolean;
+  loading?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
 };
 
 export function JobRoleCombobox({
@@ -18,6 +22,10 @@ export function JobRoleCombobox({
   label = 'Job Role',
   placeholder = 'Search or type your job role…',
   showHint = true,
+  required = false,
+  loading = false,
+  invalid = false,
+  describedBy,
 }: JobRoleComboboxProps) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
@@ -95,10 +103,19 @@ export function JobRoleCombobox({
       {label ? (
         <label htmlFor={`${listId}-input`} className="mb-2 block text-sm font-bold text-slate-800">
           {label}
+          {required ? (
+            <span className="ml-0.5 text-red-700" aria-hidden>
+              *
+            </span>
+          ) : null}
         </label>
       ) : null}
 
-      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 focus-within:ring-2 focus-within:ring-[#0a2e2c]">
+      <div
+        className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2.5 focus-within:ring-2 focus-within:ring-[#0a2e2c] ${
+          invalid ? 'border-red-600' : 'border-slate-200'
+        }`}
+      >
         <span className="text-slate-400" aria-hidden>
           ⌕
         </span>
@@ -109,12 +126,12 @@ export function JobRoleCombobox({
             setQuery(event.target.value);
             setOpen(true);
             setHighlight(0);
-            if (event.target.value.trim()) onChange(event.target.value.trim());
+            onChange(event.target.value.trim());
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => {
             window.setTimeout(() => {
-              if (trimmed && trimmed !== value) onChange(trimmed);
+              if (trimmed !== value) onChange(trimmed);
             }, 120);
           }}
           onKeyDown={onKeyDown}
@@ -123,17 +140,27 @@ export function JobRoleCombobox({
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
+          aria-required={required || undefined}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
+          aria-busy={loading || undefined}
           className="w-full border-none bg-transparent text-sm font-semibold text-slate-800 outline-none"
         />
       </div>
 
-      {open && (dropdownOptions.length > 0 || trimmed) ? (
+      {open && (loading || dropdownOptions.length > 0 || trimmed) ? (
         <ul
           id={listId}
           role="listbox"
           className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
         >
-          {dropdownOptions.length === 0 ? (
+          {loading ? (
+            <li className="space-y-2 px-3 py-2" aria-label="Loading job roles">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="block h-4 animate-pulse rounded bg-slate-200" />
+              ))}
+            </li>
+          ) : dropdownOptions.length === 0 ? (
             <li className="px-3 py-2 text-sm text-slate-500">Press Enter to use &ldquo;{trimmed}&rdquo;</li>
           ) : (
             dropdownOptions.map((option, index) => {

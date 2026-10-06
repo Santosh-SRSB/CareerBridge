@@ -1,7 +1,9 @@
 'use client';
 
-import { NON_TECH_JOB_CATEGORIES, TECH_JOB_CATEGORIES } from '@careerbridge/shared';
+import { useMemo } from 'react';
+import { DEFAULT_JOB_CATEGORY_ITEMS } from '@careerbridge/shared';
 import { GroupedSelect } from '@/components/ui/GroupedSelect';
+import { useCatalog } from '@/hooks/useCatalog';
 
 export function CategorySelect({
   label = 'Category',
@@ -18,16 +20,23 @@ export function CategorySelect({
   required?: boolean;
   id?: string;
 }) {
+  const { items } = useCatalog('job-categories', DEFAULT_JOB_CATEGORY_ITEMS);
+  const groups = useMemo(() => {
+    const tech = items.filter((item) => item.parentValue === 'TECH').map((item) => item.label);
+    const nonTech = items.filter((item) => item.parentValue !== 'TECH').map((item) => item.label);
+    return [
+      { label: 'Tech', options: tech },
+      { label: 'Non-tech', options: nonTech },
+    ].filter((group) => group.options.length > 0);
+  }, [items]);
+
   return (
     <GroupedSelect
       id={id}
       label={label}
       value={value}
       onChange={onChange}
-      groups={[
-        { label: 'Tech', options: TECH_JOB_CATEGORIES },
-        { label: 'Non-tech', options: NON_TECH_JOB_CATEGORIES },
-      ]}
+      groups={groups}
       allowAll={allowAll}
       allLabel="All categories"
       placeholder="Select category"

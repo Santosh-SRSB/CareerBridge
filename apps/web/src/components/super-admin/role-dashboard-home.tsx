@@ -36,6 +36,12 @@ function visibleTiles(role: string | null) {
   });
 }
 
+function aiBudgetLabel(status: 'OK' | 'WARNING' | 'LIMIT_REACHED' | 'DISABLED') {
+  if (status === 'LIMIT_REACHED') return 'AI daily limit reached';
+  if (status === 'DISABLED') return 'AI turned off';
+  return 'AI usage above 80% today';
+}
+
 function alertItems(metrics: AdminDashboard) {
   return [
     {
@@ -48,6 +54,15 @@ function alertItems(metrics: AdminDashboard) {
       value: metrics.alerts?.failedAiRequests ?? 0,
       href: '/adminsrsb/dashboard?tab=ai-usage',
     },
+    ...(metrics.alerts?.aiBudget && metrics.alerts.aiBudget.status !== 'OK'
+      ? [
+          {
+            label: aiBudgetLabel(metrics.alerts.aiBudget.status),
+            value: metrics.alerts.aiBudget.requestsToday,
+            href: '/adminsrsb/dashboard?tab=ai-usage',
+          },
+        ]
+      : []),
     {
       label: 'Suspended',
       value: metrics.alerts?.suspendedAccounts ?? 0,

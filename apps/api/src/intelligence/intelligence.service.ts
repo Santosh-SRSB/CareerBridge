@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import {
+  ATS_JOB_MATCH_WEIGHTS,
+  experienceFitPercent,
+  findStateForCity,
+  normalizeCityName,
   SKILL_ASSESSMENT_MAX_QUESTIONS,
   SKILL_ASSESSMENT_RECORDED_COUNT,
   SKILL_ASSESSMENT_TYPED_COUNT,
@@ -11,8 +15,23 @@ import {
 } from '@careerbridge/shared';
 import { analyzeResumeContent } from '@careerbridge/shared';
 
+function pctOf(points: number, max: number): number {
+  return max > 0 ? Math.round((points / max) * 100) : 0;
+}
+
+/** Accepts "City" or "City, State" and returns lower-cased city/state (state inferred from city). */
+function splitPlace(rawCity: string | null | undefined, rawState?: string | null) {
+  const [cityPart = '', statePart = ''] = String(rawCity || '')
+    .split(',')
+    .map((part) => part.trim());
+  const city = normalizeCityName(cityPart);
+  const state = (rawState || statePart || (city ? findStateForCity(city) : '')).trim();
+  return { city: city.toLowerCase(), state: state.toLowerCase() };
+}
+
 export type MatchCandidate = {
   city: string | null;
+  state?: string | null;
   careerInterests: string[];
   skills: string[];
   hasExperience: string | null;
@@ -31,6 +50,7 @@ export type MatchCandidate = {
 
 export type MatchJob = {
   city: string;
+  state?: string | null;
   category: string;
   requiredSkills: string[];
   preferredSkills?: string[];
@@ -96,11 +116,18 @@ export class IntelligenceService {
       ? Math.round((preferredOverlap.length / preferred.length) * 100)
       : 70;
 
-    const cityMatch =
-      Boolean(candidate.city) &&
-      Boolean(job.city) &&
-      candidate.city!.toLowerCase() === job.city.toLowerCase();
-    const locationScore = cityMatch ? 100 : candidate.city ? 40 : 30;
+    const w = ATS_JOB_MATCH_WEIGHTS;
+    const candidatePlace = splitPlace(candidate.city, candidate.state);
+    const jobPlace = splitPlace(job.city, job.state);
+    let locationPoints = 0;
+    if (!jobPlace.city || /^remote$/i.test(jobPlace.city)) {
+      locationPoints = w.location;
+    } else if (candidatePlace.city && candidatePlace.city === jobPlace.city) {
+      locationPoints = w.location;
+    } else if (candidatePlace.state && candidatePlace.state === jobPlace.state) {
+      locationPoints = Math.floor(w.location * 0.5);
+    }
+    const locationScore = pctOf(locationPoints, w.location);
 
     const categoryScore = candidate.careerInterests.some(
       (item) => item.toLowerCase() === job.category.toLowerCase(),
@@ -115,16 +142,9 @@ export class IntelligenceService {
       Boolean(job.experience) &&
       job.experience !== 'NONE' &&
       !/fresher|0\s*[-–]\s*1|entry/i.test(job.experience || '');
-    let experienceScore = 70;
-    if (!jobNeedsExp) {
-      experienceScore = hasExp ? 100 : 85;
-    } else if (years >= 3) {
-      experienceScore = 100;
-    } else if (years >= 1 || hasExp) {
-      experienceScore = 80;
-    } else {
-      experienceScore = 35;
-    }
+    const expFit = experienceFitPercent(years, job.experience);
+    const experiencePoints = Math.floor(((expFit ?? 100) / 100) * w.experience);
+    const experienceScore = pctOf(experiencePoints, w.experience);
 
     const educationCount = candidate.educationCount ?? 0;
     const hasEducation =
@@ -142,28 +162,23 @@ export class IntelligenceService {
 
     const jobLanguages = (job.languages || []).map((item) => item.toLowerCase()).filter(Boolean);
     const candidateLanguages = (candidate.languages || []).map((item) => item.toLowerCase()).filter(Boolean);
-    let languageScore = 70;
-    if (jobLanguages.length && candidateLanguages.length) {
+    let languagePoints: number = w.language;
+    if (jobLanguages.length) {
       const langOverlap = jobLanguages.filter((lang) =>
         candidateLanguages.some((item) => item.includes(lang) || lang.includes(item)),
       );
-      languageScore = Math.round((langOverlap.length / jobLanguages.length) * 100);
-    } else if (jobLanguages.length && !candidateLanguages.length) {
-      languageScore = 25;
-    } else if (candidateLanguages.length) {
-      languageScore = 85;
+      languagePoints = Math.floor((langOverlap.length / jobLanguages.length) * w.language);
     }
+    const languageScore = pctOf(languagePoints, w.language);
 
-    // Handbook Vol.3: Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%.
+    // Handbook Vol.3 points: Skills 40, Experience 20, Location 15, Language 15, Education 10.
     const score = Math.min(
       100,
-      Math.round(
-        skillScore * 0.4 +
-          experienceScore * 0.2 +
-          locationScore * 0.15 +
-          languageScore * 0.15 +
-          educationScore * 0.1,
-      ),
+      Math.floor((skillScore / 100) * w.skills) +
+        experiencePoints +
+        locationPoints +
+        languagePoints +
+        Math.floor((educationScore / 100) * w.education),
     );
 
     const gaps = required.filter((skill) => !overlap.includes(skill)).map(titleCase);
@@ -176,11 +191,11 @@ export class IntelligenceService {
         ? `${overlap.length} of ${required.length || overlap.length} required skills`
         : '',
       overlap.length ? overlap.slice(0, 3).map(titleCase).join(', ') : '',
-      locationScore === 100 ? 'Location matches the job' : '',
+      locationScore === 100 ? 'Location matches the job' : locationPoints > 0 ? 'Same state as the job' : '',
       categoryScore === 100 ? job.category : '',
       educationScore === 100 ? 'Education on file' : '',
-      languageScore >= 80 ? 'Language fit' : '',
-      hasExp && experienceScore >= 80 ? 'Relevant experience' : '',
+      jobLanguages.length && languageScore === 100 ? 'Language fit' : '',
+      hasExp && jobNeedsExp && experienceScore === 100 ? 'Relevant experience' : '',
       hasResume && resumeQualityScore >= 70 ? 'Resume quality' : '',
       preferredOverlap.length
         ? preferredOverlap.slice(0, 2).map(titleCase).join(', ')

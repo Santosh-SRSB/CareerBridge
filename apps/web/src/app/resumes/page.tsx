@@ -17,6 +17,16 @@ import { rememberReturnTo } from '@/lib/nav-return';
 
 const ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg';
 
+/** Browsers refuse to open `data:` URLs in a new tab, so inline copies are served as `blob:` URLs. */
+function toBrowserViewUrl(url: string, mimeType: string): string {
+  const match = /^data:[^;,]*;base64,([A-Za-z0-9+/=]*)$/.exec(url);
+  if (!match) return url;
+  const binary = atob(match[1]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
 function versionLabel(row: ResumeRecord) {
   const kind =
     row.kind === 'OPTIMIZED'
@@ -137,6 +147,11 @@ export default function ViewResumesPage() {
     return () => window.clearTimeout(timer);
   }, [highlightId]);
 
+  useEffect(() => {
+    if (!viewUrl?.startsWith('blob:')) return;
+    return () => URL.revokeObjectURL(viewUrl);
+  }, [viewUrl]);
+
   function closePreview() {
     setViewingId(null);
     setViewUrl(null);
@@ -150,7 +165,7 @@ export default function ViewResumesPage() {
     setViewError('');
     try {
       const result = await getResumeViewUrl(resumeId);
-      setViewUrl(result.url);
+      setViewUrl(toBrowserViewUrl(result.url, result.mimeType));
       setViewMeta({ fileName: result.fileName, mimeType: result.mimeType });
     } catch (err) {
       setViewUrl(null);
@@ -311,6 +326,7 @@ export default function ViewResumesPage() {
         ref={fileRef}
         type="file"
         accept={ACCEPT}
+        aria-label="Upload resume file"
         className="sr-only"
         tabIndex={-1}
         disabled={uploading}
@@ -395,7 +411,7 @@ export default function ViewResumesPage() {
                             ? ` · Used in ${row.applicationCount} application${row.applicationCount === 1 ? '' : 's'}`
                             : ''}
                         </p>
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-slate-600">
                           Updated {new Date(row.updatedAt).toLocaleString()}
                         </p>
                         {failed ? (

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { atsMatchBandLabel } from '@careerbridge/shared';
+import { PROFILE_MATCH_LABEL, atsMatchBand, atsMatchBandInfo } from '@careerbridge/shared';
 
 export type MatchedCandidateCardProps = {
   rank: number;
@@ -21,12 +21,7 @@ export type MatchedCandidateCardProps = {
 };
 
 function bandClass(score: number) {
-  const label = atsMatchBandLabel(score).toLowerCase();
-  if (label.includes('excellent')) return 'excellent';
-  if (label.includes('strong')) return 'strong';
-  if (label.includes('good')) return 'good';
-  if (label.includes('potential')) return 'potential';
-  return 'low';
+  return atsMatchBand(score).toLowerCase();
 }
 
 function cleanLocation(city?: string | null) {
@@ -71,7 +66,7 @@ export function MatchedCandidateCard({
   candidateId,
 }: MatchedCandidateCardProps) {
   const band = bandClass(totalScore);
-  const bandLabel = atsMatchBandLabel(totalScore).replace(' Match', '');
+  const bandLabel = atsMatchBandInfo(totalScore).label;
   const location = cleanLocation(city);
   const topSkills = skills.slice(0, 5).map(shortSkill);
   const moreSkills = Math.max(0, skills.length - 5);
@@ -83,10 +78,11 @@ export function MatchedCandidateCard({
 
   return (
     <article className={`ep-talent ep-talent--${band}`}>
-      <aside className="ep-talent__score" aria-label={`ATS score ${totalScore}`}>
+      <aside className="ep-talent__score" aria-label={`${PROFILE_MATCH_LABEL} ${Math.round(totalScore)} out of 100`}>
         <span className="ep-talent__rank">#{rank}</span>
         <strong className="ep-talent__score-num">{Math.round(totalScore)}</strong>
         <em className="ep-talent__score-label">/100</em>
+        <span className="ep-talent__match-label">{PROFILE_MATCH_LABEL}</span>
       </aside>
 
       <div className="ep-talent__body">
@@ -123,7 +119,7 @@ export function MatchedCandidateCard({
           <div className="ep-talent__metric">
             <strong>
               {Math.round(experienceScore)}
-              <em>/30</em>
+              <em>/20</em>
             </strong>
             <span>Exp fit</span>
           </div>

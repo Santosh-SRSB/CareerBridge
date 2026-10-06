@@ -15,6 +15,7 @@ import {
 } from '@/lib/api';
 import {
   applyJobFilters,
+  toAnnualAmount,
   type JobSearchFilterValues,
   type SalaryPeriod,
 } from '@/features/jobs/job-search';
@@ -35,6 +36,7 @@ export type JobSearchParams = {
   experience?: string;
   jobType?: string;
   skills?: string[];
+  sort?: 'newest' | 'salary';
 };
 
 function toFilterValues(params: JobSearchParams): JobSearchFilterValues {
@@ -56,29 +58,30 @@ export async function searchJobs(params: JobSearchParams = {}): Promise<PagedJob
   const filters = toFilterValues(params);
   const apiLocation = params.city?.trim() || params.location?.trim() || '';
 
+  const period = filters.salaryPeriod;
+
   const result = await listJobs({
     q: params.q,
     location: apiLocation || undefined,
     type: params.jobType,
     category: params.category,
+    experience: params.experience || undefined,
+    salaryMin: toAnnualAmount(filters.salaryMin, period),
+    salaryMax: toAnnualAmount(filters.salaryMax, period),
+    sort: params.sort,
     page: params.page,
     pageSize: params.pageSize || 50,
   });
 
   const filtered = applyJobFilters(result.items, filters);
+  const clientNarrowed = filtered.length !== result.items.length;
 
   return {
     items: filtered,
-    page: params.page || 1,
-    pageSize: params.pageSize || 20,
-    total: filtered.length,
+    page: result.page,
+    pageSize: result.pageSize,
+    total: clientNarrowed ? filtered.length : result.total,
   };
-}
-
-function monthlyAmount(value: string, period: SalaryPeriod) {
-  const amount = Number(value.replace(/,/g, '').trim());
-  if (!Number.isFinite(amount) || amount <= 0) return undefined;
-  return period === 'ctc' ? Math.round(amount / 12) : amount;
 }
 
 export type NearbySearchParams = JobSearchParams & {
@@ -104,8 +107,8 @@ export async function searchNearbyJobs(params: NearbySearchParams): Promise<Near
     type: params.jobType || undefined,
     category: params.category || undefined,
     experience: params.experience || undefined,
-    salaryMin: monthlyAmount(params.salaryMin || '', period),
-    salaryMax: monthlyAmount(params.salaryMax || '', period),
+    salaryMin: toAnnualAmount(params.salaryMin || '', period),
+    salaryMax: toAnnualAmount(params.salaryMax || '', period),
     skills: params.skills?.length ? params.skills : undefined,
     remoteOnly: params.remoteOnly || undefined,
   });
@@ -131,6 +134,31 @@ export async function fetchScheduledInterviews(): Promise<ScheduledJobInterview[
   return listCandidateScheduledInterviews();
 }
 
+function interviewStartMs(item: ScheduledJobInterview) {
+  const at = item.scheduledAt ? Date.parse(item.scheduledAt) : Number.NaN;
+  return Number.isNaN(at) ? Date.parse(`${item.scheduledDate}T00:00:00`) : at;
+}
+
+export function isUpcomingInterview(item: ScheduledJobInterview, now = Date.now()) {
+  if (item.status === 'COMPLETED' || item.status === 'CANCELLED') return false;
+  const start = interviewStartMs(item);
+  if (Number.isNaN(start)) return true;
+  return start + (item.durationMin || 60) * 60_000 > now;
+}
+
+/** Cancelled but its slot has not passed yet — still shown with the upcoming interviews, disabled. */
+export function isCancelledUpcomingInterview(item: ScheduledJobInterview, now = Date.now()) {
+  if (item.status !== 'CANCELLED') return false;
+  const start = interviewStartMs(item);
+  if (Number.isNaN(start)) return false;
+  return start + (item.durationMin || 60) * 60_000 > now;
+}
+
+export function sortInterviewsByTime(items: ScheduledJobInterview[], direction: 'asc' | 'desc' = 'asc') {
+  const sign = direction === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => sign * (interviewStartMs(a) - interviewStartMs(b)));
+}
+
 export async function fetchScheduledInterview(id: string): Promise<ScheduledJobInterview> {
   return getCandidateScheduledInterview(id);
 }
@@ -141,7 +169,7 @@ export async function confirmScheduledInterview(id: string): Promise<ScheduledJo
 
 export async function rescheduleScheduledInterview(
   id: string,
-  payload?: { preferredAt?: string; preferredDate?: string; preferredTime?: string; reason?: string },
+  payload?: { date: string; availableFrom: string; availableUntil: string; timezone?: string },
 ): Promise<ScheduledJobInterview> {
   return rescheduleCandidateScheduledInterview(id, payload);
 }

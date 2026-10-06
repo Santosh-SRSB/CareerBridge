@@ -3,7 +3,13 @@
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { RESUME_TEMPLATES, type ResumeContent, type ResumeRecord } from '@careerbridge/shared';
+import {
+  RESUME_TEMPLATES,
+  aiSuggestionsUnavailableMessage,
+  type ResumeContent,
+  type ResumeRecord,
+} from '@careerbridge/shared';
+import { userFacingError } from '@/lib/client-errors';
 import { aiReviewResume, createResume, downloadResume, getCandidateMe, getResume, saveBase64File, savePassport, updateCandidateMe, updateResume } from '@/lib/api';
 import { downloadResumePdfFile } from '@/lib/resume-pdf';
 import { CandidateShell } from '@/components/CandidatePortal';
@@ -70,6 +76,7 @@ export default function ResumeEditorPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiReview, setAiReview] = useState<AiReviewData | null>(null);
   const [aiError, setAiError] = useState('');
+  const [aiNotice, setAiNotice] = useState('');
   const [approvedSuggestions, setApprovedSuggestions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -267,8 +274,14 @@ export default function ResumeEditorPage() {
           setResume({ ...resume, score: res.score });
         }
       }
-    } catch (err: any) {
-      setAiError(err?.message || 'Could not complete AI review at this time.');
+      setAiNotice(
+        res.aiAvailable === false || (res.provider && res.provider !== 'gemini')
+          ? aiSuggestionsUnavailableMessage(res.aiUnavailableReason)
+          : '',
+      );
+    } catch (err: unknown) {
+      setAiNotice('');
+      setAiError(userFacingError(err, 'analyze your resume with AI'));
     } finally {
       setAiLoading(false);
     }
@@ -792,9 +805,19 @@ export default function ResumeEditorPage() {
                 </div>
 
                 {aiError && (
-                  <div className="rounded-lg bg-red-50 p-3.5 text-xs text-red-700">
+                  <div role="alert" className="rounded-lg bg-red-50 p-3.5 text-xs text-red-700">
                     <p className="font-bold">Analysis error:</p>
                     <p className="mt-0.5">{aiError}</p>
+                    <p className="mt-0.5">You can continue editing manually.</p>
+                  </div>
+                )}
+                {aiNotice && !aiLoading && (
+                  <div
+                    role="alert"
+                    data-testid="ai-unavailable"
+                    className="rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs font-semibold text-amber-900"
+                  >
+                    {aiNotice} The score below comes from our standard ATS check.
                   </div>
                 )}
 

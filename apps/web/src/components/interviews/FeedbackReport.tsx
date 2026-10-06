@@ -7,8 +7,9 @@ import './FeedbackReport.css';
 
 export type FeedbackReportSkill = {
   name: string;
-  /** Score on a 1–10 scale */
-  score: number;
+  /** Score on a 1–10 scale; null when the dimension could not be measured */
+  score: number | null;
+  note?: string;
 };
 
 export type FeedbackReportPoint = {
@@ -208,9 +209,13 @@ export function FeedbackReport({
               {data.skills.map((skill) => (
                 <tr key={skill.name}>
                   <td>{skill.name}</td>
-                  <td style={{ color: skillScoreColor(skill.score), fontWeight: 700 }}>
-                    {clamp10(skill.score).toFixed(skill.score % 1 ? 1 : 0)}
-                  </td>
+                  {skill.score == null ? (
+                    <td className="fr-skills__na">{skill.note || 'Not measured'}</td>
+                  ) : (
+                    <td style={{ color: skillScoreColor(skill.score), fontWeight: 700 }}>
+                      {clamp10(skill.score).toFixed(skill.score % 1 ? 1 : 0)}
+                    </td>
+                  )}
                 </tr>
               ))}
               <tr className="fr-skills__total">
@@ -225,24 +230,28 @@ export function FeedbackReport({
         {data.feedbackPoints.length > 0 ? (
           <section className="fr-section">
             <h2 className="fr-section__title">Interviewer Feedback</h2>
-            <div className="fr-feedback-list">
-              {data.feedbackPoints.map((point, idx) => (
-                <div
-                  key={`${point.type}-${idx}`}
-                  className={
-                    point.type === 'good' ? 'fr-feedback fr-feedback--good' : 'fr-feedback fr-feedback--improve'
-                  }
-                >
-                  <span className="fr-feedback__icon" aria-hidden>
-                    {point.type === 'good' ? '✓' : '!'}
-                  </span>
-                  <p>
-                    <strong>{point.type === 'good' ? 'Good — ' : 'Need Improvement — '}</strong>
-                    {point.text}
-                  </p>
+            {(['good', 'improve'] as const).map((type) => {
+              const points = data.feedbackPoints.filter((point) => point.type === type);
+              if (!points.length) return null;
+              return (
+                <div key={type} className="fr-feedback-group">
+                  <h3 className="fr-feedback-group__title">{type === 'good' ? 'What you did well' : 'Areas to improve'}</h3>
+                  <div className="fr-feedback-list">
+                    {points.map((point, idx) => (
+                      <div
+                        key={`${type}-${idx}`}
+                        className={type === 'good' ? 'fr-feedback fr-feedback--good' : 'fr-feedback fr-feedback--improve'}
+                      >
+                        <span className="fr-feedback__icon" aria-hidden>
+                          {type === 'good' ? '✓' : '!'}
+                        </span>
+                        <p>{point.text}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </section>
         ) : null}
 

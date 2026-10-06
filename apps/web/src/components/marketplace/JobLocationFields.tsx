@@ -45,9 +45,10 @@ export function JobLocationFields({
         </select>
       </label>
 
-      <div className={!state ? 'pointer-events-none opacity-60' : undefined}>
+      <div>
         <GroupedSelect
           id="job-city"
+          disabled={!state}
           label="City (optional)"
           value={city}
           onChange={onCityChange}

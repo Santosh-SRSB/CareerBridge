@@ -28,8 +28,14 @@ import { readOwnedProfilePhotoDataUrl } from '../candidates/profile-photo.util';
 import { ResumeOptimizeAi } from './resume-optimize-ai';
 import { ResumeProcessorService } from './resume-processor.service';
 import { publicProcessingError } from './resume-eligibility';
+import { readableResumeUrl } from './resume-view-url.util';
 import { analyzeRoleResume, rewriteRoleResume, recommendCareerRoles } from './ats-engine';
-import { resolveResumeTemplateId, CAREERBRIDGE_RESUME_TEMPLATE } from '@careerbridge/shared';
+import {
+  resolveResumeTemplateId,
+  CAREERBRIDGE_RESUME_TEMPLATE,
+  fitResumeSummary,
+  type AiUnavailableReason,
+} from '@careerbridge/shared';
 import { extractProjectTechnologies, isPageMarkerText, isThinResumeContent, parseExtractedResumeText } from './parse-extracted-resume';
 
 @Injectable()
@@ -475,17 +481,25 @@ export class ResumesService {
         message: this.storage.getConfigurationError() || 'Cloud Storage is not configured.',
       });
     }
-    const url = await this.storage.getSignedUrl(objectPath, {
-      action: 'read',
-      expiresInMinutes: 30,
-    });
+    const mimeType = (resume.sourceStoragePath && resume.sourceMimeType) || 'application/pdf';
+    let view: Awaited<ReturnType<typeof readableResumeUrl>>;
+    try {
+      view = await readableResumeUrl(this.storage, objectPath, mimeType, 30);
+    } catch (err) {
+      this.logger.error(`Resume view failed for ${resume.id}: ${(err as Error).message}`);
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'The stored resume file could not be read. Please try again or re-upload it.',
+      });
+    }
     return {
       id: resume.id,
-      url,
+      url: view.url,
+      source: view.source,
       fileName: resume.sourceFileName || `${resume.title}.pdf`,
-      mimeType: resume.sourceMimeType || 'application/pdf',
+      mimeType,
       storagePath: objectPath,
-      expiresInMinutes: 30,
+      expiresInMinutes: view.source === 'signed' ? 30 : null,
     };
   }
 
@@ -938,13 +952,22 @@ export class ResumesService {
     const content = parseContent(resume.contentJson);
     const targetRole = input.targetRole?.trim() || resume.targetJobTitle || 'General Professional';
 
-    // Try Centralized AI Gateway (Gemini) first — time-box so a hang falls back to ATS.
+    // Time-box the gateway and cancel it (including pending retries) when the budget elapses; the
+    // deterministic ATS analysis below still runs, and the response says AI was unavailable and why.
+    let aiUnavailableReason: AiUnavailableReason = 'NOT_CONFIGURED';
     if (this.aiGateway.isConfigured()) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        const err = new Error('AI resume review timed out');
+        err.name = 'TimeoutError';
+        controller.abort(err);
+      }, 25_000);
       try {
-        const aiResult = await Promise.race([
-          this.aiGateway.reviewResume(content, targetRole, { userId }),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 25_000)),
-        ]);
+        const { data: aiResult, unavailableReason } = await this.aiGateway.reviewResumeWithStatus(
+          content,
+          targetRole,
+          { userId, signal: controller.signal },
+        );
         if (aiResult) {
           return {
             score: aiResult.score,
@@ -954,9 +977,16 @@ export class ResumesService {
             suggestedSections: aiResult.suggestedSections || {},
             suggestions: aiResult.suggestions || [],
             provider: 'gemini',
+            aiAvailable: true,
           };
         }
-      } catch {}
+        aiUnavailableReason = controller.signal.aborted ? 'TIMEOUT' : unavailableReason ?? 'FAILED';
+      } catch (err) {
+        this.logger.warn(`AI resume review failed: ${(err as Error).message}`);
+        aiUnavailableReason = controller.signal.aborted ? 'TIMEOUT' : 'FAILED';
+      } finally {
+        clearTimeout(timer);
+      }
     }
 
     // Deterministic ATS fallback
@@ -975,7 +1005,103 @@ export class ResumesService {
       suggestedSections: {},
       suggestions: [],
       provider: 'ats-engine',
+      aiAvailable: false,
+      aiUnavailableReason,
     };
+  }
+
+  /** Suggests a clearer professional summary; the candidate decides whether to use it. */
+  async improveSummary(
+    userId: string,
+    input: { summary?: string; targetRole?: string; profile?: Record<string, unknown>; avoid?: string[] },
+  ): Promise<
+    | { aiAvailable: true; improvedSummary: string }
+    | { aiAvailable: false; aiUnavailableReason: AiUnavailableReason }
+  > {
+    const summary = (input.summary || '').trim();
+    const profile = input.profile || {};
+    if (!summary && Object.keys(profile).length === 0) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Add a draft summary or some profile details before using AI.',
+      });
+    }
+    if (!this.aiGateway.isConfigured()) return { aiAvailable: false, aiUnavailableReason: 'NOT_CONFIGURED' };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const err = new Error('AI summary improvement timed out');
+      err.name = 'TimeoutError';
+      controller.abort(err);
+    }, 20_000);
+    try {
+      const avoid = cleanAvoidList(input.avoid);
+      const { data, unavailableReason } = await this.aiGateway.improveResumeSummaryWithStatus(
+        { summary, targetRole: input.targetRole?.trim() || undefined, profile, ...(avoid.length ? { avoidSuggestions: avoid } : {}) },
+        { userId, signal: controller.signal },
+      );
+      const fitted = fitResumeSummary(data?.improvedSummary);
+      if (fitted && !repeatsAvoided([fitted], avoid)) return { aiAvailable: true, improvedSummary: fitted };
+      return {
+        aiAvailable: false,
+        aiUnavailableReason: controller.signal.aborted ? 'TIMEOUT' : unavailableReason ?? 'FAILED',
+      };
+    } catch (err) {
+      this.logger.warn(`AI summary improvement failed: ${(err as Error).message}`);
+      return { aiAvailable: false, aiUnavailableReason: controller.signal.aborted ? 'TIMEOUT' : 'FAILED' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Suggests clearer bullets for one experience entry; the candidate decides whether to use them. */
+  async improveExperience(
+    userId: string,
+    input: { role?: string; company?: string; bullets?: string[]; targetRole?: string; avoid?: string[] },
+  ): Promise<
+    | { aiAvailable: true; improvedBullets: string[] }
+    | { aiAvailable: false; aiUnavailableReason: AiUnavailableReason }
+  > {
+    const role = (input.role || '').trim();
+    if (!role) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Add the job title before using AI.',
+      });
+    }
+    if (!this.aiGateway.isConfigured()) return { aiAvailable: false, aiUnavailableReason: 'NOT_CONFIGURED' };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const err = new Error('AI experience improvement timed out');
+      err.name = 'TimeoutError';
+      controller.abort(err);
+    }, 20_000);
+    try {
+      const avoid = cleanAvoidList(input.avoid);
+      const { data, unavailableReason } = await this.aiGateway.improveExperienceBulletsWithStatus(
+        {
+          role,
+          company: input.company?.trim() || undefined,
+          bullets: (input.bullets || []).map((b) => b.trim()).filter(Boolean),
+          targetRole: input.targetRole?.trim() || undefined,
+          ...(avoid.length ? { avoidSuggestions: avoid } : {}),
+        },
+        { userId, signal: controller.signal },
+      );
+      if (data?.improvedBullets.length && !repeatsAvoided([data.improvedBullets.join('\n')], avoid)) {
+        return { aiAvailable: true, improvedBullets: data.improvedBullets };
+      }
+      return {
+        aiAvailable: false,
+        aiUnavailableReason: controller.signal.aborted ? 'TIMEOUT' : unavailableReason ?? 'FAILED',
+      };
+    } catch (err) {
+      this.logger.warn(`AI experience improvement failed: ${(err as Error).message}`);
+      return { aiAvailable: false, aiUnavailableReason: controller.signal.aborted ? 'TIMEOUT' : 'FAILED' };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async careerGuidance(
@@ -1385,6 +1511,19 @@ function improvementLabels(changes: ResumeChangeRecord[]) {
 
 function asString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function cleanAvoidList(avoid: string[] | undefined): string[] {
+  return (avoid || []).map((s) => s.trim()).filter(Boolean).slice(0, 5);
+}
+
+const normalizeForCompare = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** True when "Try again" produced the same wording as a suggestion the candidate already saw. */
+export function repeatsAvoided(candidates: string[], avoid: string[]): boolean {
+  if (!avoid.length) return false;
+  const seen = new Set(avoid.map(normalizeForCompare));
+  return candidates.some((c) => seen.has(normalizeForCompare(c)));
 }
 
 function sanitizeUploadedContent(

@@ -17,6 +17,8 @@ import {
   setAdminCandidateStatus,
   setAdminEmployerStatus,
   setAdminJobStatus,
+  approveAdminJob,
+  rejectAdminJob,
   setPlatformAdminRole,
   setPlatformAdminStatus,
   setPlatformAdminPassword,
@@ -28,6 +30,7 @@ import {
   reviewAdminTestimonial,
 } from '@/lib/api';
 import { SuperAdminShell } from '@/components/super-admin/SuperAdminShell';
+import { PlatformCatalogSettings } from '@/components/super-admin/PlatformCatalogSettings';
 import {
   ActionBtn,
   DetailPanel,
@@ -47,6 +50,19 @@ import {
 } from '@/lib/admin-portal';
 import { beginEmployerImpersonation, getStoredUser, isPlatformRole, isSuperAdminRole } from '@/lib/session';
 import { RoleDashboardHome, roleDashboardHero } from '@/components/super-admin/role-dashboard-home';
+import {
+  ApplicationPipelinePanel,
+  CandidateFilterBar,
+  EMPTY_CANDIDATE_FILTERS,
+  FunnelConversionPanel,
+  RevenuePanel,
+  SkillMergeControl,
+  WhatsAppDeliveryPanel,
+  type CandidateFilters,
+} from '@/components/super-admin/admin-insights';
+import type { AdminFunnelStage, AdminWhatsAppDelivery } from '@/lib/api';
+import { userFacingError } from '@/lib/client-errors';
+import { sortRows } from '@/lib/table-sort';
 
 const TABS: SuperAdminNavId[] = [
   'dashboard',
@@ -153,6 +169,47 @@ function asRows(data: unknown): Array<Record<string, unknown>> {
   return data.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
 }
 
+type ListSort = 'default' | 'name-asc' | 'name-desc' | 'newest' | 'oldest' | 'status';
+
+const LIST_SORT_OPTIONS: Array<{ value: ListSort; label: string }> = [
+  { value: 'default', label: 'Sort: Default' },
+  { value: 'name-asc', label: 'Name A–Z' },
+  { value: 'name-desc', label: 'Name Z–A' },
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'status', label: 'Status' },
+];
+
+function rowName(row: Record<string, unknown>): string | null {
+  const value =
+    row.name ?? row.companyName ?? row.title ?? row.candidateName ?? row.fullName ?? row.email ?? null;
+  return value == null || value === '' ? null : String(value);
+}
+
+function rowTime(row: Record<string, unknown>): number | null {
+  const raw = row.createdAt ?? row.scheduledAt ?? null;
+  if (raw == null || raw === '') return null;
+  const time = new Date(String(raw)).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function sortAdminRows(rows: Array<Record<string, unknown>>, sort: ListSort) {
+  switch (sort) {
+    case 'name-asc':
+      return sortRows(rows, rowName, 'asc');
+    case 'name-desc':
+      return sortRows(rows, rowName, 'desc');
+    case 'newest':
+      return sortRows(rows, rowTime, 'desc');
+    case 'oldest':
+      return sortRows(rows, rowTime, 'asc');
+    case 'status':
+      return sortRows(rows, (row) => String(row.accountStatus ?? row.status ?? '') || null, 'asc');
+    default:
+      return rows;
+  }
+}
+
 export default function SuperAdminDashboardInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -164,8 +221,12 @@ export default function SuperAdminDashboardInner() {
   const [staffRole, setStaffRole] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  const [candidateFilters, setCandidateFilters] = useState<CandidateFilters>(EMPTY_CANDIDATE_FILTERS);
+  const [pipelineRefresh, setPipelineRefresh] = useState(0);
   const [metrics, setMetrics] = useState<AdminDashboard | null>(null);
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
+  const [listSort, setListSort] = useState<ListSort>('default');
+  const sortedRows = useMemo(() => sortAdminRows(rows, listSort), [rows, listSort]);
   const [listLoading, setListLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
@@ -177,6 +238,7 @@ export default function SuperAdminDashboardInner() {
     summary: Record<string, number>;
     inbox: Array<Record<string, unknown>>;
     whatsapp: Array<Record<string, unknown>>;
+    delivery?: AdminWhatsAppDelivery;
   } | null>(null);
   const [testimonials, setTestimonials] = useState<
     Array<{
@@ -243,6 +305,7 @@ export default function SuperAdminDashboardInner() {
     setOk('');
     setDetail(null);
     setStatusFilter('');
+    setCandidateFilters(EMPTY_CANDIDATE_FILTERS);
   }, [tab]);
 
   useEffect(() => {
@@ -260,19 +323,28 @@ export default function SuperAdminDashboardInner() {
       const q = nextQuery.trim();
       const params = new URLSearchParams();
       if (q) params.set('query', q);
-      if (statusFilter && (tab === 'jobs' || tab === 'applications' || tab === 'interviews')) {
+      if (
+        statusFilter &&
+        (tab === 'jobs' || tab === 'applications' || tab === 'interviews' || tab === 'candidates')
+      ) {
         params.set('status', statusFilter);
+      }
+      if (tab === 'candidates') {
+        if (candidateFilters.location) params.set('location', candidateFilters.location);
+        if (candidateFilters.skill) params.set('skill', candidateFilters.skill);
+        if (candidateFilters.from) params.set('from', candidateFilters.from);
+        if (candidateFilters.to) params.set('to', candidateFilters.to);
       }
       const suffix = params.toString() ? `?${params.toString()}` : '';
       const data = await getAdminList(`${tab}${suffix}`);
       let next = asRows(data);
-      if (statusFilter && (tab === 'candidates' || tab === 'employers' || tab === 'admins')) {
+      if (statusFilter && (tab === 'employers' || tab === 'admins')) {
         next = next.filter((row) => String(row.accountStatus ?? row.status ?? '') === statusFilter);
       }
       setRows(next);
-    } catch {
+    } catch (err) {
       setRows([]);
-      setError(`Could not load ${tab}.`);
+      setError(userFacingError(err, `load ${tab}`));
     } finally {
       setListLoading(false);
     }
@@ -358,18 +430,25 @@ export default function SuperAdminDashboardInner() {
         .finally(() => setListLoading(false));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, tab, appliedSearch, superAdmin, statusFilter, testimonialFilter]);
+  }, [ready, tab, appliedSearch, superAdmin, statusFilter, testimonialFilter, candidateFilters]);
 
   const reportBlocks = useMemo(() => {
     if (!reports) return [] as Array<{ title: string; entries: Array<[string, unknown]> }>;
-    return Object.entries(reports).map(([title, value]) => ({
-      title,
-      entries:
-        value && typeof value === 'object' && !Array.isArray(value)
-          ? Object.entries(value as Record<string, unknown>)
-          : [['value', value]],
-    }));
+    return Object.entries(reports)
+      .filter(([title]) => title !== 'funnel')
+      .map(([title, value]) => ({
+        title,
+        entries:
+          value && typeof value === 'object' && !Array.isArray(value)
+            ? Object.entries(value as Record<string, unknown>)
+            : [['value', value]],
+      }));
   }, [reports]);
+
+  const reportFunnel = useMemo(
+    () => (Array.isArray(reports?.funnel) ? (reports.funnel as AdminFunnelStage[]) : []),
+    [reports],
+  );
 
   async function runAction(id: string, action: () => Promise<unknown>, success: string) {
     setBusyId(id);
@@ -379,6 +458,7 @@ export default function SuperAdminDashboardInner() {
       await action();
       setOk(success);
       if (LIST_TABS.includes(tab)) await reloadList(appliedSearch);
+      if (tab === 'applications') setPipelineRefresh((n) => n + 1);
       if (tab === 'testimonials') {
         setTestimonials(await getAdminTestimonials(testimonialFilter || undefined));
       }
@@ -735,6 +815,7 @@ export default function SuperAdminDashboardInner() {
                     );
                   })}
                 </div>
+                <WhatsAppDeliveryPanel delivery={notifications?.delivery} />
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="border border-[#cfe9f5] bg-white">
                     <div className="bg-[#27a9e3] px-4 py-2 text-sm font-bold text-white">Inbox</div>
@@ -877,6 +958,9 @@ export default function SuperAdminDashboardInner() {
             {listLoading && !reports ? (
               <p className="text-sm text-[#888]">Loading reports…</p>
             ) : (
+              <>
+              <FunnelConversionPanel funnel={reportFunnel} />
+              <RevenuePanel />
               <div className="grid gap-4 md:grid-cols-2">
                 {reportBlocks.map((block, idx) => {
                   const accents = ['#1f9d68', '#0aa3c2', '#d97706', '#da542e', '#852b99'];
@@ -945,13 +1029,16 @@ export default function SuperAdminDashboardInner() {
                   );
                 })}
               </div>
+              </>
             )}
             {!listLoading && !reports && <p className="text-sm text-[#888]">No report data.</p>}
           </div>
         )}
 
+        {tab === 'settings' && superAdmin && <PlatformCatalogSettings />}
+
         {tab === 'settings' && superAdmin && (
-          <div className="border border-[#ddd] bg-white">
+          <div className="mt-4 border border-[#ddd] bg-white">
             <div className="bg-[#555] px-4 py-3 text-sm font-bold uppercase tracking-wide text-white">
               Platform configuration
             </div>
@@ -1052,7 +1139,21 @@ export default function SuperAdminDashboardInner() {
               onSubmit={onSearchSubmit}
               placeholder={`Search ${tab}…`}
               filter={
-                tab === 'jobs' ||
+                <>
+                <select
+                  value={listSort}
+                  onChange={(e) => setListSort(e.target.value as ListSort)}
+                  aria-label="Sort list"
+                  data-testid="admin-list-sort"
+                  className="min-h-12 border border-[#ddd] bg-white px-3 py-2 text-sm"
+                >
+                  {LIST_SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {tab === 'jobs' ||
                 tab === 'applications' ||
                 tab === 'interviews' ||
                 tab === 'candidates' ||
@@ -1061,6 +1162,7 @@ export default function SuperAdminDashboardInner() {
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
+                    aria-label="Filter by status"
                     className="border border-[#ddd] bg-white px-3 py-2 text-sm"
                   >
                     <option value="">All statuses</option>
@@ -1086,7 +1188,7 @@ export default function SuperAdminDashboardInner() {
                         </option>
                       ))}
                     {tab === 'interviews' &&
-                      ['PROPOSED', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULE_REQUESTED', 'COMPLETED', 'CANCELLED'].map(
+                      ['PROPOSED', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED', 'COMPLETED', 'CANCELLED'].map(
                         (s) => (
                           <option key={s} value={s}>
                             {s}
@@ -1100,9 +1202,14 @@ export default function SuperAdminDashboardInner() {
                         </option>
                       ))}
                   </select>
-                ) : null
+                ) : null}
+                </>
               }
             />
+
+            {tab === 'candidates' && <CandidateFilterBar value={candidateFilters} onApply={setCandidateFilters} />}
+
+            {tab === 'applications' && <ApplicationPipelinePanel refreshKey={pipelineRefresh} />}
 
             {tab === 'skills' && canManageSkills(staffRole) && (
               <div className="border border-[#e4d0ec] bg-[#fbf6fd] p-4">
@@ -1204,7 +1311,7 @@ export default function SuperAdminDashboardInner() {
 
             {tab === 'candidates' && !listLoading && rows.length > 0 && (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {rows.map((row) => {
+                {sortedRows.map((row) => {
                   const id = String(row.id ?? '');
                   const status = String(row.accountStatus ?? '');
                   const name = String(row.name ?? '—');
@@ -1277,7 +1384,7 @@ export default function SuperAdminDashboardInner() {
 
             {tab === 'employers' && !listLoading && rows.length > 0 && (
               <div className="grid gap-3 md:grid-cols-2">
-                {rows.map((row) => {
+                {sortedRows.map((row) => {
                   const id = String(row.id ?? '');
                   const status = String(row.accountStatus ?? '');
                   const verified = Boolean(row.verified);
@@ -1343,7 +1450,7 @@ export default function SuperAdminDashboardInner() {
 
             {tab === 'jobs' && !listLoading && rows.length > 0 && (
               <div className="space-y-2">
-                {rows.map((row) => {
+                {sortedRows.map((row) => {
                   const id = String(row.id ?? '');
                   const status = String(row.status ?? '');
                   const bar =
@@ -1351,7 +1458,9 @@ export default function SuperAdminDashboardInner() {
                       ? '#28b779'
                       : status === 'PAUSED'
                         ? '#ffb848'
-                        : status === 'CLOSED'
+                        : status === 'PENDING_REVIEW'
+                          ? '#d97706'
+                          : status === 'CLOSED'
                           ? '#da542e'
                           : '#27a9e3';
                   return (
@@ -1369,7 +1478,29 @@ export default function SuperAdminDashboardInner() {
                           <ActionBtn accent="#ffb848" onClick={() => void openDetail('jobs', id)}>
                             View
                           </ActionBtn>
-                          {canManageJobs(staffRole) ? (
+                          {canManageJobs(staffRole) && status === 'PENDING_REVIEW' ? (
+                            <>
+                              <ActionBtn
+                                accent="#28b779"
+                                disabled={!id || busyId === id}
+                                onClick={() =>
+                                  void runAction(id, () => approveAdminJob(id), 'Job approved and published.')
+                                }
+                              >
+                                Approve
+                              </ActionBtn>
+                              <ActionBtn
+                                danger
+                                disabled={!id || busyId === id}
+                                onClick={() =>
+                                  void runAction(id, () => rejectAdminJob(id), 'Job rejected and returned to the employer.')
+                                }
+                              >
+                                Reject
+                              </ActionBtn>
+                            </>
+                          ) : null}
+                          {canManageJobs(staffRole) && status !== 'PENDING_REVIEW' ? (
                             <>
                               <ActionBtn
                                 accent="#28b779"
@@ -1410,7 +1541,7 @@ export default function SuperAdminDashboardInner() {
 
             {tab === 'applications' && !listLoading && rows.length > 0 && (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {rows.map((row) => (
+                {sortedRows.map((row) => (
                   <article
                     key={String(row.id)}
                     className="relative overflow-hidden border border-[#f3d5cb] bg-[#fff9f7] p-4"
@@ -1434,7 +1565,7 @@ export default function SuperAdminDashboardInner() {
 
             {tab === 'interviews' && !listLoading && rows.length > 0 && (
               <div className="space-y-3">
-                {rows.map((row) => (
+                {sortedRows.map((row) => (
                   <article
                     key={String(row.id)}
                     className="grid gap-3 border border-[#d5dff0] bg-white p-4 md:grid-cols-[140px_1fr_auto]"
@@ -1465,7 +1596,7 @@ export default function SuperAdminDashboardInner() {
             {tab === 'skills' && !listLoading && rows.length > 0 && (
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
-                  {rows.map((row) => (
+                  {sortedRows.map((row) => (
                     <span
                       key={`chip-${String(row.id)}`}
                       className="rounded-full px-3 py-1 text-xs font-bold text-white"
@@ -1487,7 +1618,7 @@ export default function SuperAdminDashboardInner() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((row) => {
+                      {sortedRows.map((row) => {
                         const id = String(row.id ?? '');
                         const active = Boolean(row.active);
                         return (
@@ -1539,6 +1670,25 @@ export default function SuperAdminDashboardInner() {
                                   >
                                     {active ? 'Deactivate' : 'Activate'}
                                   </ActionBtn>
+                                  {active && (
+                                    <SkillMergeControl
+                                      source={{ id, name: String(row.name ?? '') }}
+                                      skills={rows.map((r) => ({
+                                        id: String(r.id ?? ''),
+                                        name: String(r.name ?? ''),
+                                        active: Boolean(r.active),
+                                      }))}
+                                      onMerged={(message) => {
+                                        setError('');
+                                        setOk(message);
+                                        void reloadList(appliedSearch);
+                                      }}
+                                      onError={(message) => {
+                                        setOk('');
+                                        setError(message);
+                                      }}
+                                    />
+                                  )}
                                 </div>
                               ) : (
                                 '—'
@@ -1555,7 +1705,7 @@ export default function SuperAdminDashboardInner() {
 
             {tab === 'admins' && !listLoading && rows.length > 0 && (
               <div className="grid gap-3 md:grid-cols-2">
-                {rows.map((row) => {
+                {sortedRows.map((row) => {
                   const id = String(row.id ?? '');
                   const status = String(row.status ?? '');
                   const role = String(row.userType ?? '');

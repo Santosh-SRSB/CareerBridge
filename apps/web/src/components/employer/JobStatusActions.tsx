@@ -2,6 +2,15 @@
 
 import { useState } from 'react';
 import { closeEmployerJob, pauseEmployerJob, publishEmployerJob } from '@/lib/api';
+import { toast } from '@/components/ui/Toast';
+import { userFacingError } from '@/lib/client-errors';
+import { jobPublishToast } from '@/lib/job-status';
+
+const ACTION_TEXT = {
+  publish: 'publish job',
+  pause: 'pause job',
+  close: 'close job',
+} as const;
 
 type Props = {
   jobId: string;
@@ -23,8 +32,12 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
 
     setBusy(action);
     try {
-      await fn();
+      const result = await fn();
+      if (action === 'publish') toast.success(jobPublishToast(result));
+      else toast.success(action === 'pause' ? 'Job paused' : 'Job closed');
       await onUpdated?.();
+    } catch (err) {
+      toast.error(userFacingError(err, ACTION_TEXT[action]));
     } finally {
       setBusy(null);
     }
@@ -33,6 +46,15 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
   if (status === 'CLOSED') {
     if (compact) return null;
     return <p className="text-xs font-semibold text-muted">This position is closed.</p>;
+  }
+
+  if (status === 'PENDING_REVIEW') {
+    if (compact) return null;
+    return (
+      <p className="text-xs font-semibold text-amber-900">
+        Waiting for CareerBridge approval. Candidates will see this job once it is approved.
+      </p>
+    );
   }
 
   if (compact) {

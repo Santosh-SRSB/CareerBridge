@@ -186,7 +186,7 @@ function DesktopNavLink({
     >
       {label}
       {typeof badge === 'number' && badge > 0 ? (
-        <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#f0803c] px-1 text-[10px] font-bold text-white">
+        <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c2410c] px-1 text-[10px] font-bold text-white">
           {badge > 9 ? '9+' : badge}
         </span>
       ) : null}
@@ -377,14 +377,9 @@ export function CandidateAppShell({
     };
   }, [hoverKey, currentTab, carouselTick, mobileCarousel]);
 
-  /** Mobile: Home · Apps · Jobs (center) · Interviews · auto-swiping Resume/ATS */
+  /** Mobile: Home · Jobs · Applications · Interviews · Profile (Resume and ATS live in the account menu). */
   const mobileNavItems = useMemo(
-    () => [
-      NAV_HOME,
-      { ...NAV_APPLICATIONS, label: 'Apps' },
-      NAV_JOBS,
-      { ...NAV_INTERVIEWS, label: 'Interview' },
-    ],
+    () =>     [NAV_HOME, NAV_JOBS, NAV_APPLICATIONS, NAV_INTERVIEWS, NAV_PROFILE],
     [],
   );
 
@@ -441,7 +436,7 @@ export function CandidateAppShell({
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#f0803c] text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(240,128,60,0.35)] ring-2 ring-white/15"
+              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#c2410c] text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(240,128,60,0.35)] ring-2 ring-white/15"
               aria-label="Account menu"
               aria-expanded={menuOpen}
             >
@@ -560,7 +555,7 @@ export function CandidateAppShell({
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#f0803c] text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(240,128,60,0.35)] ring-2 ring-white/15"
+              className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#c2410c] text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(240,128,60,0.35)] ring-2 ring-white/15"
               aria-label="Account menu"
               aria-expanded={menuOpen}
             >
@@ -590,7 +585,7 @@ export function CandidateAppShell({
               aria-label="Close menu"
               onClick={() => setMenuOpen(false)}
             />
-            <div className="absolute right-[150px] top-[84px] z-50 min-w-[160px] rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+            <div className="absolute right-3 top-[60px] z-50 min-w-[160px] rounded-2xl border border-slate-200 bg-white p-2 shadow-lg md:right-[150px] md:top-[84px]">
               <Link
                 href="/profile"
                 className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -671,8 +666,9 @@ export function CandidateAppShell({
               <div key={item.id} className="relative flex flex-1 flex-col items-center">
                 <Link
                   href={item.href}
-                  className={`flex w-full flex-col items-center gap-0 py-0.5 text-[9px] font-semibold leading-tight ${
-                    isActive ? 'text-white' : 'text-white/65'
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex w-full flex-col items-center gap-0 py-0.5 text-[10px] font-semibold leading-tight ${
+                    isActive ? 'text-white' : 'text-white/75'
                   }`}
                 >
                   <span
@@ -690,47 +686,6 @@ export function CandidateAppShell({
             );
           })}
 
-          {/* Auto-swiping Resume ⇄ ATS */}
-          <div className="relative flex flex-1 flex-col items-center overflow-hidden">
-            <Link
-              href={mobileCarouselItem.href}
-              onClick={onMobileResumeAtsClick}
-              className={`flex w-full flex-col items-center py-0.5 text-[9px] font-semibold leading-tight ${
-                currentTab === 'resumes' || currentTab === 'ats'
-                  ? 'text-white'
-                  : 'text-white/65'
-              }`}
-              aria-label={
-                mobileCarousel === 'ats' ? 'Open ATS Score' : 'Open View Resume'
-              }
-            >
-              <span
-                key={carouselTick}
-                className="cb-nav-swipe flex flex-col items-center gap-0"
-              >
-                <span
-                  className={`flex h-[5vw] w-[5vw] max-h-[18px] max-w-[18px] min-h-[14px] min-w-[14px] items-center justify-center rounded-full ${
-                    currentTab === mobileCarouselItem.id ? 'bg-white text-[#0a2e2c]' : ''
-                  }`}
-                >
-                  {mobileCarouselItem.icon(currentTab === mobileCarouselItem.id)}
-                </span>
-                <span>{mobileCarouselItem.label}</span>
-              </span>
-            </Link>
-            <span className="mt-0.5 flex gap-0.5" aria-hidden>
-              <span
-                className={`h-0.5 w-0.5 rounded-full ${
-                  mobileCarousel === 'resumes' ? 'bg-white' : 'bg-white/35'
-                }`}
-              />
-              <span
-                className={`h-0.5 w-0.5 rounded-full ${
-                  mobileCarousel === 'ats' ? 'bg-white' : 'bg-white/35'
-                }`}
-              />
-            </span>
-          </div>
         </div>
       </nav>
     </div>

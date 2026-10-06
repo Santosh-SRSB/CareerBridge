@@ -1,25 +1,24 @@
+import { OTP_EXPIRED_MESSAGE } from '@careerbridge/shared';
+
 const FIREBASE_CODES: Record<string, string> = {
   'auth/captcha-check-failed':
     'Verification could not be completed. Please try again.',
   'auth/invalid-verification-code': 'The OTP is incorrect.',
-  'auth/code-expired': 'This OTP has expired. Please request a new one.',
+  'auth/code-expired': OTP_EXPIRED_MESSAGE,
   'auth/too-many-requests': 'Too many attempts. Please wait and try again later.',
-  'auth/quota-exceeded':
-    'Too many OTP requests for this number. Wait a while, or use a Firebase test phone number.',
-  'auth/error-code:-39':
-    'Too many OTP requests for this number. Wait a while, or use a Firebase test phone number.',
+  'auth/quota-exceeded': 'Too many OTP requests for this number. Please wait a while and try again.',
+  'auth/error-code:-39': 'Too many OTP requests for this number. Please wait a while and try again.',
   'auth/invalid-verification-id': 'Please request a new OTP.',
-  'auth/session-expired': 'This OTP has expired. Please request a new one.',
+  'auth/session-expired': OTP_EXPIRED_MESSAGE,
   'auth/missing-verification-code': 'Enter the 6-digit OTP.',
-  'auth/invalid-phone-number': 'Enter a valid mobile number.',
-  'auth/operation-not-allowed': 'Phone OTP is not enabled in Firebase yet.',
+  'auth/invalid-phone-number': 'Please enter a valid mobile number.',
+  'auth/operation-not-allowed':
+    'Mobile verification is temporarily unavailable. Please try again later.',
   'auth/billing-not-enabled':
-    'Firebase Phone OTP needs billing enabled for real SMS. Use a test phone number for local setup.',
-  FIREBASE_NOT_CONFIGURED: 'Firebase OTP is not configured yet. Add NEXT_PUBLIC_FIREBASE_* in apps/web/.env.local.',
-  OTP_EXPIRED: 'This OTP has expired. Please request a new one.',
+    'Mobile verification is temporarily unavailable. Please try again later.',
+  FIREBASE_NOT_CONFIGURED: 'Mobile verification is temporarily unavailable. Please try again later.',
+  OTP_EXPIRED: OTP_EXPIRED_MESSAGE,
   INVALID_OTP: 'The OTP is incorrect.',
-  ACCOUNT_EXISTS: 'An account already exists with this phone/email. Please sign in.',
-  DUPLICATE_RESOURCE: 'An account already exists with this phone/email. Please sign in.',
 };
 
 export function authErrorMessage(err: unknown, stage: 'request' | 'verify') {
@@ -49,7 +48,7 @@ export function authErrorMessage(err: unknown, stage: 'request' | 'verify') {
     }
     if (code === 'ACCOUNT_EXISTS' || code === 'DUPLICATE_RESOURCE') {
       if (err instanceof Error && err.message) return err.message;
-      return 'An account already exists with this email or mobile. Please sign in.';
+      return 'This account is already registered. Please login.';
     }
     if (err instanceof Error && err.message) {
       return err.message;
@@ -63,7 +62,7 @@ export function authErrorMessage(err: unknown, stage: 'request' | 'verify') {
   }
   if (code === 'ACCOUNT_EXISTS' || code === 'DUPLICATE_RESOURCE') {
     if (err instanceof Error && err.message) return err.message;
-    return 'An account already exists with this email or mobile. Please sign in.';
+    return 'This account is already registered. Please login.';
   }
   if (code === 'TOO_MANY_ATTEMPTS') {
     return "You've reached the maximum number of attempts. Please try again later.";

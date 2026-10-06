@@ -1,76 +1,19 @@
 'use client';
 
+import { userFacingError } from '@/lib/client-errors';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import { JobRoleCombobox } from '@/components/marketplace/JobRoleCombobox';
-import { createLiveInterview, getCandidateMe, startLiveInterview } from '@/lib/api';
+import { createLiveInterview, getCandidateMe, getJobRoles, startLiveInterview } from '@/lib/api';
+import { detectRoleCategory, uniqueRoles } from '@careerbridge/shared';
 
-const ROLE_CATALOG: Record<string, string[]> = {
-  IT: [
-    'Full Stack Developer',
-    'Frontend Developer',
-    'Backend Developer',
-    'Software Developer',
-    'Software Engineer',
-    'Data Analyst',
-    'DevOps Engineer',
-    'QA Engineer',
-    'Mobile App Developer',
-    'React Developer',
-    'Java Developer',
-    'Python Developer',
-  ],
-  FINANCE: [
-    'Accountant',
-    'Financial Analyst',
-    'Accounts Executive',
-    'Auditor',
-    'Tax Consultant',
-    'Finance Executive',
-  ],
-  HR: [
-    'HR Executive',
-    'Talent Acquisition',
-    'HR Generalist',
-    'People Operations',
-    'Recruiter',
-  ],
-  SALES: [
-    'Sales Executive',
-    'Business Development Executive',
-    'Account Manager',
-    'Retail Associate',
-  ],
-  MARKETING: [
-    'Marketing Executive',
-    'Digital Marketing Executive',
-    'Content Marketer',
-    'Brand Executive',
-  ],
-  GENERAL: [
-    'Customer Service Executive',
-    'Front Office Executive',
-    'Business Analyst',
-    'Operations Executive',
-  ],
-};
-
-const OTHER_OPTION = 'Other (type your role)';
-
-function detectCategory(interests: string[]): keyof typeof ROLE_CATALOG {
-  const blob = interests.join(' ').toLowerCase();
-  if (/\b(it|software|developer|engineer|tech|data|qa|devops)\b/.test(blob)) return 'IT';
-  if (/\b(finance|account|caf|tax|audit|banking)\b/.test(blob)) return 'FINANCE';
-  if (/\b(hr|human resource|talent|recruit)\b/.test(blob)) return 'HR';
-  if (/\b(sales|bdm|business development|retail)\b/.test(blob)) return 'SALES';
-  if (/\b(market|digital|seo|content|brand)\b/.test(blob)) return 'MARKETING';
-  return 'GENERAL';
-}
-
-const QUESTION_COUNTS = [5, 8, 10];
+const QUESTION_COUNTS = [5, 10, 15];
+const DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'] as const;
+type Difficulty = (typeof DIFFICULTIES)[number];
+const ROLES_ERROR = 'Unable to load job roles. Please try again.';
 
 function PushPinIcon() {
   return (
@@ -121,56 +64,64 @@ export default function MockInterviewSetupPage() {
   const searchParams = useSearchParams();
   const roleFromUrl = searchParams.get('role')?.trim() || '';
 
-  const [jobRole, setJobRole] = useState(roleFromUrl || ROLE_CATALOG.IT[0]);
-  const [customRole, setCustomRole] = useState('');
-  const [interviewType, setInterviewType] = useState<'GENERIC' | 'ROLE'>(roleFromUrl ? 'ROLE' : 'GENERIC');
+  const [jobRole, setJobRole] = useState(roleFromUrl);
+  const [interviewType, setInterviewType] = useState<'GENERIC' | 'ROLE'>('ROLE');
   const [questionCount, setQuestionCount] = useState(5);
+  const [difficulty, setDifficulty] = useState<Difficulty>('Intermediate');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [roleOptions, setRoleOptions] = useState([...ROLE_CATALOG.IT, OTHER_OPTION]);
+  const [roleError, setRoleError] = useState('');
+  const [roleOptions, setRoleOptions] = useState<string[]>(roleFromUrl ? [roleFromUrl] : []);
+  const [rolesLoading, setRolesLoading] = useState(true);
+  const [rolesError, setRolesError] = useState('');
+  const [rolesAttempt, setRolesAttempt] = useState(0);
 
   useEffect(() => {
-    void getCandidateMe()
-      .then((profile) => {
-        const fromProfile = (profile.careerInterests || []).filter(Boolean);
-        const category = detectCategory(fromProfile);
-        const catalog = ROLE_CATALOG[category] || ROLE_CATALOG.GENERAL;
-        const merged = [
-          ...new Set([roleFromUrl, ...fromProfile, ...catalog, OTHER_OPTION].filter(Boolean)),
-        ];
-        setRoleOptions(merged);
-        if (roleFromUrl) {
-          setJobRole(roleFromUrl);
-        } else if (fromProfile[0]) {
-          setJobRole(fromProfile[0]);
-        } else {
-          setJobRole(catalog[0]);
-        }
+    let active = true;
+    setRolesLoading(true);
+    setRolesError('');
+    Promise.all([getJobRoles(), getCandidateMe().catch(() => null)])
+      .then(([roles, profile]) => {
+        if (!active) return;
+        const fromProfile = (profile?.careerInterests || []).filter(Boolean);
+        const category = detectRoleCategory(fromProfile);
+        const otherCatalog = Object.entries(roles.catalog)
+          .filter(([key]) => key !== category)
+          .flatMap(([, list]) => list);
+        setRoleOptions(
+          uniqueRoles([roleFromUrl, ...fromProfile, ...(roles.catalog[category] || []), ...roles.fromJobs, ...otherCatalog]),
+        );
+        setJobRole((current) => current || roleFromUrl || fromProfile[0] || '');
       })
       .catch(() => {
-        const fallback = [...ROLE_CATALOG.GENERAL, OTHER_OPTION];
-        setRoleOptions(roleFromUrl ? [roleFromUrl, ...fallback] : fallback);
-        if (roleFromUrl) setJobRole(roleFromUrl);
+        if (active) setRolesError(ROLES_ERROR);
+      })
+      .finally(() => {
+        if (active) setRolesLoading(false);
       });
-  }, [roleFromUrl]);
+    return () => {
+      active = false;
+    };
+  }, [roleFromUrl, rolesAttempt]);
 
   const durationLimitMin = useMemo(() => Math.max(45, questionCount * 6), [questionCount]);
-  const pickingOther = jobRole === OTHER_OPTION;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const role = (pickingOther ? customRole : jobRole).trim();
+    const role = jobRole.trim();
     if (role.length < 2) {
-      setError(pickingOther ? 'Type your job role.' : 'Please enter a job role.');
+      setRoleError('Please select a job role');
       return;
     }
 
+    setRoleError('');
     setLoading(true);
     setError('');
     try {
       const session = await createLiveInterview({
         jobRole: role,
         interviewType: interviewType === 'GENERIC' ? 'BEHAVIOURAL' : 'ROLE',
+        difficulty,
         questionCount,
         durationLimitMin,
         source: 'PASSPORT',
@@ -178,7 +129,7 @@ export default function MockInterviewSetupPage() {
       await startLiveInterview(session.id);
       router.push(`/interviews/mock/${session.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start mock interview. Please try again.');
+      setError(userFacingError(err, 'start interview'));
     } finally {
       setLoading(false);
     }
@@ -245,28 +196,58 @@ export default function MockInterviewSetupPage() {
             onSubmit={(event) => void onSubmit(event)}
             className="space-y-5 rounded-[22px] border border-[#d7eef6] bg-white p-5 shadow-[0_12px_32px_rgba(47,143,173,0.12)] sm:p-6"
           >
-            <JobRoleCombobox
-              value={jobRole}
-              options={roleOptions}
-              onChange={(next) => {
-                setJobRole(next);
-                if (next !== OTHER_OPTION) setCustomRole('');
-              }}
-              showHint={false}
-            />
-            {pickingOther ? (
-              <input
-                className="mt-3 w-full rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm font-semibold text-[#0a2e2c] outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/20"
-                value={customRole}
-                onChange={(e) => setCustomRole(e.target.value)}
-                placeholder="Type your job role"
+            <div>
+              <JobRoleCombobox
+                value={jobRole}
+                options={roleOptions}
+                onChange={(next) => {
+                  setJobRole(next);
+                  if (next.trim().length >= 2) setRoleError('');
+                }}
+                showHint={false}
                 required
+                loading={rolesLoading}
+                invalid={Boolean(roleError)}
+                describedBy={roleError ? 'mock-role-error' : rolesError ? 'mock-roles-load-error' : undefined}
               />
-            ) : null}
+              {roleError ? (
+                <p id="mock-role-error" role="alert" className="mt-2 text-sm font-semibold text-red-700">
+                  {roleError}
+                </p>
+              ) : null}
+              {rolesError ? (
+                <p id="mock-roles-load-error" role="alert" className="mt-2 text-sm text-red-700">
+                  {rolesError}{' '}
+                  <button
+                    type="button"
+                    className="font-bold underline"
+                    onClick={() => setRolesAttempt((n) => n + 1)}
+                  >
+                    Retry
+                  </button>
+                  <span className="block text-xs text-[#4a6b72]">You can still type your job role.</span>
+                </p>
+              ) : null}
+            </div>
 
             <fieldset>
               <legend className="mb-2.5 text-sm font-bold text-[#0a2e2c]">Interview Type</legend>
               <div className="space-y-3">
+                <label className="flex cursor-pointer items-start gap-2.5">
+                  <input
+                    type="radio"
+                    name="interviewType"
+                    checked={interviewType === 'ROLE'}
+                    onChange={() => setInterviewType('ROLE')}
+                    className="mt-1 h-4 w-4 accent-[#0a2e2c]"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-[#0a2e2c]">Role Specific</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-[#4a6b72]">
+                      Uses your resume, profile, skills, projects, and selected job role automatically.
+                    </span>
+                  </span>
+                </label>
                 <label className="flex cursor-pointer items-start gap-2.5">
                   <input
                     type="radio"
@@ -277,26 +258,37 @@ export default function MockInterviewSetupPage() {
                   />
                   <span>
                     <span className="block text-sm font-semibold text-[#0a2e2c]">Generic</span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-[#5a7a82]">
+                    <span className="mt-0.5 block text-xs leading-relaxed text-[#4a6b72]">
                       Communication, behavioural, and professional readiness — not purely technical.
                     </span>
                   </span>
                 </label>
-                <label className="flex cursor-pointer items-start gap-2.5">
-                  <input
-                    type="radio"
-                    name="interviewType"
-                    checked={interviewType === 'ROLE'}
-                    onChange={() => setInterviewType('ROLE')}
-                    className="mt-1 h-4 w-4 accent-[#0a2e2c]"
-                  />
-                  <span>
-                    <span className="block text-sm font-semibold text-[#0a2e2c]">Role-Based</span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-[#5a7a82]">
-                      Uses your resume, profile, skills, projects, and selected job role automatically.
-                    </span>
-                  </span>
-                </label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend className="mb-2.5 text-sm font-bold text-[#0a2e2c]">Difficulty Level</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {DIFFICULTIES.map((level) => (
+                  <label
+                    key={level}
+                    className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-2 py-2.5 text-sm font-semibold ${
+                      difficulty === level
+                        ? 'border-[#0a2e2c] bg-[#e8f6fb] text-[#0a2e2c]'
+                        : 'border-[#cfe6ee] bg-[#f7fcfe] text-[#35565f]'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="difficulty"
+                      value={level}
+                      checked={difficulty === level}
+                      onChange={() => setDifficulty(level)}
+                      className="h-4 w-4 accent-[#0a2e2c]"
+                    />
+                    {level}
+                  </label>
+                ))}
               </div>
             </fieldset>
 
@@ -318,7 +310,11 @@ export default function MockInterviewSetupPage() {
               </select>
             </div>
 
-            {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}
+            {error ? (
+              <p role="alert" className="text-sm font-semibold text-red-700">
+                {error}
+              </p>
+            ) : null}
 
             <button
               type="submit"

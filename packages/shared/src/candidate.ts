@@ -25,6 +25,12 @@ export type CandidateProfile = {
   careerInterests: string[];
   hasExperience: string | null;
   noticePeriod?: string | null;
+  employmentStatus?: string | null;
+  experienceRange?: string | null;
+  expectedSalaryMin?: number | null;
+  expectedSalaryMax?: number | null;
+  preferredJobTypes?: string[];
+  onboardingSkippedSteps?: number[];
   profileCompletion: number;
   onboardingCompleted: boolean;
   dashboardReached?: boolean;
@@ -206,6 +212,12 @@ export type UpdateCandidatePayload = {
   careerInterests?: string[];
   hasExperience?: string;
   noticePeriod?: string;
+  employmentStatus?: string;
+  experienceRange?: string;
+  expectedSalaryMin?: number | null;
+  expectedSalaryMax?: number | null;
+  preferredJobTypes?: string[];
+  onboardingSkippedSteps?: number[];
   experienceLevel?: 'fresher' | 'experienced';
   totalExperienceYears?: string;
   totalExperienceMonths?: string;

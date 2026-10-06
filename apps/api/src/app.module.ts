@@ -15,6 +15,7 @@ import { MatchingModule } from './matching/matching.module';
 import { EmployersModule } from './employers/employers.module';
 import { AdminModule } from './admin/admin.module';
 import { LocationsModule } from './locations/locations.module';
+import { CatalogModule } from './catalog/catalog.module';
 import { SkillsModule } from './skills/skills.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { GstModule } from './gst/gst.module';
@@ -54,6 +55,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     EmployersModule,
     AdminModule,
     LocationsModule,
+    CatalogModule,
     SkillsModule,
     IntelligenceModule,
     GstModule,

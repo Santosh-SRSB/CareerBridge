@@ -1,24 +1,5 @@
 import type { ReminderKind } from './whatsapp.types';
 
-/** Default offered reschedule offsets (hours after current scheduledAt). */
-export const DEFAULT_RESCHEDULE_OFFSET_HOURS = [3, 5, 27] as const;
-
-export function buildDefaultRescheduleSlots(from: Date, offsetsHours = DEFAULT_RESCHEDULE_OFFSET_HOURS) {
-  return offsetsHours.map((hours) => new Date(from.getTime() + hours * 60 * 60 * 1000));
-}
-
-/**
- * Revalidate a slot at selection time — must match an offered slot (±2s).
- * Do not trust the client ISO alone.
- */
-export function isOfferedRescheduleSlot(scheduledAt: Date, slotIso: string, now = Date.now()) {
-  const next = new Date(slotIso);
-  if (Number.isNaN(next.getTime())) return false;
-  if (next.getTime() <= now - 60_000) return false;
-  const offered = buildDefaultRescheduleSlots(scheduledAt);
-  return offered.some((slot) => Math.abs(slot.getTime() - next.getTime()) <= 2_000);
-}
-
 const REMINDER_MS: Record<ReminderKind, number> = {
   '24h': 24 * 60 * 60 * 1000,
   '2h': 2 * 60 * 60 * 1000,
@@ -66,4 +47,17 @@ export function phonesMatch(a: string | null | undefined, b: string | null | und
   if (da === db) return true;
   const norm = (d: string) => (d.length === 10 ? `91${d}` : d.startsWith('91') && d.length > 10 ? d : d);
   return norm(da) === norm(db);
+}
+
+/**
+ * Outbound WhatsApp consent: only candidates who opted in, only to the number they opted in with
+ * (registration stores it in whatsappNumber). The login phone is never used as a fallback.
+ */
+export function consentedWhatsAppNumber(candidate: {
+  whatsappOptIn?: boolean | null;
+  whatsappNumber?: string | null;
+}): string | null {
+  if (!candidate.whatsappOptIn) return null;
+  const number = candidate.whatsappNumber?.trim();
+  return number && /\d{10,}/.test(number.replace(/\D/g, '')) ? number : null;
 }

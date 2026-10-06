@@ -1,10 +1,12 @@
 'use client';
 
+import { toast } from '@/components/ui/Toast';
+import { userFacingError } from '@/lib/client-errors';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { EmployerApplication } from '@careerbridge/shared';
-import { normalizeHttpUrl } from '@careerbridge/shared';
+import { normalizeHttpUrl, timeSlots } from '@careerbridge/shared';
 import { listEmployerApplications, listEmployerJobs, scheduleEmployerInterview } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +19,7 @@ const MODES = [
 ] as const;
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 90];
+const INTERVIEW_TIME_SLOTS = timeSlots(7, 22);
 
 function candidateName(app: EmployerApplication) {
   return [app.candidate.firstName, app.candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
@@ -126,7 +129,7 @@ export default function EmployerScheduleInterviewPage() {
     setSaving(true);
     setError('');
     try {
-      await scheduleEmployerInterview({
+      const created = await scheduleEmployerInterview({
         applicationId,
         scheduledAt: scheduledAt.toISOString(),
         durationMin: Number(durationMin) || 30,
@@ -136,13 +139,14 @@ export default function EmployerScheduleInterviewPage() {
         notifyWhatsApp,
         notifyEmail,
       });
-      router.push(
-        notifyWhatsApp
-          ? '/employer/interviews?scheduled=1&wa=queued'
-          : '/employer/interviews?scheduled=1',
-      );
+      const params = new URLSearchParams({ scheduled: '1' });
+      if (created.delivery?.whatsapp) params.set('wa', created.delivery.whatsapp.toLowerCase());
+      if (created.delivery?.email) params.set('email', created.delivery.email.toLowerCase());
+      router.push(`/employer/interviews?${params.toString()}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not schedule interview.');
+      const text = userFacingError(err, 'schedule interview');
+      setError(text);
+      toast.error(text);
     } finally {
       setSaving(false);
     }
@@ -224,12 +228,14 @@ export default function EmployerScheduleInterviewPage() {
                 </label>
                 <label className="ep-schedule__field">
                   <span>Time</span>
-                  <input
-                    type="time"
-                    value={interviewTime}
-                    onChange={(e) => setInterviewTime(e.target.value)}
-                    required
-                  />
+                  <select value={interviewTime} onChange={(e) => setInterviewTime(e.target.value)} required>
+                    <option value="">Select time</option>
+                    {INTERVIEW_TIME_SLOTS.map((slot) => (
+                      <option key={slot.value} value={slot.value}>
+                        {slot.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="ep-schedule__field">
                   <span>Duration</span>

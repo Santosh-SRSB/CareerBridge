@@ -8,6 +8,14 @@ import {
   ProviderGenerateResult,
 } from './ai-provider.interface';
 import { AiProviderName } from '../ai.types';
+import { classifyAiError, linkedAbort, raceAbort } from '../ai-resilience';
+
+function abortReason(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const err = new Error('AI request aborted');
+  err.name = 'AbortError';
+  return err;
+}
 
 @Injectable()
 export class GeminiProvider implements AiProvider {
@@ -69,28 +77,37 @@ export class GeminiProvider implements AiProvider {
       (model, index, all) => Boolean(model) && all.indexOf(model) === index,
     );
 
+    const timeoutMs = options?.timeoutMs ?? this.getAttemptTimeoutMs();
+
+    // Retry policy: an outage (503/429) moves straight to the fallback model once — the same model is
+    // never retried; truncated JSON gets one more try on the same model; a timeout or a caller abort stops.
     let lastError: unknown;
     for (const model of models) {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (options?.signal?.aborted) throw abortReason(options.signal);
+        const { signal, dispose } = linkedAbort(options?.signal, timeoutMs);
         try {
-          const response = await client.models.generateContent({
-            model,
-            contents: userPrompt,
-            config: {
-              systemInstruction: systemPrompt,
-              temperature: options?.temperature ?? 0.2,
-              maxOutputTokens: options?.maxOutputTokens,
-              responseMimeType: 'application/json',
-            },
-          });
+          const response = await raceAbort(
+            client.models.generateContent({
+              model,
+              contents: userPrompt,
+              config: {
+                systemInstruction: systemPrompt,
+                temperature: options?.temperature ?? 0.2,
+                maxOutputTokens: options?.maxOutputTokens,
+                responseMimeType: 'application/json',
+                abortSignal: signal,
+              },
+            }),
+            signal,
+          );
 
           const rawText = response.text || '';
           let data: T | null = null;
           if (rawText) {
             data = this.parseJsonLoose<T>(rawText);
             if (!data) {
-              // Truncated / invalid JSON — retry same model instead of burning the whole call.
-              throw new Error('Gemini returned invalid JSON (likely truncated). Retrying.');
+              throw new Error('Gemini returned invalid JSON (likely truncated).');
             }
           }
 
@@ -106,23 +123,24 @@ export class GeminiProvider implements AiProvider {
           };
         } catch (err) {
           lastError = err;
+          const kind = classifyAiError(err);
           const msg = err instanceof Error ? err.message : String(err);
-          const retryable =
-            /503|UNAVAILABLE|high demand|temporarily|resource.?exhausted|429|invalid JSON|truncated/i.test(
-              msg,
-            );
-          this.logger.error(`Gemini generation error (${model} attempt ${attempt + 1}): ${msg}`);
-          if (retryable && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
-            continue;
-          }
-          // Try next model if available
+          this.logger.error(`Gemini generation error (${model} attempt ${attempt + 1}, ${kind}): ${msg}`);
+          if (kind === 'TIMEOUT') throw err;
+          if (kind === 'INVALID_OUTPUT' && attempt === 0) continue;
           break;
+        } finally {
+          dispose();
         }
       }
     }
 
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  private getAttemptTimeoutMs(): number {
+    const value = Number(this.config.get<string>('GEMINI_TIMEOUT_MS') || 20000);
+    return Number.isFinite(value) && value > 0 ? value : 20000;
   }
 
   /** Best-effort JSON parse, including lightly truncated array/object tails. */
@@ -201,17 +219,22 @@ export class GeminiProvider implements AiProvider {
       };
     });
 
+    const { signal, dispose } = linkedAbort(options?.signal, options?.timeoutMs ?? this.getAttemptTimeoutMs());
     try {
-      const response = await client.models.generateContent({
-        model,
-        contents: [{ role: 'user', parts: contents }],
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: options?.temperature ?? 0,
-          maxOutputTokens: options?.maxOutputTokens ?? 8192,
-          responseMimeType: 'application/json',
-        },
-      });
+      const response = await raceAbort(
+        client.models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: contents }],
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: options?.temperature ?? 0,
+            maxOutputTokens: options?.maxOutputTokens ?? 8192,
+            responseMimeType: 'application/json',
+            abortSignal: signal,
+          },
+        }),
+        signal,
+      );
 
       const rawText = response.text || '';
       let data: T | null = null;
@@ -240,6 +263,8 @@ export class GeminiProvider implements AiProvider {
     } catch (err) {
       this.logger.error(`Gemini multimodal error: ${(err as Error).message}`);
       throw err;
+    } finally {
+      dispose();
     }
   }
 

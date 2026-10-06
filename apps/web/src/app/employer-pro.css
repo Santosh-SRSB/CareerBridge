@@ -1,9 +1,9 @@
-﻿/* CareerBridge Employer — Left vertical nav (pine / teal / mist) */
+/* CareerBridge Employer — Left vertical nav (pine / teal / mist) */
 
 .ep-app--desk.ep-app--saas,
 .ep-app--saas {
   --ep-saas-ink: #0e2925;
-  --ep-saas-muted: #6b7a76;
+  --ep-saas-muted: #5a6864;
   --ep-saas-line: #e6e2d8;
   --ep-saas-bg: #f6f4ef;
   --ep-saas-panel: #ffffff;
@@ -1197,7 +1197,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #1f9d8a;
+  color: #0f766e;
   opacity: 0;
   transform: translateY(6px);
   animation: ep-saas-write-in 0.55s var(--ep-saas-ease) 0.05s forwards;
@@ -1296,7 +1296,7 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #1f9d8a;
+  color: #0f766e;
   flex-shrink: 0;
 }
 
@@ -1434,7 +1434,7 @@
 
 .ep-saas-btn--primary {
   background: var(--ep-saas-gold);
-  color: #0c332c !important;
+  color: #04201b !important;
   border-color: transparent;
 }
 
@@ -2868,7 +2868,7 @@
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-ats-panel__score {
@@ -2926,7 +2926,7 @@
 .ep-ats-panel__band--low,
 .ep-ats-panel__ring-arc--low,
 .ep-ats-chip--low {
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-ats-panel__ring {
@@ -3006,7 +3006,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-ats-panel__explain ul {
@@ -4605,7 +4605,7 @@
   color: #0e2925;
 }
 .ep-page--schedule .ep-schedule__field input::placeholder {
-  color: #6b7a76;
+  color: #5a6864;
 }
 .ep-page--schedule .ep-schedule__mode {
   border-radius: 12px;
@@ -5105,7 +5105,7 @@
 .ep-page--create .ep-choice__btn.is-on {
   background: var(--ep-create-gold);
   border-color: var(--ep-create-gold);
-  color: #1a2330;
+  color: #ffffff;
   box-shadow: 0 6px 14px rgba(232, 166, 59, 0.22);
 }
 
@@ -5464,7 +5464,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #5f746f !important;
+  color: #4a5d59 !important;
 }
 
 .ep-prohead__title {
@@ -5531,7 +5531,7 @@ a.ep-prohead__cta {
 .ep-pro-muted {
   margin: 0;
   font-size: 13px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-pro-empty {
@@ -5930,7 +5930,7 @@ a.ep-prohead__cta {
   font-size: 12px;
   letter-spacing: 0;
   text-transform: none;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 /* —— Interviews desk (operating table) —— */
@@ -5973,7 +5973,7 @@ a.ep-prohead__cta {
   max-width: 42ch;
   font-size: 15px;
   line-height: 1.45;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-ivdesk__cta {
@@ -6037,7 +6037,7 @@ a.ep-prohead__cta {
 
 .ep-ivdesk__muted {
   margin: 0;
-  color: #6b7a76;
+  color: #5a6864;
   font-size: 14px;
 }
 
@@ -6058,7 +6058,7 @@ a.ep-prohead__cta {
 .ep-ivdesk__empty p {
   margin: 8px auto 18px;
   max-width: 42ch;
-  color: #6b7a76;
+  color: #5a6864;
   font-size: 14px;
 }
 
@@ -6111,7 +6111,7 @@ a.ep-prohead__cta {
 
 .ep-ivdesk__who span {
   font-size: 13px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-ivdesk__cell {
@@ -6451,7 +6451,7 @@ a.ep-prohead__cta {
   margin: 4px 0 0;
   font-size: 13px;
   font-weight: 600;
-  color: #6b7a76;
+  color: #5a6864;
   line-height: 1.35;
 }
 
@@ -6588,33 +6588,6 @@ a.ep-prohead__cta {
 
 .ep-page--candidates .ep-cand__btn--outline:hover:not(:disabled) {
   background: #e8f7f4;
-}
-
-.ep-page--candidates .ep-cand__btn--wa {
-  background: #128c7e !important;
-  border-color: #128c7e;
-  color: #fff !important;
-}
-
-.ep-page--candidates .ep-cand__btn--wa:hover:not(:disabled) {
-  background: #0e7a6e !important;
-  border-color: #0e7a6e;
-}
-
-.ep-page--candidates .ep-cand__btn--wa:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-.ep-pass__btn--wa {
-  background: #128c7e !important;
-  border-color: #128c7e;
-  color: #fff !important;
-}
-
-.ep-pass__btn--wa:hover:not(:disabled) {
-  background: #0e7a6e !important;
-  border-color: #0e7a6e;
 }
 
 .ep-ivdesk__modal {
@@ -6780,7 +6753,7 @@ a.ep-prohead__cta {
 .ep-pass__back {
   font-size: 13px;
   font-weight: 700;
-  color: #6b7a76;
+  color: #5a6864;
   text-decoration: none;
 }
 
@@ -7016,7 +6989,7 @@ a.ep-prohead__cta {
 .ep-pass__edu span,
 .ep-pass__exp span {
   font-size: 13px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-pass__chips {
@@ -7131,7 +7104,7 @@ a.ep-prohead__cta {
 .ep-pass__muted {
   margin: 0;
   font-size: 13px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-pass__foot {
@@ -7345,7 +7318,7 @@ a.ep-prohead__cta {
 .ep-match-section__toolbar p {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-match-section__rank-btn {
@@ -7485,7 +7458,7 @@ a.ep-prohead__cta {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   background: #f3f5f4;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-talent__band--excellent,
@@ -7503,7 +7476,7 @@ a.ep-prohead__cta {
 .ep-talent__loc {
   margin: 4px 0 0;
   font-size: 12.5px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-talent__cta {
@@ -7610,7 +7583,7 @@ a.ep-prohead__cta {
 .ep-talent__skills li.is-more {
   background: transparent;
   border-style: dashed;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-talent__notes {
@@ -7722,7 +7695,7 @@ a.ep-prohead__cta {
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-applicant {
@@ -7785,7 +7758,7 @@ a.ep-prohead__cta {
   flex-direction: column;
   gap: 3px;
   font-size: 13px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 
 .ep-applicant__skills {
@@ -8355,7 +8328,7 @@ a.ep-prohead__cta {
 .ep-modal__sub {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 .ep-modal__field {
   display: grid;
@@ -8407,7 +8380,7 @@ a.ep-prohead__cta {
 .ep-saas-panel__hint {
   margin: 4px 0 0;
   font-size: 12.5px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 .ep-saas-panel--wide {
   margin-top: 4px;
@@ -8483,7 +8456,7 @@ a.ep-prohead__cta {
 .ep-billing__sub {
   margin: 6px 0 0;
   font-size: 14px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 .ep-billing__back {
   font-size: 13px;
@@ -8502,7 +8475,7 @@ a.ep-prohead__cta {
 }
 .ep-billing__muted {
   margin: 0;
-  color: #6b7a76;
+  color: #5a6864;
   font-size: 14px;
 }
 .ep-billing__plan {
@@ -8522,7 +8495,7 @@ a.ep-prohead__cta {
 }
 .ep-billing__plan p {
   margin: 0;
-  color: #6b7a76;
+  color: #5a6864;
   font-size: 14px;
 }
 .ep-billing__plan-label {
@@ -8555,7 +8528,7 @@ a.ep-prohead__cta {
   margin-top: 8px;
   font-style: normal;
   font-size: 12px;
-  color: #6b7a76;
+  color: #5a6864;
 }
 .ep-billing__usage,
 .ep-billing__history {
@@ -8601,4 +8574,71 @@ a.ep-prohead__cta {
   .ep-billing__usage ul {
     grid-template-columns: 1fr;
   }
+}
+
+/* Handbook match bands: Excellent green, Good blue, Moderate amber, Low grey (AA contrast on light chips). */
+.ep-ats-panel__band--excellent,
+.ep-ats-panel__ring-arc--excellent,
+.ep-ats-chip--excellent,
+.ep-cprof .ep-ats-panel__band--excellent,
+.ep-cprof .ep-ats-panel__ring-arc--excellent {
+  color: #047857;
+}
+.ep-ats-panel__band--good,
+.ep-ats-panel__ring-arc--good,
+.ep-ats-chip--good,
+.ep-cprof .ep-ats-panel__band--good,
+.ep-cprof .ep-ats-panel__ring-arc--good {
+  color: #1d4ed8;
+}
+.ep-ats-panel__band--moderate,
+.ep-ats-panel__ring-arc--moderate,
+.ep-ats-chip--moderate,
+.ep-cprof .ep-ats-panel__band--moderate,
+.ep-cprof .ep-ats-panel__ring-arc--moderate {
+  color: #92400e;
+}
+.ep-ats-panel__band--low,
+.ep-ats-panel__ring-arc--low,
+.ep-ats-chip--low,
+.ep-cprof .ep-ats-panel__band--low,
+.ep-cprof .ep-ats-panel__ring-arc--low {
+  color: #4b5563;
+}
+.ep-talent--excellent .ep-talent__score {
+  background: linear-gradient(180deg, #047857 0%, #065f46 100%);
+}
+.ep-talent--good .ep-talent__score {
+  background: linear-gradient(180deg, #1d4ed8 0%, #1e3a8a 100%);
+}
+.ep-talent--moderate .ep-talent__score {
+  background: linear-gradient(180deg, #92400e 0%, #78350f 100%);
+}
+.ep-talent--low .ep-talent__score {
+  background: linear-gradient(180deg, #4b5563 0%, #374151 100%);
+}
+.ep-talent__band--excellent {
+  background: #d1fae5;
+  color: #065f46;
+}
+.ep-talent__band--good {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+.ep-talent__band--moderate {
+  background: #fef3c7;
+  color: #78350f;
+}
+.ep-talent__band--low {
+  background: #e5e7eb;
+  color: #374151;
+}
+.ep-talent__match-label {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff;
 }

@@ -52,6 +52,8 @@ const styles = `
     outline: none; border-color: #0A2E2C; box-shadow: 0 0 0 3px rgba(10, 46, 44, 0.25);
   }
   .cb-form-select:disabled { background: #f5f5f3; color: #9aa3b2; cursor: not-allowed; }
+  .cb-form-select[aria-invalid="true"], .cb-combo-input-wrap.invalid { border-color: #b42318; }
+  .cb-field-error { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #b42318; }
   .cb-location-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 600px) {
     .cb-location-pair { grid-template-columns: 1fr; }
@@ -66,6 +68,7 @@ interface SearchableComboboxProps {
   placeholder?: string;
   allowCustom?: boolean;
   disabled?: boolean;
+  error?: string;
 }
 
 export function SearchableCombobox({
@@ -76,12 +79,15 @@ export function SearchableCombobox({
   placeholder = 'Search or type…',
   allowCustom = true,
   disabled = false,
+  error,
 }: SearchableComboboxProps) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+  const inputId = useId();
+  const errorId = useId();
 
   useEffect(() => {
     setQuery(value);
@@ -138,10 +144,13 @@ export function SearchableCombobox({
   return (
     <div className="cb-combo cb-field" ref={rootRef}>
       <style dangerouslySetInnerHTML={{ __html: styles }} />
-      {label ? <label>{label}</label> : null}
-      <div className="cb-combo-input-wrap">
+      {label ? <label htmlFor={inputId}>{label}</label> : null}
+      <div className={`cb-combo-input-wrap${error ? ' invalid' : ''}`}>
         <input
+          id={inputId}
           className="cb-combo-input"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           value={query}
           disabled={disabled}
           onChange={(e) => {
@@ -182,6 +191,11 @@ export function SearchableCombobox({
           })}
         </ul>
       )}
+      {error ? (
+        <p id={errorId} className="cb-field-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -190,11 +204,14 @@ interface DegreeSelectProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  error?: string;
 }
 
-export function DegreeSelect({ value, onChange, label = 'Degree / qualification *' }: DegreeSelectProps) {
+export function DegreeSelect({ value, onChange, label = 'Degree / qualification *', error }: DegreeSelectProps) {
   const [selectValue, setSelectValue] = useState('');
   const [customDegree, setCustomDegree] = useState('');
+  const selectId = useId();
+  const errorId = useId();
 
   useEffect(() => {
     if (!value) {
@@ -224,10 +241,14 @@ export function DegreeSelect({ value, onChange, label = 'Degree / qualification 
   return (
     <div className="cb-field">
       <style dangerouslySetInnerHTML={{ __html: styles }} />
-      <label>{label}</label>
+      <label htmlFor={selectId}>{label}</label>
       <select
+        id={selectId}
         className="cb-form-select"
         value={selectValue}
+        aria-required="true"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         onChange={(e) => handleSelectChange(e.target.value)}
       >
         <option value="">Select degree</option>
@@ -246,8 +267,14 @@ export function DegreeSelect({ value, onChange, label = 'Degree / qualification 
             onChange(e.target.value);
           }}
           placeholder="Enter your degree"
+          aria-label="Degree name"
         />
       )}
+      {error ? (
+        <p id={errorId} className="cb-field-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -320,13 +347,16 @@ export function FieldOfStudySelect({ value, onChange }: FieldOfStudySelectProps)
 export function InstitutionCombobox({
   value,
   onChange,
+  error,
 }: {
   value: string;
   onChange: (value: string) => void;
+  error?: string;
 }) {
   return (
     <SearchableCombobox
-      label="Institution"
+      label="Institution *"
+      error={error}
       value={value}
       onChange={onChange}
       options={INSTITUTION_OPTIONS}

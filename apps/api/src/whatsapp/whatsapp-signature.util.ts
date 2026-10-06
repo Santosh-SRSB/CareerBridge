@@ -2,8 +2,9 @@ import { createHmac, timingSafeEqual } from 'crypto';
 
 /**
  * Pure Meta webhook HMAC check.
- * When requireSignature is false (DEV), always accept.
- * When true, appSecret is mandatory and x-hub-signature-256 must match.
+ * Whenever an App Secret is configured, x-hub-signature-256 must match it.
+ * requireSignature=true without an App Secret rejects everything; only requireSignature=false
+ * with no App Secret (local DEV without Meta) accepts unsigned payloads.
  */
 export function validateWhatsAppSignature(input: {
   requireSignature: boolean;
@@ -11,8 +12,7 @@ export function validateWhatsAppSignature(input: {
   rawBody: Buffer | string | undefined;
   signatureHeader: string | undefined;
 }): boolean {
-  if (!input.requireSignature) return true;
-  if (!input.appSecret) return false;
+  if (!input.appSecret) return !input.requireSignature;
   if (!input.rawBody || !input.signatureHeader?.startsWith('sha256=')) return false;
   const expected = createHmac('sha256', input.appSecret).update(input.rawBody).digest('hex');
   const provided = input.signatureHeader.slice('sha256='.length);
@@ -35,7 +35,19 @@ export function isWhatsAppSendConfigured(input: {
 }
 
 export function signatureModeLabel(requireSignature: boolean, appSecretPresent: boolean) {
+  if (appSecretPresent) return 'required' as const;
   if (!requireSignature) return 'disabled_dev' as const;
-  if (!appSecretPresent) return 'required_missing_secret' as const;
-  return 'required' as const;
+  return 'required_missing_secret' as const;
+}
+
+function waDigits(phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
+/** Meta rejects messages addressed to the sending business number with a generic (#100) Invalid parameter. */
+export function isOwnBusinessNumber(recipientWaId: string, businessDisplayPhone: string | null | undefined) {
+  const business = waDigits(businessDisplayPhone || '');
+  const recipient = waDigits(recipientWaId || '');
+  return Boolean(business) && Boolean(recipient) && business === recipient;
 }

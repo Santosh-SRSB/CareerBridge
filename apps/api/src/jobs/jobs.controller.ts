@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { UserType } from '../prisma/client';
-import { IsBoolean, IsNumber, IsOptional, IsString, IsInt, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, IsInt, Max, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { JobsService } from './jobs.service';
 import { Public } from '../common/decorators/public.decorator';
@@ -25,6 +26,28 @@ class JobQueryDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  @IsOptional()
+  @IsString()
+  experience?: string;
+
+  /** Annual CTC in rupees. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  salaryMin?: number;
+
+  /** Annual CTC in rupees. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  salaryMax?: number;
+
+  @IsOptional()
+  @IsIn(['newest', 'salary'])
+  sort?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -141,6 +164,8 @@ export class JobsController {
   }
 
   /** OLX-style distance-bucketed job discovery. Registered before :id. */
+  // One search fans out to one request per distance bucket, so the global 60/min limit is too low here.
+  @Throttle({ default: { limit: 300, ttl: 60000 } })
   @Public()
   @Get('nearby')
   nearby(@Query() query: NearbyJobsQueryDto, @CurrentUser() user?: { id: string; role: string }) {
@@ -164,6 +189,15 @@ export class JobsController {
       },
       user?.role === 'CANDIDATE' ? user.id : undefined,
     );
+  }
+
+  /** Job role options for the mock interview setup. Registered before :id. */
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(UserType.CANDIDATE)
+  @Get('roles')
+  roles() {
+    return this.jobs.roles();
   }
 
   @ApiBearerAuth()
@@ -200,8 +234,12 @@ export class JobsController {
 
   @Public()
   @Get(':id')
-  detail(@Param('id') id: string, @CurrentUser() user?: { id: string; role: string }) {
-    return this.jobs.detail(id, user?.role === 'CANDIDATE' ? user.id : undefined);
+  async detail(@Param('id') id: string, @CurrentUser() user?: { id: string; role: string }) {
+    const job = await this.jobs.detail(id, user?.role === 'CANDIDATE' ? user.id : undefined);
+    if (!user || user.role === UserType.CANDIDATE) {
+      void this.jobs.recordView(id);
+    }
+    return job;
   }
 
   @ApiBearerAuth()

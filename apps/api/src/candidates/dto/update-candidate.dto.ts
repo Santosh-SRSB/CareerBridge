@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -11,10 +12,20 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { EXPERIENCE_OPTIONS, MAX_RECORD_YEAR } from '@careerbridge/shared';
+import {
+  EMPLOYMENT_STATUSES,
+  EXPECTED_SALARY_MAX_INR,
+  EXPERIENCE_OPTIONS,
+  JOB_TYPES,
+  MAX_RECORD_YEAR,
+  ONBOARDING_MAX_JOB_CATEGORIES,
+  ONBOARDING_MAX_JOB_CATEGORIES_MESSAGE,
+  SALARY_RANGE_INVALID_MESSAGE,
+} from '@careerbridge/shared';
 
 export class ProfileLinksDto {
   @IsOptional()
@@ -71,7 +82,9 @@ export class UpdateCandidateDto {
   @ApiPropertyOptional({ example: 'Bengaluru' })
   @IsOptional()
   @IsString()
+  @ValidateIf((o: { preferredWorkCity?: unknown }) => o.preferredWorkCity !== '')
   @MinLength(2, { message: 'Select where you would like to work.' })
+  @MaxLength(500)
   preferredWorkCity?: string;
 
   @ApiPropertyOptional()
@@ -116,10 +129,12 @@ export class UpdateCandidateDto {
   @IsBoolean()
   stillInCollege?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Preferred job categories (max 3).' })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(ONBOARDING_MAX_JOB_CATEGORIES, { message: ONBOARDING_MAX_JOB_CATEGORIES_MESSAGE })
   @IsString({ each: true })
+  @MaxLength(80, { each: true })
   careerInterests?: string[];
 
   @ApiPropertyOptional()
@@ -127,6 +142,50 @@ export class UpdateCandidateDto {
   @IsString()
   @IsIn(EXPERIENCE_OPTIONS.map((item) => item.value))
   hasExperience?: string;
+
+  @ApiPropertyOptional({ enum: EMPLOYMENT_STATUSES.map((item) => item.value) })
+  @IsOptional()
+  @IsIn(EMPLOYMENT_STATUSES.map((item) => item.value), { message: 'Please select your employment status' })
+  employmentStatus?: string;
+
+  @ApiPropertyOptional({ description: 'Experience level catalog value; empty string clears it.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  experienceRange?: string;
+
+  @ApiPropertyOptional({ description: 'Expected monthly salary (INR); null clears it.' })
+  @IsOptional()
+  @ValidateIf((o: { expectedSalaryMin?: unknown }) => o.expectedSalaryMin !== null)
+  @Type(() => Number)
+  @IsInt({ message: SALARY_RANGE_INVALID_MESSAGE })
+  @Min(1, { message: SALARY_RANGE_INVALID_MESSAGE })
+  @Max(EXPECTED_SALARY_MAX_INR, { message: SALARY_RANGE_INVALID_MESSAGE })
+  expectedSalaryMin?: number | null;
+
+  @ApiPropertyOptional({ description: 'Expected monthly salary (INR); null clears it.' })
+  @IsOptional()
+  @ValidateIf((o: { expectedSalaryMax?: unknown }) => o.expectedSalaryMax !== null)
+  @Type(() => Number)
+  @IsInt({ message: SALARY_RANGE_INVALID_MESSAGE })
+  @Min(1, { message: SALARY_RANGE_INVALID_MESSAGE })
+  @Max(EXPECTED_SALARY_MAX_INR, { message: SALARY_RANGE_INVALID_MESSAGE })
+  expectedSalaryMax?: number | null;
+
+  @ApiPropertyOptional({ enum: JOB_TYPES, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @IsIn([...JOB_TYPES], { each: true })
+  preferredJobTypes?: string[];
+
+  @ApiPropertyOptional({ description: 'Onboarding steps (1-4) the candidate skipped.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(4, { each: true })
+  onboardingSkippedSteps?: number[];
 
   @ApiPropertyOptional({
     example: 'Immediate',

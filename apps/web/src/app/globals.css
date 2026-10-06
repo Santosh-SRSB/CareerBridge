@@ -61,6 +61,25 @@ html {
   scroll-behavior: smooth;
 }
 
+/* WCAG 2.5.5 / product spec: 48x48 minimum touch targets on phones and touch screens.
+   Kept in the base layer so utilities (hidden, flex, block, ...) still decide display. */
+@layer base {
+  @media (max-width: 767px), (pointer: coarse) {
+    a[href],
+    button,
+    [role='button'],
+    select,
+    input:not([type='hidden']):not([type='checkbox']):not([type='radio']) {
+      min-height: 48px;
+      min-width: 48px;
+    }
+    a[href]:not(:has(div, p, section, article, ul, ol, h1, h2, h3, h4, table)) {
+      display: inline-flex;
+      align-items: center;
+    }
+  }
+}
+
 body {
   background: var(--fog);
   color: var(--ink);
@@ -3444,7 +3463,7 @@ button.resume-drop-tip {
   min-width: 64px;
   padding: 6px 12px;
   border-radius: 6px;
-  background: #ef4444;
+  background: #dc2626;
   color: #fff;
   font-size: 10px;
   font-weight: 800;
@@ -3527,7 +3546,7 @@ button.resume-drop-tip {
   margin: -12px 0 18px;
   text-align: center;
   font-size: 12.5px;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .cb-auth-portal .cb-auth-form-stack,
@@ -3538,7 +3557,11 @@ button.resume-drop-tip {
 }
 
 .cb-auth-field__label {
-  display: none !important;
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
 }
 
 .cb-auth-field__control {
@@ -3559,7 +3582,7 @@ button.resume-drop-tip {
   transform: translateY(-1px);
 }
 .cb-auth-field__control.is-error {
-  border-color: #ef4444;
+  border-color: #dc2626;
 }
 
 .cb-auth-field__icon {
@@ -3612,7 +3635,7 @@ button.resume-drop-tip {
   display: block;
   margin-top: 5px;
   font-size: 11px;
-  color: #94a3b8;
+  color: #64748b;
 }
 .cb-auth-field__error {
   color: #dc2626;
@@ -3789,8 +3812,7 @@ button.resume-drop-tip {
   color: #fff !important;
   font-size: 14px !important;
   font-weight: 800 !important;
-  letter-spacing: 0.06em !important;
-  text-transform: uppercase !important;
+  letter-spacing: 0.02em !important;
   box-shadow: 0 10px 22px rgba(20, 184, 166, 0.3) !important;
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease !important;
 }
@@ -3798,6 +3820,25 @@ button.resume-drop-tip {
   filter: brightness(1.03);
   transform: translateY(-1px);
   box-shadow: 0 12px 26px rgba(13, 148, 136, 0.34) !important;
+}
+.cb-auth-portal button[type="submit"][aria-disabled="true"],
+.cb-auth-portal button[type="submit"]:disabled {
+  background: #94a3b8 !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+.cb-auth-portal fieldset {
+  display: contents;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.cb-auth-portal .cb-auth-required {
+  color: #dc2626;
+  margin-left: 2px;
 }
 .cb-auth-portal button[type="submit"]:active {
   transform: translateY(0);
@@ -12131,9 +12172,9 @@ button.cb-ticket-go {
 }
 
 .cb-job-row__glyph--closed {
-  color: #475569;
-  background: linear-gradient(165deg, #f8fafc 0%, #e2e8f0 100%);
-  border-color: rgba(71, 85, 105, 0.18);
+  color: #b91c1c;
+  background: linear-gradient(165deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: rgba(185, 28, 28, 0.2);
 }
 
 .cb-job-row__mark {
@@ -15635,8 +15676,8 @@ button.cb-ticket-go {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border: 1px solid #e4ece9;
   border-radius: 11px;
   background: #ffffff;
@@ -16152,7 +16193,15 @@ button.cb-ticket-go {
   font-size: 12px;
   font-weight: 700;
   background: #f3f8f6;
-  color: #6d7d79;
+  color: #3f4d4a;
+}
+.ep-apps__status--under_review {
+  background: #eef2f7;
+  color: #334155;
+}
+.ep-apps__status--on_hold {
+  background: #fef3c7;
+  color: #854d0e;
 }
 .ep-apps__status--applied {
   background: #eef4ff;
@@ -19688,7 +19737,7 @@ a.ep-stat:hover {
 
 .cb-boarding {
   --cb-navy: #0a2e2c;
-  --cb-sky: #0d9488;
+  --cb-sky: #0f766e;
   --cb-orange: #0a2e2c;
   --cb-accent: #14b8a6;
   --cb-paper: #f7f8f7;
@@ -19814,7 +19863,7 @@ a.ep-stat:hover {
 .cb-boarding__code {
   font-family: var(--font-space-mono), ui-monospace, monospace;
   font-size: 11px;
-  color: #7a908c;
+  color: #566b67;
   margin-top: 2px;
 }
 
@@ -19890,7 +19939,7 @@ a.ep-stat:hover {
 .cb-boarding__field-label {
   font-family: var(--font-space-mono), ui-monospace, monospace;
   font-size: 9.5px;
-  color: #7a908c;
+  color: #566b67;
   letter-spacing: 1px;
   margin-bottom: 6px;
 }
@@ -20260,7 +20309,7 @@ a.ep-stat:hover {
   margin-top: auto;
   padding: 11px;
   text-align: center;
-  background: #f0803c;
+  background: #c2410c;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -20300,7 +20349,7 @@ a.ep-stat:hover {
 .cb-boarding__stat-lbl {
   font-family: var(--font-space-mono), ui-monospace, monospace;
   font-size: 10.5px;
-  color: #7a908c;
+  color: #566b67;
   margin-top: 6px;
   letter-spacing: 0.5px;
 }
@@ -20362,7 +20411,7 @@ a.ep-stat:hover {
 
 .cb-boarding__job-co {
   font-size: 12.5px;
-  color: #7a908c;
+  color: #566b67;
   margin: 6px 0 12px;
 }
 
@@ -21759,7 +21808,7 @@ a.ep-stat:hover {
   --jd-hair: #e7e9e0;
   --jd-ink: #16211d;
   --jd-ink-soft: #4a534d;
-  --jd-muted: #7d857f;
+  --jd-muted: #5e665f;
   --jd-mint: #e7f1ea;
   --jd-mint-2: #dcece1;
   --jd-good: #2f6b4f;

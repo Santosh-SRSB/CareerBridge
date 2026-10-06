@@ -17,6 +17,8 @@ import {
 } from '@/lib/api';
 import { EmployerShell, TinyEagleIcon } from '@/components/EmployerPortal';
 import { TestimonialPromptCard } from '@/components/TestimonialPromptCard';
+import { EmptyState, ErrorState } from '@/components/ui/StateViews';
+import { isUnauthorizedError } from '@/lib/client-errors';
 
 function greetingLabel(date = new Date()) {
   const h = date.getHours();
@@ -144,8 +146,12 @@ export default function EmployerDashboardPage() {
   const [applications, setApplications] = useState<EmployerApplication[]>([]);
   const [interviews, setInterviews] = useState<EmployerInterviewRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
+    setLoadFailed(false);
     getEmployerMe()
       .then(async (employer) => {
         if (employer.verificationStatus === 'UNVERIFIED') {
@@ -166,9 +172,15 @@ export default function EmployerDashboardPage() {
         setApplications(appRows);
         setInterviews(interviewRows);
       })
-      .catch(() => router.replace('/login?role=employer'))
+      .catch((err) => {
+        if (isUnauthorizedError(err)) {
+          router.replace('/login?role=employer');
+          return;
+        }
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, reloadKey]);
 
   const hiredCount = useMemo(
     () => applications.filter((a) => a.status === 'HIRED' || a.status === 'SELECTED').length,
@@ -184,9 +196,16 @@ export default function EmployerDashboardPage() {
     [interviews],
   );
 
+  if (!loading && loadFailed) {
+    const retry = <ErrorState onRetry={() => setReloadKey((k) => k + 1)} className="m-6" />;
+    return profile ? <EmployerShell profile={profile}>{retry}</EmployerShell> : retry;
+  }
+
   if (loading || !data || !profile) {
     return <DashboardSkeleton />;
   }
+
+  const isNewEmployer = data.openJobs === 0 && data.applications === 0 && data.interviews === 0;
 
   const companyLabel = profile.companyName?.trim() || 'your company';
 
@@ -308,6 +327,16 @@ export default function EmployerDashboardPage() {
           <TestimonialPromptCard audience="EMPLOYER" />
         </div>
 
+        {isNewEmployer ? (
+          <EmptyState
+            className="mb-5"
+            title="Welcome! Create your first job to start receiving applications."
+            message="Post a job and CareerBridge will match it with candidates from your area."
+            actionLabel="Create Job"
+            actionHref="/employer/jobs/new"
+          />
+        ) : null}
+
         <section className="ep-saas-metrics" aria-label="Overview statistics">
           {metrics.map((item) => (
             <Link key={item.label} href={item.href} className="ep-saas-metric">
@@ -337,6 +366,38 @@ export default function EmployerDashboardPage() {
               </div>
             </div>
             <PerformanceChart series={data.applicationsByMonth || []} />
+            <h3 className="mt-4 text-sm font-extrabold text-slate-900">Active jobs</h3>
+            {(data.jobPerformance?.length ?? 0) === 0 ? (
+              <p className="mt-1 text-sm text-slate-600">No active jobs yet.</p>
+            ) : (
+              <div className="ep-saas-table-wrap">
+                <table className="ep-saas-table" data-testid="job-performance">
+                  <thead>
+                    <tr>
+                      <th>Job</th>
+                      <th>Applications</th>
+                      <th>Views</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.jobPerformance!.map((row) => (
+                      <tr key={row.jobId}>
+                        <td>{row.title}</td>
+                        <td>
+                          <Link
+                            href={`/employer/applications?jobId=${encodeURIComponent(row.jobId)}`}
+                            className="ep-saas-table__link"
+                          >
+                            {row.applications}
+                          </Link>
+                        </td>
+                        <td>{row.views}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           <section className="ep-saas-panel" aria-labelledby="interviews-title">
@@ -400,6 +461,7 @@ export default function EmployerDashboardPage() {
                   <tr>
                     <th>Candidate</th>
                     <th>Job</th>
+                    <th>Date Applied</th>
                     <th>Status</th>
                     <th aria-label="Open" />
                   </tr>
@@ -411,6 +473,15 @@ export default function EmployerDashboardPage() {
                         <strong>{row.candidateName}</strong>
                       </td>
                       <td>{row.jobTitle}</td>
+                      <td>
+                        {row.appliedAt
+                          ? new Date(row.appliedAt).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
                       <td>
                         <span className="ep-saas-status">{row.status.replaceAll('_', ' ')}</span>
                       </td>

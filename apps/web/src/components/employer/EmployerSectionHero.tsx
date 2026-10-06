@@ -5,7 +5,7 @@ type Tone = 'jobs' | 'applications' | 'interviews' | 'candidates' | 'messages' |
 
 const TONE_META: Record<Tone, { eyebrow: string; accent: string }> = {
   jobs: { eyebrow: 'Openings', accent: 'Publish and manage roles from one board' },
-  applications: { eyebrow: 'Pipeline', accent: 'Review ATS scores, shortlist, and decide' },
+  applications: { eyebrow: 'Pipeline', accent: 'Review Profile Match, shortlist, and decide' },
   interviews: { eyebrow: 'Scheduling', accent: 'Confirm, reschedule, and close interviews' },
   candidates: { eyebrow: 'Talent', accent: 'Search ranked matches for open roles' },
   messages: { eyebrow: 'Inbox', accent: 'Applications, interviews, and alerts' },

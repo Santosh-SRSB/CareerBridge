@@ -26,6 +26,8 @@ import { formatJobType } from '@/lib/match';
 import { searchNearbyJobs } from '@/lib/candidate-marketplace-api';
 import { saveJob, unsaveJob } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
+import { LOAD_ERROR_MESSAGE, userFacingError } from '@/lib/client-errors';
+import { EmptyState, ErrorState, SkeletonList } from '@/components/ui/StateViews';
 import type { JobFilterChip, JobSearchFilterValues } from '@/features/jobs/job-search';
 import {
   advanceCursorFromResponse,
@@ -122,6 +124,14 @@ function BookmarkIcon({ filled, className = 'h-5 w-5' }: { filled?: boolean; cla
       />
     </svg>
   );
+}
+
+function formatWorkMode(mode: string) {
+  const m = mode.trim().toUpperCase();
+  if (m === 'ONSITE') return 'On-site';
+  if (m === 'HYBRID') return 'Hybrid';
+  if (m === 'REMOTE') return 'Remote';
+  return mode;
 }
 
 function formatPosted(iso?: string | null) {
@@ -446,7 +456,7 @@ function JobsSearchContent() {
 
       setCursor(advanceCursorFromResponse(currentCursor, res));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load nearby jobs.');
+      setError(userFacingError(err, 'load jobs'));
     } finally {
       loadingRef.current = false;
       inFlightKey.current = null;
@@ -474,6 +484,23 @@ function JobsSearchContent() {
     obs.observe(el);
     return () => obs.disconnect();
   }, [loadNextPage, sections.length, cursor.ended]);
+
+  function clearFilters() {
+    setFilters((prev) => ({ ...INITIAL_FILTERS, state: prev.state, city: prev.city }));
+    filtersRef.current = { ...INITIAL_FILTERS, state: filters.state, city: filters.city };
+    setActiveFilter(null);
+    if (!origin) return;
+    seenJobIds.current = new Set();
+    inFlightKey.current = null;
+    setSections([]);
+    setCursor(initialNearbyCursor());
+    setFeedGeneration((g) => g + 1);
+  }
+
+  function retryLoad() {
+    setError('');
+    void loadNextPage();
+  }
 
   function applyFiltersAndReload(event?: FormEvent) {
     event?.preventDefault();
@@ -537,6 +564,14 @@ function JobsSearchContent() {
 
   const showSearchForm = showDesktopSearch || locStatus === 'denied';
   const totalShown = sections.reduce((n, s) => n + s.jobs.length, 0);
+  const hasActiveFilters = Boolean(
+    filters.q.trim() ||
+      filters.salaryMin.trim() ||
+      filters.salaryMax.trim() ||
+      filters.experience ||
+      filters.jobType ||
+      filters.skills.length,
+  );
 
   const desktopSearchForm = (
     <form
@@ -593,6 +628,11 @@ function JobsSearchContent() {
         <Button type="submit" loading={loading} loadingLabel="Searching..." className="w-full">
           {origin ? 'Apply filters' : 'Search near city'}
         </Button>
+        {hasActiveFilters ? (
+          <Button type="button" variant="outline" className="w-full" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        ) : null}
         {locStatus === 'denied' ? (
           <Button type="button" variant="secondary" className="w-full" onClick={() => void tryUseGps()}>
             Allow location
@@ -610,7 +650,7 @@ function JobsSearchContent() {
       onMobileJobsFilter={() => setMobileFilterOpen(true)}
     >
       <div
-        className={`${lora.variable} mx-auto w-full max-w-[400px] space-y-4 pb-4 md:max-w-none md:w-1/2 [--jobs-dark:#0c2822] [--jobs-dark-2:#123a32] [--jobs-hair:#e7e9e0] [--jobs-ink:#16211d] [--jobs-ink-soft:#4a534d] [--jobs-muted:#7d857f] [--jobs-good:#2f6b4f] [--jobs-good-soft:#dcece1]`}
+        className={`${lora.variable} mx-auto w-full max-w-[400px] space-y-4 pb-4 md:max-w-none md:w-1/2 [--jobs-dark:#0c2822] [--jobs-dark-2:#123a32] [--jobs-hair:#e7e9e0] [--jobs-ink:#16211d] [--jobs-ink-soft:#4a534d] [--jobs-muted:#5e665f] [--jobs-good:#2f6b4f] [--jobs-good-soft:#dcece1]`}
         style={{ fontFamily: "Inter, system-ui, sans-serif", color: 'var(--jobs-ink)' }}
       >
         <h1
@@ -708,7 +748,16 @@ function JobsSearchContent() {
           </div>
         ) : null}
 
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {error ? (
+          <ErrorState
+            message={origin ? LOAD_ERROR_MESSAGE : error}
+            onRetry={origin ? retryLoad : undefined}
+          />
+        ) : null}
+
+        {!origin && !error && (locStatus === 'idle' || locStatus === 'asking') ? (
+          <SkeletonList rows={3} label="Finding jobs near you…" />
+        ) : null}
 
         {locationPickerOpen ? (
           <div
@@ -786,6 +835,23 @@ function JobsSearchContent() {
 
         {origin ? (
           <div className="space-y-5">
+            {totalShown > 0 ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-bold text-[var(--jobs-ink)]" data-testid="jobs-count" aria-live="polite">
+                  {totalShown}
+                  {cursor.ended ? '' : '+'} {totalShown === 1 && cursor.ended ? 'job' : 'jobs'} found
+                </p>
+                {hasActiveFilters ? (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="min-h-12 rounded-full px-3 text-sm font-bold text-[var(--jobs-dark)] underline"
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {sections.map((section, index) => (
               <section key={section.key} className="space-y-3">
                 {index > 0 ? <div className="cb-jobs-bucket-divider" aria-hidden /> : null}
@@ -849,7 +915,8 @@ function JobsSearchContent() {
                                   ? `${salary.main} ${salary.suffix}`
                                   : null,
                                 job.experience,
-                                job.workMode || formatJobType(job.jobType),
+                                formatJobType(job.jobType),
+                                job.workMode ? formatWorkMode(job.workMode) : null,
                               ]
                                 .filter(Boolean)
                                 .join(' · ')}
@@ -905,24 +972,30 @@ function JobsSearchContent() {
               </section>
             ))}
 
-            {!loading && totalShown === 0 && locStatus === 'ready' ? (
-              <p className="rounded-[14px] border border-dashed border-[var(--jobs-hair)] bg-white p-5 text-sm text-[var(--jobs-muted)]">
-                Currently no match found with your profile. We will notify you when a suitable role
-                opens up near this location.
-              </p>
+            {!loading && !error && totalShown === 0 && locStatus === 'ready' && cursor.ended ? (
+              <EmptyState
+                title="No jobs found"
+                message={
+                  hasActiveFilters
+                    ? 'No jobs found matching your criteria. Try adjusting your filters.'
+                    : 'Currently no match found with your profile. We will notify you when a suitable role opens up near this location.'
+                }
+                actionLabel={hasActiveFilters ? 'Clear filters' : undefined}
+                onAction={hasActiveFilters ? clearFilters : undefined}
+              />
             ) : null}
 
-            {loading ? (
-              <p className="text-sm font-semibold text-[var(--jobs-ink-soft)]">Loading nearby jobs…</p>
+            {loading || (totalShown === 0 && !error && !cursor.ended) ? (
+              <SkeletonList rows={totalShown ? 1 : 3} label="Loading nearby jobs…" />
             ) : null}
 
-            {cursor.ended ? (
+            {cursor.ended && totalShown > 0 ? (
               <p className="rounded-full border border-[var(--jobs-hair)] bg-white px-4 py-3 text-center text-sm font-semibold text-[var(--jobs-ink-soft)]">
                 You&apos;ve reached the end of jobs within 50 km.
               </p>
-            ) : (
+            ) : !cursor.ended && !error ? (
               <div ref={sentinelRef} className="h-8 w-full" aria-hidden />
-            )}
+            ) : null}
           </div>
         ) : null}
       </div>

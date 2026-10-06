@@ -48,7 +48,7 @@ function getClientAuth() {
   };
   if (!config.apiKey || !config.projectId || !config.authDomain || !config.appId) {
     throw Object.assign(
-      new Error('Firebase is not configured. Set NEXT_PUBLIC_FIREBASE_* in apps/web/.env.local'),
+      new Error('Mobile verification is temporarily unavailable. Please try again later.'),
       { code: 'FIREBASE_NOT_CONFIGURED' },
     );
   }

@@ -9,31 +9,83 @@ import {
 } from '@nestjs/common';
 import { ApplicationStatus, EmployerInterviewStatus, JobStatus } from '../prisma/client';
 import {
+  CANDIDATE_SEARCH_MAX_SKILLS,
+  type CandidateSearchSort,
   ErrorCode as SharedError,
+  activeJobLimitMessage,
+  activeJobLimitReached,
+  candidateViewLimitMessage,
   designationError,
   emailError,
+  experienceFilterRange,
   lookupCityCentroid,
+  meetsEducationFilter,
   normalizeHttpUrl,
+  COMPANY_ABOUT_MAX,
+  isCompanySize,
+  jobSalaryRequiredError,
+  parseLinkedinUrl,
 } from '@careerbridge/shared';
+import { GstService } from '../gst/gst.service';
+import { normalizeGstin, validateGstinFormat } from '../gst/gst.validator';
+import {
+  ACTIVE_INTERVIEW_STATUSES,
+  applicationTransitionError,
+  assertKycComplete,
+  DEFAULT_INTERVIEW_TIMEZONE,
+  formatAvailabilityWindow,
+  hasCompletedKyc,
+  intervalsOverlap,
+  interviewActionCheck,
+  parseCompanyWebsite,
+  parseInterviewInstant,
+  parseNotifyPrefs,
+  salaryRangeError,
+  stripNotifyMarkers,
+  withEffectiveVerification,
+  withNotifyPrefs,
+} from './employer-policy';
+import {
+  LOGO_VALIDATION_MESSAGES,
+  canonicalCompanyLogoPaths,
+  companyLogoPath,
+  companyLogoUrl,
+  readableCompanyLogoUrl,
+  validateCompanyLogo,
+} from './company-logo.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { USABLE_RESUME_WHERE } from '../resumes/resume-eligibility';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { MatchingService } from '../matching/matching.service';
 import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service';
+import { consentedWhatsAppNumber } from '../whatsapp/interview-lifecycle.util';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { WhatsAppWebhookService } from '../whatsapp/whatsapp.webhook.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { renderDefaultNotification, type NotificationTemplateKey } from '../notifications/notification-templates';
+import { CatalogService } from '../catalog/catalog.service';
 import { ConfigService } from '@nestjs/config';
 import { ResumesService } from '../resumes/resumes.service';
 import { EmailService } from '../auth/email.service';
 import { JobsService } from '../jobs/jobs.service';
 import { StorageService } from '../common/storage/storage.service';
+import { candidateInterviewUrl, interviewMeetingUrl } from '../common/web/public-web-url';
 import { TestimonialsService } from '../testimonials/testimonials.service';
+import { employerPlanUsage, usagePeriod } from './employer-plan';
+
+const APPLICATION_STATUS_NOTICE: Partial<Record<ApplicationStatus, NotificationTemplateKey>> = {
+  SHORTLISTED: 'APPLICATION_SHORTLISTED',
+  ON_HOLD: 'APPLICATION_ON_HOLD',
+  SELECTED: 'APPLICATION_SELECTED',
+  HIRED: 'APPLICATION_SELECTED',
+  REJECTED: 'APPLICATION_REJECTED',
+};
 
 const ACTION_STATUS: Record<string, ApplicationStatus> = {
   REVIEW: 'UNDER_REVIEW',
   SHORTLIST: 'SHORTLISTED',
   INTERVIEW: 'INTERVIEW',
+  HOLD: 'ON_HOLD',
   SELECT: 'SELECTED',
   REJECT: 'REJECTED',
   HIRE: 'HIRED',
@@ -75,56 +127,53 @@ export class EmployersService {
     private readonly jobsService: JobsService,
     private readonly storage: StorageService,
     private readonly testimonials: TestimonialsService,
+    private readonly gst: GstService,
+    private readonly catalog: CatalogService,
   ) {}
 
+  private async assertJobCategory(category: string, existingCategory?: string | null) {
+    const value = category?.trim();
+    if (value && value === existingCategory) return;
+    if (!value || !(await this.catalog.isActiveValue('JOB_CATEGORY', value))) {
+      throw new BadRequestException({
+        code: SharedError.VALIDATION_ERROR,
+        message: 'Select a valid job category.',
+      });
+    }
+  }
+
   async me(userId: string) {
-    return this.toProfile(await this.requireEmployer(userId));
+    return this.profile(await this.requireEmployer(userId));
   }
 
   async uploadLogoFile(
     userId: string,
     file: { buffer: Buffer; mimetype: string; size: number; originalname?: string },
   ) {
-    const mime = (file.mimetype || '').toLowerCase();
-    const allowed =
-      mime.startsWith('image/jpeg') ||
-      mime.startsWith('image/jpg') ||
-      mime.startsWith('image/png') ||
-      mime.startsWith('image/webp');
-    if (!allowed) {
+    const validation = await validateCompanyLogo(file);
+    if (!validation.ok) {
       throw new BadRequestException({
         code: SharedError.VALIDATION_ERROR,
-        message: 'Please upload a JPG, PNG, or WebP logo.',
-      });
-    }
-    if (!file.buffer?.length || file.size > 5 * 1024 * 1024) {
-      throw new BadRequestException({
-        code: SharedError.VALIDATION_ERROR,
-        message: 'Logo must be under 5 MB.',
+        message: LOGO_VALIDATION_MESSAGES[validation.reason],
       });
     }
 
     const employer = await this.requireEmployer(userId);
-    const ext = mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : '.jpg';
-    const contentType = mime.includes('png')
-      ? 'image/png'
-      : mime.includes('webp')
-        ? 'image/webp'
-        : 'image/jpeg';
+    const contentType = validation.contentType;
     let storedUrl: string;
 
     if (this.storage.isConfigured()) {
       try {
-        const path = this.storage.imageObjectPath(
-          `logo-${Date.now()}${ext}`,
-          employer.id.slice(0, 8),
-        );
-        const uploaded = await this.storage.uploadFile(path, file.buffer, {
+        const path = companyLogoPath(employer.id, validation.type);
+        await this.storage.uploadFile(path, file.buffer, {
           contentType,
-          isPublic: true,
+          isPublic: false,
           metadata: { employerId: employer.id, source: 'company-logo' },
         });
-        storedUrl = uploaded.publicUrl;
+        storedUrl = companyLogoUrl(this.storage.getBucketName(), employer.id, validation.type);
+        for (const stale of canonicalCompanyLogoPaths(employer.id).filter((p) => p !== path)) {
+          await this.storage.deleteFile(stale);
+        }
       } catch (err) {
         this.logger.error(
           `Company logo GCS upload failed for ${employer.id}: ${(err as Error).message}`,
@@ -140,7 +189,7 @@ export class EmployersService {
       data: { logoUrl: storedUrl },
     });
     this.logger.log(`Saved company logo for employer ${employer.id} (${file.size} bytes)`);
-    return this.toProfile(updated);
+    return this.profile(updated);
   }
 
   async updateMe(
@@ -153,17 +202,33 @@ export class EmployersService {
       website?: string;
       workEmail?: string;
       designation?: string;
+      companySize?: string;
+      about?: string;
+      linkedinUrl?: string;
     },
   ) {
     const employer = await this.requireEmployer(userId);
-    const websiteRaw = dto.website?.trim();
-    const website =
-      websiteRaw === undefined
-        ? undefined
-        : websiteRaw.length === 0
-          ? null
-          : normalizeHttpUrl(websiteRaw.startsWith('http') ? websiteRaw : `https://${websiteRaw}`) ||
-            (websiteRaw.startsWith('http') ? websiteRaw : `https://${websiteRaw}`);
+    const invalid = (message: string) =>
+      new BadRequestException({ code: SharedError.VALIDATION_ERROR, message });
+    let website: string | null | undefined;
+    if (dto.website !== undefined) {
+      const parsed = parseCompanyWebsite(dto.website);
+      if (!parsed.ok) throw invalid(parsed.message);
+      website = parsed.value;
+    }
+    if (dto.industry !== undefined && !dto.industry.trim()) throw invalid('Please select an industry.');
+    const companySize = dto.companySize?.trim();
+    if (companySize !== undefined && !isCompanySize(companySize)) throw invalid('Please select company size.');
+    const about = dto.about?.trim();
+    if (about !== undefined && about.length > COMPANY_ABOUT_MAX) {
+      throw invalid(`About the company can be up to ${COMPANY_ABOUT_MAX} characters.`);
+    }
+    let linkedinUrl: string | null | undefined;
+    if (dto.linkedinUrl !== undefined) {
+      const parsed = parseLinkedinUrl(dto.linkedinUrl);
+      if (!parsed.ok) throw invalid(parsed.message);
+      linkedinUrl = parsed.value;
+    }
     const updated = await this.prisma.employer.update({
       where: { id: employer.id },
       data: {
@@ -174,9 +239,12 @@ export class EmployersService {
         ...(website !== undefined ? { website } : {}),
         ...(dto.workEmail !== undefined ? { workEmail: dto.workEmail.trim() || null } : {}),
         ...(dto.designation !== undefined ? { designation: dto.designation.trim() || null } : {}),
+        ...(companySize !== undefined ? { companySize } : {}),
+        ...(about !== undefined ? { about: about || null } : {}),
+        ...(linkedinUrl !== undefined ? { linkedinUrl } : {}),
       },
     });
-    return this.toProfile(updated);
+    return this.profile(updated);
   }
 
   async saveKyc(
@@ -190,36 +258,82 @@ export class EmployersService {
     },
   ) {
     const employer = await this.requireEmployer(userId);
-    const gst = dto.gstNumber.trim().toUpperCase();
+    const gst = normalizeGstin(dto.gstNumber || '');
     const cin = (dto.cin || '').trim().toUpperCase();
-    const pan = dto.panNumber.trim().toUpperCase();
-    const websiteRaw = dto.website.trim();
-    const trademark = dto.trademark?.trim().replace(/\s+/g, ' ') || '';
-    if (![gst, pan, websiteRaw].every((value) => value.length > 0)) {
+    const pan = (dto.panNumber || '').trim().toUpperCase();
+    if (![gst, pan, (dto.website || '').trim()].every((value) => value.length > 0)) {
       throw new HttpException(
         { code: SharedError.VALIDATION_ERROR, message: 'GSTIN, PAN, and website are required.' },
         HttpStatus.BAD_REQUEST,
       );
     }
-    const website =
-      normalizeHttpUrl(websiteRaw.startsWith('http') ? websiteRaw : `https://${websiteRaw}`) ||
-      (websiteRaw.startsWith('http') ? websiteRaw : `https://${websiteRaw}`);
+    const formatError = validateGstinFormat(gst);
+    if (formatError) {
+      throw new BadRequestException({ code: SharedError.VALIDATION_ERROR, message: formatError });
+    }
+    const site = parseCompanyWebsite(dto.website);
+    if (!site.ok || !site.value) {
+      throw new BadRequestException({
+        code: SharedError.VALIDATION_ERROR,
+        message: site.ok ? 'GSTIN, PAN, and website are required.' : site.message,
+      });
+    }
 
+    const verification = await this.gst.verify(gst, userId);
+    if (verification.status === 'UNKNOWN') {
+      throw new HttpException(
+        { code: SharedError.INTERNAL_ERROR, message: verification.message, status: 'UNKNOWN', verified: false },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    if (!verification.verified || verification.status !== 'ACTIVE') {
+      throw new BadRequestException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: verification.message || 'This GSTIN is not active. Enter an active GSTIN to continue.',
+        status: verification.status,
+        verified: false,
+      });
+    }
+
+    const duplicate = await this.prisma.employer.findFirst({
+      where: { gstNumber: { equals: gst, mode: 'insensitive' }, id: { not: employer.id } },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new HttpException(
+        {
+          code: SharedError.DUPLICATE_RESOURCE,
+          message: 'This GSTIN is already registered to another employer account.',
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    // Only a live lookup may rename the company; client-supplied and mock trade names are not proof.
+    const verifiedTradeName = verification.mock ? '' : (verification.trademark || '').trim().replace(/\s+/g, ' ');
+    const gstChanged = (employer.gstNumber || '').trim().toUpperCase() !== gst;
+    const current = employer.verificationStatus;
     const nextStatus =
-      employer.verificationStatus === 'UNVERIFIED' ? 'KYC_COMPLETE' : employer.verificationStatus;
+      current === 'UNVERIFIED' || (gstChanged && ['PENDING', 'VERIFIED', 'REJECTED'].includes(current))
+        ? 'KYC_COMPLETE'
+        : current;
 
     const updated = await this.prisma.employer.update({
       where: { id: employer.id },
       data: {
         gstNumber: gst,
         cin: cin || null,
-        website,
+        website: site.value,
         panNumber: pan,
-        ...(trademark.length >= 2 ? { companyName: trademark } : {}),
-        verificationStatus: nextStatus,
+        ...(verifiedTradeName.length >= 2 ? { companyName: verifiedTradeName } : {}),
+        verificationStatus: nextStatus as typeof employer.verificationStatus,
+        verified: nextStatus === 'VERIFIED',
       },
     });
-    return this.toProfile(updated);
+    return {
+      ...(await this.profile(updated)),
+      gstVerification: { status: verification.status, provider: verification.provider, mock: verification.mock },
+    };
   }
 
   async submitVerification(
@@ -260,15 +374,20 @@ export class EmployersService {
         companyName,
         workEmail,
         designation,
-        verificationStatus: 'PENDING',
+        // Resubmitting details never downgrades an already verified employer.
+        verificationStatus: employer.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'PENDING',
+        verified: employer.verificationStatus === 'VERIFIED',
       },
     });
-    return this.toProfile(updated);
+    return this.profile(updated);
   }
 
   async dashboard(userId: string) {
     const employer = await this.requireEmployer(userId);
-    const jobs = await this.prisma.job.findMany({ where: { employerId: employer.id }, select: { id: true, status: true } });
+    const jobs = await this.prisma.job.findMany({
+      where: { employerId: employer.id },
+      select: { id: true, status: true, title: true, viewCount: true, _count: { select: { applications: true } } },
+    });
     const jobIds = jobs.map((item) => item.id);
 
     const now = new Date();
@@ -294,7 +413,7 @@ export class EmployersService {
         this.prisma.employerInterview.count({
           where: {
             employerId: employer.id,
-            status: { in: ['PROPOSED', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULE_REQUESTED'] },
+            status: { in: [...ACTIVE_INTERVIEW_STATUSES] },
           },
         }),
         this.prisma.application.findMany({
@@ -330,6 +449,16 @@ export class EmployersService {
         label,
         count,
       })),
+      jobPerformance: jobs
+        .filter((item) => item.status === 'PUBLISHED')
+        .map((item) => ({
+          jobId: item.id,
+          title: item.title,
+          applications: item._count.applications,
+          views: item.viewCount,
+        }))
+        .sort((a, b) => b.applications - a.applications || b.views - a.views)
+        .slice(0, 10),
       recent: recent.map((item) => ({
         candidateName: [item.candidate.firstName, item.candidate.lastName].filter(Boolean).join(' ') || 'Candidate',
         candidateId: item.candidate.id,
@@ -337,6 +466,7 @@ export class EmployersService {
         status: item.status,
         applicationId: item.id,
         jobId: item.job.id,
+        appliedAt: item.createdAt.toISOString(),
       })),
     };
   }
@@ -361,9 +491,14 @@ export class EmployersService {
 
   async createJob(userId: string, dto: CreateJobInput) {
     const employer = await this.requireEmployer(userId);
+    assertKycComplete(employer, 'Complete company KYC before posting jobs.');
+    if (dto.publish) this.assertPublishSalary(dto.salaryMin, dto.salaryMax);
+    this.assertSalaryRange(dto.salaryMin, dto.salaryMax);
+    await this.assertJobCategory(dto.category);
     const screeningQuestions = normalizeScreeningQuestions(dto.screeningQuestions);
     const city = dto.city.trim();
     const geo = lookupCityCentroid(city);
+    if (dto.publish) await this.assertActiveJobAllowance(employer.id);
     const job = await this.prisma.job.create({
       data: {
         employerId: employer.id,
@@ -386,14 +521,13 @@ export class EmployersService {
         preferredSkills: JSON.stringify(dto.preferredSkills || []),
         benefits: dto.benefits,
         screeningQuestionsJson: JSON.stringify(screeningQuestions),
-        status: dto.publish ? 'PUBLISHED' : 'DRAFT',
-        publishedAt: dto.publish ? new Date() : null,
+        status: dto.publish ? 'PENDING_REVIEW' : 'DRAFT',
+        publishedAt: null,
       },
     });
     if (dto.publish) {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
-      await this.matching.recomputeMatchesForJob(job.id);
-      await this.jobsService.notifyCandidatesForPublishedJob(job.id).catch(() => undefined);
+      return { ...job, reviewRequired: true };
     }
     return job;
   }
@@ -404,6 +538,11 @@ export class EmployersService {
 
   async updateJob(userId: string, id: string, dto: CreateJobInput) {
     const existing = await this.requireJob(userId, id);
+    if (existing.status === 'PUBLISHED' || existing.status === 'PENDING_REVIEW') {
+      this.assertPublishSalary(dto.salaryMin, dto.salaryMax);
+    }
+    this.assertSalaryRange(dto.salaryMin, dto.salaryMax);
+    await this.assertJobCategory(dto.category, existing.category);
     const screeningQuestions = normalizeScreeningQuestions(dto.screeningQuestions);
     const city = dto.city.trim();
     const geo = lookupCityCentroid(city);
@@ -432,25 +571,160 @@ export class EmployersService {
       },
     });
     if (existing.status === 'PUBLISHED') {
-      await this.matching.recomputeMatchesForJob(id);
+      return { ...updated, matching: await this.recomputeMatchesAfterPublish(id) };
     }
     return updated;
   }
 
+  /**
+   * Employer publish requests: a job that has never been approved goes to PENDING_REVIEW and only an admin
+   * can make it live. Resuming a paused job that was already approved goes straight back to PUBLISHED.
+   */
   async setStatus(userId: string, id: string, status: JobStatus) {
     const job = await this.requireJob(userId, id);
     const employer = await this.requireEmployer(userId);
+    if (status === 'PENDING_REVIEW') status = 'PUBLISHED';
+    if (status === 'PUBLISHED') {
+      if (job.status === 'PENDING_REVIEW') return { ...job, reviewRequired: true };
+      assertKycComplete(employer, 'Complete company KYC before publishing jobs.');
+      if (!job.publishedAt) this.assertPublishSalary(job.salaryMin, job.salaryMax);
+      if (job.status !== 'PUBLISHED') await this.assertActiveJobAllowance(employer.id);
+      await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
+      if (!job.publishedAt && job.status !== 'PUBLISHED') {
+        const pending = await this.prisma.job.update({ where: { id }, data: { status: 'PENDING_REVIEW' } });
+        return { ...pending, reviewRequired: true };
+      }
+    }
     const updated = await this.prisma.job.update({
       where: { id },
       data: { status, publishedAt: status === 'PUBLISHED' ? new Date() : undefined },
     });
-    if (status === 'PUBLISHED') {
-      await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
-      await this.matching.recomputeMatchesForJob(job.id);
-      await this.jobsService.notifyCandidatesForPublishedJob(job.id).catch(() => undefined);
-      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
+    if (status !== 'PUBLISHED') return updated;
+    const followUps = await this.runPublishFollowUps(job.id);
+    await this.maybeFirstJobPublishedPrompt(userId, employer.id);
+    return { ...updated, ...followUps };
+  }
+
+  /** Called after an admin approves a PENDING_REVIEW job: the job is live, so matching and alerts run now. */
+  async completeJobApproval(jobId: string) {
+    const job = await this.prisma.job.findUnique({ where: { id: jobId }, include: { employer: true } });
+    if (!job || job.status !== 'PUBLISHED') return null;
+    const followUps = await this.runPublishFollowUps(job.id);
+    await this.maybeFirstJobPublishedPrompt(job.employer.userId, job.employerId);
+    await this.notifications
+      .create({
+        userId: job.employer.userId,
+        ...renderDefaultNotification('JOB_APPROVED', { jobTitle: job.title }),
+        templateKey: 'JOB_APPROVED',
+        templateVars: { jobTitle: job.title },
+        type: 'JOB',
+        link: `/employer/jobs/${job.id}`,
+      })
+      .catch(() => undefined);
+    return followUps;
+  }
+
+  async notifyJobRejected(jobId: string) {
+    const job = await this.prisma.job.findUnique({ where: { id: jobId }, include: { employer: true } });
+    if (!job) return;
+    await this.notifications
+      .create({
+        userId: job.employer.userId,
+        ...renderDefaultNotification('JOB_REJECTED', { jobTitle: job.title }),
+        templateKey: 'JOB_REJECTED',
+        templateVars: { jobTitle: job.title },
+        type: 'JOB',
+        link: `/employer/jobs/${job.id}`,
+      })
+      .catch(() => undefined);
+  }
+
+  async planUsage(userId: string) {
+    const employer = await this.requireEmployer(userId);
+    return employerPlanUsage(this.prisma, employer.id);
+  }
+
+  /**
+   * Each distinct candidate profile opened in a month uses one view credit. Profiles of candidates who
+   * applied to the employer's jobs are always viewable, but still counted in usage.
+   */
+  private async recordCandidateView(employerId: string, candidateId: string, jobId: string | null, applied: boolean) {
+    const period = usagePeriod();
+    const existing = await this.prisma.employerCandidateView.findUnique({
+      where: { employerId_candidateId_period: { employerId, candidateId, period } },
+    });
+    if (existing) return;
+    if (!applied) {
+      const usage = await employerPlanUsage(this.prisma, employerId);
+      if (usage.candidateViewCredits > 0 && usage.candidateViews >= usage.candidateViewCredits) {
+        throw new ForbiddenException({
+          code: SharedError.BUSINESS_RULE_VIOLATION,
+          message: candidateViewLimitMessage(usage.candidateViewCredits),
+        });
+      }
     }
-    return updated;
+    await this.prisma.employerCandidateView
+      .create({ data: { employerId, candidateId, jobId, period } })
+      .catch((err: unknown) => {
+        // A concurrent request may have inserted the same (employer, candidate, month) row.
+        if (!(err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002')) throw err;
+      });
+  }
+
+  private async assertActiveJobAllowance(employerId: string) {
+    const usage = await employerPlanUsage(this.prisma, employerId);
+    if (activeJobLimitReached(usage)) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: activeJobLimitMessage(usage.activeJobLimit),
+      });
+    }
+  }
+
+  /**
+   * Matching and candidate alerts run after the publish is persisted. Their failure must not report
+   * the publish itself as failed; the outcome is returned so the client can show the real state.
+   */
+  private async runPublishFollowUps(jobId: string) {
+    const matching = await this.recomputeMatchesAfterPublish(jobId);
+    await this.jobsService.notifyCandidatesForPublishedJob(jobId).catch((err: unknown) => {
+      this.logger.warn(
+        `Candidate alerts failed for published job ${jobId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+    return { matching };
+  }
+
+  private async recomputeMatchesAfterPublish(
+    jobId: string,
+  ): Promise<{ status: 'COMPUTED' | 'FAILED'; message?: string }> {
+    try {
+      await this.matching.recomputeMatchesForJob(jobId);
+      return { status: 'COMPUTED' };
+    } catch (err) {
+      this.logger.error(
+        `ATS match recompute failed for job ${jobId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return {
+        status: 'FAILED',
+        message:
+          'The job is saved, but candidate matching could not be computed yet. Open Matches or use Recompute to retry.',
+      };
+    }
+  }
+
+  private assertPublishSalary(salaryMin?: number | null, salaryMax?: number | null) {
+    const error = jobSalaryRequiredError(salaryMin, salaryMax);
+    if (error) {
+      throw new BadRequestException({ code: SharedError.VALIDATION_ERROR, message: error });
+    }
+  }
+
+  private assertSalaryRange(salaryMin?: number, salaryMax?: number) {
+    const error = salaryRangeError(salaryMin, salaryMax);
+    if (error) {
+      throw new BadRequestException({ code: SharedError.VALIDATION_ERROR, message: error });
+    }
   }
 
   async applications(userId: string, jobId: string) {
@@ -485,6 +759,7 @@ export class EmployersService {
         experienceYears: row.candidate.totalExperienceYears || 0,
       },
       job: { id: job.id, title: job.title },
+      employerNote: row.employerNote,
       screeningAnswers: parseScreeningAnswers(row.screeningAnswersJson).map((item) => ({
         questionId: item.questionId,
         answer: item.answer,
@@ -525,21 +800,31 @@ export class EmployersService {
         experienceYears: row.candidate.totalExperienceYears || 0,
       },
       job: { id: row.job.id, title: row.job.title },
+      employerNote: row.employerNote,
       match: this.scoreApplicationMatch(row.candidate, row.job),
     }));
   }
 
   async searchCandidates(
     userId: string,
-    query: { q?: string; city?: string; skill?: string; experienceMin?: number; jobId?: string },
+    query: {
+      q?: string;
+      city?: string;
+      skill?: string;
+      skills?: string[];
+      experienceMin?: number;
+      experience?: string;
+      language?: string;
+      education?: string;
+      availability?: string;
+      sort?: CandidateSearchSort;
+      page?: number;
+      pageSize?: number;
+      jobId?: string;
+    },
   ) {
     const employer = await this.requireEmployer(userId);
-    if (employer.verificationStatus === 'UNVERIFIED') {
-      throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: 'Complete company KYC before searching candidates.',
-      });
-    }
+    assertKycComplete(employer, 'Complete company KYC before searching candidates.');
 
     const jobId = query.jobId?.trim();
     if (!jobId) {
@@ -553,10 +838,26 @@ export class EmployersService {
     const job = await this.requireJob(userId, jobId);
     const unlockLimit = await this.matching.candidateUnlockLimit(employer.id, jobId);
 
-    const skillFilter = query.skill?.trim().toLowerCase();
+    const skillFilters = Array.from(
+      new Set(
+        [...(query.skills || []), ...(query.skill ? [query.skill] : [])]
+          .map((item) => item.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    if (skillFilters.length > CANDIDATE_SEARCH_MAX_SKILLS) {
+      throw new BadRequestException({
+        code: SharedError.VALIDATION_ERROR,
+        message: `You can filter by up to ${CANDIDATE_SEARCH_MAX_SKILLS} skills.`,
+      });
+    }
     const cityFilter = query.city?.trim();
     const q = query.q?.trim();
     const experienceMin = query.experienceMin && query.experienceMin > 0 ? query.experienceMin : 0;
+    const experienceBand = experienceFilterRange(query.experience);
+    const languageFilter = query.language?.trim().toLowerCase();
+    const page = Math.max(1, query.page || 1);
+    const pageSize = Math.min(Math.max(1, query.pageSize || 20), 50);
 
     let matchRows = await this.prisma.candidateMatch.findMany({
       where: { jobId: job.id },
@@ -582,6 +883,9 @@ export class EmployersService {
         unlocked: true,
         unlockLimit,
         totalMatched,
+        total: 0,
+        page,
+        pageSize,
         candidates: [],
       };
     }
@@ -614,14 +918,34 @@ export class EmployersService {
         if (cityFilter && !candidate.city?.toLowerCase().includes(cityFilter.toLowerCase())) {
           return null;
         }
-        if (experienceMin > 0) {
-          const candidateYears =
-            (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
-          if (candidateYears + 1e-9 < experienceMin) return null;
+        const candidateYears =
+          (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
+        if (experienceMin > 0 && candidateYears + 1e-9 < experienceMin) return null;
+        if (experienceBand) {
+          const inBand =
+            experienceBand.max === experienceBand.min
+              ? candidateYears <= experienceBand.max
+              : candidateYears >= experienceBand.min && candidateYears <= experienceBand.max;
+          if (!inBand) return null;
         }
-        if (skillFilter && !candidate.skills.some((item) => item.name.toLowerCase().includes(skillFilter))) {
+        if (
+          skillFilters.length &&
+          !skillFilters.every((wanted) =>
+            candidate.skills.some((item) => item.name.toLowerCase().includes(wanted)),
+          )
+        ) {
           return null;
         }
+        if (
+          languageFilter &&
+          !String(candidate.preferredLanguage || '')
+            .toLowerCase()
+            .split(/[,/|]/)
+            .some((item) => item.trim() && (item.includes(languageFilter) || languageFilter.includes(item.trim())))
+        ) {
+          return null;
+        }
+        if (!meetsEducationFilter(candidate.highestEducation, query.education)) return null;
         if (q) {
           const haystack = [
             candidate.firstName,
@@ -636,17 +960,6 @@ export class EmployersService {
             .toLowerCase();
           if (!haystack.includes(q.toLowerCase())) return null;
         }
-        return { match, candidate };
-      })
-      .filter((row): row is NonNullable<typeof row> => Boolean(row));
-
-    return {
-      jobId,
-      unlocked: true,
-      unlockLimit,
-      totalMatched,
-      candidates: filtered.map(({ match, candidate }) => {
-        const latestRole = candidate.experiences[0];
         const currentlyEmployed = candidate.experiences.some((item) => item.stillInCompany);
         const application = candidate.applications[0] || null;
         const noticeAnswer =
@@ -658,6 +971,46 @@ export class EmployersService {
           noticeAnswer,
           experienceYears: candidate.totalExperienceYears || 0,
         });
+        if (query.availability) {
+          const kind =
+            availability.label === 'Student' ? 'student' : availability.tone === 'immediate' ? 'immediate' : 'notice';
+          if (kind !== query.availability) return null;
+        }
+        return { match, candidate, candidateYears, currentlyEmployed, application, availability };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
+
+    if (query.sort === 'recent') {
+      filtered.sort((a, b) => b.candidate.updatedAt.getTime() - a.candidate.updatedAt.getTime());
+    } else if (query.sort === 'experience') {
+      filtered.sort((a, b) => b.candidateYears - a.candidateYears || b.match.totalScore - a.match.totalScore);
+    }
+    const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const talentShortlisted = new Set(
+      pageRows.length
+        ? (
+            await this.prisma.employerTalentShortlist.findMany({
+              where: {
+                employerId: employer.id,
+                jobId: job.id,
+                candidateId: { in: pageRows.map((row) => row.candidate.id) },
+              },
+              select: { candidateId: true },
+            })
+          ).map((row) => row.candidateId)
+        : [],
+    );
+
+    return {
+      jobId,
+      unlocked: true,
+      unlockLimit,
+      totalMatched,
+      total: filtered.length,
+      page,
+      pageSize,
+      candidates: pageRows.map(({ match, candidate, currentlyEmployed, application, availability }) => {
+        const latestRole = candidate.experiences[0];
         const skillNames = candidate.skills.map((item) => item.name);
         const matchScore = Math.round(match.totalScore);
         return {
@@ -667,6 +1020,7 @@ export class EmployersService {
           city: candidate.city,
           state: candidate.state,
           highestEducation: candidate.highestEducation,
+          preferredLanguage: candidate.preferredLanguage,
           experienceYears: candidate.totalExperienceYears || 0,
           experienceMonths: candidate.totalExperienceMonths || 0,
           stillInCollege: candidate.stillInCollege,
@@ -684,76 +1038,55 @@ export class EmployersService {
           appliedToEmployer: Boolean(application),
           applicationId: application?.id || null,
           applicationStatus: application?.status || null,
+          talentShortlisted: talentShortlisted.has(candidate.id),
         };
       }),
     };
   }
 
-  async notifyMatchedCandidate(userId: string, candidateId: string, jobId: string) {
+  /** Private per-job shortlist for matched candidates who have not applied (applicants use the application status). */
+  async setTalentShortlist(
+    userId: string,
+    candidateId: string,
+    jobId: string,
+    shortlisted: boolean,
+    note?: string,
+  ) {
     const employer = await this.requireEmployer(userId);
+    assertKycComplete(employer, 'Complete company KYC before shortlisting candidates.');
     const job = await this.requireJob(userId, jobId);
     await this.matching.assertCandidateVisibleForJob(userId, jobId, candidateId);
 
-    const candidate = await this.prisma.candidate.findUnique({
-      where: { id: candidateId },
-      select: {
-        id: true,
-        userId: true,
-        firstName: true,
-        whatsappOptIn: true,
-        whatsappNumber: true,
-        user: { select: { phone: true } },
-      },
-    });
-    if (!candidate) {
-      throw new NotFoundException({
-        code: SharedError.RESOURCE_NOT_FOUND,
-        message: 'Candidate was not found',
+    const key = { employerId: employer.id, candidateId, jobId: job.id };
+    if (shortlisted) {
+      const employerNote = note?.trim().slice(0, 500) || null;
+      await this.prisma.employerTalentShortlist.upsert({
+        where: { employerId_candidateId_jobId: key },
+        create: { ...key, note: employerNote },
+        update: employerNote ? { note: employerNote } : {},
       });
+    } else {
+      await this.prisma.employerTalentShortlist.deleteMany({ where: key });
     }
-
-    const company = employer.companyName?.trim() || 'An employer';
-    const firstName = candidate.firstName?.trim() || 'there';
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
-    const jobUrl = `${portalBase}/jobs/${job.id}`;
-
-    await this.notifications.create({
-      userId: candidate.userId,
-      title: 'Invited to apply',
-      body: `You were invited by ${company} for ${job.title}.`,
-      type: 'JOB_INVITE',
-      link: `/jobs/${job.id}`,
-    });
-
-    let whatsappSent = false;
-    const phone = this.whatsappWebhook.resolveNotifyPhone(candidate);
-    if (phone) {
-      try {
-        await this.whatsapp.sendText({
-          to: phone,
-          candidateId: candidate.id,
-          messageType: 'job_invite',
-          body: `Hi ${firstName}, ${company} invited you to apply for ${job.title} on CareerBridge.\n\nView the role: ${jobUrl}`,
-        });
-        whatsappSent = true;
-      } catch {
-        // In-app notify already sent; WhatsApp is best-effort.
-      }
-    }
-
-    return { ok: true as const, candidateId, jobId, whatsappSent };
+    return { ok: true as const, candidateId, jobId: job.id, shortlisted };
   }
 
   async candidateView(userId: string, candidateId: string, jobId?: string) {
     const employer = await this.requireEmployer(userId);
-    const applied = await this.prisma.application.findFirst({
-      where: { candidateId, job: { employerId: employer.id } },
-      include: {
-        job: { select: { id: true, title: true } },
-      },
-    });
+    const appliedInclude = { job: { select: { id: true, title: true } } } as const;
+    const appliedForJob = jobId
+      ? await this.prisma.application.findFirst({
+          where: { candidateId, jobId, job: { employerId: employer.id } },
+          include: appliedInclude,
+        })
+      : null;
+    const applied =
+      appliedForJob ||
+      (await this.prisma.application.findFirst({
+        where: { candidateId, job: { employerId: employer.id } },
+        include: appliedInclude,
+        orderBy: { createdAt: 'desc' },
+      }));
 
     const candidate = await this.prisma.candidate.findUnique({
       where: { id: candidateId },
@@ -775,7 +1108,7 @@ export class EmployersService {
       });
     }
 
-    if (employer.verificationStatus === 'UNVERIFIED' && !applied) {
+    if (!hasCompletedKyc(employer) && !applied) {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
         message: 'Complete company KYC before viewing candidate profiles.',
@@ -793,6 +1126,7 @@ export class EmployersService {
         message: 'Select a paid job to view this candidate profile.',
       });
     }
+    await this.recordCandidateView(employer.id, candidateId, resolvedJobId || null, Boolean(applied));
 
     const job = resolvedJobId
       ? await this.requireJob(userId, resolvedJobId)
@@ -845,20 +1179,23 @@ export class EmployersService {
 
   async downloadCandidateResume(userId: string, candidateId: string, jobId?: string) {
     const employer = await this.requireEmployer(userId);
+    const requestedJobId = jobId?.trim() || undefined;
+    // The application must link this candidate to this employer, and to the requested job when one is given.
     const applied = await this.prisma.application.findFirst({
-      where: { candidateId, job: { employerId: employer.id } },
+      where: {
+        candidateId,
+        job: { employerId: employer.id },
+        ...(requestedJobId ? { jobId: requestedJobId } : {}),
+      },
       include: { candidate: { select: { userId: true } } },
+      orderBy: { createdAt: 'desc' },
     });
     if (!applied) {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: 'Resume is available only for candidates who applied to your jobs.',
-      });
-    }
-    if (jobId && applied.jobId !== jobId) {
-      throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: 'This application does not match the selected job.',
+        message: requestedJobId
+          ? 'This candidate has not applied to the selected job.'
+          : 'Resume is available only for candidates who applied to your jobs.',
       });
     }
 
@@ -924,9 +1261,16 @@ export class EmployersService {
         message: 'Application was not found',
       });
     }
+    const transitionError = applicationTransitionError(application.status, 'INTERVIEW');
+    if (transitionError) {
+      throw new HttpException(
+        { code: SharedError.BUSINESS_RULE_VIOLATION, message: transitionError },
+        HttpStatus.CONFLICT,
+      );
+    }
 
-    const scheduledAt = new Date(dto.scheduledAt);
-    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now() - 60_000) {
+    const scheduledAt = parseInterviewInstant(dto.scheduledAt);
+    if (!scheduledAt || scheduledAt.getTime() < Date.now() - 60_000) {
       throw new HttpException(
         { code: SharedError.VALIDATION_ERROR, message: 'Choose a valid future interview time.' },
         HttpStatus.BAD_REQUEST,
@@ -936,9 +1280,6 @@ export class EmployersService {
     const mode = dto.mode?.trim().toUpperCase() || 'VIDEO';
     const durationMin = dto.durationMin && dto.durationMin > 0 ? dto.durationMin : 30;
     const scheduledEnd = new Date(scheduledAt.getTime() + durationMin * 60_000);
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
     const locationRaw = dto.location?.trim() || '';
     if (mode === 'VIDEO') {
       const meetingUrl = normalizeHttpUrl(locationRaw);
@@ -965,13 +1306,48 @@ export class EmployersService {
     }
     const location =
       mode === 'VIDEO' ? (normalizeHttpUrl(locationRaw) as string) : locationRaw;
-    const notifyBits = [
-      dto.notifyWhatsApp !== false ? 'WhatsApp notify: yes' : 'WhatsApp notify: no',
-      dto.notifyEmail !== false ? 'Email notify: yes' : 'Email notify: no',
-    ];
-    const notes = [dto.notes?.trim(), ...notifyBits].filter(Boolean).join('\n') || null;
+    const prefs = { whatsapp: dto.notifyWhatsApp !== false, email: dto.notifyEmail !== false };
+    const notes = withNotifyPrefs(dto.notes?.trim(), prefs);
+    const waConsented = Boolean(consentedWhatsAppNumber(application.candidate));
 
     const interview = await this.prisma.$transaction(async (tx) => {
+      // Serialise scheduling per candidate so concurrent requests cannot both pass the checks below.
+      // $executeRaw: pg_advisory_xact_lock returns void, which $queryRaw cannot deserialize.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`employer-interview:${application.candidateId}`}))`;
+      const open = await tx.employerInterview.findMany({
+        where: {
+          employerId: employer.id,
+          candidateId: application.candidateId,
+          status: { in: [...ACTIVE_INTERVIEW_STATUSES] },
+        },
+        select: { id: true, applicationId: true, scheduledAt: true, scheduledEnd: true, durationMin: true },
+      });
+      if (open.some((row) => row.applicationId === application.id)) {
+        throw new HttpException(
+          {
+            code: SharedError.DUPLICATE_RESOURCE,
+            message: 'An interview is already scheduled for this application. Reschedule or cancel it instead.',
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+      const clash = open.find((row) =>
+        intervalsOverlap(
+          scheduledAt,
+          scheduledEnd,
+          row.scheduledAt,
+          row.scheduledEnd || new Date(row.scheduledAt.getTime() + row.durationMin * 60_000),
+        ),
+      );
+      if (clash) {
+        throw new HttpException(
+          {
+            code: SharedError.BUSINESS_RULE_VIOLATION,
+            message: 'This candidate already has an interview with you that overlaps this time. Choose another slot.',
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
       if (application.status !== 'INTERVIEW' && application.status !== 'SELECTED') {
         await tx.application.update({
           where: { id: application.id },
@@ -992,8 +1368,13 @@ export class EmployersService {
           location,
           meetingUrl: null,
           notes,
+          candidateNotes: dto.notes?.trim() || null,
           status: 'SCHEDULED',
-          whatsappStatus: dto.notifyWhatsApp === false ? 'SKIPPED_BY_EMPLOYER' : 'QUEUED',
+          whatsappStatus: !prefs.whatsapp
+            ? 'SKIPPED_BY_EMPLOYER'
+            : waConsented
+              ? 'QUEUED'
+              : 'SKIPPED_NO_PHONE_OR_OPT_IN',
         },
         include: {
           application: {
@@ -1006,9 +1387,7 @@ export class EmployersService {
       });
     });
 
-    const portalMeetingUrl = `${portalBase}/interviews/scheduled/${interview.id}`;
-    const joinUrl =
-      (location && /^https?:\/\//i.test(location) ? location : null) || portalMeetingUrl;
+    const joinUrl = interviewMeetingUrl(this.config, { id: interview.id, location });
 
     const withMeeting = await this.prisma.employerInterview.update({
       where: { id: interview.id },
@@ -1024,8 +1403,19 @@ export class EmployersService {
     });
 
     // System of record is PostgreSQL. WhatsApp is async via Cloud Tasks / local queue.
-    if (dto.notifyWhatsApp !== false) {
-      await this.interviewWhatsApp.enqueueInvitation(withMeeting.id).catch(() => undefined);
+    let whatsappDelivery: 'QUEUED' | 'FAILED' | 'SKIPPED_NO_OPT_IN' | 'SKIPPED_BY_EMPLOYER' = 'SKIPPED_BY_EMPLOYER';
+    if (prefs.whatsapp && !waConsented) {
+      whatsappDelivery = 'SKIPPED_NO_OPT_IN';
+    } else if (prefs.whatsapp) {
+      whatsappDelivery = await this.interviewWhatsApp
+        .enqueueInvitation(withMeeting.id)
+        .then(() => 'QUEUED' as const)
+        .catch((err: unknown) => {
+          this.logger.error(
+            `WhatsApp invitation enqueue failed for interview ${withMeeting.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return 'FAILED' as const;
+        });
     }
 
     const whenLabel = new Intl.DateTimeFormat('en-IN', {
@@ -1038,40 +1428,62 @@ export class EmployersService {
       'there';
     const candidateEmail = application.candidate.user?.email?.trim() || '';
 
-    await this.notifications
+    const inApp = await this.notifications
       .create({
         userId: application.candidate.userId,
-        title: 'Interview scheduled',
-        body: `${employer.companyName || 'An employer'} scheduled an interview for ${application.job.title} on ${whenLabel}.`,
+        ...renderDefaultNotification('INTERVIEW_SCHEDULED', {
+          company: employer.companyName || 'An employer',
+          jobTitle: application.job.title,
+          when: whenLabel,
+        }),
+        templateKey: 'INTERVIEW_SCHEDULED',
+        templateVars: { company: employer.companyName || 'An employer', jobTitle: application.job.title, when: whenLabel },
         type: 'INTERVIEW',
         link: `/interviews/scheduled/${withMeeting.id}`,
       })
-      .catch(() => undefined);
+      .then(() => 'CREATED' as const)
+      .catch((err: unknown) => {
+        this.logger.error(
+          `In-app interview notification failed for interview ${withMeeting.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return 'FAILED' as const;
+      });
 
-    if (dto.notifyEmail !== false && candidateEmail) {
-      await this.email
-        .sendEmployerInterviewScheduled({
-          to: candidateEmail,
-          candidateName: application.candidate.firstName || candidateName,
-          companyName: employer.companyName || 'Employer',
-          jobTitle: application.job.title,
-          whenLabel,
-          mode,
-          portalUrl: portalMeetingUrl,
-          meetingUrl: joinUrl,
-          location,
-        })
-        .catch(() => undefined);
-    }
+    const email = await this.deliverEmail(prefs.email, candidateEmail, () =>
+      this.email.sendEmployerInterviewScheduled({
+        to: candidateEmail,
+        candidateName: application.candidate.firstName || candidateName,
+        companyName: employer.companyName || 'Employer',
+        jobTitle: application.job.title,
+        whenLabel,
+        mode,
+        portalUrl: candidateInterviewUrl(this.config, withMeeting.id),
+        meetingUrl: joinUrl,
+        location,
+      }),
+    );
 
-    return this.toInterview(withMeeting);
+    return { ...this.toInterview(withMeeting), delivery: { inApp, whatsapp: whatsappDelivery, email } };
+  }
+
+  /** Email outcome as it really happened; never reports SENT unless SMTP accepted the message. */
+  private async deliverEmail(
+    enabled: boolean,
+    to: string | null | undefined,
+    send: () => Promise<boolean>,
+  ): Promise<'SENT' | 'FAILED' | 'NOT_CONFIGURED' | 'NO_EMAIL' | 'SKIPPED_BY_EMPLOYER'> {
+    if (!enabled) return 'SKIPPED_BY_EMPLOYER';
+    if (!to) return 'NO_EMAIL';
+    if (!this.email.isConfigured()) return 'NOT_CONFIGURED';
+    const sent = await send().catch(() => false);
+    return sent ? 'SENT' : 'FAILED';
   }
 
   async updateInterviewStatus(
     userId: string,
     interviewId: string,
     action: 'confirm' | 'reschedule' | 'complete' | 'cancel' | 'notes',
-    payload?: { scheduledAt?: string; notes?: string },
+    payload?: { scheduledAt?: string; notes?: string; meetingUrl?: string },
   ) {
     const employer = await this.requireEmployer(userId);
     const interview = await this.prisma.employerInterview.findFirst({
@@ -1092,18 +1504,34 @@ export class EmployersService {
       });
     }
 
+    const check = interviewActionCheck(interview.status, action);
+    if (check === 'noop') return this.toInterview(interview);
+    if (check) {
+      throw new HttpException(
+        { code: SharedError.BUSINESS_RULE_VIOLATION, message: check },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const prefs = parseNotifyPrefs(interview.notes);
     let status: EmployerInterviewStatus = interview.status;
     let scheduledAt = interview.scheduledAt;
     let confirmedAt = interview.confirmedAt;
     let notes = interview.notes;
-    let notifyCandidate: 'approved' | 'rescheduled' | null = null;
+    let location = interview.location;
+    let notifyCandidate: 'approved' | 'rescheduled' | 'cancelled' | null = null;
+    const cancelReason = payload?.notes?.trim() || null;
 
     if (action === 'notes') {
-      notes = (payload?.notes || '').trim() || null;
+      const pendingReschedule = [
+        interview.notes?.match(RESCHEDULE_PREF_RE)?.[0],
+        interview.notes?.match(RESCHEDULE_REASON_RE)?.[0],
+      ].filter(Boolean);
+      notes = [(payload?.notes || '').trim(), ...pendingReschedule].filter(Boolean).join('\n') || null;
     } else if (action === 'confirm') {
       // Approve candidate reschedule request (preferred slot) or confirm pending interview.
       const preferred = parsePreferredReschedule(interview.notes);
-      const next = payload?.scheduledAt ? new Date(payload.scheduledAt) : preferred;
+      const next = payload?.scheduledAt ? parseInterviewInstant(payload.scheduledAt) : preferred;
       if (next && !Number.isNaN(next.getTime())) {
         if (next.getTime() < Date.now() - 60_000) {
           throw new HttpException(
@@ -1119,7 +1547,7 @@ export class EmployersService {
       if (payload?.notes !== undefined) notes = payload.notes.trim() || notes;
       notifyCandidate = interview.status === 'RESCHEDULE_REQUESTED' ? 'approved' : null;
     } else if (action === 'reschedule') {
-      const next = payload?.scheduledAt ? new Date(payload.scheduledAt) : null;
+      const next = payload?.scheduledAt ? parseInterviewInstant(payload.scheduledAt) : null;
       if (!next || Number.isNaN(next.getTime())) {
         throw new HttpException(
           { code: SharedError.VALIDATION_ERROR, message: 'Provide a valid reschedule time.' },
@@ -1131,6 +1559,20 @@ export class EmployersService {
           { code: SharedError.VALIDATION_ERROR, message: 'Interview time cannot be in the past.' },
           HttpStatus.BAD_REQUEST,
         );
+      }
+      const newMeetingUrl = payload?.meetingUrl?.trim();
+      if (newMeetingUrl) {
+        const normalized = interview.mode === 'VIDEO' ? normalizeHttpUrl(newMeetingUrl) : null;
+        if (!normalized) {
+          throw new HttpException(
+            {
+              code: SharedError.VALIDATION_ERROR,
+              message: 'Enter a valid meeting link (e.g. Google Meet or Zoom URL) for a video interview.',
+            },
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        location = normalized;
       }
       scheduledAt = next;
       // Employer-proposed new time — candidate should confirm again.
@@ -1144,7 +1586,10 @@ export class EmployersService {
       if (payload?.notes !== undefined) notes = payload.notes.trim();
     } else if (action === 'cancel') {
       status = 'CANCELLED';
-      if (payload?.notes !== undefined) notes = payload.notes.trim();
+      if (cancelReason) {
+        notes = [interview.notes?.trim(), `Cancellation reason: ${cancelReason}`].filter(Boolean).join('\n');
+      }
+      notifyCandidate = 'cancelled';
     } else {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
@@ -1152,19 +1597,16 @@ export class EmployersService {
       });
     }
 
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
-    const location = (interview.location || '').trim();
-    const meetingUrl =
-      (location && /^https?:\/\//i.test(location) ? location : null) ||
-      interview.meetingUrl ||
-      `${portalBase}/interviews/scheduled/${interview.id}`;
+    const meetingUrl = interviewMeetingUrl(this.config, { id: interview.id, location, meetingUrl: interview.meetingUrl });
     const scheduledEnd = new Date(scheduledAt.getTime() + interview.durationMin * 60_000);
+    if (scheduledAt.getTime() !== interview.scheduledAt.getTime()) {
+      await this.assertNoOverlappingInterview(employer.id, interview.candidateId, interview.id, scheduledAt, scheduledEnd);
+    }
+    notes = withNotifyPrefs(notes, prefs);
 
     const updated = await this.prisma.employerInterview.update({
       where: { id: interview.id },
-      data: { status, scheduledAt, scheduledEnd, confirmedAt, notes, meetingUrl },
+      data: { status, scheduledAt, scheduledEnd, confirmedAt, notes, location, meetingUrl },
       include: {
         application: {
           include: {
@@ -1188,41 +1630,130 @@ export class EmployersService {
         timeZone: 'Asia/Kolkata',
       }).format(updated.scheduledAt);
 
-      await this.notifications
+      if (notifyCandidate === 'cancelled') {
+        const companyName = employer.companyName || 'The employer';
+        const cancelVars = {
+          company: companyName,
+          jobTitle: updated.application.job.title,
+          when: whenLabel,
+          reason: cancelReason ? ` Reason: ${cancelReason.slice(0, 300)}` : '',
+        };
+        const inAppCancel = await this.notifications
+          .create({
+            userId: candidateUser.id,
+            ...renderDefaultNotification('INTERVIEW_CANCELLED', cancelVars),
+            templateKey: 'INTERVIEW_CANCELLED',
+            templateVars: cancelVars,
+            type: 'INTERVIEW',
+            link: `/interviews/scheduled/${updated.id}`,
+          })
+          .then(() => 'CREATED' as const)
+          .catch((err: unknown) => {
+            this.logger.error(
+              `Cancellation notification failed for interview ${updated.id}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            return 'FAILED' as const;
+          });
+        const emailCancel = await this.deliverEmail(prefs.email, candidateUser.email, () =>
+          this.email.sendEmployerInterviewCancelled({
+            to: candidateUser.email as string,
+            candidateName,
+            companyName,
+            jobTitle: updated.application.job.title,
+            whenLabel,
+            reason: cancelReason,
+          }),
+        );
+        return {
+          ...this.toInterview(updated),
+          delivery: { inApp: inAppCancel, email: emailCancel, whatsapp: 'NOT_SUPPORTED' as const },
+        };
+      }
+
+      const rescheduleKey: NotificationTemplateKey =
+        notifyCandidate === 'approved' ? 'INTERVIEW_RESCHEDULE_APPROVED' : 'INTERVIEW_RESCHEDULED';
+      const rescheduleVars = {
+        company: employer.companyName || 'Employer',
+        jobTitle: updated.application.job.title,
+      };
+      const inApp = await this.notifications
         .create({
           userId: candidateUser.id,
-          title: notifyCandidate === 'approved' ? 'Reschedule approved' : 'Interview rescheduled',
-          body:
-            notifyCandidate === 'approved'
-              ? `${employer.companyName || 'Employer'} approved your preferred time for ${updated.application.job.title}.`
-              : `${employer.companyName || 'Employer'} proposed a new time for ${updated.application.job.title}. Please confirm.`,
+          ...renderDefaultNotification(rescheduleKey, rescheduleVars),
+          templateKey: rescheduleKey,
+          templateVars: rescheduleVars,
           type: 'INTERVIEW',
           link: `/interviews/scheduled/${updated.id}`,
         })
-        .catch(() => undefined);
+        .then(() => 'CREATED' as const)
+        .catch(() => 'FAILED' as const);
 
-      if (candidateUser.email) {
-        await this.email
-          .sendEmployerInterviewRescheduleUpdate({
-            to: candidateUser.email,
-            candidateName,
-            companyName: employer.companyName || 'Employer',
-            jobTitle: updated.application.job.title,
-            whenLabel,
-            meetingUrl,
-            approved: notifyCandidate === 'approved',
-          })
-          .catch(() => undefined);
-      }
+      const email = await this.deliverEmail(prefs.email, candidateUser.email, () =>
+        this.email.sendEmployerInterviewRescheduleUpdate({
+          to: candidateUser.email as string,
+          candidateName,
+          companyName: employer.companyName || 'Employer',
+          jobTitle: updated.application.job.title,
+          whenLabel,
+          meetingUrl: notifyCandidate === 'approved' ? meetingUrl : null,
+          portalUrl: candidateInterviewUrl(this.config, updated.id),
+          approved: notifyCandidate === 'approved',
+        }),
+      );
 
-      if (notifyCandidate === 'approved') {
-        await this.interviewWhatsApp.sendConfirmationNow(updated.id).catch(() => undefined);
-      } else {
-        await this.interviewWhatsApp.enqueueInvitation(updated.id).catch(() => undefined);
+      let whatsapp: 'SENT' | 'QUEUED' | 'FAILED' | 'SKIPPED_NO_OPT_IN' | 'SKIPPED_BY_EMPLOYER' = 'SKIPPED_BY_EMPLOYER';
+      if (prefs.whatsapp && !consentedWhatsAppNumber(updated.application.candidate)) {
+        whatsapp = 'SKIPPED_NO_OPT_IN';
+      } else if (prefs.whatsapp && notifyCandidate === 'approved') {
+        const sent = await this.interviewWhatsApp
+          .sendConfirmationNow(updated.id)
+          .catch(() => ({ ok: false as const, reason: 'error' }));
+        whatsapp = sent.ok ? 'SENT' : 'reason' in sent && sent.reason === 'no_phone' ? 'SKIPPED_NO_OPT_IN' : 'FAILED';
+      } else if (prefs.whatsapp) {
+        whatsapp = await this.interviewWhatsApp
+          .enqueueInvitation(updated.id, 'reschedule')
+          .then(() => 'QUEUED' as const)
+          .catch(() => 'FAILED' as const);
       }
+      return { ...this.toInterview(updated), delivery: { inApp, whatsapp, email } };
     }
 
     return this.toInterview(updated);
+  }
+
+  private async assertNoOverlappingInterview(
+    employerId: string,
+    candidateId: string,
+    excludeInterviewId: string,
+    start: Date,
+    end: Date,
+  ) {
+    const others = await this.prisma.employerInterview.findMany({
+      where: {
+        employerId,
+        candidateId,
+        id: { not: excludeInterviewId },
+        status: { in: [...ACTIVE_INTERVIEW_STATUSES] },
+      },
+      select: { scheduledAt: true, scheduledEnd: true, durationMin: true },
+    });
+    const clash = others.some((row) =>
+      intervalsOverlap(
+        start,
+        end,
+        row.scheduledAt,
+        row.scheduledEnd || new Date(row.scheduledAt.getTime() + row.durationMin * 60_000),
+      ),
+    );
+    if (clash) {
+      throw new HttpException(
+        {
+          code: SharedError.BUSINESS_RULE_VIOLATION,
+          message: 'This candidate already has an interview with you that overlaps this time. Choose another slot.',
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
   async requestInterviewFeedback(userId: string, interviewId: string) {
@@ -1269,10 +1800,7 @@ export class EmployersService {
 
     const company = employer.companyName?.trim() || 'the employer';
     const jobTitle = interview.application.job.title;
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
-    const feedbackUrl = `${portalBase}/interviews/scheduled/${interview.id}`;
+    const feedbackUrl = candidateInterviewUrl(this.config, interview.id);
     const candidate = interview.application.candidate;
     const firstName = candidate.firstName?.trim() || 'there';
 
@@ -1284,22 +1812,25 @@ export class EmployersService {
       link: `/interviews/scheduled/${interview.id}`,
     });
 
-    const phone = this.whatsappWebhook.resolveNotifyPhone(candidate);
-    if (phone) {
-      try {
-        await this.whatsapp.sendText({
-          to: phone,
-          candidateId: candidate.id,
-          interviewId: interview.id,
-          messageType: 'interview_feedback_request',
-          body: `Hi ${firstName}, ${company} would like your feedback on the ${jobTitle} interview.\n\nShare feedback: ${feedbackUrl}`,
-        });
-      } catch {
-        // Notification already created.
+    let whatsapp: 'SENT' | 'FAILED' | 'SKIPPED_NO_OPT_IN' | 'SKIPPED_BY_EMPLOYER' = 'SKIPPED_BY_EMPLOYER';
+    if (parseNotifyPrefs(interview.notes).whatsapp) {
+      const phone = this.whatsappWebhook.resolveNotifyPhone(candidate);
+      whatsapp = 'SKIPPED_NO_OPT_IN';
+      if (phone) {
+        const sent = await this.whatsapp
+          .sendText({
+            to: phone,
+            candidateId: candidate.id,
+            interviewId: interview.id,
+            messageType: 'interview_feedback_request',
+            body: `Hi ${firstName}, ${company} would like your feedback on the ${jobTitle} interview.\n\nShare feedback: ${feedbackUrl}`,
+          })
+          .catch(() => ({ ok: false as const }));
+        whatsapp = sent.ok ? 'SENT' : 'FAILED';
       }
     }
 
-    return this.toInterview(updated);
+    return { ...this.toInterview(updated), delivery: { inApp: 'CREATED' as const, whatsapp } };
   }
 
   private toInterview(row: {
@@ -1309,6 +1840,7 @@ export class EmployersService {
     candidateId: string;
     scheduledAt: Date;
     durationMin: number;
+    timezone?: string | null;
     mode: string;
     location: string | null;
     meetingUrl?: string | null;
@@ -1320,6 +1852,10 @@ export class EmployersService {
     candidateFeedbackText?: string | null;
     candidateFeedbackAt?: Date | null;
     feedbackRequestedAt?: Date | null;
+    candidateAvailableFrom?: Date | null;
+    candidateAvailableUntil?: Date | null;
+    candidateTimezone?: string | null;
+    candidateRescheduleRequestedAt?: Date | null;
     application: {
       status: ApplicationStatus;
       candidate: {
@@ -1345,8 +1881,23 @@ export class EmployersService {
       location: row.location,
       meetingUrl: row.meetingUrl || null,
       status: row.status,
-      notes: stripRescheduleMarkers(row.notes) || null,
+      notes: stripNotifyMarkers(stripRescheduleMarkers(row.notes)) || null,
+      notify: parseNotifyPrefs(row.notes),
       preferredRescheduleAt: preferredRescheduleAt?.toISOString() || null,
+      candidateAvailability:
+        row.candidateAvailableFrom && row.candidateAvailableUntil
+          ? {
+              from: row.candidateAvailableFrom.toISOString(),
+              until: row.candidateAvailableUntil.toISOString(),
+              timezone: row.candidateTimezone || row.timezone || DEFAULT_INTERVIEW_TIMEZONE,
+              label: formatAvailabilityWindow(
+                row.candidateAvailableFrom,
+                row.candidateAvailableUntil,
+                row.candidateTimezone || row.timezone || DEFAULT_INTERVIEW_TIMEZONE,
+              ),
+            }
+          : null,
+      rescheduleRequestedAt: row.candidateRescheduleRequestedAt?.toISOString() || null,
       confirmedAt: row.confirmedAt?.toISOString() || null,
       createdAt: row.createdAt.toISOString(),
       applicationStatus: row.application.status,
@@ -1370,10 +1921,11 @@ export class EmployersService {
     };
   }
 
-  async changeStatus(userId: string, applicationId: string, action: string) {
+  async changeStatus(userId: string, applicationId: string, action: string, reason?: string, note?: string) {
     const employer = await this.requireEmployer(userId);
     const application = await this.prisma.application.findFirst({
       where: { id: applicationId, job: { employerId: employer.id } },
+      include: { job: { select: { title: true } }, candidate: { select: { userId: true } } },
     });
     if (!application) {
       throw new NotFoundException({ code: SharedError.RESOURCE_NOT_FOUND, message: 'Application was not found' });
@@ -1382,7 +1934,44 @@ export class EmployersService {
     if (!status) {
       throw new ForbiddenException({ code: SharedError.BUSINESS_RULE_VIOLATION, message: 'This action is not allowed.' });
     }
-    const updated = await this.prisma.application.update({ where: { id: application.id }, data: { status } });
+    if (application.status === status) return application;
+    const transitionError = applicationTransitionError(application.status, status);
+    if (transitionError) {
+      throw new HttpException(
+        { code: SharedError.BUSINESS_RULE_VIOLATION, message: transitionError },
+        HttpStatus.CONFLICT,
+      );
+    }
+    const employerNote = note?.trim().slice(0, 500);
+    const updated = await this.prisma.application.update({
+      where: { id: application.id },
+      data: { status, ...(employerNote ? { employerNote } : {}) },
+    });
+    const noticeKey = APPLICATION_STATUS_NOTICE[status];
+    let notification: 'CREATED' | 'FAILED' | 'NOT_APPLICABLE' = 'NOT_APPLICABLE';
+    if (noticeKey) {
+      const noticeVars = {
+        jobTitle: application.job.title,
+        company: employer.companyName || 'The employer',
+        feedback: status === 'REJECTED' && reason?.trim() ? ` Feedback: ${reason.trim().slice(0, 300)}` : '',
+      };
+      notification = await this.notifications
+        .create({
+          userId: application.candidate.userId,
+          ...renderDefaultNotification(noticeKey, noticeVars),
+          templateKey: noticeKey,
+          templateVars: noticeVars,
+          type: 'APPLICATION',
+          link: `/applications/${application.id}`,
+        })
+        .then(() => 'CREATED' as const)
+        .catch((err: unknown) => {
+          this.logger.error(
+            `Application status notification failed for ${application.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return 'FAILED' as const;
+        });
+    }
     if (status === 'SHORTLISTED' || status === 'INTERVIEW') {
       await this.testimonials
         .markEligible(userId, 'AFTER_SHORTLIST_OR_INTERVIEW')
@@ -1391,7 +1980,7 @@ export class EmployersService {
     if (status === 'SELECTED' || status === 'HIRED') {
       await this.testimonials.markEligible(userId, 'AFTER_HIRE_OR_SELECT').catch(() => undefined);
     }
-    return updated;
+    return { ...updated, notification };
   }
 
   private async maybeFirstJobPublishedPrompt(userId: string, employerId: string) {
@@ -1408,7 +1997,12 @@ export class EmployersService {
     if (!employer) {
       throw new NotFoundException({ code: SharedError.RESOURCE_NOT_FOUND, message: 'Employer profile was not found' });
     }
-    return employer;
+    return withEffectiveVerification(employer);
+  }
+
+  private async profile(employer: Parameters<EmployersService['toProfile']>[0] & { id: string }) {
+    const logoUrl = await readableCompanyLogoUrl(this.storage, employer.id, employer.logoUrl);
+    return this.toProfile({ ...employer, logoUrl });
   }
 
   private async requireJob(userId: string, id: string) {
@@ -1432,15 +2026,18 @@ export class EmployersService {
     panNumber: string | null;
     workEmail: string | null;
     designation: string | null;
+    companySize?: string | null;
+    about?: string | null;
+    linkedinUrl?: string | null;
     logoUrl?: string | null;
     verificationStatus: string;
     verified: boolean;
   }) {
-    const verificationStatus =
-      employer.verified && employer.verificationStatus === 'UNVERIFIED'
-        ? 'VERIFIED'
-        : employer.verificationStatus;
+    const { verificationStatus, verified } = withEffectiveVerification(employer);
     return {
+      companySize: employer.companySize ?? null,
+      about: employer.about ?? null,
+      linkedinUrl: employer.linkedinUrl ?? null,
       id: employer.id,
       companyName: employer.companyName,
       industry: employer.industry,
@@ -1454,7 +2051,7 @@ export class EmployersService {
       designation: employer.designation,
       logoUrl: employer.logoUrl || null,
       verificationStatus,
-      verified: employer.verified || verificationStatus === 'VERIFIED',
+      verified,
     };
   }
 

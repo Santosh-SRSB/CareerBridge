@@ -21,6 +21,9 @@ async function bootstrap() {
     logger: isCloudOrProd ? new CloudJsonLogger() : ['log', 'error', 'warn', 'debug', 'verbose'],
     bodyParser: false,
   });
+  // Cloud Run's front end is the only proxy; trusting exactly one hop makes req.ip the real client
+  // (used by the rate limiter) without accepting client-supplied X-Forwarded-For entries.
+  app.set('trust proxy', 1);
 
   // Profile photos may be sent as compressed JPEG data URLs — keep limit high.
   // Also preserve rawBody for WhatsApp signature verification.

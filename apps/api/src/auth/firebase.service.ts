@@ -94,10 +94,10 @@ export class FirebaseService {
 
   async verifyIdToken(idToken: string) {
     if (!this.app) {
+      this.logger.error('verifyIdToken called but Firebase Admin is not configured (FIREBASE_* env missing).');
       throw new ServiceUnavailableException({
-        code: 'INTERNAL_ERROR',
-        message:
-          'Phone OTP verification is not available on the server. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_* in apps/api/.env, then restart the API.',
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'Phone verification is temporarily unavailable. Please try again later or use email OTP.',
       });
     }
     try {

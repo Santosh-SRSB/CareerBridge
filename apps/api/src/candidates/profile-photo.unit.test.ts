@@ -199,6 +199,7 @@ function makeHarness(initialPhoto: string | null, opts: { uploadFails?: boolean;
     {} as never,
     storage as never,
     { markEligible: async () => undefined } as never,
+    {} as never,
   );
   return { service, state };
 }

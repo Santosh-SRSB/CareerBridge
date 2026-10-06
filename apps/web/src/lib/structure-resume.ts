@@ -10,7 +10,7 @@ export async function structureResumeText(rawText: string): Promise<PassportDraf
     (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/$/, "") ||
     (process.env.NODE_ENV !== "production" ? "http://localhost:3001/api/v1" : "");
   if (!apiUrl) {
-    throw new Error("NEXT_PUBLIC_API_URL is not configured for this environment.");
+    throw new Error("Something went wrong. Please try again.");
   }
 
   const response = await fetch(`${apiUrl}/resumes/structure-text`, {

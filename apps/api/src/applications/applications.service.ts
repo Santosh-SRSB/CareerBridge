@@ -9,10 +9,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { USABLE_RESUME_WHERE } from '../resumes/resume-eligibility';
 import { MatchingService } from '../matching/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { renderDefaultNotification } from '../notifications/notification-templates';
 import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service';
 import { EmailService } from '../auth/email.service';
 import { ConfigService } from '@nestjs/config';
 import { TestimonialsService } from '../testimonials/testimonials.service';
+import { InterviewAvailabilityService } from '../interview-availability/interview-availability.service';
+import { interviewMeetingUrl } from '../common/web/public-web-url';
+import {
+  DEFAULT_INTERVIEW_TIMEZONE,
+  formatAvailabilityWindow,
+  isReschedulePending,
+} from '../employers/employer-policy';
 
 const FLOW: ApplicationStatus[] = ['APPLIED', 'UNDER_REVIEW', 'SHORTLISTED', 'INTERVIEW', 'SELECTED'];
 
@@ -27,16 +35,6 @@ function stripRescheduleMarkers(notes: string | null | undefined) {
     .trim();
 }
 
-function withRescheduleMarkers(notes: string | null | undefined, preferredAt: Date, reason?: string) {
-  const base = stripRescheduleMarkers(notes);
-  const bits = [
-    `[[RESCHEDULE_PREF:${preferredAt.toISOString()}]]`,
-    reason?.trim() ? `[[RESCHEDULE_REASON:${reason.trim().slice(0, 280)}]]` : '',
-    base,
-  ].filter(Boolean);
-  return bits.join('\n');
-}
-
 function parsePreferredReschedule(notes: string | null | undefined) {
   const match = (notes || '').match(RESCHEDULE_PREF_RE);
   if (!match?.[1]) return null;
@@ -47,6 +45,15 @@ function parsePreferredReschedule(notes: string | null | undefined) {
 function parseRescheduleReason(notes: string | null | undefined) {
   const match = (notes || '').match(RESCHEDULE_REASON_RE);
   return match?.[1]?.trim() || null;
+}
+
+/** Hiring decision on the application behind an interview, as the candidate may see it. */
+function interviewOutcome(status: string | undefined) {
+  if (status === 'SELECTED' || status === 'HIRED') return 'SELECTED' as const;
+  if (status === 'REJECTED') return 'NOT_SELECTED' as const;
+  if (status === 'ON_HOLD') return 'ON_HOLD' as const;
+  if (status === 'WITHDRAWN') return 'WITHDRAWN' as const;
+  return null;
 }
 
 function formatWhenLabel(value: Date) {
@@ -67,6 +74,7 @@ export class ApplicationsService {
     private readonly email: EmailService,
     private readonly config: ConfigService,
     private readonly testimonials: TestimonialsService,
+    private readonly availability: InterviewAvailabilityService,
   ) {}
 
   async apply(userId: string, jobId: string, resumeId?: string) {
@@ -118,22 +126,26 @@ export class ApplicationsService {
     const candidateName =
       [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim() || 'A candidate';
 
+    const submittedVars = { jobTitle: job.title, company: job.employer.companyName };
     await this.notifications
       .create({
         userId,
-        title: 'Application submitted',
-        body: `Your application for ${job.title} at ${job.employer.companyName} was sent.`,
+        ...renderDefaultNotification('APPLICATION_SUBMITTED', submittedVars),
+        templateKey: 'APPLICATION_SUBMITTED',
+        templateVars: submittedVars,
         type: 'APPLICATION',
         link: `/applications/${application.id}`,
       })
       .catch(() => undefined);
 
     if (job.employer.userId) {
+      const receivedVars = { candidateName, jobTitle: job.title };
       await this.notifications
         .create({
           userId: job.employer.userId,
-          title: 'New application',
-          body: `${candidateName} applied for ${job.title}.`,
+          ...renderDefaultNotification('APPLICATION_RECEIVED', receivedVars),
+          templateKey: 'APPLICATION_RECEIVED',
+          templateVars: receivedVars,
           type: 'APPLICATION',
           link: `/employer/jobs/${job.id}`,
         })
@@ -183,10 +195,7 @@ export class ApplicationsService {
   async listScheduledInterviews(userId: string) {
     const candidate = await this.requireCandidate(userId);
     const rows = await this.prisma.employerInterview.findMany({
-      where: {
-        candidateId: candidate.id,
-        status: { not: 'CANCELLED' },
-      },
+      where: { candidateId: candidate.id },
       include: {
         application: {
           include: {
@@ -247,17 +256,17 @@ export class ApplicationsService {
         message: 'This interview can no longer be confirmed.',
       });
     }
+    if (isReschedulePending(row.status)) {
+      throw new ConflictException({
+        code: ErrorCode.BUSINESS_RULE_VIOLATION,
+        message: 'You asked for another time. The employer will send you a new interview time to confirm.',
+      });
+    }
 
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
-    const portalUrl = `${portalBase}/interviews/scheduled/${row.id}`;
-    const location = (row.location || '').trim();
-    const meetingUrl =
-      (location && /^https?:\/\//i.test(location) ? location : null) || row.meetingUrl || portalUrl;
-
-    const updated = await this.prisma.employerInterview.update({
-      where: { id },
+    const meetingUrl = interviewMeetingUrl(this.config, row);
+    // Atomic claim so a double click or a parallel WhatsApp confirm never sends notifications twice.
+    const claimed = await this.prisma.employerInterview.updateMany({
+      where: { id, candidateId: candidate.id, status: { in: ['PROPOSED', 'SCHEDULED'] } },
       data: {
         status: 'CONFIRMED',
         confirmedAt: new Date(),
@@ -265,6 +274,9 @@ export class ApplicationsService {
         meetingUrl,
         notes: stripRescheduleMarkers(row.notes) || null,
       },
+    });
+    const updated = await this.prisma.employerInterview.findUniqueOrThrow({
+      where: { id },
       include: {
         application: {
           include: {
@@ -274,6 +286,7 @@ export class ApplicationsService {
         },
       },
     });
+    if (claimed.count === 0) return this.toScheduledInterview(updated);
 
     const candidateName =
       [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim() || 'Candidate';
@@ -310,14 +323,18 @@ export class ApplicationsService {
     return this.toScheduledInterview(updated);
   }
 
+  /**
+   * No availability fields: the candidate clicked "Reschedule" (→ RESCHEDULE_NEEDED).
+   * date + availableFrom + availableUntil: availability submitted (→ RESCHEDULE_REQUESTED).
+   */
   async requestRescheduleInterview(
     userId: string,
     id: string,
     body: {
-      preferredAt?: string;
-      preferredDate?: string;
-      preferredTime?: string;
-      reason?: string;
+      date?: string;
+      availableFrom?: string;
+      availableUntil?: string;
+      timezone?: string;
     } = {},
   ) {
     const candidate = await this.requireCandidate(userId);
@@ -346,88 +363,41 @@ export class ApplicationsService {
       });
     }
 
-    let preferredAt: Date | null = null;
-    if (body.preferredAt) {
-      preferredAt = new Date(body.preferredAt);
-    } else if (body.preferredDate && body.preferredTime) {
-      preferredAt = new Date(`${body.preferredDate}T${body.preferredTime}`);
-    }
-    if (!preferredAt || Number.isNaN(preferredAt.getTime())) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: 'Choose a preferred date and time for the reschedule.',
-      });
-    }
-    if (preferredAt.getTime() < Date.now() - 60_000) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: 'Preferred date and time cannot be in the past.',
-      });
-    }
-
-    const updated = await this.prisma.employerInterview.update({
-      where: { id },
-      data: {
-        status: 'RESCHEDULE_REQUESTED',
-        confirmedAt: null,
-        whatsappStatus: 'RESCHEDULE_REQUESTED_VIA_PORTAL',
-        notes: withRescheduleMarkers(row.notes, preferredAt, body.reason),
-      },
-      include: {
-        application: {
-          include: {
-            job: { include: { employer: true } },
-            candidate: { include: { user: true } },
-          },
+    const include = {
+      application: {
+        include: {
+          job: { include: { employer: true } },
+          candidate: { include: { user: true } },
         },
       },
-    });
+    } as const;
 
-    const candidateName =
-      [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim() || 'A candidate';
-    const preferredLabel = formatWhenLabel(preferredAt);
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
-    const employerUser = row.employer.user;
-
-    if (employerUser?.id) {
-      await this.notifications
-        .create({
-          userId: employerUser.id,
-          title: 'Reschedule requested',
-          body: `${candidateName} wants to reschedule ${updated.application.job.title} to ${preferredLabel}.`,
-          type: 'INTERVIEW',
-          link: `/employer/interviews`,
-        })
-        .catch(() => undefined);
-
-      if (employerUser.email) {
-        await this.email
-          .sendEmployerInterviewRescheduleRequest({
-            to: employerUser.email,
-            employerName: row.employer.contactName || 'there',
-            candidateName,
-            jobTitle: updated.application.job.title,
-            preferredLabel,
-            portalUrl: `${portalBase}/employer/interviews`,
-          })
-          .catch(() => undefined);
-      }
-
-      await this.interviewWhatsApp
-        .notifyEmployerRescheduleRequest({
-          employerUserId: employerUser.id,
-          employerPhone: employerUser.phone,
-          candidateName,
-          jobTitle: updated.application.job.title,
-          preferredAt,
-          interviewId: updated.id,
-        })
-        .catch(() => undefined);
+    const submitsAvailability = Boolean(body.date || body.availableFrom || body.availableUntil);
+    if (!submitsAvailability) {
+      await this.interviewWhatsApp.markRescheduleNeeded(row.id, 'PORTAL');
+      return this.toScheduledInterview(
+        await this.prisma.employerInterview.findUniqueOrThrow({ where: { id: row.id }, include }),
+      );
     }
 
-    return this.toScheduledInterview(updated);
+    const result = await this.availability.submitAvailability({
+      interviewId: row.id,
+      candidateId: candidate.id,
+      body,
+      source: 'PORTAL',
+    });
+    if (!result.ok) {
+      if (result.reason === 'not_found') {
+        throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: result.message });
+      }
+      throw new BadRequestException({
+        code: result.reason === 'invalid' ? ErrorCode.VALIDATION_ERROR : ErrorCode.BUSINESS_RULE_VIOLATION,
+        message: result.message,
+      });
+    }
+    return this.toScheduledInterview(
+      await this.prisma.employerInterview.findUniqueOrThrow({ where: { id: row.id }, include }),
+    );
   }
 
   async submitScheduledInterviewFeedback(
@@ -521,11 +491,18 @@ export class ApplicationsService {
     status: string;
     meetingUrl?: string | null;
     notes?: string | null;
+    candidateNotes?: string | null;
     candidateFeedbackRating?: number | null;
     candidateFeedbackText?: string | null;
     candidateFeedbackAt?: Date | null;
     feedbackRequestedAt?: Date | null;
+    timezone?: string | null;
+    candidateAvailableFrom?: Date | null;
+    candidateAvailableUntil?: Date | null;
+    candidateTimezone?: string | null;
+    whatsappStatus?: string | null;
     application: {
+      status?: string;
       job: {
         title: string;
         employer: { companyName: string };
@@ -533,7 +510,12 @@ export class ApplicationsService {
     };
   }) {
     const scheduledAt = row.scheduledAt;
-    const dateLabel = scheduledAt.toISOString().slice(0, 10);
+    const dateLabel = new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'Asia/Kolkata',
+    }).format(scheduledAt);
     const timeLabel = new Intl.DateTimeFormat('en-IN', {
       hour: 'numeric',
       minute: '2-digit',
@@ -541,20 +523,18 @@ export class ApplicationsService {
       timeZone: 'Asia/Kolkata',
     }).format(scheduledAt);
     const status =
-      row.status === 'CONFIRMED'
-        ? 'CONFIRMED'
-        : row.status === 'RESCHEDULE_REQUESTED'
-          ? 'RESCHEDULE_REQUESTED'
-          : row.status === 'COMPLETED'
-            ? 'COMPLETED'
-            : row.status === 'CANCELLED'
-              ? 'CANCELLED'
-              : 'PENDING_CONFIRMATION';
+      row.status === 'CONFIRMED' ||
+      row.status === 'RESCHEDULE_NEEDED' ||
+      row.status === 'RESCHEDULE_REQUESTED' ||
+      row.status === 'COMPLETED' ||
+      row.status === 'CANCELLED'
+        ? row.status
+        : 'PENDING_CONFIRMATION';
     const mode = row.mode?.toUpperCase().includes('VIDEO') ? 'VIDEO' : 'IN_PERSON';
     const preferredAt = parsePreferredReschedule(row.notes);
-    const portalBase = (this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000') || '')
-      .split(',')[0]
-      .trim();
+    // The agreed time is void while a new one is being arranged, so its meeting link is not shown.
+    const linkWithheld = isReschedulePending(row.status) && mode === 'VIDEO';
+    const availabilityTz = row.candidateTimezone || row.timezone || DEFAULT_INTERVIEW_TIMEZONE;
     return {
       id: row.id,
       jobTitle: row.application.job.title,
@@ -562,14 +542,29 @@ export class ApplicationsService {
       scheduledDate: dateLabel,
       scheduledTime: timeLabel,
       status,
-      location: row.location || (mode === 'VIDEO' ? 'Video interview' : 'To be confirmed'),
+      // A WhatsApp "Decline" is the only candidate-side path to CANCELLED; every other cancel is the employer's.
+      cancelledBy:
+        status === 'CANCELLED' ? (row.whatsappStatus === 'DECLINED_VIA_WA' ? 'CANDIDATE' : 'EMPLOYER') : null,
+      location: linkWithheld
+        ? 'Video interview'
+        : row.location || (mode === 'VIDEO' ? 'Video interview' : 'To be confirmed'),
       mode,
       applicationId: row.applicationId,
       durationMin: row.durationMin,
       scheduledAt: scheduledAt.toISOString(),
-      meetingUrl: row.meetingUrl || `${portalBase}/interviews/scheduled/${row.id}`,
+      meetingUrl: linkWithheld ? null : interviewMeetingUrl(this.config, row),
+      candidateAvailability:
+        row.candidateAvailableFrom && row.candidateAvailableUntil
+          ? {
+              from: row.candidateAvailableFrom.toISOString(),
+              until: row.candidateAvailableUntil.toISOString(),
+              timezone: availabilityTz,
+              label: formatAvailabilityWindow(row.candidateAvailableFrom, row.candidateAvailableUntil, availabilityTz),
+            }
+          : null,
       preferredRescheduleAt: preferredAt?.toISOString() || null,
       preferredRescheduleReason: parseRescheduleReason(row.notes),
+      candidateNotes: row.candidateNotes?.trim() || null,
       candidateFeedback:
         row.candidateFeedbackAt && row.candidateFeedbackRating
           ? {
@@ -581,6 +576,7 @@ export class ApplicationsService {
       feedbackRequestedAt: row.feedbackRequestedAt?.toISOString() || null,
       canSubmitFeedback:
         ['CONFIRMED', 'COMPLETED'].includes(row.status) && !row.candidateFeedbackAt,
+      outcome: interviewOutcome(row.application.status),
     };
   }
 
@@ -612,7 +608,9 @@ export class ApplicationsService {
       employer: { companyName: string };
     };
   }) {
-    const reached = FLOW.indexOf(row.status === 'HIRED' ? 'SELECTED' : row.status);
+    const reached = FLOW.indexOf(
+      row.status === 'HIRED' ? 'SELECTED' : row.status === 'ON_HOLD' ? 'UNDER_REVIEW' : row.status,
+    );
     const timeline = FLOW.map((item, index) => ({
       status: item,
       at: row.createdAt.toISOString(),

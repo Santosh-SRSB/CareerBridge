@@ -8,13 +8,16 @@ import {
   buildReminderText,
   confirmPayload,
   formatInterviewWhen,
+  RESCHEDULE_BUTTON_TEXT,
+  RESCHEDULE_REQUEST_TEXT,
   reschedulePayload,
   resolveTemplateName,
-  slotPayload,
   startPayload,
+  uniqueButtonTitles,
   parseInteractivePayload as parseWaInteractivePayload,
 } from './whatsapp.templates';
 import {
+  isOwnBusinessNumber,
   isWhatsAppSendConfigured,
   signatureModeLabel,
   validateWhatsAppSignature,
@@ -24,6 +27,12 @@ import type {
   WhatsAppTemplateName,
   WhatsAppWebhookBody,
 } from './whatsapp.types';
+import { RESCHEDULE_FLOW_CTA, RESCHEDULE_FLOW_SCREEN } from './whatsapp-flow.util';
+
+/** Flow tokens authorise a Flow submission; they are not kept in the message log. */
+function payloadForStorage(payload: Record<string, unknown>) {
+  return JSON.stringify(payload, (key, value) => (key === 'flow_token' ? '[redacted]' : value));
+}
 
 function digitsOnly(phone: string) {
   return phone.replace(/\D/g, '');
@@ -54,7 +63,7 @@ export class WhatsAppService {
     const requireSignature = this.config.get<string>('WHATSAPP_REQUIRE_SIGNATURE') === 'true';
     const requireOptIn = this.config.get<string>('WHATSAPP_REQUIRE_OPT_IN') === 'true';
     const configured = isWhatsAppSendConfigured({ accessToken, phoneNumberId, verifyToken });
-    const signatureReady = !requireSignature || appSecret;
+    const signatureReady = appSecret || !requireSignature;
     return {
       configured,
       accessToken,
@@ -63,7 +72,9 @@ export class WhatsAppService {
       appSecret,
       businessAccountId,
       requireSignature,
-      requireOptIn,
+      signatureEnforced: appSecret || requireSignature,
+      requireOptIn: true,
+      requireOptInEnv: requireOptIn,
       signatureReady,
       signatureMode: signatureModeLabel(requireSignature, appSecret),
       apiVersion: this.config.get<string>('WHATSAPP_API_VERSION', 'v21.0'),
@@ -90,9 +101,9 @@ export class WhatsAppService {
 
   /**
    * Meta webhook HMAC (x-hub-signature-256).
-   * Controlled by WHATSAPP_REQUIRE_SIGNATURE:
-   * - false (DEV): accept without App Secret / signature
-   * - true: WHATSAPP_APP_SECRET required; reject invalid/missing signatures
+   * - WHATSAPP_APP_SECRET set (Secret Manager → Cloud Run env): signature always verified
+   * - WHATSAPP_REQUIRE_SIGNATURE=true without the secret: every webhook rejected
+   * - neither: unsigned payloads accepted (local DEV only)
    */
   validateSignature(rawBody: Buffer | string | undefined, signatureHeader: string | undefined) {
     const requireSignature = this.config.get<string>('WHATSAPP_REQUIRE_SIGNATURE') === 'true';
@@ -116,7 +127,7 @@ export class WhatsAppService {
         summary: 'Meta API not fully configured',
         detail: status,
       });
-      return { ok: false, status, message: 'Set WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN' };
+      return { ok: false, status, message: 'WhatsApp is not fully configured on the server. Complete the WhatsApp setup and try again.' };
     }
     const phoneNumberId = this.config.get<string>('WHATSAPP_PHONE_NUMBER_ID')!;
     const result = await this.graphGet(`/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`);
@@ -161,9 +172,11 @@ export class WhatsAppService {
     messageType?: string;
   }) {
     const to = toWaId(input.to);
-    const buttons = input.buttons.slice(0, 3).map((button) => ({
+    const picked = input.buttons.slice(0, 3);
+    const titles = uniqueButtonTitles(picked.map((button) => button.title));
+    const buttons = picked.map((button, index) => ({
       type: 'reply',
-      reply: { id: button.id.slice(0, 256), title: button.title.slice(0, 20) },
+      reply: { id: button.id.slice(0, 256), title: titles[index] },
     }));
     const payload = {
       messaging_product: 'whatsapp',
@@ -189,21 +202,30 @@ export class WhatsAppService {
     to: string;
     logicalTemplate: WhatsAppTemplateName;
     bodyParams?: string[];
+    /** Dynamic suffix for the template's first URL button (Meta `{{1}}` at the end of the URL). */
+    urlButtonSuffix?: string;
     candidateId?: string;
     interviewId?: string;
     languageCode?: string;
+    messageType?: string;
   }) {
     const to = toWaId(input.to);
     const templateName = resolveTemplateName(input.logicalTemplate);
-    const components =
-      input.bodyParams && input.bodyParams.length
-        ? [
-            {
-              type: 'body',
-              parameters: input.bodyParams.map((text) => ({ type: 'text', text })),
-            },
-          ]
-        : undefined;
+    const components: Array<Record<string, unknown>> = [];
+    if (input.bodyParams?.length) {
+      components.push({
+        type: 'body',
+        parameters: input.bodyParams.map((text) => ({ type: 'text', text })),
+      });
+    }
+    if (input.urlButtonSuffix) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [{ type: 'text', text: input.urlButtonSuffix }],
+      });
+    }
     const payload = {
       messaging_product: 'whatsapp',
       to,
@@ -211,15 +233,126 @@ export class WhatsAppService {
       template: {
         name: templateName,
         language: { code: input.languageCode || this.config.get('WHATSAPP_TEMPLATE_LANGUAGE', 'en') },
-        ...(components ? { components } : {}),
+        ...(components.length ? { components } : {}),
       },
     };
     return this.sendAndPersist({
       to,
       candidateId: input.candidateId,
       interviewId: input.interviewId,
-      messageType: 'template',
+      messageType: input.messageType || 'template',
       templateName,
+      payload,
+    });
+  }
+
+  /** Interactive message with a single URL button (allowed only inside the 24-hour service window). */
+  async sendCtaUrl(input: {
+    to: string;
+    body: string;
+    displayText: string;
+    url: string;
+    candidateId?: string;
+    interviewId?: string;
+    messageType?: string;
+  }) {
+    const to = toWaId(input.to);
+    const payload = {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'interactive',
+      interactive: {
+        type: 'cta_url',
+        body: { text: input.body.slice(0, 1024) },
+        action: {
+          name: 'cta_url',
+          parameters: { display_text: input.displayText.slice(0, 20), url: input.url },
+        },
+      },
+    };
+    return this.sendAndPersist({
+      to,
+      candidateId: input.candidateId,
+      interviewId: input.interviewId,
+      messageType: input.messageType || 'interactive_cta_url',
+      templateName: null,
+      payload,
+    });
+  }
+
+  /**
+   * "Choose Another Time" → CareerBridge availability form. Never includes meeting details.
+   * Interactive first (the candidate just tapped, so the service window is open); the approved
+   * `interview_reschedule` template is the fallback outside the window.
+   */
+  async sendRescheduleRequestLink(input: {
+    to: string;
+    interviewId: string;
+    url: string;
+    candidateId?: string;
+  }) {
+    const messageType = 'interview_reschedule_link';
+    const interactive = await this.sendCtaUrl({
+      to: input.to,
+      body: RESCHEDULE_REQUEST_TEXT,
+      displayText: RESCHEDULE_BUTTON_TEXT,
+      url: input.url,
+      candidateId: input.candidateId,
+      interviewId: input.interviewId,
+      messageType,
+    });
+    if (interactive.ok) return interactive;
+    return this.sendTemplate({
+      to: input.to,
+      logicalTemplate: 'INTERVIEW_RESCHEDULE',
+      urlButtonSuffix: input.interviewId,
+      candidateId: input.candidateId,
+      interviewId: input.interviewId,
+      messageType,
+    });
+  }
+
+  /**
+   * Interactive WhatsApp Flow (date picker + From/Until selectors) for "Choose Another Time".
+   * Same messageType as the website link, so one reschedule request still yields one message.
+   */
+  async sendRescheduleFlow(input: {
+    to: string;
+    interviewId: string;
+    flowId: string;
+    flowToken: string;
+    screenData: Record<string, string>;
+    body?: string;
+    candidateId?: string;
+  }) {
+    const to = toWaId(input.to);
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'interactive',
+      interactive: {
+        type: 'flow',
+        body: { text: (input.body || RESCHEDULE_REQUEST_TEXT).slice(0, 1024) },
+        action: {
+          name: 'flow',
+          parameters: {
+            flow_message_version: '3',
+            flow_token: input.flowToken,
+            flow_id: input.flowId,
+            flow_cta: RESCHEDULE_FLOW_CTA,
+            flow_action: 'navigate',
+            flow_action_payload: { screen: RESCHEDULE_FLOW_SCREEN, data: input.screenData },
+          },
+        },
+      },
+    };
+    return this.sendAndPersist({
+      to,
+      candidateId: input.candidateId,
+      interviewId: input.interviewId,
+      messageType: 'interview_reschedule_link',
+      templateName: null,
       payload,
     });
   }
@@ -244,6 +377,7 @@ export class WhatsAppService {
         bodyParams: [input.candidateName, input.jobTitle, dateLabel, timeLabel],
         candidateId: input.candidateId,
         interviewId: input.interviewId,
+        messageType: 'interview_invitation',
       });
       if (sent.ok) return sent;
     }
@@ -267,6 +401,7 @@ export class WhatsAppService {
     interviewId: string;
     candidateId?: string;
     timeZone?: string;
+    meetingUrl?: string | null;
   }) {
     return this.sendText({
       to: input.to,
@@ -274,35 +409,6 @@ export class WhatsAppService {
       candidateId: input.candidateId,
       interviewId: input.interviewId,
       messageType: 'interview_confirmation',
-    });
-  }
-
-  async sendRescheduleOptions(input: {
-    to: string;
-    interviewId: string;
-    slots: Date[];
-    candidateId?: string;
-    timeZone?: string;
-  }) {
-    const buttons = input.slots.slice(0, 3).map((slot) => {
-      const { dateLabel, timeLabel } = formatInterviewWhen(slot, input.timeZone);
-      return {
-        id: slotPayload(input.interviewId, slot.toISOString()),
-        title: timeLabel.slice(0, 20),
-        label: `${dateLabel} · ${timeLabel}`,
-      };
-    });
-    const body = [
-      'No problem. Please select another available time:',
-      ...buttons.map((button) => `• ${button.label}`),
-    ].join('\n');
-    return this.sendInteractiveButtons({
-      to: input.to,
-      body,
-      candidateId: input.candidateId,
-      interviewId: input.interviewId,
-      messageType: 'interview_reschedule_options',
-      buttons: buttons.map((button) => ({ id: button.id, title: button.title })),
     });
   }
 
@@ -386,17 +492,44 @@ export class WhatsAppService {
         ? input.interviewId
         : null;
 
+    const businessPhone = this.config.get<string>('WHATSAPP_DISPLAY_PHONE') || null;
+    if (isOwnBusinessNumber(input.to, businessPhone)) {
+      const error = {
+        error: {
+          code: 'RECIPIENT_IS_BUSINESS_NUMBER',
+          message: 'Recipient is the WhatsApp Business sender number; Meta rejects this with (#100) Invalid parameter.',
+        },
+      };
+      const rejected = await this.prisma.whatsAppMessage.create({
+        data: {
+          candidateId: input.candidateId || null,
+          interviewId: interviewFk,
+          toPhone: input.to,
+          fromPhone: businessPhone,
+          messageType: input.messageType,
+          templateName: input.templateName,
+          direction: 'OUTBOUND',
+          status: 'FAILED',
+          payloadJson: payloadForStorage(input.payload),
+          errorJson: JSON.stringify(error),
+        },
+      });
+      this.logger.warn(`WhatsApp ${input.messageType} not sent: recipient is the business sender number`);
+      this.events.push({ kind: 'MESSAGE_FAILED', summary: `Refused ${input.messageType}: recipient is the business number`, detail: error });
+      return { ok: false as const, messageId: null, recordId: rejected.id, error };
+    }
+
     const record = await this.prisma.whatsAppMessage.create({
       data: {
         candidateId: input.candidateId || null,
         interviewId: interviewFk,
         toPhone: input.to,
-        fromPhone: this.config.get<string>('WHATSAPP_DISPLAY_PHONE') || null,
+        fromPhone: businessPhone,
         messageType: input.messageType,
         templateName: input.templateName,
         direction: 'OUTBOUND',
         status: 'QUEUED',
-        payloadJson: JSON.stringify(input.payload),
+        payloadJson: payloadForStorage(input.payload),
       },
     });
 

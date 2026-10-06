@@ -15,6 +15,7 @@ export default function EmployerKycPage() {
   const [panNumber, setPanNumber] = useState('');
   const [gstVerified, setGstVerified] = useState(false);
   const [gstStatus, setGstStatus] = useState<'ACTIVE' | 'NOT_ACTIVE' | 'UNKNOWN' | ''>('');
+  const [gstMock, setGstMock] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -55,10 +56,13 @@ export default function EmployerKycPage() {
       const result = await verifyGstin(gstin);
       const mark = (result.trademark || result.tradeName || '').trim();
       setGstStatus(result.status);
+      setGstMock(Boolean(result.mock));
       if (result.verified && result.status === 'ACTIVE') {
         setGstVerified(true);
         setTrademark(mark);
-        if (!mark) {
+        if (result.mock) {
+          setError(result.message || 'Test mode: this is a mock GST check, not a live GST lookup.');
+        } else if (!mark) {
           setError('GSTIN is active, but no trade name was returned. Enter the trademark manually.');
         }
       } else if (result.status === 'NOT_ACTIVE') {
@@ -120,7 +124,7 @@ export default function EmployerKycPage() {
   }
 
   const gstLabelStatus = gstVerified ? (
-    <span className="ep-kyc__status ep-kyc__status--ok">Verified</span>
+    <span className="ep-kyc__status ep-kyc__status--ok">{gstMock ? 'Test mode (mock)' : 'Verified'}</span>
   ) : gstStatus === 'NOT_ACTIVE' ? (
     <span className="ep-kyc__status ep-kyc__status--bad">Not active</span>
   ) : (

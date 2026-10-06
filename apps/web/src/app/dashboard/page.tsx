@@ -1,16 +1,22 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   photoFileError,
   resolveExperienceChip,
   resolveCandidateExperienceBand,
   formatLocationLabel,
+  ONBOARDING_STEP_LABELS,
 } from '@careerbridge/shared';
-import type { CandidateProfile, JobCard } from '@careerbridge/shared';
+import type { ApplicationRecord, CandidateProfile, EmployabilityScore, JobCard } from '@careerbridge/shared';
+import { ErrorState, Skeleton, SkeletonList } from '@/components/ui/StateViews';
+import { isUnauthorizedError } from '@/lib/client-errors';
+import { formatAnnualSalaryLpa } from '@/lib/match';
 import {
   getCandidateMe,
+  getEmployabilityScore,
   getProfileCompletion,
   listApplications,
   listJobs,
@@ -27,12 +33,22 @@ import { formatCandidateExperienceLine, resolveTotalExperienceYears } from '@/li
 import { resolvePassportSummary } from '@/lib/passport-to-friend-resume';
 import {
   fetchScheduledInterviews,
+  isUpcomingInterview,
+  sortInterviewsByTime,
   type ScheduledJobInterview,
 } from '@/lib/candidate-marketplace-api';
 import { mockInterviewSetupUrl } from '@/lib/mock-interview-url';
 import { compressImageBlob } from '@/lib/image';
 
 const PHOTO_ACCEPT = 'image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png';
+
+/** Where a candidate completes an onboarding step they skipped. */
+const SKIPPED_STEP_LINKS: Record<number, string> = {
+  1: '/passport/personal',
+  2: '/passport/experience',
+  3: '/passport/preferences',
+  4: '/passport/skills',
+};
 
 function formatPersonName(value: string) {
   return value
@@ -114,6 +130,16 @@ function BriefcaseGlyph() {
   );
 }
 
+function WalletGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M16 13h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 function targetRole(profile: CandidateProfile | null) {
   if (!profile) return 'YOUR ROLE';
   const interest = profile.careerInterests?.[0]?.trim();
@@ -154,9 +180,35 @@ function formatInterviewDate(value: string) {
 
 function interviewStatusLabel(status: ScheduledJobInterview['status']) {
   if (status === 'CONFIRMED') return 'Confirmed';
-  if (status === 'RESCHEDULE_REQUESTED') return 'Reschedule requested';
+  if (status === 'RESCHEDULE_NEEDED') return 'Choose another time';
+  if (status === 'RESCHEDULE_REQUESTED') return 'Waiting for employer to schedule';
   return 'Pending confirmation';
 }
+
+function formatInterviewTime(interview: ScheduledJobInterview) {
+  if (interview.scheduledAt) {
+    const at = new Date(interview.scheduledAt);
+    if (!Number.isNaN(at.getTime())) {
+      return at.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+  }
+  return interview.scheduledTime || '';
+}
+
+function interviewTypeLabel(mode: ScheduledJobInterview['mode']) {
+  return mode === 'VIDEO' ? 'Video interview' : 'In-person interview';
+}
+
+const APPLICATION_STATUS_LABELS: Record<string, string> = {
+  APPLIED: 'Applied',
+  UNDER_REVIEW: 'Under review',
+  SHORTLISTED: 'Shortlisted',
+  INTERVIEW: 'Interview',
+  SELECTED: 'Selected',
+  REJECTED: 'Not selected',
+  WITHDRAWN: 'Withdrawn',
+  HIRED: 'Hired',
+};
 
 function TypingHello({ name }: { name: string }) {
   const fullText = `Hello, ${name}`;
@@ -256,12 +308,16 @@ export default function DashboardPage() {
   const [name, setName] = useState('there');
   const [city, setCity] = useState('');
   const [completionPercent, setCompletionPercent] = useState(0);
+  const [employability, setEmployability] = useState<EmployabilityScore | null>(null);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [bio, setBio] = useState('');
   const [jobs, setJobs] = useState<JobCard[]>([]);
   const [scheduledInterviews, setScheduledInterviews] = useState<ScheduledJobInterview[]>([]);
   const [applicationCount, setApplicationCount] = useState(0);
+  const [recentApplications, setRecentApplications] = useState<ApplicationRecord[]>([]);
   const [ready, setReady] = useState(false);
+  const [dataState, setDataState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [reloadKey, setReloadKey] = useState(0);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoPct, setPhotoPct] = useState(0);
@@ -292,8 +348,11 @@ export default function DashboardPage() {
       return;
     }
 
+    setDataState('loading');
+    let meLoaded = false;
     fetchMe()
       .then((me) => {
+        meLoaded = true;
         const onboardingDone = me.onboardingCompleted ?? stored.onboardingCompleted;
         const dashboardReached = me.dashboardReached ?? stored.dashboardReached ?? false;
         patchStoredUser({
@@ -323,10 +382,8 @@ export default function DashboardPage() {
           recommendedJobs()
             .then((result) => result.items || [])
             .catch(() => listJobs({ limit: 8 }).then((result) => result.items || []).catch(() => [])),
-          fetchScheduledInterviews().catch(() => [] as ScheduledJobInterview[]),
-          listApplications()
-            .then((rows) => rows.length)
-            .catch(() => 0),
+          fetchScheduledInterviews(),
+          listApplications(),
           listResumes()
             .then((items) => {
               const latest = [...items].sort(
@@ -335,7 +392,7 @@ export default function DashboardPage() {
               return latest?.summary || latest?.content?.summary || '';
             })
             .catch(() => ''),
-        ]).then(([, candidateProfile, completion, jobItems, interviews, appsCount, resumeSummary]) => {
+        ]).then(([, candidateProfile, completion, jobItems, interviews, applications, resumeSummary]) => {
           setProfile(candidateProfile);
           if (candidateProfile.photoUrl) {
             patchStoredUser({ photoUrl: candidateProfile.photoUrl });
@@ -352,24 +409,42 @@ export default function DashboardPage() {
           setCompletionPercent(percent);
           setBio(resolvePassportSummary(candidateProfile, resumeSummary || undefined));
           setJobs(jobItems.slice(0, 3));
-          const upcoming = interviews
-            .filter((item) => item.status !== 'RESCHEDULE_REQUESTED')
-            .sort((a, b) =>
-              `${a.scheduledDate}${a.scheduledTime}`.localeCompare(`${b.scheduledDate}${b.scheduledTime}`),
-            );
+          const upcoming = sortInterviewsByTime(
+            interviews.filter(
+              (item) =>
+                item.status !== 'RESCHEDULE_REQUESTED' &&
+                item.status !== 'RESCHEDULE_NEEDED' &&
+                isUpcomingInterview(item),
+            ),
+          );
           setScheduledInterviews(upcoming);
-          setApplicationCount(appsCount);
+          setApplicationCount(applications.length);
+          setRecentApplications(
+            [...applications]
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .slice(0, 3),
+          );
+          setDataState('ready');
         });
       })
-      .catch(() => {
-        if (!stored.onboardingCompleted) {
+      .catch((err) => {
+        if (isUnauthorizedError(err)) return;
+        if (!meLoaded && !stored.onboardingCompleted) {
           router.replace('/onboarding/continue');
           return;
         }
         setName(formatPersonName(stored.firstName || 'there'));
         setReady(true);
+        setDataState('error');
       });
-  }, [router]);
+  }, [router, reloadKey]);
+
+  useEffect(() => {
+    if (dataState !== 'ready') return;
+    getEmployabilityScore()
+      .then(setEmployability)
+      .catch(() => setEmployability(null));
+  }, [dataState, reloadKey]);
 
   useEffect(() => {
     const onPhoto = (event: Event) => {
@@ -478,10 +553,26 @@ export default function DashboardPage() {
   if (!ready) {
     return (
       <CandidateAppShell activeTab="home" maxWidth="max-w-[1180px]">
-        <div className="p-12 text-center text-sm text-slate-500">Loading dashboard...</div>
+        <div className="space-y-4 p-4">
+          <Skeleton className="h-8 w-1/2" />
+          <Skeleton className="h-48 w-full" />
+          <SkeletonList rows={3} label="Loading dashboard…" />
+        </div>
       </CandidateAppShell>
     );
   }
+
+  if (dataState === 'error') {
+    return (
+      <CandidateAppShell activeTab="home" maxWidth="max-w-[1180px]">
+        <div className="p-4">
+          <ErrorState onRetry={() => setReloadKey((k) => k + 1)} />
+        </div>
+      </CandidateAppShell>
+    );
+  }
+
+  const widgetsLoading = dataState === 'loading';
 
   return (
     <CandidateAppShell activeTab="home" maxWidth="max-w-[1180px]" avatarUrl={profile?.photoUrl}>
@@ -564,6 +655,25 @@ export default function DashboardPage() {
                 />
               </div>
             </div>
+
+            {profile?.onboardingSkippedSteps?.length ? (
+              <div
+                role="note"
+                data-testid="skipped-sections"
+                className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+              >
+                <p className="font-semibold">Skipped during setup:</p>
+                <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                  {profile.onboardingSkippedSteps.map((step) => (
+                    <li key={step}>
+                      <Link href={SKIPPED_STEP_LINKS[step] ?? '/profile'} className="font-semibold underline">
+                        {ONBOARDING_STEP_LABELS[step] ?? `Step ${step}`}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             {!isProfileComplete ? (
               <button
@@ -682,6 +792,7 @@ export default function DashboardPage() {
                 ref={photoInputRef}
                 type="file"
                 accept={PHOTO_ACCEPT}
+                aria-label="Upload profile photo"
                 className="sr-only"
                 tabIndex={-1}
                 disabled={photoUploading}
@@ -711,6 +822,15 @@ export default function DashboardPage() {
             >
               View Profile
             </button>
+            {employability ? (
+              <Link
+                href="/passport#employability"
+                className="mt-2 inline-flex min-h-12 items-center text-sm font-bold text-[#0a2e2c] underline"
+                data-testid="dashboard-employability"
+              >
+                Employability score: {employability.score}/100 ({employability.band})
+              </Link>
+            ) : null}
           </div>
         </div>
 
@@ -740,7 +860,9 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {jobs.length === 0 ? (
+        {widgetsLoading ? (
+          <SkeletonList rows={3} label="Loading recommended jobs…" />
+        ) : jobs.length === 0 ? (
           <div className="cb-boarding__empty">
             <p>
               Currently no match found with your profile. We will notify you when a suitable role
@@ -757,6 +879,7 @@ export default function DashboardPage() {
               const matchScore =
                 typeof job.match?.score === 'number' ? Math.round(job.match.score) : null;
               const experienceLabel = job.experience?.trim() || null;
+              const salaryLabel = formatAnnualSalaryLpa(job.salaryMin, job.salaryMax);
               return (
                 <article key={job.id} className="cb-rec-job">
                   <div className="cb-rec-job__head">
@@ -781,6 +904,12 @@ export default function DashboardPage() {
                         job.city ||
                         city ||
                         'India'}
+                    </p>
+                    <p className="cb-rec-job__meta" data-testid="rec-job-salary">
+                      <span className="cb-rec-job__meta-icon" aria-hidden>
+                        <WalletGlyph />
+                      </span>
+                      {salaryLabel || 'Salary not disclosed'}
                     </p>
                     {experienceLabel ? (
                       <p className="cb-rec-job__meta">
@@ -836,7 +965,9 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {displayInterviews.length === 0 ? (
+        {widgetsLoading ? (
+          <SkeletonList rows={2} label="Loading interviews…" />
+        ) : displayInterviews.length === 0 ? (
           <div className="cb-boarding__empty">
             <p>No interviews scheduled yet. Practice a mock interview while you wait.</p>
             <div className="cb-boarding__empty-actions">
@@ -862,7 +993,18 @@ export default function DashboardPage() {
               <article key={interview.id} className="cb-boarding__job">
                 <h3>{interview.jobTitle}</h3>
                 <div className="cb-boarding__job-co">{interview.companyName}</div>
-                <div className="cb-boarding__job-pay">{formatInterviewDate(interview.scheduledDate)}</div>
+                <div className="cb-boarding__job-pay">
+                  {formatInterviewDate(interview.scheduledDate)}
+                  {formatInterviewTime(interview) ? ` · ${formatInterviewTime(interview)}` : ''}
+                </div>
+                <div className="cb-boarding__job-co">
+                  {[
+                    interviewTypeLabel(interview.mode),
+                    interview.durationMin ? `${interview.durationMin} min` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
                 <div className="cb-boarding__job-match">{interviewStatusLabel(interview.status).toUpperCase()}</div>
                 <div className="cb-boarding__job-actions">
                   <button
@@ -878,6 +1020,48 @@ export default function DashboardPage() {
                     onClick={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}
                   >
                     Prepare
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        <div className="cb-boarding__section-title cb-boarding__section-title--spaced">
+          <h2>Application Status</h2>
+          <button type="button" onClick={() => router.push('/applications')}>
+            View all applications →
+          </button>
+        </div>
+
+        {widgetsLoading ? (
+          <SkeletonList rows={2} label="Loading applications…" />
+        ) : recentApplications.length === 0 ? (
+          <div className="cb-boarding__empty" data-state="empty">
+            <p>You haven&apos;t applied for any jobs yet.</p>
+            <button type="button" className="cb-boarding__btn" onClick={() => router.push('/jobs')}>
+              Find Jobs
+            </button>
+          </div>
+        ) : (
+          <div className="cb-boarding__jobs" data-testid="dashboard-applications">
+            {recentApplications.map((application) => (
+              <article key={application.id} className="cb-boarding__job">
+                <h3>{application.job.title}</h3>
+                <div className="cb-boarding__job-co">{application.job.companyName}</div>
+                <div className="cb-boarding__job-pay">
+                  Applied {formatInterviewDate(application.createdAt)}
+                </div>
+                <div className="cb-boarding__job-match">
+                  {(APPLICATION_STATUS_LABELS[application.status] || application.status).toUpperCase()}
+                </div>
+                <div className="cb-boarding__job-actions">
+                  <button
+                    type="button"
+                    className="cb-boarding__job-view"
+                    onClick={() => router.push(`/applications/${application.id}`)}
+                  >
+                    View
                   </button>
                 </div>
               </article>

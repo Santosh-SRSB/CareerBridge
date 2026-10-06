@@ -38,6 +38,27 @@ export function formatInterviewWhen(date: Date, timeZone = 'Asia/Kolkata') {
   return { dateLabel, timeLabel };
 }
 
+/** Must match the body of the approved `interview_reschedule` Meta template. */
+export const RESCHEDULE_REQUEST_TEXT =
+  'Your interview needs to be rescheduled. Please select another available date and the time range when you are available.';
+export const RESCHEDULE_BUTTON_TEXT = 'Choose Another Time';
+export const CONFIRMATION_LINK_NOTE =
+  'The interview link is sent via email and will also be shared here with a reminder.';
+
+/** Meta rejects interactive messages whose reply-button titles repeat (#131009 "Duplicate button title"). */
+export function uniqueButtonTitles(titles: string[]) {
+  const seen = new Set<string>();
+  return titles.map((raw, index) => {
+    let title = raw.slice(0, 20);
+    if (seen.has(title)) {
+      const suffix = ` #${index + 1}`;
+      title = `${raw.slice(0, 20 - suffix.length)}${suffix}`;
+    }
+    seen.add(title);
+    return title;
+  });
+}
+
 export function buildInvitationText(input: {
   candidateName: string;
   jobTitle: string;
@@ -63,16 +84,20 @@ export function buildConfirmationText(input: {
   candidateName: string;
   scheduledAt: Date;
   timeZone?: string;
+  meetingUrl?: string | null;
 }) {
   const { dateLabel, timeLabel } = formatInterviewWhen(input.scheduledAt, input.timeZone);
   return [
     `Great, ${input.candidateName}!`,
     '',
     `Your interview is confirmed for ${dateLabel} at ${timeLabel}.`,
+    ...(input.meetingUrl ? ['', `Meeting link: ${input.meetingUrl}`] : []),
     '',
     "We'll remind you before the interview.",
     '',
     'Good luck!',
+    '',
+    CONFIRMATION_LINK_NOTE,
   ].join('\n');
 }
 

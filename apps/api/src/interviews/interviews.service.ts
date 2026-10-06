@@ -149,6 +149,7 @@ export class InterviewsService {
           ...content,
           experienceYears: years,
           questionLimit,
+          requestedDifficulty: SETUP_DIFFICULTIES.has(dto.difficulty ?? '') ? dto.difficulty : undefined,
           candidateId: candidate.id,
           resumeId: parsedResume?.id,
         }),
@@ -186,6 +187,7 @@ export class InterviewsService {
       snippet: first.snippet ?? null,
       thinkSeconds: first.thinkSeconds ?? 0,
       ragChunkIds: first.ragChunkIds || [],
+      aiFallback: first.aiFallback || undefined,
     };
     const transcript: LiveInterviewTurn[] = [
       { role: 'ai', text: first.text, at: new Date().toISOString(), questionNumber: 1 },
@@ -275,6 +277,52 @@ export class InterviewsService {
       category: current.category,
     });
 
+    return this.advanceLive(userId, id, row, questions, current, isAudioOnly ? 'Audio answer submitted.' : textAnswer);
+  }
+
+  /** Close the open question as skipped (score 0, no AI evaluation) and move to the next one. */
+  async skipLive(userId: string, id: string, expectedIndex?: number) {
+    const interview = await this.requireInterview(userId, id);
+    if (interview.mode !== 'LIVE_AI') {
+      throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'This interview is not an AI live session.' });
+    }
+    if (interview.status === 'COMPLETED') throw interviewEnded();
+    if (expectedIndex != null && expectedIndex !== interview.questionIndex) throw alreadyAnswered();
+    const claim = await this.lockInterview(interview.id, async (row, tx) => {
+      if (row.status === 'COMPLETED') throw interviewEnded();
+      const questions = parseQuestions(row.questionsJson);
+      const current = questions[row.questionIndex];
+      if (!current) {
+        throw new BadRequestException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: 'There is no open question to skip.' });
+      }
+      if (isAnsweredQuestion(current) || (expectedIndex != null && expectedIndex !== row.questionIndex)) {
+        throw alreadyAnswered();
+      }
+      Object.assign(current, skippedQuestionResult());
+      const transcript = parseTurns(row.transcriptJson || '[]');
+      transcript.push({ role: 'candidate', text: '[Skipped]', at: new Date().toISOString(), questionNumber: current.number });
+      const updated = await tx.interview.update({
+        where: { id: row.id },
+        data: {
+          questionsJson: JSON.stringify(questions),
+          answersJson: JSON.stringify(questions.map((item) => item.answer || '')),
+          transcriptJson: JSON.stringify(transcript),
+        },
+      });
+      return { row: updated, questions, current };
+    });
+    return this.advanceLive(userId, id, claim.row, claim.questions, claim.current, 'Question skipped.');
+  }
+
+  private async advanceLive(
+    userId: string,
+    id: string,
+    row: Interview,
+    questions: LiveInterviewQuestion[],
+    current: LiveInterviewQuestion,
+    lastAnswer: string,
+  ) {
+    const profile = this.profileOf(row);
     const limitMin = row.durationLimitMin || 30;
     const elapsed = row.startAt ? (Date.now() - row.startAt.getTime()) / 60000 : 0;
     const questionLimit = readQuestionLimit(row.profileJson);
@@ -287,7 +335,7 @@ export class InterviewsService {
       row.interviewType,
       row.difficulty || 'Beginner',
       questions.map((item) => item.text),
-      { question: current.text, answer: isAudioOnly ? 'Audio answer submitted.' : textAnswer },
+      { question: current.text, answer: lastAnswer },
       (questions as StoredLiveQuestion[]).flatMap((item) => item.ragChunkIds || []),
     );
 
@@ -307,6 +355,7 @@ export class InterviewsService {
         snippet: follow.snippet ?? null,
         thinkSeconds: follow.thinkSeconds ?? 0,
         ragChunkIds: follow.ragChunkIds || [],
+        aiFallback: follow.aiFallback || undefined,
       };
       latest.push(nextQuestion);
       const transcript = parseTurns(fresh.transcriptJson || '[]');
@@ -453,6 +502,7 @@ export class InterviewsService {
         target.whatWasGood = analysis.whatWasGood;
         target.whatWasMissing = analysis.whatWasMissing;
         target.improvementSuggestion = analysis.improvementSuggestion;
+        target.scoredWithoutAi = analysis.scoredWithoutAi || undefined;
         changed = true;
       }
       if (changed) {
@@ -620,6 +670,7 @@ export class InterviewsService {
       Partial<ResumeContent> & {
         experienceYears?: number;
         questionLimit?: number;
+        requestedDifficulty?: string;
         candidateId?: string;
         resumeId?: string;
       }
@@ -643,6 +694,7 @@ export class InterviewsService {
     return {
       ...profile,
       questionLimit: content.questionLimit,
+      requestedDifficulty: content.requestedDifficulty,
       candidateId: content.candidateId,
       resumeId: content.resumeId,
       interviewId: interview.id,
@@ -728,6 +780,7 @@ export class InterviewsService {
               prompt: currentLive.text,
               snippet: currentLive.snippet ?? null,
               thinkSeconds: currentLive.thinkSeconds ?? 0,
+              aiFallback: currentLive.aiFallback || undefined,
             }
           : classic[row.questionIndex]
             ? { index: row.questionIndex, prompt: classic[row.questionIndex] }
@@ -868,6 +921,25 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+const SETUP_DIFFICULTIES = new Set(['Beginner', 'Intermediate', 'Advanced']);
+
+export function skippedQuestionResult(now = new Date()): Partial<LiveInterviewQuestion> {
+  return {
+    answer: '',
+    answerMode: 'SKIPPED',
+    answeredAt: now.toISOString(),
+    answerDurationSec: 0,
+    score: 0,
+    analysis: 'Question skipped — no answer was given.',
+    improvedAnswer: undefined,
+    strengths: [],
+    weaknesses: ['Question was skipped'],
+    whatWasGood: [],
+    whatWasMissing: ['An answer to this question'],
+    improvementSuggestion: 'Practise this question and give a specific example from your experience.',
+  };
 }
 
 function clampQuestionLimit(value: number) {

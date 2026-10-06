@@ -43,6 +43,9 @@ import {
   mapAtsSectionToWizardStep,
 } from '@/features/resume/resume-update-mode';
 import { validateWizardStep } from '@/features/resume/resume-wizard-validation';
+import { RESUME_SUMMARY_MAX } from '@/features/resume/resume-entry-validation';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { SummaryAiAssist } from '@/components/resume/SummaryAiAssist';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { OB } from '@/components/OnboardingFrame';
@@ -62,7 +65,7 @@ import {
 import { mapResumeRecordToWizardSeed } from '@/features/resume/resume-record-to-wizard';
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
 import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
-import type { CandidateProfile } from '@careerbridge/shared';
+import { fitResumeSummary, type CandidateProfile } from '@careerbridge/shared';
 import {
   parseLanguageSkills,
   serializeLanguageSkills,
@@ -78,6 +81,16 @@ function formatSalaryDisplay(value: string) {
   return Number(digits).toLocaleString('en-IN');
 }
 type ActiveForm = null | 'education' | 'experience' | 'project' | 'certification' | 'achievement';
+type EntryKind = Exclude<ActiveForm, null>;
+type PendingEntryDelete = { kind: EntryKind; id: string; label: string };
+
+const ENTRY_KIND_NAMES: Record<EntryKind, string> = {
+  education: 'education entry',
+  experience: 'experience entry',
+  project: 'project',
+  certification: 'certification',
+  achievement: 'achievement',
+};
 
 interface EducationItem {
   id: string;
@@ -266,7 +279,7 @@ export default function ResumePage() {
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
-          Loadingâ€¦
+          Loading…
         </main>
       }
     >
@@ -308,6 +321,9 @@ function ResumePageInner() {
   const [gapLabel, setGapLabel] = useState('');
   const [activeForm, setActiveForm] = useState<ActiveForm>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [entrySubmitSignal, setEntrySubmitSignal] = useState(0);
+  const [continueAfterEntrySave, setContinueAfterEntrySave] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PendingEntryDelete | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [draftReady, setDraftReady] = useState(false);
   const [pendingParseId, setPendingParseId] = useState<string | null>(null);
@@ -384,7 +400,7 @@ function ResumePageInner() {
         });
       }
 
-      // ATS dashboard â†’ edit one section only (do not restart full creation wizard)
+      // ATS dashboard → edit one section only (do not restart full creation wizard)
       const pendingAtsEdit = peekAtsSectionEdit();
       if (pendingAtsEdit?.resumeId) {
         try {
@@ -414,7 +430,7 @@ function ResumePageInner() {
         }
       }
 
-      // Path A: seed from uploaded resume â†’ open Personal step (skip choose screen)
+      // Path A: seed from uploaded resume → open Personal step (skip choose screen)
       const autofillSeed = peekResumeAutofillSeed();
       const fromAutofill = Boolean(autofillSeed || peekResumeFromAutofill() || fromAutofillQuery);
       if (fromAutofill) {
@@ -454,7 +470,7 @@ function ResumePageInner() {
             pendingParseId: pendingParse && resumeId ? resumeId : null,
             savedResumeId: resumeId || null,
           });
-          // Clear seed only â€” keep from-autofill flag for Strict Mode remount.
+          // Clear seed only — keep from-autofill flag for Strict Mode remount.
           clearResumeAutofillSeed();
           setFlowPhase('wizard');
           setWizardIndex(0);
@@ -879,6 +895,7 @@ function ResumePageInner() {
       location,
       email,
       phone,
+      summary,
       skills,
       educationList,
       languages,
@@ -895,6 +912,58 @@ function ResumePageInner() {
   function clearEntryForm() {
     setActiveForm(null);
     setEditingId(null);
+  }
+
+  function summaryAiProfile(): Record<string, unknown> {
+    const profile: Record<string, unknown> = {};
+    if (skills.length) profile.skills = skills.slice(0, 25);
+    if (languages.length) profile.languages = languages;
+    if (educationList.length) {
+      profile.education = educationList.map((e) => ({
+        degree: e.degree,
+        field: e.field,
+        institution: e.institution,
+        completed: e.isCurrent ? 'ongoing' : e.endDate,
+      }));
+    }
+    if (experienceList.length) {
+      profile.experience = experienceList.map((e) => ({
+        role: e.role,
+        company: e.company,
+        from: e.startDate,
+        to: e.isCurrent ? 'present' : e.endDate,
+      }));
+    }
+    return profile;
+  }
+
+  function requestEntryDelete(kind: EntryKind, id: string, label: string) {
+    setPendingDelete({ kind, id, label });
+  }
+
+  function confirmEntryDelete() {
+    if (!pendingDelete) return;
+    const { kind, id } = pendingDelete;
+    const drop = <T extends { id: string }>(prev: T[]) => prev.filter((x) => x.id !== id);
+    if (kind === 'education') setEducationList(drop);
+    else if (kind === 'experience') setExperienceList(drop);
+    else if (kind === 'project') setProjectList(drop);
+    else if (kind === 'certification') setCertificationList(drop);
+    else setAchievementList(drop);
+    if (editingId === id) clearEntryForm();
+    setPendingDelete(null);
+  }
+
+  useEffect(() => {
+    if (!continueAfterEntrySave || activeForm !== null) return;
+    setContinueAfterEntrySave(false);
+    handleWizardNext();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [continueAfterEntrySave, activeForm, educationList, experienceList]);
+
+  function handleEntryInvalid() {
+    setContinueAfterEntrySave(false);
+    setValidationErrors(['Fix the highlighted fields in the open entry, or cancel it, before continuing.']);
   }
 
   function nextWizardIndex(from: number) {
@@ -946,6 +1015,14 @@ function ResumePageInner() {
   }
 
   function handleWizardNext() {
+    const openEntryOnStep =
+      (activeForm === 'education' && currentStep === 'Education') ||
+      (activeForm === 'experience' && currentStep === 'Experience');
+    if (openEntryOnStep) {
+      setContinueAfterEntrySave(true);
+      setEntrySubmitSignal((n) => n + 1);
+      return;
+    }
     // ATS edit mode: never advance through the creation wizard
     if (atsEditStep) {
       void handleAtsEditSaveAndReturn();
@@ -1064,12 +1141,12 @@ function ResumePageInner() {
   function handleApplyAiSuggestion(suggestion: ResumeAiSuggestion, improvedText: string) {
     const lines = improvedText
       .split(/\n+/)
-      .map((line) => line.replace(/^[-â€¢*]\s*/, '').trim())
+      .map((line) => line.replace(/^[-•*]\s*/, '').trim())
       .filter(Boolean);
 
     switch (suggestion.section) {
       case 'summary':
-        setSummary(improvedText.replace(/\n+/g, ' ').trim());
+        setSummary(fitResumeSummary(improvedText) ?? improvedText.replace(/\n+/g, ' ').trim());
         break;
       case 'skills':
         setSkills(
@@ -1110,9 +1187,9 @@ function ResumePageInner() {
                 id: `edu-${Date.now()}`,
                 degree: improvedText.split(' in ')[0] || improvedText,
                 field: improvedText.includes(' in ')
-                  ? improvedText.split(' in ')[1]?.split(' â€” ')[0] || ''
+                  ? improvedText.split(' in ')[1]?.split(' — ')[0] || ''
                   : '',
-                institution: improvedText.split(' â€” ')[1]?.replace(/\s*\(.*\)$/, '') || '',
+                institution: improvedText.split(' — ')[1]?.replace(/\s*\(.*\)$/, '') || '',
                 location: '',
                 startDate: '',
                 endDate: '',
@@ -1123,12 +1200,12 @@ function ResumePageInner() {
             ];
           }
           const next = [...prev];
-          const degreeMatch = improvedText.match(/^([^â€”]+?)(?:\s+in\s+([^â€”]+))?/);
+          const degreeMatch = improvedText.match(/^([^—]+?)(?:\s+in\s+([^—]+))?/);
           next[0] = {
             ...next[0],
             degree: degreeMatch?.[1]?.trim() || next[0].degree,
             field: degreeMatch?.[2]?.trim() || next[0].field,
-            institution: improvedText.split(' â€” ')[1]?.replace(/\s*\(.*\)$/, '').trim() || next[0].institution,
+            institution: improvedText.split(' — ')[1]?.replace(/\s*\(.*\)$/, '').trim() || next[0].institution,
           };
           return next;
         });
@@ -1139,7 +1216,7 @@ function ResumePageInner() {
 
         for (const line of lines) {
           if (/certification|certificate|certified/i.test(line)) {
-            const name = line.replace(/\s*â€”\s*Udemy\s*$/i, '').trim() || line;
+            const name = line.replace(/\s*—\s*Udemy\s*$/i, '').trim() || line;
             certEntries.push({
               id: `cert-${Date.now()}-${certEntries.length}`,
               name,
@@ -1314,14 +1391,14 @@ function ResumePageInner() {
       leaveResumeFlow('/onboarding/complete');
       return;
     }
-    // Step 0: leave wizard back to where the user came from (View Resume, ATS, dashboardâ€¦)
+    // Step 0: leave wizard back to where the user came from (View Resume, ATS, dashboard…)
     leaveResumeFlow('/dashboard');
   }
 
   if (!draftReady) {
     return (
       <div className="cb-resume-flow-root flex min-h-screen items-center justify-center bg-[#f3f4ee]">
-        <p className="text-sm font-medium text-[#43526b]">Loading your resumeâ€¦</p>
+        <p className="text-sm font-medium text-[#43526b]">Loading your resume…</p>
       </div>
     );
   }
@@ -1610,6 +1687,19 @@ function ResumePageInner() {
           background: transparent;
           font-family: 'Inter', sans-serif;
         }
+        .cb-entry-empty {
+          margin: 0 0 12px;
+          padding: 14px 16px;
+          border-radius: var(--radius-m);
+          background: #f6f7f2;
+          color: var(--ink-70);
+          font-size: 13.5px;
+        }
+        .cb-char-count {
+          align-self: flex-end;
+          font-size: 12px;
+          color: var(--ink-70);
+        }
         .cb-entry-card {
           border: 1px solid var(--line);
           border-radius: var(--radius-m);
@@ -1707,7 +1797,7 @@ function ResumePageInner() {
                 style={{ borderColor: '#7A8270', color: '#5C5546' }}
                 aria-label="Go back"
               >
-                â† Back
+                ← Back
               </button>
 
               <h1
@@ -1782,7 +1872,7 @@ function ResumePageInner() {
                   className="w-full rounded-full border-2 bg-white py-2.5 text-sm font-semibold transition hover:bg-[#F5F7F0] sm:py-3"
                   style={{ marginTop: 50, borderColor: OB.ink, color: OB.ink }}
                 >
-                  Continue to dashboard â†’
+                  Continue to dashboard →
                 </button>
               </div>
             </div>
@@ -1831,7 +1921,7 @@ function ResumePageInner() {
                     Reading your resume
                   </p>
                   <p className="m-0 mt-0.5 text-xs" style={{ color: '#6b7789' }}>
-                    You can keep editing â€” details will fill in automatically.
+                    You can keep editing — details will fill in automatically.
                   </p>
                 </div>
               </div>
@@ -1880,11 +1970,11 @@ function ResumePageInner() {
             <button type="button" className="cb-flow-back-btn" onClick={handleBack}>
               {atsEditStep
                 ? atsEditReturnTo === 'ats'
-                  ? 'â† Back to ATS'
-                  : 'â† Back'
+                  ? '← Back to ATS'
+                  : '← Back'
                 : getResumeUpdateReturnTo() || peekReturnTo()
-                  ? 'â† Back'
-                  : 'Back â†'}
+                  ? '← Back'
+                  : 'Back ←'}
             </button>
           </div>
           <div className="desc">
@@ -1894,7 +1984,7 @@ function ResumePageInner() {
                 ? 'Fill in the gaps so your profile is ready.'
                 : isBuildPath
                   ? 'Fill each section, then check ATS score and improve with AI before you save.'
-                  : 'One strong profile â€” ready for every application.'}
+                  : 'One strong profile — ready for every application.'}
           </div>
         </div>
 
@@ -1941,7 +2031,7 @@ function ResumePageInner() {
                 <div className="cb-field-grid">
                   {highlightMissingPersonal ? (
                     <p className="cb-field full" style={{ margin: 0, fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>
-                      Empty fields are highlighted in red â€” fill them to complete your profile.
+                      Empty fields are highlighted in red — fill them to complete your profile.
                     </p>
                   ) : null}
                   <div className={`cb-field${highlightMissingPersonal && !fullName.trim() ? ' cb-field-missing' : ''}`}>
@@ -1976,11 +2066,23 @@ function ResumePageInner() {
                     />
                   </div>
                   <div className={`cb-field full${highlightMissingPersonal && !summary.trim() ? ' cb-field-missing' : ''}`}>
-                    <label>Professional summary</label>
+                    <label htmlFor="cb-resume-summary">Professional summary</label>
                     <textarea
+                      id="cb-resume-summary"
                       value={summary}
-                      onChange={(e) => setSummary(e.target.value)}
+                      maxLength={RESUME_SUMMARY_MAX}
+                      aria-describedby="cb-resume-summary-count"
+                      onChange={(e) => setSummary(e.target.value.slice(0, RESUME_SUMMARY_MAX))}
                       placeholder="A line or two about the role you want"
+                    />
+                    <span id="cb-resume-summary-count" className="cb-char-count" aria-live="polite">
+                      {summary.length}/{RESUME_SUMMARY_MAX}
+                    </span>
+                    <SummaryAiAssist
+                      summary={summary}
+                      targetRole={preferredRole}
+                      profile={summaryAiProfile()}
+                      onUse={setSummary}
                     />
                   </div>
                 </div>
@@ -1996,8 +2098,8 @@ function ResumePageInner() {
                           {edu.field ? ` in ${edu.field}` : ''}
                         </div>
                         <div className="meta">
-                          {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' Â· ')}
-                          {edu.grade ? ` Â· ${edu.gradeType || 'Grade'}: ${edu.grade}` : ''}
+                          {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' · ')}
+                          {edu.grade ? ` · ${edu.gradeType || 'Grade'}: ${edu.grade}` : ''}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2014,16 +2116,19 @@ function ResumePageInner() {
                         <button
                           type="button"
                           className="remove"
-                          onClick={() => {
-                            setEducationList((prev) => prev.filter((x) => x.id !== edu.id));
-                            if (editingId === edu.id) clearEntryForm();
-                          }}
+                          aria-label={`Delete ${edu.degree || 'education entry'}`}
+                          onClick={() => requestEntryDelete('education', edu.id, edu.degree)}
                         >
                           Delete
                         </button>
                       </div>
                     </div>
                   ))}
+                  {educationList.length === 0 && activeForm !== 'education' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No education added yet. Click + Add Education to begin.
+                    </p>
+                  ) : null}
                   {activeForm === 'education' ? (
                     <EducationInlineForm
                       key={editingId || 'edu-new'}
@@ -2032,6 +2137,8 @@ function ResumePageInner() {
                           ? educationList.find((e) => e.id === editingId) || undefined
                           : undefined
                       }
+                      submitSignal={entrySubmitSignal}
+                      onInvalid={handleEntryInvalid}
                       onCancel={clearEntryForm}
                       onSave={(data) => {
                         if (editingId) {
@@ -2094,10 +2201,10 @@ function ResumePageInner() {
                     <div key={exp.id} className="cb-entry-card">
                       <div>
                         <div className="role">
-                          {exp.role} â€” {exp.company}
+                          {exp.role} — {exp.company}
                         </div>
                         <div className="meta">
-                          {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' Â· ')}
+                          {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' · ')}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2114,16 +2221,19 @@ function ResumePageInner() {
                         <button
                           type="button"
                           className="remove"
-                          onClick={() => {
-                            setExperienceList((prev) => prev.filter((x) => x.id !== exp.id));
-                            if (editingId === exp.id) clearEntryForm();
-                          }}
+                          aria-label={`Delete ${exp.role || 'experience entry'}`}
+                          onClick={() => requestEntryDelete('experience', exp.id, exp.role)}
                         >
                           Delete
                         </button>
                       </div>
                     </div>
                   ))}
+                  {experienceList.length === 0 && activeForm !== 'experience' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No experience added yet. Click + Add Experience to begin, or continue if you are a fresher.
+                    </p>
+                  ) : null}
                   {activeForm === 'experience' ? (
                     <ExperienceInlineForm
                       key={editingId || 'exp-new'}
@@ -2133,6 +2243,8 @@ function ResumePageInner() {
                           ? experienceList.find((e) => e.id === editingId) || undefined
                           : undefined
                       }
+                      submitSignal={entrySubmitSignal}
+                      onInvalid={handleEntryInvalid}
                       onCancel={clearEntryForm}
                       onSave={(data) => {
                         if (editingId) {
@@ -2195,7 +2307,7 @@ function ResumePageInner() {
                       <div>
                         <div className="role">{proj.name}</div>
                         <div className="meta">
-                          {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' Â· ')}
+                          {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2212,10 +2324,8 @@ function ResumePageInner() {
                         <button
                           type="button"
                           className="remove"
-                          onClick={() => {
-                            setProjectList((prev) => prev.filter((x) => x.id !== proj.id));
-                            if (editingId === proj.id) clearEntryForm();
-                          }}
+                          aria-label={`Delete ${proj.name || 'project'}`}
+                          onClick={() => requestEntryDelete('project', proj.id, proj.name)}
                         >
                           Delete
                         </button>
@@ -2282,14 +2392,14 @@ function ResumePageInner() {
                     Certifications
                   </p>
                   <p className="mb-3 text-sm text-[#5b6b7c]">
-                    Optional for many roles â€” add any certificates that strengthen your profile.
+                    Optional for many roles — add any certificates that strengthen your profile.
                   </p>
                   {certificationList.map((cert) => (
                     <div key={cert.id} className="cb-entry-card">
                       <div>
                         <div className="role">{cert.name}</div>
                         <div className="meta">
-                          {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' Â· ')}
+                          {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2306,10 +2416,8 @@ function ResumePageInner() {
                         <button
                           type="button"
                           className="remove"
-                          onClick={() => {
-                            setCertificationList((prev) => prev.filter((x) => x.id !== cert.id));
-                            if (editingId === cert.id) clearEntryForm();
-                          }}
+                          aria-label={`Delete ${cert.name || 'certification'}`}
+                          onClick={() => requestEntryDelete('certification', cert.id, cert.name)}
                         >
                           Delete
                         </button>
@@ -2373,7 +2481,7 @@ function ResumePageInner() {
                         <div className="meta">
                           {[ach.organization, formatDateForResume(ach.date), ach.description]
                             .filter(Boolean)
-                            .join(' Â· ')}
+                            .join(' · ')}
                         </div>
                       </div>
                       <div className="cb-entry-actions">
@@ -2390,10 +2498,8 @@ function ResumePageInner() {
                         <button
                           type="button"
                           className="remove"
-                          onClick={() => {
-                            setAchievementList((prev) => prev.filter((x) => x.id !== ach.id));
-                            if (editingId === ach.id) clearEntryForm();
-                          }}
+                          aria-label={`Delete ${ach.title || 'achievement'}`}
+                          onClick={() => requestEntryDelete('achievement', ach.id, ach.title)}
                         >
                           Delete
                         </button>
@@ -2525,7 +2631,7 @@ function ResumePageInner() {
                       rows={4}
                       value={gapReason}
                       onChange={(e) => setGapReason(e.target.value)}
-                      placeholder="e.g. Prepared for competitive exams, caregiving, health recovery, full-time upskillingâ€¦"
+                      placeholder="e.g. Prepared for competitive exams, caregiving, health recovery, full-time upskilling…"
                       style={{
                         width: '100%',
                         borderRadius: 12,
@@ -2556,7 +2662,7 @@ function ResumePageInner() {
                     Languages you speak
                   </p>
                   <p className="mb-3 text-sm text-[#5b6b7c]">
-                    Tap a language to select it. Selected languages appear dark â€” tap again to remove.
+                    Tap a language to select it. Selected languages appear dark — tap again to remove.
                     Proficiency from your profile (if any) is kept and shown on the resume.
                   </p>
                   <div className="cb-chip-wrap">
@@ -2580,7 +2686,7 @@ function ResumePageInner() {
                           onClick={() => (selected ? removeLanguage(l) : addLanguage(l))}
                         >
                           {label}{' '}
-                          <span className={selected ? undefined : 'plus'}>{selected ? 'Ã—' : '+'}</span>
+                          <span className={selected ? undefined : 'plus'}>{selected ? '×' : '+'}</span>
                         </button>
                       );
                     })}
@@ -2658,7 +2764,7 @@ function ResumePageInner() {
               >
                 {atsEditStep
                   ? saving
-                    ? 'Savingâ€¦'
+                    ? 'Saving…'
                     : 'Save & recheck ATS'
                   : 'Save & continue'}
               </button>
@@ -2666,7 +2772,7 @@ function ResumePageInner() {
           </>
         )}
 
-        {/* REVIEW SCREEN â€” opens after wizard when user reaches Review step */}
+        {/* REVIEW SCREEN — opens after wizard when user reaches Review step */}
         {isReviewStep && (
           <>
             <h2 className="cb-section-head">{getStepSectionLabel(currentStep)}</h2>
@@ -2746,9 +2852,21 @@ function ResumePageInner() {
                 <div className="cb-field">
                   <textarea
                     id="review-summary"
+                    aria-label="Professional summary"
+                    aria-describedby="review-summary-count"
                     value={summary}
-                    onChange={(e) => setSummary(e.target.value)}
+                    maxLength={RESUME_SUMMARY_MAX}
+                    onChange={(e) => setSummary(e.target.value.slice(0, RESUME_SUMMARY_MAX))}
                     placeholder="A short summary about your experience and goals"
+                  />
+                  <span id="review-summary-count" className="cb-char-count" aria-live="polite">
+                    {summary.length}/{RESUME_SUMMARY_MAX}
+                  </span>
+                  <SummaryAiAssist
+                    summary={summary}
+                    targetRole={preferredRole}
+                    profile={summaryAiProfile()}
+                    onUse={setSummary}
                   />
                 </div>
               </section>
@@ -2771,10 +2889,10 @@ function ResumePageInner() {
                   <div key={exp.id} className="cb-entry-card">
                     <div>
                       <div className="role">
-                        {exp.role} â€” {exp.company}
+                        {exp.role} — {exp.company}
                       </div>
                       <div className="meta">
-                        {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' Â· ')}
+                        {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' · ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -2792,9 +2910,8 @@ function ResumePageInner() {
                       <button
                         type="button"
                         className="remove"
-                        onClick={() =>
-                          setExperienceList((prev) => prev.filter((x) => x.id !== exp.id))
-                        }
+                        aria-label={`Delete ${exp.role || 'experience entry'}`}
+                        onClick={() => requestEntryDelete('experience', exp.id, exp.role)}
                       >
                         Delete
                       </button>
@@ -2869,7 +2986,7 @@ function ResumePageInner() {
                     <div>
                       <div className="role">{proj.name}</div>
                       <div className="meta">
-                        {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' Â· ')}
+                        {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -2887,9 +3004,8 @@ function ResumePageInner() {
                       <button
                         type="button"
                         className="remove"
-                        onClick={() =>
-                          setProjectList((prev) => prev.filter((x) => x.id !== proj.id))
-                        }
+                        aria-label={`Delete ${proj.name || 'project'}`}
+                        onClick={() => requestEntryDelete('project', proj.id, proj.name)}
                       >
                         Delete
                       </button>
@@ -2931,7 +3047,7 @@ function ResumePageInner() {
                         {edu.field ? ` in ${edu.field}` : ''}
                       </div>
                       <div className="meta">
-                        {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' Â· ')}
+                        {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' · ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -2949,9 +3065,8 @@ function ResumePageInner() {
                       <button
                         type="button"
                         className="remove"
-                        onClick={() =>
-                          setEducationList((prev) => prev.filter((x) => x.id !== edu.id))
-                        }
+                        aria-label={`Delete ${edu.degree || 'education entry'}`}
+                        onClick={() => requestEntryDelete('education', edu.id, edu.degree)}
                       >
                         Delete
                       </button>
@@ -2995,7 +3110,7 @@ function ResumePageInner() {
                     <div>
                       <div className="role">{cert.name}</div>
                       <div className="meta">
-                        {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' Â· ')}
+                        {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -3013,9 +3128,8 @@ function ResumePageInner() {
                       <button
                         type="button"
                         className="remove"
-                        onClick={() =>
-                          setCertificationList((prev) => prev.filter((x) => x.id !== cert.id))
-                        }
+                        aria-label={`Delete ${cert.name || 'certification'}`}
+                        onClick={() => requestEntryDelete('certification', cert.id, cert.name)}
                       >
                         Delete
                       </button>
@@ -3048,7 +3162,7 @@ function ResumePageInner() {
                     <div>
                       <div className="role">{ach.title}</div>
                       <div className="meta">
-                        {[ach.organization, formatDateForResume(ach.date), ach.description].filter(Boolean).join(' Â· ')}
+                        {[ach.organization, formatDateForResume(ach.date), ach.description].filter(Boolean).join(' · ')}
                       </div>
                     </div>
                     <div className="cb-entry-actions">
@@ -3066,9 +3180,8 @@ function ResumePageInner() {
                       <button
                         type="button"
                         className="remove"
-                        onClick={() =>
-                          setAchievementList((prev) => prev.filter((x) => x.id !== ach.id))
-                        }
+                        aria-label={`Delete ${ach.title || 'achievement'}`}
+                        onClick={() => requestEntryDelete('achievement', ach.id, ach.title)}
                       >
                         Delete
                       </button>
@@ -3136,7 +3249,7 @@ function ResumePageInner() {
                       rows={3}
                       value={gapReason}
                       onChange={(e) => setGapReason(e.target.value)}
-                      placeholder="Explain why this gap is OKâ€¦"
+                      placeholder="Explain why this gap is OK…"
                       style={{
                         width: '100%',
                         borderRadius: 12,
@@ -3168,7 +3281,7 @@ function ResumePageInner() {
               >
                 {atsEditStep
                   ? saving
-                    ? 'Savingâ€¦'
+                    ? 'Saving…'
                     : 'Save & recheck ATS'
                   : saving
                     ? 'Saving...'
@@ -3180,6 +3293,19 @@ function ResumePageInner() {
         )}
       </div>
       )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete ? `Delete this ${ENTRY_KIND_NAMES[pendingDelete.kind]}?` : ''}
+        message={
+          pendingDelete
+            ? `${pendingDelete.label ? `"${pendingDelete.label}" ` : 'This entry '}will be removed from your resume.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmEntryDelete}
+      />
     </div>
   );
 }

@@ -40,6 +40,7 @@ export function DarkRecordingStage({
   transcript,
   amplitudeRef,
   elapsedSec,
+  maxSec,
   isRecording,
   loading,
   error,
@@ -53,6 +54,7 @@ export function DarkRecordingStage({
   transcript: string;
   amplitudeRef: MutableRefObject<number>;
   elapsedSec: number;
+  maxSec?: number;
   isRecording: boolean;
   loading: boolean;
   error?: string;
@@ -176,7 +178,8 @@ export function DarkRecordingStage({
             </span>
           </div>
           <span className="font-mono text-sm font-bold tabular-nums text-white/80">
-            {formatClock(elapsedSec)}
+            Recording time: {formatClock(elapsedSec)}
+            {maxSec ? ` / ${formatClock(maxSec)}` : ''}
           </span>
         </header>
 

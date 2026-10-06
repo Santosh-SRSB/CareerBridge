@@ -1,5 +1,8 @@
 'use client';
 
+import { toast } from '@/components/ui/Toast';
+import { userFacingError } from '@/lib/client-errors';
+import { jobPublishToast } from '@/lib/job-status';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -7,11 +10,14 @@ import {
   JOB_DEPARTMENTS,
   JOB_EDUCATION_LEVELS,
   JOB_EXPERIENCE_RANGES,
+  toJobExperienceRange,
   JOB_SKILL_SUGGESTIONS,
   JOB_TITLE_SUGGESTIONS,
   JOB_TYPES,
   PREFERRED_LANGUAGES,
   WORK_MODES,
+  JOB_DESCRIPTION_MAX,
+  jobSalaryRequiredError,
   salaryRangeError,
   type CreateJobPayload,
   type ScreeningQuestion,
@@ -130,7 +136,14 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-semibold text-primary">{label}</span>
+      <span className="mb-1.5 block text-sm font-semibold text-primary">
+        {label}
+        {required ? (
+          <span className="ml-0.5 text-error" aria-hidden="true">
+            *
+          </span>
+        ) : null}
+      </span>
       <select
         required={required}
         value={value}
@@ -160,7 +173,7 @@ export default function NewJobPage() {
   const [city, setCity] = useState('Bengaluru');
   const [workMode, setWorkMode] = useState<(typeof WORK_MODES)[number]>('HYBRID');
   const [jobType, setJobType] = useState<(typeof JOB_TYPES)[number]>('FULL_TIME');
-  const [experience, setExperience] = useState<(typeof JOB_EXPERIENCE_RANGES)[number]>('2 - 4 Years');
+  const [experience, setExperience] = useState<(typeof JOB_EXPERIENCE_RANGES)[number]>('2–5 yrs');
   const [salaryMin, setSalaryMin] = useState('');
   const [salaryMax, setSalaryMax] = useState('');
   const [languages, setLanguages] = useState<string[]>(['English', 'Tamil']);
@@ -189,6 +202,8 @@ export default function NewJobPage() {
     },
   ]);
   const [error, setError] = useState('');
+  const [salaryErrors, setSalaryErrors] = useState<{ min?: string; max?: string }>({});
+  const [draftSaving, setDraftSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bootLoading, setBootLoading] = useState(Boolean(editJobId));
   const [isEditing, setIsEditing] = useState(false);
@@ -214,9 +229,8 @@ export default function NewJobPage() {
         if (job.jobType && (JOB_TYPES as readonly string[]).includes(String(job.jobType))) {
           setJobType(job.jobType as (typeof JOB_TYPES)[number]);
         }
-        if (job.experience && (JOB_EXPERIENCE_RANGES as readonly string[]).includes(String(job.experience))) {
-          setExperience(job.experience as (typeof JOB_EXPERIENCE_RANGES)[number]);
-        }
+        const storedExperience = toJobExperienceRange(job.experience ? String(job.experience) : null);
+        if (storedExperience) setExperience(storedExperience);
         if (job.educationMin) {
           setEducationMin(String(job.educationMin));
         }
@@ -305,8 +319,8 @@ export default function NewJobPage() {
       workMode,
       jobType,
       experience,
-      salaryMin: monthlyMin * 12,
-      salaryMax: monthlyMax * 12,
+      salaryMin: monthlyMin > 0 ? monthlyMin * 12 : undefined,
+      salaryMax: monthlyMax > 0 ? monthlyMax * 12 : undefined,
       requiredSkills: skills,
       educationMin,
       description:
@@ -436,11 +450,22 @@ export default function NewJobPage() {
     if (department.trim().length < 2) return 'Enter the department.';
     if (city.trim().length < 2) return 'Select or enter the job location.';
     if (nextStep <= 2) return null;
-    if (!skills.length) return 'Select at least one required skill.';
+    if (!skills.length) return 'At least one skill is required.';
+    if (!educationMin.trim()) return 'Education is required.';
     if (nextStep <= 3) return null;
+    const required = jobSalaryRequiredError(salaryMin, salaryMax);
+    if (required) {
+      setSalaryErrors(required.startsWith('Minimum') ? { min: required } : { max: required });
+      return required;
+    }
+    setSalaryErrors({});
     const salaryError = salaryRangeError(salaryMin, salaryMax);
     if (salaryError) return salaryError;
+    if (!description.trim()) return 'Job description is required.';
     if (description.trim().length < 20) return 'Add a job description of at least 20 characters.';
+    if (description.length > JOB_DESCRIPTION_MAX) {
+      return `Job description must be ${JOB_DESCRIPTION_MAX} characters or fewer.`;
+    }
     if (nextStep <= 4) return null;
     return null;
   }
@@ -462,7 +487,7 @@ export default function NewJobPage() {
             educationMin,
           });
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Could not save job draft.');
+          setError(userFacingError(err, 'save job draft'));
           return;
         } finally {
           setSkillsBusy(false);
@@ -475,6 +500,32 @@ export default function NewJobPage() {
   function goBack() {
     setError('');
     setStep((value) => Math.max(value - 1, 1));
+  }
+
+  async function saveDraft() {
+    const problem = validateStep(2);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setError('');
+    setDraftSaving(true);
+    try {
+      const payload = buildPayload(false);
+      if (draftJobIdRef.current) {
+        await updateEmployerJob(draftJobIdRef.current, payload);
+      } else {
+        const job = await createEmployerJob(payload);
+        setDraftId(job.id);
+      }
+      toast.success('Draft saved. Finish and publish it any time from My Jobs.');
+    } catch (err) {
+      const text = userFacingError(err, 'save the draft');
+      setError(text);
+      toast.error(text);
+    } finally {
+      setDraftSaving(false);
+    }
   }
 
   async function onSubmit(event: FormEvent) {
@@ -497,7 +548,7 @@ export default function NewJobPage() {
           router.replace(`/employer/jobs/${draftJobIdRef.current}`);
           return;
         }
-        await publishEmployerJob(draftJobIdRef.current);
+        toast.success(jobPublishToast(await publishEmployerJob(draftJobIdRef.current)));
         router.replace(
           `/employer/jobs/${draftJobIdRef.current}/posted?title=${encodeURIComponent(payload.title)}`,
         );
@@ -505,9 +556,12 @@ export default function NewJobPage() {
       }
 
       const job = await createEmployerJob({ ...payload, publish: true });
+      toast.success(jobPublishToast(job));
       router.replace(`/employer/jobs/${job.id}/posted?title=${encodeURIComponent(job.title)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'We could not create this job.');
+      const text = userFacingError(err, 'publish job');
+      setError(text);
+      toast.error(text);
     } finally {
       setLoading(false);
     }
@@ -594,6 +648,7 @@ export default function NewJobPage() {
               if (step < STEPS.length) goNext();
               else void onSubmit(event);
             }}
+            noValidate
             className="ep-flow-form"
           >
             {step === 1 ? (
@@ -698,25 +753,37 @@ export default function NewJobPage() {
                     name="salaryMin"
                     inputMode="numeric"
                     placeholder="18000"
+                    required
+                    error={salaryErrors.min}
                     value={salaryMin}
-                    onChange={(event) => setSalaryMin(event.target.value.replace(/\D/g, ''))}
+                    onChange={(event) => {
+                      setSalaryMin(event.target.value.replace(/\D/g, ''));
+                      setSalaryErrors((prev) => ({ ...prev, min: undefined }));
+                    }}
                   />
                   <Input
                     label="Salary to (₹ / month)"
                     name="salaryMax"
                     inputMode="numeric"
                     placeholder="22000"
+                    required
+                    error={salaryErrors.max}
                     value={salaryMax}
-                    onChange={(event) => setSalaryMax(event.target.value.replace(/\D/g, ''))}
+                    onChange={(event) => {
+                      setSalaryMax(event.target.value.replace(/\D/g, ''));
+                      setSalaryErrors((prev) => ({ ...prev, max: undefined }));
+                    }}
                   />
                 </div>
                 <Textarea
                   label="Job Description"
                   name="description"
                   required
+                  maxLength={JOB_DESCRIPTION_MAX}
+                  hint={`${description.length} / ${JOB_DESCRIPTION_MAX} characters`}
                   placeholder="Describe responsibilities, day-to-day work, and what success looks like…"
                   value={description}
-                  onChange={(event) => setDescription(event.target.value)}
+                  onChange={(event) => setDescription(event.target.value.slice(0, JOB_DESCRIPTION_MAX))}
                 />
                 <div>
                   <p className="mb-2 text-sm font-semibold text-primary">Benefits</p>
@@ -743,6 +810,7 @@ export default function NewJobPage() {
                     <input
                       value={benefitDraft}
                       onChange={(e) => setBenefitDraft(e.target.value)}
+                      aria-label="Add a benefit"
                       placeholder="e.g. Health insurance"
                       className="ep-create__control min-w-0 flex-1"
                     />
@@ -810,6 +878,20 @@ export default function NewJobPage() {
                 ) : (
                   <span className="ep-flow-foot__hint" aria-hidden />
                 )}
+                {!isEditing ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    block={false}
+                    loading={draftSaving}
+                    loadingLabel="Saving…"
+                    disabled={loading}
+                    onClick={() => void saveDraft()}
+                  >
+                    Save Draft
+                  </Button>
+                ) : null}
                 <Button
                   type="submit"
                   size="sm"

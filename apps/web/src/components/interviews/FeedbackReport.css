@@ -327,6 +327,23 @@
   gap: 12px;
 }
 
+.fr-feedback-group + .fr-feedback-group {
+  margin-top: 16px;
+}
+
+.fr-feedback-group__title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--fr-ink);
+}
+
+.fr-skills td.fr-skills__na {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
 .fr-feedback {
   display: flex;
   gap: 12px;

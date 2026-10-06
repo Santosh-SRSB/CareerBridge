@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { EmployerInterviewRecord } from '@careerbridge/shared';
+import { formatTimeSlotLabel, timeSlots, type EmployerInterviewRecord } from '@careerbridge/shared';
 import {
   changeApplicationStatus,
   employerInterviewAction,
@@ -12,8 +12,60 @@ import {
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { Button } from '@/components/ui/Button';
+import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
+import { toast } from '@/components/ui/Toast';
+import { userFacingError } from '@/lib/client-errors';
 
 type FilterTab = 'all' | 'upcoming' | 'completed';
+type StatusFilter =
+  | 'ALL'
+  | 'AWAITING'
+  | 'CONFIRMED'
+  | 'RESCHEDULE_NEEDED'
+  | 'RESCHEDULE_REQUESTED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'ALL', label: 'All statuses' },
+  { value: 'AWAITING', label: 'Awaiting Confirmation' },
+  { value: 'CONFIRMED', label: 'Confirmed' },
+  { value: 'RESCHEDULE_NEEDED', label: 'Waiting for candidate availability' },
+  { value: 'RESCHEDULE_REQUESTED', label: 'Candidate proposed new time' },
+  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+];
+
+function matchesStatusFilter(status: string, filter: StatusFilter) {
+  if (filter === 'ALL') return true;
+  if (filter === 'AWAITING') return status === 'SCHEDULED' || status === 'PROPOSED';
+  return status === filter;
+}
+
+/** Calendar day (YYYY-MM-DD) of an instant in India time, matching how interviews are scheduled. */
+function istDay(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Kolkata',
+  }).format(date);
+}
+
+type CancelDelivery = { inApp?: string; email?: string; whatsapp?: string };
+
+function cancelDeliveryMessage(delivery?: CancelDelivery) {
+  if (!delivery) return 'Interview cancelled.';
+  const parts = ['Interview cancelled.'];
+  parts.push(delivery.inApp === 'CREATED' ? 'Candidate notified in the app.' : 'In-app notification could not be created.');
+  if (delivery.email === 'SENT') parts.push('Email sent.');
+  else if (delivery.email === 'NOT_CONFIGURED') parts.push('Email was not sent: email delivery is not set up on this server.');
+  else if (delivery.email === 'NO_EMAIL') parts.push('Email was not sent: the candidate has no email address.');
+  else if (delivery.email === 'FAILED') parts.push('Email could not be sent.');
+  return parts.join(' ');
+}
 type OutcomeChoice = 'SELECTED' | 'REJECTED' | 'FURTHER' | 'ON_HOLD';
 
 function candidateName(row: EmployerInterviewRecord) {
@@ -37,6 +89,8 @@ function formatWhen(iso: string) {
   });
 }
 
+const RESCHEDULE_TIME_SLOTS = timeSlots(7, 22);
+
 function toLocalInputValue(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
@@ -50,8 +104,9 @@ function formatMode(mode: string) {
 }
 
 function statusLabel(status: string) {
-  if (status === 'RESCHEDULE_REQUESTED') return 'Reschedule requested';
-  if (status === 'SCHEDULED' || status === 'PROPOSED') return 'Scheduled';
+  if (status === 'RESCHEDULE_NEEDED') return 'Waiting for candidate availability';
+  if (status === 'RESCHEDULE_REQUESTED') return 'Candidate proposed new time';
+  if (status === 'SCHEDULED' || status === 'PROPOSED') return 'Awaiting Confirmation';
   return status.charAt(0) + status.slice(1).toLowerCase().replaceAll('_', ' ');
 }
 
@@ -59,8 +114,16 @@ function statusTone(status: string) {
   if (status === 'CONFIRMED') return 'ok';
   if (status === 'COMPLETED') return 'done';
   if (status === 'CANCELLED') return 'off';
-  if (status === 'RESCHEDULE_REQUESTED') return 'warn';
+  if (status === 'RESCHEDULE_REQUESTED' || status === 'RESCHEDULE_NEEDED') return 'warn';
   return 'default';
+}
+
+function proposedTimeLine(row: EmployerInterviewRecord) {
+  if (row.status === 'RESCHEDULE_REQUESTED' && row.candidateAvailability?.label) {
+    return `Candidate proposed time: ${row.candidateAvailability.label}`;
+  }
+  if (row.status === 'RESCHEDULE_NEEDED') return 'Waiting for the candidate to share another available time.';
+  return '';
 }
 
 function isUpcoming(status: string) {
@@ -84,11 +147,18 @@ export default function EmployerInterviewsPage() {
   const [filter, setFilter] = useState<FilterTab>('all');
   const [feedbackRow, setFeedbackRow] = useState<EmployerInterviewRecord | null>(null);
   const [detailRow, setDetailRow] = useState<EmployerInterviewRecord | null>(null);
+  const [detailNotes, setDetailNotes] = useState('');
   const [rescheduleRow, setRescheduleRow] = useState<EmployerInterviewRecord | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState('');
+  const [rescheduleLink, setRescheduleLink] = useState('');
   const [outcomeRow, setOutcomeRow] = useState<EmployerInterviewRecord | null>(null);
   const [outcome, setOutcome] = useState<OutcomeChoice>('SELECTED');
   const [outcomeNotes, setOutcomeNotes] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [cancelRow, setCancelRow] = useState<EmployerInterviewRecord | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   async function load() {
     setError('');
@@ -96,10 +166,19 @@ export default function EmployerInterviewsPage() {
     setItems(rows);
   }
 
-  useEffect(() => {
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  function initialLoad() {
+    setLoading(true);
+    setLoadFailed(false);
     void load()
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load interviews.'))
+      .catch(() => setLoadFailed(true))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    initialLoad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
   }, []);
 
   useEffect(() => {
@@ -107,11 +186,16 @@ export default function EmployerInterviewsPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('scheduled') === '1') {
       const wa = params.get('wa');
-      setMessage(
-        wa === 'queued'
-          ? 'Interview scheduled. WhatsApp notification queued.'
-          : 'Interview scheduled.',
-      );
+      const email = params.get('email');
+      const parts = ['Interview scheduled.'];
+      if (wa === 'queued') parts.push('WhatsApp notification queued.');
+      if (wa === 'failed') parts.push('WhatsApp notification could not be queued.');
+      if (wa === 'skipped_no_opt_in') parts.push('WhatsApp not sent: the candidate has not opted in to WhatsApp updates.');
+      if (email === 'sent') parts.push('Email sent.');
+      if (email === 'not_configured') parts.push('Email was not sent: email delivery is not set up on this server.');
+      if (email === 'failed') parts.push('Email could not be sent.');
+      if (email === 'no_email') parts.push('Email was not sent: the candidate has no email address.');
+      setMessage(parts.join(' '));
       window.history.replaceState({}, '', '/employer/interviews');
     }
   }, []);
@@ -120,36 +204,59 @@ export default function EmployerInterviewsPage() {
   const completedCount = useMemo(() => items.filter((item) => isCompletedTab(item.status)).length, [items]);
 
   const visible = useMemo(() => {
-    if (filter === 'upcoming') return items.filter((item) => isUpcoming(item.status));
-    if (filter === 'completed') return items.filter((item) => isCompletedTab(item.status));
-    return items;
-  }, [items, filter]);
+    return items.filter((item) => {
+      if (filter === 'upcoming' && !isUpcoming(item.status)) return false;
+      if (filter === 'completed' && !isCompletedTab(item.status)) return false;
+      if (!matchesStatusFilter(item.status, statusFilter)) return false;
+      const day = istDay(item.scheduledAt);
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
+      return true;
+    });
+  }, [items, filter, statusFilter, fromDate, toDate]);
+
+  const dateRangeInvalid = Boolean(fromDate && toDate && fromDate > toDate);
 
   async function act(
     id: string,
     action: 'confirm' | 'complete' | 'cancel' | 'reschedule' | 'notes',
-    payload?: { scheduledAt?: string; notes?: string },
+    payload?: { scheduledAt?: string; notes?: string; meetingUrl?: string },
   ) {
-    if (action === 'cancel' && !window.confirm('Cancel this interview? The candidate will be notified.')) {
-      return;
-    }
     setBusyId(id);
     setError('');
+    setMessage('');
     try {
-      await employerInterviewAction(id, action, payload);
-      await load();
-      setMessage(
+      const result = (await employerInterviewAction(id, action, payload)) as EmployerInterviewRecord & {
+        delivery?: CancelDelivery;
+      };
+      toast.success(
         action === 'reschedule'
           ? 'Interview rescheduled. Candidate will confirm the new time.'
           : action === 'cancel'
-            ? 'Interview cancelled.'
+            ? cancelDeliveryMessage(result?.delivery)
             : action === 'complete'
               ? 'Interview marked complete.'
-              : 'Interview updated.',
+              : action === 'confirm'
+                ? 'Interview confirmed.'
+                : 'Interview updated.',
       );
       setRescheduleRow(null);
+      setCancelRow(null);
+      setCancelReason('');
+      await load().catch(() => undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action failed.');
+      const text = userFacingError(
+        err,
+        action === 'reschedule'
+          ? 'reschedule interview'
+          : action === 'cancel'
+            ? 'cancel interview'
+            : action === 'complete'
+              ? 'complete interview'
+              : 'update interview',
+      );
+      setError(text);
+      toast.error(text);
     } finally {
       setBusyId('');
     }
@@ -177,23 +284,59 @@ export default function EmployerInterviewsPage() {
         if (outcomeNotes.trim()) {
           await employerInterviewAction(outcomeRow.id, 'notes', { notes: outcomeNotes.trim() });
         }
-      } else if (outcomeNotes.trim()) {
-        await employerInterviewAction(outcomeRow.id, 'notes', { notes: `On hold: ${outcomeNotes.trim()}` });
+      } else {
+        await changeApplicationStatus(outcomeRow.applicationId, 'HOLD');
+        if (outcomeNotes.trim()) {
+          await employerInterviewAction(outcomeRow.id, 'notes', { notes: `On hold: ${outcomeNotes.trim()}` });
+        }
       }
       setOutcomeRow(null);
       setOutcomeNotes('');
-      setMessage(
-        outcome === 'SELECTED'
-          ? 'Candidate selected.'
-          : outcome === 'REJECTED'
-            ? 'Candidate rejected.'
-            : outcome === 'FURTHER'
-              ? 'Marked for further interview.'
-              : 'Candidate placed on hold.',
+      toast.success(
+        `Interview outcome recorded: ${
+          outcome === 'SELECTED'
+            ? 'candidate selected.'
+            : outcome === 'REJECTED'
+              ? 'candidate rejected.'
+              : outcome === 'FURTHER'
+                ? 'further interview needed.'
+                : 'candidate on hold.'
+        }`,
       );
-      await load();
+      await load().catch(() => undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not record outcome.');
+      const text = userFacingError(err, 'record outcome');
+      setError(text);
+      toast.error(text);
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  function openReschedule(row: EmployerInterviewRecord) {
+    const proposedStart = row.status === 'RESCHEDULE_REQUESTED' ? row.candidateAvailability?.from : null;
+    setRescheduleRow(row);
+    setRescheduleAt(toLocalInputValue(proposedStart || row.scheduledAt));
+    setRescheduleLink('');
+  }
+
+  function openDetails(row: EmployerInterviewRecord) {
+    setDetailRow(row);
+    setDetailNotes(row.notes || '');
+  }
+
+  async function saveDetailNotes() {
+    if (!detailRow) return;
+    setBusyId(`notes-${detailRow.id}`);
+    setError('');
+    try {
+      const updated = await employerInterviewAction(detailRow.id, 'notes', { notes: detailNotes.trim() });
+      setItems((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+      setDetailRow(updated);
+      setDetailNotes(updated.notes || '');
+      toast.success('Interview notes saved.');
+    } catch (err) {
+      toast.error(userFacingError(err, 'save notes'));
     } finally {
       setBusyId('');
     }
@@ -209,7 +352,7 @@ export default function EmployerInterviewsPage() {
       setFeedbackRow(updated);
       setMessage('Feedback request sent to the candidate.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not request feedback.');
+      setError(userFacingError(err, 'request feedback'));
     } finally {
       setBusyId('');
     }
@@ -235,7 +378,12 @@ export default function EmployerInterviewsPage() {
           </Link>
         </header>
 
-        {error ? <p className="ep-ivdesk__alert">{error}</p> : null}
+        {error ? (
+          <p className="ep-ivdesk__alert" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {!loading && loadFailed ? <ErrorState onRetry={initialLoad} /> : null}
         {message ? <p className="ep-ivdesk__alert ep-ivdesk__alert--ok">{message}</p> : null}
 
         {!loading && items.length > 0 ? (
@@ -255,9 +403,71 @@ export default function EmployerInterviewsPage() {
           </div>
         ) : null}
 
-        {loading ? <p className="ep-ivdesk__muted">Loading interviews…</p> : null}
+        {!loading && items.length > 0 ? (
+          <div className="flex flex-wrap items-end gap-3" role="group" aria-label="Status and date filters">
+            <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800" htmlFor="ep-iv-status">
+              Status
+              <select
+                id="ep-iv-status"
+                className="min-h-12 rounded-lg border border-slate-300 bg-white px-3"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              >
+                {STATUS_FILTERS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800" htmlFor="ep-iv-from">
+              From
+              <input
+                id="ep-iv-from"
+                type="date"
+                className="min-h-12 rounded-lg border border-slate-300 bg-white px-3"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800" htmlFor="ep-iv-to">
+              To
+              <input
+                id="ep-iv-to"
+                type="date"
+                className="min-h-12 rounded-lg border border-slate-300 bg-white px-3"
+                value={toDate}
+                min={fromDate || undefined}
+                aria-invalid={dateRangeInvalid || undefined}
+                aria-describedby={dateRangeInvalid ? 'ep-iv-range-error' : undefined}
+                onChange={(e) => setToDate(e.target.value)}
+              />
+            </label>
+            {statusFilter !== 'ALL' || fromDate || toDate ? (
+              <button
+                type="button"
+                className="min-h-12 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800"
+                onClick={() => {
+                  setStatusFilter('ALL');
+                  setFromDate('');
+                  setToDate('');
+                }}
+              >
+                Clear filters
+              </button>
+            ) : null}
+            {dateRangeInvalid ? (
+              <p id="ep-iv-range-error" className="w-full text-sm font-semibold text-red-700" role="alert">
+                The end date must be on or after the start date.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
-        {!loading && items.length === 0 ? (
+        {loading ? <SkeletonList rows={3} label="Loading interviews…" /> : null}
+
+        {!loading && !loadFailed && items.length === 0 ? (
           <section className="ep-ivdesk__empty">
             <h2>No interviews yet</h2>
             <p>Shortlist an applicant, then book a time. Candidates get notified with the details.</p>
@@ -268,9 +478,9 @@ export default function EmployerInterviewsPage() {
         ) : null}
 
         {!loading && items.length > 0 && visible.length === 0 ? (
-          <section className="ep-ivdesk__empty">
-            <h2>No {filter} interviews</h2>
-            <p>Switch filters to see other conversations.</p>
+          <section className="ep-ivdesk__empty" role="status">
+            <h2>No interviews match these filters</h2>
+            <p>Change the status, dates or tab to see other interviews.</p>
           </section>
         ) : null}
 
@@ -304,6 +514,11 @@ export default function EmployerInterviewsPage() {
                       </td>
                       <td>
                         <span className="ep-ivdesk__cell">{formatWhen(item.scheduledAt)}</span>
+                        {proposedTimeLine(item) ? (
+                          <span className="ep-ivdesk__cell" style={{ display: 'block', fontWeight: 600 }}>
+                            {proposedTimeLine(item)}
+                          </span>
+                        ) : null}
                       </td>
                       <td>
                         <span className={`ep-ivdesk__status ep-ivdesk__status--${statusTone(item.status)}`}>
@@ -318,7 +533,7 @@ export default function EmployerInterviewsPage() {
                             size="sm"
                             block={false}
                             className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
-                            onClick={() => setDetailRow(item)}
+                            onClick={() => openDetails(item)}
                           >
                             View
                           </Button>
@@ -328,10 +543,7 @@ export default function EmployerInterviewsPage() {
                               size="sm"
                               block={false}
                               className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
-                              onClick={() => {
-                                setRescheduleRow(item);
-                                setRescheduleAt(toLocalInputValue(item.scheduledAt));
-                              }}
+                              onClick={() => openReschedule(item)}
                             >
                               Reschedule
                             </Button>
@@ -342,26 +554,13 @@ export default function EmployerInterviewsPage() {
                               size="sm"
                               block={false}
                               className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
-                              loading={busyId === item.id}
-                              onClick={() => void act(item.id, 'cancel')}
+                              disabled={busyId === item.id}
+                              onClick={() => {
+                                setCancelReason('');
+                                setCancelRow(item);
+                              }}
                             >
                               Cancel
-                            </Button>
-                          ) : null}
-                          {upcoming && item.status === 'RESCHEDULE_REQUESTED' ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              block={false}
-                              className="ep-ivdesk__btn ep-ivdesk__btn--solid"
-                              loading={busyId === item.id}
-                              onClick={() =>
-                                void act(item.id, 'confirm', {
-                                  scheduledAt: item.preferredRescheduleAt || undefined,
-                                })
-                              }
-                            >
-                              Approve
                             </Button>
                           ) : null}
                           {upcoming && (item.status === 'SCHEDULED' || item.status === 'PROPOSED') ? (
@@ -454,11 +653,67 @@ export default function EmployerInterviewsPage() {
                   <dt>Status</dt>
                   <dd>{statusLabel(detailRow.status)}</dd>
                 </div>
-                <div>
-                  <dt>Notes</dt>
-                  <dd>{detailRow.notes || '—'}</dd>
-                </div>
+                {proposedTimeLine(detailRow) ? (
+                  <div>
+                    <dt>Candidate availability</dt>
+                    <dd>{proposedTimeLine(detailRow)}</dd>
+                  </div>
+                ) : null}
               </dl>
+              <label className="ep-modal__field" htmlFor="ep-detail-notes">
+                <span>Notes</span>
+                <textarea
+                  id="ep-detail-notes"
+                  rows={3}
+                  maxLength={1000}
+                  value={detailNotes}
+                  onChange={(e) => setDetailNotes(e.target.value)}
+                />
+                <em>{detailNotes.length}/1000</em>
+              </label>
+              <div className="ep-ivdesk__actions" style={{ marginTop: 8 }}>
+                <Button
+                  type="button"
+                  size="sm"
+                  block={false}
+                  className="ep-ivdesk__btn ep-ivdesk__btn--solid"
+                  loading={busyId === `notes-${detailRow.id}`}
+                  loadingLabel="Saving…"
+                  disabled={detailNotes.trim() === (detailRow.notes || '').trim()}
+                  onClick={() => void saveDetailNotes()}
+                >
+                  Save notes
+                </Button>
+                {isUpcoming(detailRow.status) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    block={false}
+                    className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
+                    onClick={() => {
+                      openReschedule(detailRow);
+                      setDetailRow(null);
+                    }}
+                  >
+                    Reschedule
+                  </Button>
+                ) : null}
+                {isUpcoming(detailRow.status) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    block={false}
+                    className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
+                    onClick={() => {
+                      setCancelReason('');
+                      setCancelRow(detailRow);
+                      setDetailRow(null);
+                    }}
+                  >
+                    Cancel interview
+                  </Button>
+                ) : null}
+              </div>
               <div className="ep-ivdesk__actions" style={{ marginTop: 14 }}>
                 <Link
                   href={`/employer/candidates/${detailRow.candidateId}?jobId=${encodeURIComponent(detailRow.jobId)}`}
@@ -503,15 +758,61 @@ export default function EmployerInterviewsPage() {
                   ×
                 </button>
               </header>
-              <label className="ep-modal__field" htmlFor="ep-reschedule-at">
-                <span>New date &amp; time</span>
-                <input
-                  id="ep-reschedule-at"
-                  type="datetime-local"
-                  value={rescheduleAt}
-                  onChange={(e) => setRescheduleAt(e.target.value)}
-                />
-              </label>
+              {(() => {
+                const date = rescheduleAt.slice(0, 10);
+                const time = rescheduleAt.slice(11, 16);
+                const slots = RESCHEDULE_TIME_SLOTS.some((slot) => slot.value === time) || !time
+                  ? RESCHEDULE_TIME_SLOTS
+                  : [{ value: time, label: formatTimeSlotLabel(time) }, ...RESCHEDULE_TIME_SLOTS];
+                return (
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="ep-modal__field" htmlFor="ep-reschedule-date">
+                      <span>New date</span>
+                      <input
+                        id="ep-reschedule-date"
+                        type="date"
+                        value={date}
+                        onChange={(e) => setRescheduleAt(e.target.value ? `${e.target.value}T${time || '10:00'}` : '')}
+                      />
+                    </label>
+                    <label className="ep-modal__field" htmlFor="ep-reschedule-time">
+                      <span>New time</span>
+                      <select
+                        id="ep-reschedule-time"
+                        value={time}
+                        disabled={!date}
+                        onChange={(e) => setRescheduleAt(`${date}T${e.target.value}`)}
+                      >
+                        {slots.map((slot) => (
+                          <option key={slot.value} value={slot.value}>
+                            {slot.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                );
+              })()}
+              {proposedTimeLine(rescheduleRow) ? (
+                <p className="text-sm font-semibold text-slate-800" style={{ margin: '14px 0 6px' }}>
+                  {proposedTimeLine(rescheduleRow)}
+                </p>
+              ) : null}
+              {rescheduleRow.mode === 'VIDEO' ? (
+                <label className="ep-modal__field" htmlFor="ep-reschedule-link">
+                  <span>New meeting link (optional)</span>
+                  <input
+                    id="ep-reschedule-link"
+                    type="url"
+                    inputMode="url"
+                    maxLength={500}
+                    placeholder="https://meet.google.com/..."
+                    value={rescheduleLink}
+                    onChange={(e) => setRescheduleLink(e.target.value)}
+                  />
+                  <em>The link is shared with the candidate only after they confirm the new time.</em>
+                </label>
+              ) : null}
               <footer className="ep-modal__actions">
                 <Button type="button" variant="secondary" block={false} onClick={() => setRescheduleRow(null)}>
                   Cancel
@@ -524,10 +825,64 @@ export default function EmployerInterviewsPage() {
                   onClick={() =>
                     void act(rescheduleRow.id, 'reschedule', {
                       scheduledAt: new Date(rescheduleAt).toISOString(),
+                      meetingUrl: rescheduleLink.trim() || undefined,
                     })
                   }
                 >
                   Save new time
+                </Button>
+              </footer>
+            </div>
+          </div>
+        ) : null}
+
+        {cancelRow ? (
+          <div className="ep-ivdesk__modal" role="dialog" aria-modal="true" aria-labelledby="ep-cancel-title">
+            <button
+              type="button"
+              className="ep-ivdesk__modal-backdrop"
+              aria-label="Close cancel dialog"
+              onClick={() => setCancelRow(null)}
+            />
+            <div className="ep-ivdesk__modal-card">
+              <header className="ep-ivdesk__modal-head">
+                <div>
+                  <p className="ep-ivdesk__eyebrow">Cancel interview</p>
+                  <h2 id="ep-cancel-title">Cancel the interview with {candidateName(cancelRow)}?</h2>
+                  <p>
+                    {cancelRow.job.title} · {formatWhen(cancelRow.scheduledAt)}. The candidate will be notified.
+                  </p>
+                </div>
+                <button type="button" className="ep-ivdesk__modal-close" onClick={() => setCancelRow(null)}>
+                  ×
+                </button>
+              </header>
+              <label className="ep-modal__field" htmlFor="ep-cancel-reason">
+                <span>Reason (optional, shared with the candidate)</span>
+                <textarea
+                  id="ep-cancel-reason"
+                  rows={3}
+                  maxLength={500}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                />
+                <em>{cancelReason.length}/500</em>
+              </label>
+              <footer className="ep-modal__actions">
+                <Button type="button" variant="secondary" block={false} onClick={() => setCancelRow(null)}>
+                  Keep interview
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  block={false}
+                  loading={busyId === cancelRow.id}
+                  loadingLabel="Cancelling…"
+                  onClick={() =>
+                    void act(cancelRow.id, 'cancel', { notes: cancelReason.trim() || undefined })
+                  }
+                >
+                  Cancel interview
                 </Button>
               </footer>
             </div>

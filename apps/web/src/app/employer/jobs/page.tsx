@@ -8,21 +8,9 @@ import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { EmployerSectionHero, EmployerQuickLink } from '@/components/employer/EmployerSectionHero';
 import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
-
-function jobStatusLabel(status: string) {
-  if (status === 'PUBLISHED') return 'Active';
-  if (status === 'CLOSED') return 'Closed';
-  if (status === 'PAUSED') return 'Paused';
-  if (status === 'DRAFT') return 'Draft';
-  return status.replaceAll('_', ' ');
-}
-
-function jobStatusTone(status: string) {
-  if (status === 'PUBLISHED') return 'bg-emerald-100 text-emerald-800';
-  if (status === 'CLOSED') return 'bg-slate-200 text-slate-700';
-  if (status === 'PAUSED') return 'bg-slate-200 text-slate-700';
-  return 'bg-primary-soft text-primary';
-}
+import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
+import { LOAD_ERROR_MESSAGE } from '@/lib/client-errors';
+import { JOB_STATUS_FILTERS, jobStatusLabel, jobStatusTone, type JobStatusFilter } from '@/lib/job-status';
 
 function postedLabel(job: EmployerJobSummary) {
   const raw = job.publishedAt || job.createdAt;
@@ -98,13 +86,15 @@ export default function EmployerJobsPage() {
   const [jobs, setJobs] = useState<EmployerJobSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState<JobStatusFilter>('ALL');
 
   async function load() {
     setError('');
+    setLoading(true);
     try {
       setJobs(await listEmployerJobs());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load jobs.');
+    } catch {
+      setError(LOAD_ERROR_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -120,6 +110,17 @@ export default function EmployerJobsPage() {
     const applicants = jobs.reduce((sum, job) => sum + (job.applicantCount || 0), 0);
     return { active, drafts, applicants, total: jobs.length };
   }, [jobs]);
+
+  const counts = useMemo(() => {
+    const out: Record<string, number> = { ALL: jobs.length };
+    for (const job of jobs) out[job.status] = (out[job.status] || 0) + 1;
+    return out;
+  }, [jobs]);
+
+  const visibleJobs = useMemo(
+    () => (filter === 'ALL' ? jobs : jobs.filter((job) => job.status === filter)),
+    [jobs, filter],
+  );
 
   return (
     <EmployerShellFallback title="My Jobs">
@@ -197,8 +198,8 @@ export default function EmployerJobsPage() {
         ) : null}
 
         <article className="ep-card ep-list-card">
-          {loading ? <p className="p-4 text-sm text-muted">Loading jobs…</p> : null}
-          {error ? <p className="p-4 text-sm text-error">{error}</p> : null}
+          {loading ? <SkeletonList rows={3} label="Loading jobs…" className="p-4" /> : null}
+          {error && !loading ? <ErrorState message={error} onRetry={() => void load()} className="m-4" /> : null}
 
           {!loading && !error && !jobs.length ? (
             <div className="ep-polished-empty">
@@ -213,7 +214,33 @@ export default function EmployerJobsPage() {
             </div>
           ) : null}
 
-          {!loading && jobs.length > 0 ? (
+          {!loading && !error && jobs.length > 0 ? (
+            <div className="flex flex-wrap gap-2 p-4 pb-0" role="group" aria-label="Filter jobs by status">
+              {JOB_STATUS_FILTERS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  aria-pressed={filter === item.value}
+                  onClick={() => setFilter(item.value)}
+                  className={`min-h-12 rounded-full border px-4 text-sm font-bold ${
+                    filter === item.value
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-slate-300 bg-white text-slate-800 hover:border-primary'
+                  }`}
+                >
+                  {item.label} ({counts[item.value] || 0})
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {!loading && !error && jobs.length > 0 && !visibleJobs.length ? (
+            <p className="p-6 text-sm font-semibold text-slate-700" role="status">
+              No {JOB_STATUS_FILTERS.find((f) => f.value === filter)?.label.toLowerCase()} jobs.
+            </p>
+          ) : null}
+
+          {!loading && visibleJobs.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="ep-wire-table min-w-[640px]">
                 <thead>
@@ -225,7 +252,7 @@ export default function EmployerJobsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {jobs.map((job) => (
+                  {visibleJobs.map((job) => (
                     <tr key={job.id}>
                       <td>
                         <p className="font-extrabold text-primary">{job.title}</p>
@@ -236,7 +263,15 @@ export default function EmployerJobsPage() {
                           {jobStatusLabel(job.status)}
                         </span>
                       </td>
-                      <td className="font-semibold">{job.applicantCount || 0}</td>
+                      <td className="font-semibold">
+                        <Link
+                          href={`/employer/applications?jobId=${encodeURIComponent(job.id)}`}
+                          className="text-primary underline underline-offset-2 hover:no-underline"
+                          aria-label={`${job.applicantCount || 0} applications for ${job.title}`}
+                        >
+                          {job.applicantCount || 0} {(job.applicantCount || 0) === 1 ? 'Application' : 'Applications'}
+                        </Link>
+                      </td>
                       <td>
                         <div className="ep-wire-actions">
                           <Link href={`/employer/jobs/${job.id}`}>View</Link>

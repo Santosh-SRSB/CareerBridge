@@ -16,6 +16,8 @@ import {
   setAdminCandidateStatus,
   setAdminEmployerStatus,
   setAdminJobStatus,
+  approveAdminJob,
+  rejectAdminJob,
   setPlatformAdminRole,
   setPlatformAdminStatus,
   setPlatformAdminPassword,
@@ -1057,7 +1059,7 @@ export default function SuperAdminDashboardInner() {
                         </option>
                       ))}
                     {tab === 'interviews' &&
-                      ['PROPOSED', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULE_REQUESTED', 'COMPLETED', 'CANCELLED'].map(
+                      ['PROPOSED', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED', 'COMPLETED', 'CANCELLED'].map(
                         (s) => (
                           <option key={s} value={s}>
                             {s}
@@ -1322,7 +1324,9 @@ export default function SuperAdminDashboardInner() {
                       ? '#28b779'
                       : status === 'PAUSED'
                         ? '#ffb848'
-                        : status === 'CLOSED'
+                        : status === 'PENDING_REVIEW'
+                          ? '#d97706'
+                          : status === 'CLOSED'
                           ? '#da542e'
                           : '#27a9e3';
                   return (
@@ -1340,7 +1344,29 @@ export default function SuperAdminDashboardInner() {
                           <ActionBtn accent="#ffb848" onClick={() => void openDetail('jobs', id)}>
                             View
                           </ActionBtn>
-                          {canManageJobs(staffRole) ? (
+                          {canManageJobs(staffRole) && status === 'PENDING_REVIEW' ? (
+                            <>
+                              <ActionBtn
+                                accent="#28b779"
+                                disabled={!id || busyId === id}
+                                onClick={() =>
+                                  void runAction(id, () => approveAdminJob(id), 'Job approved and published.')
+                                }
+                              >
+                                Approve
+                              </ActionBtn>
+                              <ActionBtn
+                                danger
+                                disabled={!id || busyId === id}
+                                onClick={() =>
+                                  void runAction(id, () => rejectAdminJob(id), 'Job rejected and returned to the employer.')
+                                }
+                              >
+                                Reject
+                              </ActionBtn>
+                            </>
+                          ) : null}
+                          {canManageJobs(staffRole) && status !== 'PENDING_REVIEW' ? (
                             <>
                               <ActionBtn
                                 accent="#28b779"

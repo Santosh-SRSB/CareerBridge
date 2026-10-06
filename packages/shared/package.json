@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "tsc && node --test dist/ats.test.js dist/career-gap.test.js dist/resume-dates.test.js dist/career-timeline-gaps.test.js dist/handbook-match-weights.test.js"
+    "test": "tsc && node --test dist/ats.test.js dist/career-gap.test.js dist/resume-dates.test.js dist/career-timeline-gaps.test.js dist/handbook-match-weights.test.js dist/experience-range.test.js dist/candidate-filters.test.js dist/ai-availability.test.js dist/auth-mask.test.js dist/registration-validation.test.js dist/company-profile.test.js dist/resume-summary.test.js dist/job-roles.test.js dist/job-salary.test.js dist/time-slots.test.js dist/employability.test.js dist/catalog.test.js"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

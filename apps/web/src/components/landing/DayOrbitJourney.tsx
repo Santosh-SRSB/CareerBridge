@@ -54,6 +54,14 @@ const FEATURES = [
   },
 ] as const;
 
+const CANDIDATE_STEPS = [
+  { title: 'Create Profile', body: 'Sign up free with your phone and add your basics.' },
+  { title: 'Build Resume', body: 'Turn your profile into a clean, ATS-friendly resume.' },
+  { title: 'Find Jobs', body: 'Search roles that match your skills and location.' },
+  { title: 'Prepare for Interview', body: 'Practise with AI mock interviews and get feedback.' },
+  { title: 'Get Hired', body: 'Apply, track every stage and land the offer.' },
+] as const;
+
 const EMP_STAGES = [
   {
     n: '01',
@@ -280,9 +288,41 @@ export function DayOrbitJourney() {
           </div>
         </div>
 
-        <div className="day-orbit__cta-row">
-          <Link href="/login?role=candidate" className="day-orbit__cta">
+        <section id="how-it-works" aria-labelledby="how-it-works-title" className="mx-auto mt-10 max-w-5xl scroll-mt-24 px-1">
+          <p className="day-orbit__k">How it works</p>
+          <h3 id="how-it-works-title" className="font-display text-2xl font-extrabold text-[#0a2e2c]">
+            Five steps from profile to offer
+          </h3>
+          <ol className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {CANDIDATE_STEPS.map((step, i) => (
+              <li
+                key={step.title}
+                className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-col"
+              >
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0a2e2c] text-sm font-extrabold text-white"
+                  aria-hidden
+                >
+                  {i + 1}
+                </span>
+                <div>
+                  <p className="font-extrabold text-[#0a2e2c]">
+                    <span className="sr-only">Step {i + 1}: </span>
+                    {step.title}
+                  </p>
+                  <p className="mt-1 text-sm leading-snug text-slate-600">{step.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <div className="day-orbit__cta-row flex-wrap gap-3">
+          <Link href="/register?role=candidate" className="day-orbit__cta">
             Get Started as Candidate
+          </Link>
+          <Link href="/jobs" className="day-orbit__cta">
+            Find Jobs
           </Link>
         </div>
 

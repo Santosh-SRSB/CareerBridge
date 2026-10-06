@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Inter, Manrope, Outfit, Poppins, Space_Grotesk, Space_Mono } from "next/font/google";
 import { AuthCookieSync } from "@/components/AuthCookieSync";
 import { PushNotificationBootstrap } from "@/components/PushNotificationBootstrap";
+import { Toaster } from "@/components/ui/Toast";
 import "./globals.css";
 
 const inter = Inter({
@@ -77,6 +78,7 @@ export default function RootLayout({
         <AuthCookieSync />
         <PushNotificationBootstrap />
         {children}
+        <Toaster />
       </body>
     </html>
   );

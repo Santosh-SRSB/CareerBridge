@@ -1,9 +1,10 @@
 'use client';
 
+import { userFacingError } from '@/lib/client-errors';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import type { InterviewSession } from '@careerbridge/shared';
+import { AI_INTERVIEW_QUESTION_FALLBACK_MESSAGE, type InterviewSession } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { DarkRecordingStage } from '@/components/interviews/DarkRecordingStage';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
@@ -18,6 +19,7 @@ import {
   buildIntroPlanLine,
   buildIntroStartLine,
   buildQuestionCompletedLines,
+  buildQuestionSkippedLines,
   buildRecordStartLine,
   buildThinkLine,
   buildThinkSpokenLine,
@@ -30,12 +32,23 @@ import {
   type GuidedPhase,
 } from '@/features/mock-interview/guided-states';
 import { cancelGuidedSpeech, speakGuided } from '@/features/mock-interview/guided-voice';
-import { answerLiveInterview, endLiveInterview, getInterview, startLiveInterview } from '@/lib/api';
+import {
+  answerLiveInterview,
+  endLiveInterview,
+  getInterview,
+  skipLiveInterviewQuestion,
+  startLiveInterview,
+} from '@/lib/api';
 import { subscribeAiSpeech } from '@/features/interview/ai-speech';
+
+const ANSWER_MAX = 1000;
+const ANSWER_MIN = 20;
+const RECORD_MAX_SEC = 120;
+const DEFAULT_TIP = 'Use a specific example from your experience.';
 
 function interviewTypeLabel(type: string) {
   if (type === 'BEHAVIOURAL' || type === 'GENERIC') return 'Generic';
-  if (type === 'ROLE' || type === 'ROLE_BASED') return 'Role-Based';
+  if (type === 'ROLE' || type === 'ROLE_BASED') return 'Role Specific';
   return type;
 }
 
@@ -54,6 +67,7 @@ export default function MockInterviewQuestionPage() {
   const completedQuestionNumber = useRef(0);
   const pendingNextPhase = useRef<'QUESTION_DISPLAY' | 'FINAL_PROCESSING'>('QUESTION_DISPLAY');
   const answerMethodRef = useRef<AnswerMethod | null>(null);
+  const skippedRef = useRef(false);
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod | null>(null);
   const savePromiseRef = useRef<Promise<{
     ok: true;
@@ -116,7 +130,7 @@ export default function MockInterviewQuestionPage() {
         setPhase(answered > 0 ? 'QUESTION_DISPLAY' : 'INTRO_GREETING');
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Could not start interview.');
+          setError(userFacingError(err, 'start interview'));
           setPhase('ERROR');
           router.replace('/interviews/mock');
         }
@@ -229,7 +243,7 @@ export default function MockInterviewQuestionPage() {
     };
   }, [phase, session?.questionIndex]);
 
-  // After think time ends, default into recording (dark mode) unless they already chose typing.
+  // After think time ends, default into typing unless they already chose recording.
   useEffect(() => {
     if (phase !== 'QUESTION_THINKING') return;
     if (thinkRemaining > 0) return;
@@ -239,7 +253,7 @@ export default function MockInterviewQuestionPage() {
     thinkAutoStartedRef.current = qIndex;
     const t = window.setTimeout(() => {
       if (answerMethodRef.current) return;
-      chooseAnswerMethod('recording');
+      chooseAnswerMethod('typing');
     }, 350);
     return () => window.clearTimeout(t);
   }, [phase, thinkRemaining, session?.questionIndex]);
@@ -344,7 +358,9 @@ export default function MockInterviewQuestionPage() {
 
         if (phase === 'QUESTION_COMPLETED') {
           const doneNum = completedQuestionNumber.current || qNum;
-          const lines = buildQuestionCompletedLines(name, doneNum, total);
+          const lines = skippedRef.current
+            ? buildQuestionSkippedLines(doneNum, total)
+            : buildQuestionCompletedLines(name, doneNum, total);
           // Caption + primary TTS already kicked off in submitAnswer — keep copy visible.
           setCaption(lines.primary);
 
@@ -355,12 +371,13 @@ export default function MockInterviewQuestionPage() {
 
           if (!alive()) return;
 
+          skippedRef.current = false;
           if (!saveResult.ok) {
             if ('session' in saveResult && saveResult.session) setSession(saveResult.session);
             setError(saveResult.error);
             setLoading(false);
             recordingArmedForIndex.current = null;
-            setPhase(answerMethodRef.current === 'typing' ? 'TYPING_ACTIVE' : 'RECORDING_ACTIVE');
+            setPhase(answerMethodRef.current === 'recording' ? 'RECORDING_ACTIVE' : 'TYPING_ACTIVE');
             return;
           }
 
@@ -403,6 +420,11 @@ export default function MockInterviewQuestionPage() {
     };
   }, [phase, session, goResult]);
 
+  useEffect(() => {
+    if (isRecording && recordElapsedSec >= RECORD_MAX_SEC) void submitAnswer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, recordElapsedSec]);
+
   async function submitAnswer() {
     if (!session?.currentQuestion || loading) return;
     if (isRecording) {
@@ -413,8 +435,8 @@ export default function MockInterviewQuestionPage() {
 
     const textAnswer = answerRef.current.trim();
     const audioReady = hasAudioRef.current || Boolean(audioDurationRef.current);
-    if (textAnswer.length < 8 && !audioReady) {
-      setError('Type your answer or record an audio response before continuing.');
+    if (textAnswer.length < ANSWER_MIN && !audioReady) {
+      setError(`Type your answer or record an audio response before continuing (minimum ${ANSWER_MIN} characters).`);
       return;
     }
 
@@ -463,6 +485,30 @@ export default function MockInterviewQuestionPage() {
       }
     })();
 
+    setPhase('QUESTION_COMPLETED');
+  }
+
+  function skipQuestion() {
+    if (!session?.currentQuestion || loading) return;
+    if (isRecording) recorderRef.current?.stop();
+    cancelGuidedSpeech();
+    setError('');
+    setLoading(true);
+    const skippedNumber = session.questionIndex + 1;
+    const questionIndex = session.questionIndex;
+    completedQuestionNumber.current = skippedNumber;
+    pendingNextPhase.current = skippedNumber >= session.totalQuestions ? 'FINAL_PROCESSING' : 'QUESTION_DISPLAY';
+    skippedRef.current = true;
+    const lines = buildQuestionSkippedLines(skippedNumber, session.totalQuestions);
+    setCaption(lines.primary);
+    void speakGuided(lines.primary).catch(() => undefined);
+    savePromiseRef.current = (async () => {
+      try {
+        return { ok: true as const, session: await skipLiveInterviewQuestion(params.id, questionIndex) };
+      } catch (err) {
+        return { ok: false as const, error: userFacingError(err, 'skip this question') };
+      }
+    })();
     setPhase('QUESTION_COMPLETED');
   }
 
@@ -623,6 +669,19 @@ export default function MockInterviewQuestionPage() {
                   <blockquote className="mt-2 text-[15px] font-bold leading-snug text-[#0a2e2c] sm:text-lg">
                     {questionText}
                   </blockquote>
+                  {session.currentQuestion?.aiFallback ? (
+                    <p
+                      role="status"
+                      data-testid="ai-unavailable"
+                      className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900"
+                    >
+                      {AI_INTERVIEW_QUESTION_FALLBACK_MESSAGE}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 text-xs font-semibold text-[#35565f]" data-testid="question-tip">
+                    <span aria-hidden>💡 </span>Tip:{' '}
+                    {(!session.currentQuestion?.aiFallback && session.currentQuestion?.snippet?.trim()) || DEFAULT_TIP}
+                  </p>
                   {phase === 'QUESTION_DISPLAY' && aiSpeaking ? (
                     <div className="mt-3 flex items-center gap-2">
                       <VoiceWave />
@@ -704,28 +763,36 @@ export default function MockInterviewQuestionPage() {
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <button
                         type="button"
-                        onClick={() => chooseAnswerMethod('recording')}
+                        onClick={() => chooseAnswerMethod('typing')}
                         className="relative flex items-center gap-2.5 rounded-xl border-2 border-[#0f8b8d] bg-[#eefaf9] px-3.5 py-3 text-left transition hover:border-[#0b6668]"
                       >
-                        <span className="absolute -top-2 right-2.5 rounded-lg bg-[#0f8b8d] px-2 py-0.5 text-[9.5px] font-bold tracking-wide text-white">
+                        <span className="absolute -top-2 right-2.5 rounded-lg bg-[#0b6668] px-2 py-0.5 text-[9.5px] font-bold tracking-wide text-white">
                           Default
                         </span>
                         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[#123c34] text-white">
-                          <MicIcon className="h-4 w-4" />
+                          <KeyboardIcon className="h-4 w-4" />
                         </span>
-                        <span className="text-sm font-bold text-[#0b6668]">Recording</span>
+                        <span className="text-sm font-bold text-[#0b6668]">Typing</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => chooseAnswerMethod('typing')}
+                        onClick={() => chooseAnswerMethod('recording')}
                         className="flex items-center gap-2.5 rounded-xl border-2 border-[#e3e6ea] bg-white px-3.5 py-3 text-left transition hover:border-[#bcd8d6]"
                       >
-                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[#d7ebe9] text-[#0f8b8d]">
-                          <KeyboardIcon className="h-4 w-4" />
+                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[#d7ebe9] text-[#0b6668]">
+                          <MicIcon className="h-4 w-4" />
                         </span>
-                        <span className="text-sm font-bold text-[#1c2530]">Typing</span>
+                        <span className="text-sm font-bold text-[#1c2530]">Recording</span>
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      onClick={skipQuestion}
+                      disabled={loading}
+                      className="mt-3 w-full rounded-xl border border-[#cfd8dc] bg-white px-3.5 py-2.5 text-sm font-bold text-[#35565f] transition hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      Skip Question
+                    </button>
                   </div>
                 </div>
               ) : null}
@@ -748,13 +815,19 @@ export default function MockInterviewQuestionPage() {
                   </div>
 
                   {/* Type box + mic on the right */}
+                  <label htmlFor="mock-answer-type" className="sr-only">
+                    Your answer
+                  </label>
                   <div className="flex items-stretch gap-2">
                     <textarea
                       id="mock-answer-type"
                       value={answer}
+                      maxLength={ANSWER_MAX}
+                      aria-describedby="mock-answer-count"
                       onChange={(e) => {
-                        setAnswer(e.target.value);
-                        answerRef.current = e.target.value;
+                        const next = e.target.value.slice(0, ANSWER_MAX);
+                        setAnswer(next);
+                        answerRef.current = next;
                       }}
                       onPaste={blockClipboardPaste}
                       onDrop={blockClipboardPaste}
@@ -790,6 +863,14 @@ export default function MockInterviewQuestionPage() {
                       {isRecording ? <StopIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
                     </button>
                   </div>
+                  <p
+                    id="mock-answer-count"
+                    className={`-mt-2 text-right text-xs font-semibold ${
+                      answer.length >= ANSWER_MAX ? 'text-red-700' : 'text-[#4a6b72]'
+                    }`}
+                  >
+                    Characters: {answer.length} / {ANSWER_MAX}
+                  </p>
 
                   {/* Mic-backed recorder (wave shows while recording / after save) */}
                   <div className={isRecording || hasAudio ? 'block' : 'sr-only'}>
@@ -806,8 +887,9 @@ export default function MockInterviewQuestionPage() {
                         setAudioDurationSec(durationSec);
                         audioDurationRef.current = durationSec;
                         if (transcript?.trim()) {
-                          setAnswer(transcript.trim());
-                          answerRef.current = transcript.trim();
+                          const text = transcript.trim().slice(0, ANSWER_MAX);
+                          setAnswer(text);
+                          answerRef.current = text;
                         }
                       }}
                       onClear={() => {
@@ -818,8 +900,9 @@ export default function MockInterviewQuestionPage() {
                       }}
                       onLiveTranscript={(text) => {
                         if (text.trim()) {
-                          setAnswer(text);
-                          answerRef.current = text;
+                          const capped = text.slice(0, ANSWER_MAX);
+                          setAnswer(capped);
+                          answerRef.current = capped;
                         }
                       }}
                     />
@@ -844,6 +927,14 @@ export default function MockInterviewQuestionPage() {
                       return isLast ? 'Finish' : 'Next';
                     })()}
                   </Button>
+                  <button
+                    type="button"
+                    onClick={skipQuestion}
+                    disabled={loading}
+                    className="w-full rounded-full border border-[#cfd8dc] bg-white px-4 py-2.5 text-sm font-bold text-[#35565f] transition hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    Skip Question
+                  </button>
                 </>
               ) : null}
             </div>
@@ -861,6 +952,7 @@ export default function MockInterviewQuestionPage() {
             transcript={answer}
             amplitudeRef={amplitudeRef}
             elapsedSec={recordElapsedSec}
+            maxSec={RECORD_MAX_SEC}
             isRecording={isRecording}
             loading={loading}
             error={error || undefined}

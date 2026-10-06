@@ -6,9 +6,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 import { AuthModule } from '../auth/auth.module';
 import { TestimonialsModule } from '../testimonials/testimonials.module';
+import { InterviewAvailabilityModule } from '../interview-availability/interview-availability.module';
 
 @Module({
-  imports: [MatchingModule, NotificationsModule, WhatsAppModule, AuthModule, TestimonialsModule],
+  imports: [MatchingModule, NotificationsModule, WhatsAppModule, AuthModule, TestimonialsModule, InterviewAvailabilityModule],
   controllers: [ApplicationsController],
   providers: [ApplicationsService],
 })

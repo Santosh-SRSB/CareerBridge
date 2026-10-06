@@ -1,10 +1,16 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ErrorCode as SharedError, employerCandidateUnlockLimit } from '@careerbridge/shared';
+import {
+  applicationTransitionError,
+  assertKycComplete,
+  withEffectiveVerification,
+} from '../employers/employer-policy';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
@@ -109,6 +115,8 @@ export class MatchingService {
   }
 
   async recomputeMatches(userId: string, jobId: string) {
+    assertKycComplete(await this.requireEmployer(userId), 'Complete company KYC before viewing candidate matches.');
+    await this.requireJob(userId, jobId);
     await this.assertJobUnlocked(userId, jobId);
     await this.recomputeMatchesForJob(jobId);
     return this.listMatches(userId, jobId);
@@ -237,21 +245,21 @@ export class MatchingService {
           city: job.city,
           category: job.category,
           requiredSkills,
-          experience: job.experience,
+          experience:
+            job.experience && job.experience !== 'NONE'
+              ? job.experience
+              : experienceYearsMin > 0
+                ? `${experienceYearsMin}+ yrs`
+                : null,
           languages: jobLanguages,
         },
       );
       // Handbook Vol.3 deterministic points: Skills 40, Experience 20, Location 15, Language 15, Education 10.
-      const skillsScore = Math.round((base.skillScore / 100) * 40);
-      const experienceScore =
-        experienceYearsMin > 0
-          ? years >= experienceYearsMin
-            ? 20
-            : Math.round((years / experienceYearsMin) * 20)
-          : Math.round((base.experienceScore / 100) * 20);
+      const skillsScore = Math.floor((base.skillScore / 100) * 40);
+      const experienceScore = Math.round((base.experienceScore / 100) * 20);
       const locationScore = Math.round((base.locationScore / 100) * 15);
       const languageScore = Math.round((base.languageScore / 100) * 15);
-      const educationScore = Math.round((base.educationScore / 100) * 10);
+      const educationScore = Math.floor((base.educationScore / 100) * 10);
       const interviewReadinessScore = this.intelligence.interviewReadinessScore({
         interviewScores: candidate.interviews
           .map((item) => item.score)
@@ -483,6 +491,7 @@ export class MatchingService {
   }
 
   async listMatches(userId: string, jobId: string) {
+    assertKycComplete(await this.requireEmployer(userId), 'Complete company KYC before viewing candidate matches.');
     await this.assertJobUnlocked(userId, jobId);
     const employer = await this.requireEmployer(userId);
     const job = await this.requireJob(userId, jobId);
@@ -549,6 +558,10 @@ export class MatchingService {
           : outcome === 'OFFER_EXTENDED'
             ? 'SELECTED'
             : application.status;
+    const transitionError = applicationTransitionError(application.status, status);
+    if (transitionError) {
+      throw new ConflictException({ code: SharedError.BUSINESS_RULE_VIOLATION, message: transitionError });
+    }
 
     const [hiringOutcome] = await this.prisma.$transaction([
       this.prisma.hiringOutcome.upsert({
@@ -778,7 +791,7 @@ export class MatchingService {
         message: 'Employer profile was not found',
       });
     }
-    return employer;
+    return withEffectiveVerification(employer);
   }
 
   private async requireJob(userId: string, id: string) {

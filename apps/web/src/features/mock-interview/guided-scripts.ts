@@ -53,6 +53,13 @@ export function buildQuestionCompletedLines(
   };
 }
 
+export function buildQuestionSkippedLines(questionNumber: number, totalQuestions: number) {
+  if (questionNumber >= totalQuestions) {
+    return { primary: 'Question skipped. That was the last question.', secondary: 'Analyzing your interview...' };
+  }
+  return { primary: `Question ${questionNumber} skipped.`, secondary: "Let's move on to the next question." };
+}
+
 export function buildAnalyzingLine() {
   return 'Analyzing your interview...';
 }

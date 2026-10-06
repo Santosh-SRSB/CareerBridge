@@ -1,12 +1,16 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
-import { WhatsAppInterviewNotice } from '@/components/marketplace/WhatsAppInterviewNotice';
+import { CancelledInterviewCard } from '@/components/marketplace/CancelledInterviewCard';
+import {
+  WhatsAppInterviewNotice,
+  type CandidateAvailabilityPayload,
+} from '@/components/marketplace/WhatsAppInterviewNotice';
 import {
   confirmScheduledInterview,
   fetchScheduledInterview,
@@ -14,11 +18,32 @@ import {
   submitScheduledInterviewFeedback,
 } from '@/lib/candidate-marketplace-api';
 import { mockInterviewSetupUrl } from '@/lib/mock-interview-url';
+import { userFacingError } from '@/lib/client-errors';
+import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
 import type { ScheduledJobInterview } from '@/lib/candidate-marketplace-api';
 
 export default function ScheduledInterviewDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <ScheduledInterviewDetail />
+    </Suspense>
+  );
+}
+
+function InterviewDetailsCard({ interview, children }: { interview: ScheduledJobInterview; children: ReactNode }) {
+  if (interview.status === 'CANCELLED') {
+    return <CancelledInterviewCard interview={interview}>{children}</CancelledInterviewCard>;
+  }
+  return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">{children}</article>;
+}
+
+function ScheduledInterviewDetail() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const rescheduleMode =
+    pathname.startsWith('/interviews/reschedule/') || searchParams.get('reschedule') === '1';
   const [interview, setInterview] = useState<ScheduledJobInterview | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -26,9 +51,40 @@ export default function ScheduledInterviewDetailPage() {
   const [rating, setRating] = useState(5);
   const [feedbackText, setFeedbackText] = useState('');
 
+  const [loadError, setLoadError] = useState('');
+
+  const load = useCallback(() => {
+    setLoadError('');
+    fetchScheduledInterview(params.id)
+      .then(setInterview)
+      .catch((err) => {
+        if ((err as { status?: number }).status === 401) {
+          router.replace(`/login?role=candidate&next=${encodeURIComponent(pathname)}`);
+          return;
+        }
+        setLoadError(userFacingError(err, 'load this interview'));
+      });
+  }, [params.id, pathname, router]);
+
   useEffect(() => {
-    fetchScheduledInterview(params.id).then(setInterview).catch(() => setInterview(null));
-  }, [params.id]);
+    load();
+  }, [load]);
+
+  // The candidate may confirm or reschedule on WhatsApp, or the employer may cancel, while this tab is in the background.
+  useEffect(() => {
+    let lastRefresh = Date.now();
+    const onReturn = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastRefresh < 2000) return;
+      lastRefresh = Date.now();
+      load();
+    };
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    return () => {
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+    };
+  }, [load]);
 
   async function handleConfirm() {
     if (!interview) return;
@@ -45,20 +101,29 @@ export default function ScheduledInterviewDetailPage() {
     }
   }
 
-  async function handleReschedule(payload: {
-    preferredDate: string;
-    preferredTime: string;
-    reason?: string;
-  }) {
+  async function handleRequestReschedule() {
     if (!interview) return;
     setBusy(true);
     setError('');
+    setMessage('');
     try {
-      const next = await rescheduleScheduledInterview(interview.id, payload);
-      setInterview(next);
-      setMessage('Reschedule request sent. Waiting for employer approval.');
+      setInterview(await rescheduleScheduledInterview(interview.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not request reschedule.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSubmitAvailability(payload: CandidateAvailabilityPayload) {
+    if (!interview) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      setInterview(await rescheduleScheduledInterview(interview.id, payload));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send your availability.');
     } finally {
       setBusy(false);
     }
@@ -83,10 +148,18 @@ export default function ScheduledInterviewDetailPage() {
     }
   }
 
+  if (loadError) {
+    return (
+      <CandidateAppShell activeTab="interviews" maxWidth="max-w-3xl">
+        <ErrorState message={loadError} onRetry={load} />
+      </CandidateAppShell>
+    );
+  }
+
   if (!interview) {
     return (
       <CandidateAppShell activeTab="interviews">
-        <p className="text-slate-500">Loading interview details...</p>
+        <SkeletonList rows={1} label="Loading interview details…" />
       </CandidateAppShell>
     );
   }
@@ -94,8 +167,10 @@ export default function ScheduledInterviewDetailPage() {
   const statusCopy =
     interview.status === 'CONFIRMED'
       ? 'Confirmed ✓'
-      : interview.status === 'RESCHEDULE_REQUESTED'
-        ? 'Reschedule pending'
+      : interview.status === 'RESCHEDULE_NEEDED'
+        ? 'Choose another time'
+        : interview.status === 'RESCHEDULE_REQUESTED'
+        ? 'Waiting for employer to schedule'
         : interview.status === 'COMPLETED'
           ? 'Completed'
           : interview.status === 'CANCELLED'
@@ -109,7 +184,7 @@ export default function ScheduledInterviewDetailPage() {
           ← My Interviews
         </Link>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <InterviewDetailsCard interview={interview}>
           <h1 className="text-xl font-extrabold text-slate-900">{interview.jobTitle}</h1>
           <p className="mt-1 text-sm font-semibold text-slate-600">{interview.companyName}</p>
           <p className="mt-4 text-sm text-slate-700">
@@ -120,12 +195,37 @@ export default function ScheduledInterviewDetailPage() {
             })}
           </p>
           <p className="text-sm font-bold text-slate-800">{interview.scheduledTime}</p>
-          <p className="mt-2 text-sm text-slate-600">{interview.location}</p>
+          <dl className="mt-3 grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="font-semibold text-slate-600">Type</dt>
+            <dd className="text-slate-800">{interview.mode === 'VIDEO' ? 'Online (video)' : 'In-person'}</dd>
+            {interview.durationMin ? (
+              <>
+                <dt className="font-semibold text-slate-600">Duration</dt>
+                <dd className="text-slate-800">{interview.durationMin} minutes</dd>
+              </>
+            ) : null}
+            <dt className="font-semibold text-slate-600">{interview.mode === 'VIDEO' ? 'Link' : 'Location'}</dt>
+            <dd className="break-words text-slate-800">
+              {interview.mode === 'VIDEO' && interview.meetingUrl ? (
+                <a href={interview.meetingUrl} className="font-semibold text-[#0a2e2c] underline">
+                  Join interview
+                </a>
+              ) : (
+                interview.location
+              )}
+            </dd>
+            <dt className="font-semibold text-slate-600">Interviewer</dt>
+            <dd className="text-slate-800">{interview.companyName} hiring team</dd>
+            <dt className="font-semibold text-slate-600">Notes</dt>
+            <dd className="whitespace-pre-line break-words text-slate-800">
+              {interview.candidateNotes || 'No notes from the employer.'}
+            </dd>
+          </dl>
           <p
             className={`mt-2 text-sm font-semibold ${
               interview.status === 'CONFIRMED'
                 ? 'text-emerald-700'
-                : interview.status === 'RESCHEDULE_REQUESTED'
+                : interview.status === 'RESCHEDULE_REQUESTED' || interview.status === 'RESCHEDULE_NEEDED'
                   ? 'text-amber-700'
                   : interview.status === 'COMPLETED'
                     ? 'text-slate-700'
@@ -140,13 +240,15 @@ export default function ScheduledInterviewDetailPage() {
               Prepare for Interview
             </Button>
           </div>
-        </article>
+        </InterviewDetailsCard>
 
         <WhatsAppInterviewNotice
           interview={interview}
           busy={busy}
+          openAvailabilityForm={rescheduleMode}
           onConfirm={() => void handleConfirm()}
-          onReschedule={(payload) => void handleReschedule(payload)}
+          onRequestReschedule={() => void handleRequestReschedule()}
+          onSubmitAvailability={(payload) => void handleSubmitAvailability(payload)}
         />
 
         {interview.candidateFeedback ? (

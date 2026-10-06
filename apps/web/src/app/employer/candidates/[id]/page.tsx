@@ -1,19 +1,26 @@
 'use client';
 
+import { userFacingError } from '@/lib/client-errors';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { EmployerCandidatePassport } from '@careerbridge/shared';
-import { toAtsMatchBreakdown } from '@careerbridge/shared';
+import { PROFILE_MATCH_LABEL, toAtsMatchBreakdown } from '@careerbridge/shared';
 import {
   changeApplicationStatus,
   downloadEmployerCandidateResume,
   getEmployerCandidate,
-  notifyMatchedCandidate,
   saveBase64File,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { Button } from '@/components/ui/Button';
+import { toast } from '@/components/ui/Toast';
+import { StatusBadge } from '@/components/AppNav';
+import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
+import { RejectConfirmModal } from '@/components/employer/RejectConfirmModal';
+
+const FINAL_APPLICATION_STATUSES = ['HIRED', 'REJECTED', 'WITHDRAWN'];
+const SCHEDULABLE_APPLICATION_STATUSES = ['SHORTLISTED', 'INTERVIEW', 'ON_HOLD'];
 
 function titleCaseName(value: string) {
   return value
@@ -72,7 +79,8 @@ export default function EmployerCandidateProfilePage() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [notified, setNotified] = useState(false);
+  const [modal, setModal] = useState<'SHORTLIST' | 'REJECT' | null>(null);
+  const [modalError, setModalError] = useState('');
 
   async function load() {
     const next = await getEmployerCandidate(params.id, jobId);
@@ -92,20 +100,25 @@ export default function EmployerCandidateProfilePage() {
 
   const resolvedJobId = jobId || profile?.application?.jobId;
 
-  async function act(action: 'SHORTLIST' | 'REJECT') {
+  async function act(action: 'SHORTLIST' | 'REJECT', text: string) {
     if (!profile?.application) return;
-    if (action === 'REJECT' && !window.confirm('Reject this candidate for this role?')) {
-      return;
-    }
     setBusy(action);
-    setError('');
+    setModalError('');
     setMessage('');
     try {
-      await changeApplicationStatus(profile.application.id, action);
-      setMessage(action === 'SHORTLIST' ? 'Candidate has been shortlisted.' : 'Candidate marked as not selected.');
-      await load();
+      await changeApplicationStatus(
+        profile.application.id,
+        action,
+        action === 'REJECT' ? text || undefined : undefined,
+        action === 'SHORTLIST' ? text || undefined : undefined,
+      );
+      toast.success(action === 'SHORTLIST' ? 'Candidate shortlisted' : 'Candidate rejected');
+      setModal(null);
+      await load().catch(() => undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action failed.');
+      const text = userFacingError(err, action === 'SHORTLIST' ? 'shortlist candidate' : 'reject candidate');
+      setModalError(text);
+      toast.error(text);
     } finally {
       setBusy('');
     }
@@ -131,26 +144,6 @@ export default function EmployerCandidateProfilePage() {
       setError('Resume file was empty.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open resume.');
-    } finally {
-      setBusy('');
-    }
-  }
-
-  async function notify() {
-    if (!resolvedJobId || !profile) return;
-    setBusy('NOTIFY');
-    setError('');
-    setMessage('');
-    try {
-      const result = await notifyMatchedCandidate(profile.id, resolvedJobId);
-      setNotified(true);
-      setMessage(
-        result.whatsappSent
-          ? 'WhatsApp message sent to this candidate.'
-          : 'Candidate notified in-app. WhatsApp number was not available.',
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not notify candidate.');
     } finally {
       setBusy('');
     }
@@ -190,7 +183,8 @@ export default function EmployerCandidateProfilePage() {
                 </div>
               </div>
               {ats ? (
-                <div className="ep-pass__score">
+                <div className="ep-pass__score" aria-label={`${PROFILE_MATCH_LABEL} ${ats.score} out of 100, ${ats.bandLabel}`}>
+                  <small className="block text-[10px] font-bold uppercase tracking-wide">{PROFILE_MATCH_LABEL}</small>
                   <strong>
                     {ats.score}
                     <em>/100</em>
@@ -274,7 +268,7 @@ export default function EmployerCandidateProfilePage() {
               <div className="ep-pass__main">
                 {ats ? (
                   <section className="ep-pass__block">
-                    <h2>ATS score breakdown</h2>
+                    <h2>Profile Match breakdown</h2>
                     <ul className="ep-pass__factors">
                       {ats.factors.map((factor) => (
                         <li key={factor.key}>
@@ -293,8 +287,8 @@ export default function EmployerCandidateProfilePage() {
                   </section>
                 ) : (
                   <section className="ep-pass__block">
-                    <h2>ATS score breakdown</h2>
-                    <p className="ep-pass__muted">Select a job match to see ATS scoring for this profile.</p>
+                    <h2>Profile Match breakdown</h2>
+                    <p className="ep-pass__muted">Select a job to see the Profile Match breakdown for this profile.</p>
                   </section>
                 )}
 
@@ -360,9 +354,12 @@ export default function EmployerCandidateProfilePage() {
             <footer className="ep-pass__foot">
               <div className="ep-pass__foot-left">
                 {profile.application ? (
-                  <span className="ep-pass__pill">
-                    Applied · {profile.application.jobTitle}
-                  </span>
+                  <>
+                    <span className="ep-pass__pill">
+                      Applied · {profile.application.jobTitle}
+                    </span>
+                    <StatusBadge status={profile.application.status} />
+                  </>
                 ) : resolvedJobId ? (
                   <span className="ep-pass__pill">Matched profile</span>
                 ) : null}
@@ -378,33 +375,42 @@ export default function EmployerCandidateProfilePage() {
                     {busy === 'RESUME' ? 'Opening…' : 'Download resume'}
                   </button>
                 ) : null}
-                {profile.application &&
-                profile.application.status !== 'SHORTLISTED' &&
-                profile.application.status !== 'HIRED' ? (
+                {profile.application && ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(profile.application.status) ? (
                   <Button
                     type="button"
                     size="sm"
                     block={false}
                     className="ep-pass__btn ep-pass__btn--solid"
-                    loading={busy === 'SHORTLIST'}
-                    loadingLabel="…"
                     disabled={busy !== ''}
-                    onClick={() => void act('SHORTLIST')}
+                    onClick={() => {
+                      setModalError('');
+                      setModal('SHORTLIST');
+                    }}
                   >
                     Shortlist
                   </Button>
                 ) : null}
-                {resolvedJobId ? (
-                  <button
-                    type="button"
-                    className="ep-pass__btn ep-pass__btn--wa"
-                    disabled={busy !== '' || notified}
-                    onClick={() => void notify()}
-                  >
-                    {busy === 'NOTIFY' ? '…' : notified ? 'WhatsApp sent' : 'Notify via WhatsApp'}
-                  </button>
+                {profile.application?.status === 'SHORTLISTED' ? (
+                  <span className="ep-pass__pill" aria-label="Already shortlisted">
+                    Shortlisted ✓
+                  </span>
                 ) : null}
-                {profile.application ? (
+                {profile.application && !FINAL_APPLICATION_STATUSES.includes(profile.application.status) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    block={false}
+                    disabled={busy !== ''}
+                    onClick={() => {
+                      setModalError('');
+                      setModal('REJECT');
+                    }}
+                  >
+                    Reject
+                  </Button>
+                ) : null}
+                {profile.application && SCHEDULABLE_APPLICATION_STATUSES.includes(profile.application.status) ? (
                   <Link
                     href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(profile.application.id)}&jobId=${encodeURIComponent(profile.application.jobId)}`}
                     className="ep-pass__btn ep-pass__btn--ghost"
@@ -417,6 +423,24 @@ export default function EmployerCandidateProfilePage() {
           </article>
         ) : null}
       </div>
+      <ShortlistConfirmModal
+        open={modal === 'SHORTLIST'}
+        candidateName={profile ? candidateName(profile) : 'Candidate'}
+        jobTitle={profile?.application?.jobTitle}
+        busy={busy === 'SHORTLIST'}
+        error={modalError}
+        onCancel={() => setModal(null)}
+        onConfirm={(note) => act('SHORTLIST', note)}
+      />
+      <RejectConfirmModal
+        open={modal === 'REJECT'}
+        candidateName={profile ? candidateName(profile) : 'Candidate'}
+        jobTitle={profile?.application?.jobTitle}
+        busy={busy === 'REJECT'}
+        error={modalError}
+        onCancel={() => setModal(null)}
+        onConfirm={(reason) => act('REJECT', reason)}
+      />
     </EmployerShellFallback>
   );
 }

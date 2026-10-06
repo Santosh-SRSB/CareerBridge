@@ -19,10 +19,10 @@ describe('authErrorMessage', () => {
   });
 
   it('surfaces ACCOUNT_EXISTS from API', () => {
-    const err = Object.assign(new Error('A candidate account already exists with this mobile number. Please sign in.'), {
+    const err = Object.assign(new Error('This mobile number is already registered. Please login.'), {
       code: 'ACCOUNT_EXISTS',
     });
-    assert.match(authErrorMessage(err, 'request'), /already exists/i);
+    assert.equal(authErrorMessage(err, 'request'), 'This mobile number is already registered. Please login.');
   });
 
   it('does not expose stack traces for unknown errors without message', () => {

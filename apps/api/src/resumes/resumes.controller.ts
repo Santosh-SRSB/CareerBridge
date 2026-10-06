@@ -2,7 +2,17 @@ import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Pat
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { RESUME_TEMPLATES } from '@careerbridge/shared';
 import { ResumesService } from './resumes.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -168,6 +178,61 @@ class RoleAtsDto {
   analysis?: Record<string, unknown>;
 }
 
+class ImproveSummaryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  summary?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  targetRole?: string;
+
+  /** Profile facts the AI may draw on (skills, education, experience); never persisted. */
+  @IsOptional()
+  @IsObject()
+  profile?: Record<string, unknown>;
+
+  /** Earlier suggestions the candidate asked to regenerate ("Try again"); the AI must word the new one differently. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsString({ each: true })
+  @MaxLength(2000, { each: true })
+  avoid?: string[];
+}
+
+class ImproveExperienceDto {
+  @IsString()
+  @MaxLength(120)
+  role!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  company?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @IsString({ each: true })
+  @MaxLength(300, { each: true })
+  bullets?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  targetRole?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsString({ each: true })
+  @MaxLength(2000, { each: true })
+  avoid?: string[];
+}
+
 class StructureResumeTextDto {
   @IsString()
   @MinLength(20)
@@ -258,6 +323,16 @@ export class ResumesController {
   @Post('ats/rewrite')
   roleRewrite(@CurrentUser() user: { id: string }, @Body() dto: RoleAtsDto) {
     return this.resumes.roleRewrite(user.id, dto);
+  }
+
+  @Post('summary/improve')
+  improveSummary(@CurrentUser() user: { id: string }, @Body() dto: ImproveSummaryDto) {
+    return this.resumes.improveSummary(user.id, dto);
+  }
+
+  @Post('experience/improve')
+  improveExperience(@CurrentUser() user: { id: string }, @Body() dto: ImproveExperienceDto) {
+    return this.resumes.improveExperience(user.id, dto);
   }
 
   @Post('career-guidance')

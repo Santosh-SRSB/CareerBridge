@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GstConfigService } from './gst.config';
+import { GstConfigService, type GstRuntimeConfig } from './gst.config';
 import { GstConfigError, GstProviderError, gstValidationException } from './gst.errors';
 import { IrisIrpGstProvider } from './gst.provider';
 import { type GstInternalStatus } from './gst.status';
@@ -16,7 +16,17 @@ export type GstVerifyResult = {
   status: GstInternalStatus;
   message?: string;
   trademark?: string | null;
+  /** Which lookup answered; MOCK is a local test double, never a live GST lookup. */
+  provider: GstRuntimeConfig['provider'];
+  mock: boolean;
 };
+
+export const GST_MOCK_ACTIVE_MESSAGE =
+  'Test mode: this server uses a mock GST check, not a live GST lookup. The result is not real verification.';
+export const GST_MOCK_NOT_ACTIVE_MESSAGE =
+  'Test mode: this server uses a mock GST check, and this GSTIN is not on its test list. Live GST lookup is not available here.';
+export const GST_UNAVAILABLE_MESSAGE = 'GSTIN verification is temporarily unavailable. Please try again.';
+export const GST_NOT_CONFIGURED_MESSAGE = 'GSTIN verification is not available on this server right now. Please contact support.';
 
 @Injectable()
 export class GstService {
@@ -51,10 +61,11 @@ export class GstService {
     );
 
     const started = Date.now();
+    const usingMock = !cfg.gstinApiKey && cfg.mockEnabled && !cfg.configured;
+    const provider = usingMock ? 'MOCK' : cfg.provider;
     try {
       const result = await this.provider.getGstinDetails(gstin);
       const status = result.status;
-      const usingMock = cfg.provider === 'MOCK';
 
       const payload: GstVerifyResult =
         status === 'UNKNOWN'
@@ -63,7 +74,9 @@ export class GstService {
               verified: false,
               status: 'UNKNOWN',
               trademark: null,
-              message: 'GSTIN verification is temporarily unavailable. Please try again.',
+              message: GST_UNAVAILABLE_MESSAGE,
+              provider,
+              mock: usingMock,
             }
           : status === 'ACTIVE'
             ? {
@@ -71,21 +84,30 @@ export class GstService {
                 verified: true,
                 status: 'ACTIVE',
                 trademark: result.tradeName,
+                provider,
+                mock: usingMock,
+                ...(usingMock ? { message: GST_MOCK_ACTIVE_MESSAGE } : {}),
               }
             : {
                 success: true,
                 verified: false,
                 status: 'NOT_ACTIVE',
                 trademark: null,
-                message: usingMock
-                  ? `Local mock only. For live Active + trade name lookup, set GSTINAPI_KEY in apps/api/.env. Demo Active GSTIN: ${process.env.GST_MOCK_ACTIVE_GSTIN || '29AAAAA0000A1ZY'}.`
-                  : 'This GSTIN is not active.',
+                message: usingMock ? GST_MOCK_NOT_ACTIVE_MESSAGE : 'This GSTIN is not active.',
+                provider,
+                mock: usingMock,
               };
+      if (usingMock && status !== 'ACTIVE') {
+        this.logger.warn(
+          'GST mock provider active (GST_MOCK_ENABLED=true, no GSTINAPI_KEY / IRIS credentials); only GST_MOCK_ACTIVE_GSTIN verifies.',
+        );
+      }
 
       await this.safeAudit({
         gstin,
         verificationStatus: payload.status,
         verified: payload.verified,
+        provider,
         environment: cfg.environment,
         responseCode: result.responseCode || null,
         userId,
@@ -105,6 +127,7 @@ export class GstService {
           gstin,
           verificationStatus: 'UNKNOWN',
           verified: false,
+          provider,
           environment: cfg.environment,
           responseCode:
             err instanceof GstProviderError ? String(err.httpStatus ?? 'ERR') : 'CONFIG',
@@ -114,7 +137,9 @@ export class GstService {
           success: false,
           verified: false,
           status: 'UNKNOWN',
-          message: 'GSTIN verification is temporarily unavailable. Please try again.',
+          message: err instanceof GstConfigError ? GST_NOT_CONFIGURED_MESSAGE : GST_UNAVAILABLE_MESSAGE,
+          provider,
+          mock: usingMock,
         };
       }
       throw err;
@@ -125,6 +150,7 @@ export class GstService {
     gstin: string;
     verificationStatus: string;
     verified: boolean;
+    provider: string;
     environment: string;
     responseCode: string | null;
     userId?: string;
@@ -135,7 +161,7 @@ export class GstService {
           gstin: input.gstin,
           verificationStatus: input.verificationStatus,
           verified: input.verified,
-          provider: 'IRIS_IRP',
+          provider: input.provider,
           environment: input.environment,
           responseCode: input.responseCode,
           userId: input.userId || null,

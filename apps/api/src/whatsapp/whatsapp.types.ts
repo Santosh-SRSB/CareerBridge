@@ -40,12 +40,16 @@ export type WhatsAppWebhookBody = {
           id?: string;
           timestamp?: string;
           type?: string;
+          /** Set when the user replied to / tapped a button on one of our messages. */
+          context?: { id?: string; from?: string };
           text?: { body?: string };
           button?: { text?: string; payload?: string };
           interactive?: {
             type?: string;
             button_reply?: { id?: string; title?: string };
             list_reply?: { id?: string; title?: string };
+            /** WhatsApp Flow submission. */
+            nfm_reply?: { name?: string; body?: string; response_json?: string };
           };
         }>;
         statuses?: Array<{

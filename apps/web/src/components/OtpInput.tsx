@@ -6,9 +6,12 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   length?: number;
+  disabled?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
 };
 
-export function OtpInput({ value, onChange, length = 6 }: Props) {
+export function OtpInput({ value, onChange, length = 6, disabled = false, invalid = false, describedBy }: Props) {
   const digits = value.padEnd(length, ' ').slice(0, length).split('');
   const refs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -23,7 +26,7 @@ export function OtpInput({ value, onChange, length = 6 }: Props) {
   }
 
   return (
-    <div className="flex justify-between gap-2">
+    <div className="flex justify-between gap-2" role="group" aria-label="One-time password">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -31,8 +34,12 @@ export function OtpInput({ value, onChange, length = 6 }: Props) {
             refs.current[index] = el;
           }}
           inputMode="numeric"
+          autoComplete={index === 0 ? 'one-time-code' : 'off'}
           maxLength={1}
           value={digit.trim()}
+          disabled={disabled}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
           onChange={(event) => setDigit(index, event.target.value.replace(/\D/g, '').slice(-1))}
           onKeyDown={(event) => {
             if (event.key === 'Backspace' && !value[index] && index > 0) {
@@ -44,7 +51,11 @@ export function OtpInput({ value, onChange, length = 6 }: Props) {
             const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
             onChange(pasted);
           }}
-          className="h-12 w-11 rounded-xl border border-primary/20 bg-[#f8faf9] text-center text-xl font-bold text-primary outline-none transition focus:border-teal focus:bg-white focus:ring-2 focus:ring-teal/20"
+          className={`h-12 w-11 rounded-xl border bg-[#f8faf9] text-center text-xl font-bold text-primary outline-none transition focus:bg-white focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+            invalid
+              ? 'border-red-600 focus:border-red-600 focus:ring-red-200'
+              : 'border-primary/20 focus:border-teal focus:ring-teal/20'
+          }`}
           aria-label={`Digit ${index + 1}`}
         />
       ))}

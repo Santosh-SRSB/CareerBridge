@@ -4,11 +4,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ErrorCode } from '@careerbridge/shared';
+import {
+  AI_SETTING_DEFAULTS,
+  type AiBudgetStatus,
+  EMPLOYER_PLAN_SETTING_DEFAULTS,
+  ErrorCode,
+  aiBudgetStatus,
+  aiUsageDayStart,
+  parseAiSettings,
+} from '@careerbridge/shared';
 import { UserStatus, UserType } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { hashPlatformPassword } from '../auth/password.util';
+import { EmployersService } from '../employers/employers.service';
+import { employerPlanUsage, usagePeriod } from '../employers/employer-plan';
 
 const DEFAULT_SETTINGS: Record<string, string> = {
   // Workflow: Settings → Platform / Resume / ATS / AI / Notifications / System
@@ -18,9 +28,8 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   'ats.scoreThreshold': '60',
   'ats.scoreVersion': 'v1',
   'ats.matchingEnabled': 'true',
-  'ai.enabled': 'true',
-  'ai.dailyRequestLimit': '50000',
-  'ai.tokenLimit': '2000000',
+  ...AI_SETTING_DEFAULTS,
+  ...EMPLOYER_PLAN_SETTING_DEFAULTS,
   'notifications.enabled': 'true',
   'notifications.remindersEnabled': 'true',
   'notifications.templatesEnabled': 'true',
@@ -29,11 +38,93 @@ const DEFAULT_SETTINGS: Record<string, string> = {
 
 const ALLOWED_SETTING_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
 
+const IST_OFFSET_MS = 330 * 60_000;
+
+/** Parses a YYYY-MM-DD filter as the start or end of that day in India time. */
+export function parseDateFilter(raw: string | undefined, edge: 'start' | 'end'): Date | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const utc = match ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : NaN;
+  if (!match || Number.isNaN(utc) || new Date(utc).getUTCDate() !== Number(match[3])) {
+    throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Dates must use the YYYY-MM-DD format.' });
+  }
+  const startIst = utc - IST_OFFSET_MS;
+  return new Date(edge === 'start' ? startIst : startIst + 24 * 60 * 60_000 - 1);
+}
+
+/** Percentage of `count` relative to `base`, one decimal; null when there is no base to compare with. */
+export function conversionRate(count: number, base: number): number | null {
+  if (!base) return null;
+  return Math.round((count / base) * 1000) / 10;
+}
+
+function splitAliases(raw: string | null | undefined): string[] {
+  return (raw || '')
+    .split(',')
+    .map((alias) => alias.trim())
+    .filter(Boolean);
+}
+
+function parseNameList(raw: string | null | undefined): string[] {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Replaces `from` (case-insensitive) with `to` in a skill-name list, without creating duplicates. */
+export function replaceSkillName(list: string[], from: string, to: string): { list: string[]; changed: boolean } {
+  const fromKey = from.trim().toLowerCase();
+  if (!list.some((item) => item.trim().toLowerCase() === fromKey)) return { list, changed: false };
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    const next = item.trim().toLowerCase() === fromKey ? to : item;
+    const key = next.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(next);
+  }
+  return { list: out, changed: true };
+}
+
+/** Short, non-sensitive failure reason from a stored Graph API error payload. */
+export function whatsappFailureReason(errorJson: string | null | undefined): string {
+  if (!errorJson) return 'Unknown error';
+  try {
+    const parsed = JSON.parse(errorJson) as Record<string, unknown>;
+    const err = (parsed.error && typeof parsed.error === 'object' ? parsed.error : parsed) as Record<string, unknown>;
+    const first = Array.isArray(parsed.errors) ? (parsed.errors[0] as Record<string, unknown> | undefined) : undefined;
+    const code = err.code ?? first?.code;
+    const title = err.title ?? err.message ?? first?.title ?? first?.message;
+    const text = typeof title === 'string' ? title.slice(0, 160) : 'Delivery failed';
+    return code !== undefined ? `${text} (code ${String(code)})` : text;
+  } catch {
+    return 'Delivery failed';
+  }
+}
+
+const APPLICATION_STAGE_ORDER = [
+  'APPLIED',
+  'UNDER_REVIEW',
+  'SHORTLISTED',
+  'ON_HOLD',
+  'INTERVIEW',
+  'SELECTED',
+  'HIRED',
+  'REJECTED',
+  'WITHDRAWN',
+] as const;
+
 @Injectable()
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
+    private readonly employerService: EmployersService,
   ) {}
 
   private async writeAudit(input: {
@@ -178,6 +269,22 @@ export class AdminService {
     };
   }
 
+  async aiBudgetToday(): Promise<AiBudgetStatus> {
+    const [rows, agg] = await Promise.all([
+      this.prisma.platformSetting.findMany({ where: { key: { in: Object.keys(AI_SETTING_DEFAULTS) } } }),
+      this.prisma.aiInteraction.aggregate({
+        where: { createdAt: { gte: aiUsageDayStart() } },
+        _count: { _all: true },
+        _sum: { inputTokens: true, outputTokens: true },
+      }),
+    ]);
+    return aiBudgetStatus({
+      ...parseAiSettings(Object.fromEntries(rows.map((row) => [row.key, row.value]))),
+      requestsToday: agg._count._all,
+      tokensToday: (agg._sum.inputTokens ?? 0) + (agg._sum.outputTokens ?? 0),
+    });
+  }
+
   async dashboard() {
     const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const [
@@ -202,6 +309,7 @@ export class AdminService {
       recentJobs,
       recentInterviews,
       aiUsage,
+      aiBudget,
     ] = await Promise.all([
       this.prisma.candidate.count(),
       this.prisma.candidate.count({ where: { onboardingCompleted: true } }),
@@ -239,6 +347,7 @@ export class AdminService {
         select: { createdAt: true, candidate: { select: { firstName: true, lastName: true } } },
       }),
       this.aiUsage(),
+      this.aiBudgetToday(),
     ]);
 
     const recentActivity = [
@@ -294,25 +403,56 @@ export class AdminService {
         suspendedAccounts: suspendedUsers,
         jobsRequiringAttention: pausedJobs,
         unreadNotifications,
+        aiBudget,
       },
       aiUsage,
     };
   }
 
-  async candidates(query?: string) {
+  async candidates(
+    query?: string,
+    filters: { location?: string; skill?: string; status?: string; from?: string; to?: string } = {},
+  ) {
     const q = query?.trim();
+    const location = filters.location?.trim();
+    const skill = filters.skill?.trim();
+    const status = filters.status?.trim().toUpperCase();
+    if (status && !['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(status)) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Unknown account status filter.' });
+    }
+    const from = parseDateFilter(filters.from, 'start');
+    const to = parseDateFilter(filters.to, 'end');
+    if (from && to && from > to) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'The end date must be on or after the start date.',
+      });
+    }
+    const and: Record<string, unknown>[] = [];
+    if (q) {
+      and.push({
+        OR: [
+          { firstName: { contains: q, mode: 'insensitive' } },
+          { lastName: { contains: q, mode: 'insensitive' } },
+          { city: { contains: q, mode: 'insensitive' } },
+          { user: { email: { contains: q, mode: 'insensitive' } } },
+          { user: { phone: { contains: q } } },
+        ],
+      });
+    }
+    if (location) {
+      and.push({
+        OR: [
+          { city: { contains: location, mode: 'insensitive' } },
+          { state: { contains: location, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (skill) and.push({ skills: { some: { name: { contains: skill, mode: 'insensitive' } } } });
+    if (status) and.push({ user: { status } });
+    if (from || to) and.push({ createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } });
     const rows = await this.prisma.candidate.findMany({
-      where: q
-        ? {
-            OR: [
-              { firstName: { contains: q, mode: 'insensitive' } },
-              { lastName: { contains: q, mode: 'insensitive' } },
-              { city: { contains: q, mode: 'insensitive' } },
-              { user: { email: { contains: q, mode: 'insensitive' } } },
-              { user: { phone: { contains: q } } },
-            ],
-          }
-        : undefined,
+      where: and.length ? ({ AND: and } as never) : undefined,
       include: {
         user: { select: { phone: true, email: true, status: true, createdAt: true } },
         skills: { take: 5 },
@@ -717,9 +857,22 @@ export class AdminService {
       orderBy: { scheduledAt: 'desc' },
       take: 20,
     });
+    const usage = await employerPlanUsage(this.prisma, id);
     return {
       id: row.id,
       companyName: row.companyName,
+      plan: {
+        name: usage.plan,
+        period: usage.period,
+        activeJobs: usage.activeJobs,
+        activeJobLimit: usage.activeJobLimit,
+      },
+      credits: {
+        candidateViewsUsed: usage.candidateViews,
+        candidateViewCredits: usage.candidateViewCredits,
+        remaining:
+          usage.candidateViewCredits > 0 ? Math.max(0, usage.candidateViewCredits - usage.candidateViews) : null,
+      },
       email: row.user.email,
       phone: row.user.phone,
       accountStatus: row.user.status,
@@ -822,7 +975,27 @@ export class AdminService {
     };
   }
 
-  async setJobStatus(actorId: string, id: string, status: 'PUBLISHED' | 'PAUSED' | 'CLOSED' | 'DRAFT') {
+  async approveJob(actorId: string, id: string) {
+    return this.setJobStatus(actorId, id, 'PUBLISHED');
+  }
+
+  /** A job waiting for review goes back to Draft so the employer can fix it; a live job is taken down. */
+  async rejectJob(actorId: string, id: string) {
+    const job = await this.prisma.job.findUnique({ where: { id }, select: { status: true } });
+    if (!job) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Job not found' });
+    }
+    const pending = job.status === 'PENDING_REVIEW';
+    const updated = await this.setJobStatus(actorId, id, pending ? 'DRAFT' : 'CLOSED');
+    await this.employerService.notifyJobRejected(id);
+    return updated;
+  }
+
+  async setJobStatus(
+    actorId: string,
+    id: string,
+    status: 'PUBLISHED' | 'PENDING_REVIEW' | 'PAUSED' | 'CLOSED' | 'DRAFT',
+  ) {
     const job = await this.prisma.job.findUnique({ where: { id } });
     if (!job) {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Job not found' });
@@ -842,6 +1015,10 @@ export class AdminService {
       oldValue: { status: job.status },
       newValue: { status },
     });
+    if (status === 'PUBLISHED' && job.status !== 'PUBLISHED') {
+      const followUps = await this.employerService.completeJobApproval(id);
+      return { ...updated, ...(followUps || {}) };
+    }
     return updated;
   }
 
@@ -882,6 +1059,25 @@ export class AdminService {
       candidateName: [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ') || '—',
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  /** Per-stage application counts across the whole platform (not limited to the latest 100 rows). */
+  async applicationPipeline() {
+    const grouped = await this.prisma.application.groupBy({ by: ['status'], _count: { _all: true } });
+    const byStatus = Object.fromEntries(APPLICATION_STAGE_ORDER.map((s) => [s, 0])) as Record<string, number>;
+    for (const row of grouped) byStatus[String(row.status)] = row._count._all;
+    const total = Object.values(byStatus).reduce((sum, n) => sum + n, 0);
+    return {
+      total,
+      byStatus,
+      stages: [
+        { stage: 'Applied', count: byStatus.APPLIED + byStatus.UNDER_REVIEW },
+        { stage: 'Shortlisted', count: byStatus.SHORTLISTED + byStatus.ON_HOLD },
+        { stage: 'Interview', count: byStatus.INTERVIEW },
+        { stage: 'Selected', count: byStatus.SELECTED + byStatus.HIRED },
+        { stage: 'Rejected', count: byStatus.REJECTED },
+      ],
+    };
   }
 
   async interviews(query?: string, status?: string) {
@@ -950,6 +1146,123 @@ export class AdminService {
     return row;
   }
 
+  /**
+   * Merges a duplicate skill into another: candidate skills and job skill lists move to the target,
+   * the duplicate's name and aliases become target aliases, and the duplicate is deactivated.
+   */
+  async mergeSkill(actorId: string, sourceId: string, targetId: string) {
+    if (sourceId === targetId) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Choose a different skill to merge into.' });
+    }
+    const [source, target] = await Promise.all([
+      this.prisma.skill.findUnique({ where: { id: sourceId } }),
+      this.prisma.skill.findUnique({ where: { id: targetId } }),
+    ]);
+    if (!source || !target) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Skill not found' });
+    }
+
+    const aliasSeen = new Set<string>([target.name.toLowerCase()]);
+    const aliases: string[] = [];
+    for (const alias of [...splitAliases(target.aliases), source.name, ...splitAliases(source.aliases)]) {
+      const key = alias.toLowerCase();
+      if (aliasSeen.has(key)) continue;
+      aliasSeen.add(key);
+      aliases.push(alias);
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const sourceRows = await tx.candidateSkill.findMany({
+        where: { name: { equals: source.name, mode: 'insensitive' } },
+        select: { id: true, candidateId: true },
+      });
+      const alreadyHasTarget = new Set(
+        (
+          await tx.candidateSkill.findMany({
+            where: {
+              candidateId: { in: sourceRows.map((r) => r.candidateId) },
+              name: { equals: target.name, mode: 'insensitive' },
+            },
+            select: { candidateId: true },
+          })
+        ).map((r) => r.candidateId),
+      );
+      const duplicateIds = sourceRows.filter((r) => alreadyHasTarget.has(r.candidateId)).map((r) => r.id);
+      const renameIds = sourceRows.filter((r) => !alreadyHasTarget.has(r.candidateId)).map((r) => r.id);
+      if (duplicateIds.length) await tx.candidateSkill.deleteMany({ where: { id: { in: duplicateIds } } });
+      if (renameIds.length) await tx.candidateSkill.updateMany({ where: { id: { in: renameIds } }, data: { name: target.name } });
+
+      let jobsUpdated = 0;
+      const jobs = await tx.job.findMany({
+        where: {
+          OR: [
+            { requiredSkills: { contains: source.name, mode: 'insensitive' } },
+            { preferredSkills: { contains: source.name, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true, requiredSkills: true, preferredSkills: true },
+      });
+      for (const job of jobs) {
+        const required = replaceSkillName(parseNameList(job.requiredSkills), source.name, target.name);
+        const preferred = replaceSkillName(parseNameList(job.preferredSkills), source.name, target.name);
+        if (!required.changed && !preferred.changed) continue;
+        await tx.job.update({
+          where: { id: job.id },
+          data: { requiredSkills: JSON.stringify(required.list), preferredSkills: JSON.stringify(preferred.list) },
+        });
+        jobsUpdated += 1;
+      }
+      const profiles = await tx.jobSkillProfile.findMany({
+        where: {
+          OR: [
+            { requiredSkillsJson: { contains: source.name, mode: 'insensitive' } },
+            { preferredSkillsJson: { contains: source.name, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true, requiredSkillsJson: true, preferredSkillsJson: true },
+      });
+      for (const profile of profiles) {
+        const required = replaceSkillName(parseNameList(profile.requiredSkillsJson), source.name, target.name);
+        const preferred = replaceSkillName(parseNameList(profile.preferredSkillsJson), source.name, target.name);
+        if (!required.changed && !preferred.changed) continue;
+        await tx.jobSkillProfile.update({
+          where: { id: profile.id },
+          data: {
+            requiredSkillsJson: JSON.stringify(required.list),
+            preferredSkillsJson: JSON.stringify(preferred.list),
+          },
+        });
+      }
+
+      const updatedTarget = await tx.skill.update({
+        where: { id: target.id },
+        data: { aliases: aliases.join(', ') || null, active: true },
+      });
+      await tx.skill.update({ where: { id: source.id }, data: { active: false } });
+      return {
+        target: updatedTarget,
+        candidatesUpdated: sourceRows.length,
+        duplicatesRemoved: duplicateIds.length,
+        jobsUpdated,
+      };
+    });
+
+    await this.writeAudit({
+      userId: actorId,
+      action: 'MERGE_SKILL',
+      resourceType: 'SKILL',
+      resourceId: target.id,
+      oldValue: { source, target },
+      newValue: {
+        target: result.target,
+        candidatesUpdated: result.candidatesUpdated,
+        duplicatesRemoved: result.duplicatesRemoved,
+        jobsUpdated: result.jobsUpdated,
+      },
+    });
+    return result;
+  }
+
   async updateSkill(
     actorId: string,
     id: string,
@@ -977,6 +1290,46 @@ export class AdminService {
       newValue: updated,
     });
     return updated;
+  }
+
+  /** Outbound WhatsApp delivery over the last 30 days, from statuses reported by Meta webhooks. */
+  private async whatsappDeliveryMetrics(now = new Date()) {
+    const windowDays = 30;
+    const since = new Date(now.getTime() - windowDays * 24 * 60 * 60_000);
+    const where = { direction: 'OUTBOUND' as const, createdAt: { gte: since } };
+    try {
+      const [grouped, recent] = await Promise.all([
+        this.prisma.whatsAppMessage.groupBy({ by: ['status'], where, _count: { _all: true } }),
+        this.prisma.whatsAppMessage.findMany({
+          where: { ...where, status: 'FAILED' },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: { id: true, templateName: true, errorJson: true, createdAt: true, interviewId: true },
+        }),
+      ]);
+      const count = (status: string) => grouped.find((g) => String(g.status) === status)?._count._all ?? 0;
+      const delivered = count('DELIVERED') + count('READ');
+      const sentOk = count('SENT') + delivered;
+      const failedCount = count('FAILED');
+      return {
+        windowDays,
+        sent: sentOk,
+        delivered,
+        read: count('READ'),
+        failed: failedCount,
+        pending: count('QUEUED'),
+        deliveryRate: conversionRate(delivered, sentOk + failedCount),
+        recentFailures: recent.map((m) => ({
+          id: m.id,
+          template: m.templateName,
+          reason: whatsappFailureReason(m.errorJson),
+          interviewId: m.interviewId,
+          createdAt: m.createdAt.toISOString(),
+        })),
+      };
+    } catch {
+      return null;
+    }
   }
 
   async notifications() {
@@ -1019,6 +1372,7 @@ export class AdminService {
 
     const failed = whatsapp.filter((m) => m.status === 'FAILED').length;
     const sent = whatsapp.filter((m) => ['SENT', 'DELIVERED', 'READ', 'QUEUED'].includes(String(m.status))).length;
+    const delivery = await this.whatsappDeliveryMetrics();
 
     return {
       summary: {
@@ -1028,6 +1382,7 @@ export class AdminService {
         sent,
         pending: whatsapp.filter((m) => m.status === 'QUEUED').length,
       },
+      delivery,
       inbox: inbox.map((n) => ({
         id: n.id,
         title: n.title,
@@ -1077,7 +1432,38 @@ export class AdminService {
       }),
       this.prisma.resume.aggregate({ _avg: { score: true }, _count: { _all: true } }),
     ]);
+    const [applicants, shortlistedReached, interviewReached] = await Promise.all([
+      this.prisma.application.findMany({ distinct: ['candidateId'], select: { candidateId: true } }).then((r) => r.length),
+      this.prisma.application.count({
+        where: { status: { in: ['SHORTLISTED', 'ON_HOLD', 'INTERVIEW', 'SELECTED', 'HIRED'] } },
+      }),
+      this.prisma.application.count({ where: { status: { in: ['INTERVIEW', 'SELECTED', 'HIRED'] } } }),
+    ]);
+    const funnel = [
+      { stage: 'Candidates', count: candidates, conversionRate: null, basis: null },
+      {
+        stage: 'Applications',
+        count: applications,
+        applicants,
+        conversionRate: conversionRate(applicants, candidates),
+        basis: 'candidates who applied at least once',
+      },
+      {
+        stage: 'Shortlisted',
+        count: shortlistedReached,
+        conversionRate: conversionRate(shortlistedReached, applications),
+        basis: 'of applications',
+      },
+      {
+        stage: 'Interviews',
+        count: interviewReached,
+        conversionRate: conversionRate(interviewReached, shortlistedReached),
+        basis: 'of shortlisted',
+      },
+      { stage: 'Hires', count: hired, conversionRate: conversionRate(hired, interviewReached), basis: 'of interviewed' },
+    ];
     return {
+      funnel,
       platform: {
         candidates,
         employers,
@@ -1112,6 +1498,42 @@ export class AdminService {
         byFeature: u.byFeature,
         byUser: u.byUser,
       })),
+    };
+  }
+
+  /**
+   * Employer revenue from recorded payments. No payment gateway is live yet, so figures only reflect
+   * payments stored with status PAID; the response says so instead of estimating.
+   */
+  async revenue(now = new Date()) {
+    const period = usagePeriod(now);
+    const [year, month] = period.split('-').map(Number);
+    const monthStart = new Date(Date.UTC(year, month - 1, 1) - IST_OFFSET_MS);
+    const [paidAll, paidMonth, payingEmployers, newEmployers, creditsConsumed, pendingPayments] = await Promise.all([
+      this.prisma.employerPayment.aggregate({ where: { status: 'PAID' }, _sum: { amountPaise: true }, _count: { _all: true } }),
+      this.prisma.employerPayment.aggregate({
+        where: { status: 'PAID', paidAt: { gte: monthStart } },
+        _sum: { amountPaise: true },
+      }),
+      this.prisma.employerPayment
+        .findMany({ where: { status: 'PAID' }, distinct: ['employerId'], select: { employerId: true } })
+        .then((rows) => rows.length),
+      this.prisma.employer.count({ where: { createdAt: { gte: monthStart } } }),
+      this.prisma.employerCandidateView.count({ where: { period } }),
+      this.prisma.employerPayment.count({ where: { status: 'PENDING' } }),
+    ]);
+    return {
+      period,
+      currency: 'INR',
+      totalRevenueInr: (paidAll._sum.amountPaise ?? 0) / 100,
+      revenueThisMonthInr: (paidMonth._sum.amountPaise ?? 0) / 100,
+      paidPayments: paidAll._count._all,
+      pendingPayments,
+      payingEmployers,
+      newEmployersThisMonth: newEmployers,
+      creditsConsumedThisMonth: creditsConsumed,
+      paymentGatewayConfigured: false,
+      note: 'Online payments are not live yet; revenue counts only payments recorded as PAID.',
     };
   }
 

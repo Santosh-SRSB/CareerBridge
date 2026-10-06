@@ -26,7 +26,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (!(exception instanceof HttpException)) {
       // Surface unexpected errors in API logs (Prisma schema drift, etc.)
       // eslint-disable-next-line no-console
-      console.error('[HttpExceptionFilter]', exception);
+      console.error(
+        `[HttpExceptionFilter] requestId=${requestId} ${request.method} ${request.originalUrl || request.url}`,
+        exception,
+      );
 
       const prismaCode =
         exception && typeof exception === 'object' && 'code' in exception
@@ -63,6 +66,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
         else if (status === HttpStatus.UNPROCESSABLE_ENTITY)
           code = ErrorCode.BUSINESS_RULE_VIOLATION;
       }
+      if (status >= 500) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[HttpExceptionFilter] requestId=${requestId} status=${status} ${request.method} ${request.originalUrl || request.url}: ${message}`,
+        );
+      }
+    }
+
+    // 5xx details stay in the logs; clients get a generic message plus the request id.
+    if (status >= 500 && status !== HttpStatus.SERVICE_UNAVAILABLE) {
+      message = 'Something went wrong. Please try again.';
     }
 
     response.status(status).json({

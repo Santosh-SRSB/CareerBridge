@@ -38,7 +38,7 @@ function SegmentToggle({
           onClick={() => onChange(option)}
           suppressHydrationWarning
           className={`relative z-10 rounded-lg py-2 text-xs font-bold transition-colors duration-200 ${
-            value === option ? 'text-white' : 'text-[#5f746f] hover:text-[#0d2826]'
+            value === option ? 'text-white' : 'text-[#4a5d59] hover:text-[#0d2826]'
           }`}
         >
           {labels[option]}

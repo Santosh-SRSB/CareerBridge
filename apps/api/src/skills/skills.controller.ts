@@ -11,8 +11,19 @@ export class SkillsController {
   @Public()
   @Get()
   list(@Query('query') query?: string) {
+    const q = query?.trim();
     return this.prisma.skill.findMany({
-      where: query ? { name: { contains: query, mode: 'insensitive' } } : undefined,
+      where: {
+        active: true,
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: 'insensitive' as const } },
+                { aliases: { contains: q, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { name: 'asc' },
     });
   }
@@ -20,7 +31,7 @@ export class SkillsController {
   @Public()
   @Get('categories')
   async categories() {
-    const skills = await this.prisma.skill.findMany();
+    const skills = await this.prisma.skill.findMany({ where: { active: true } });
     const grouped = new Map<string, string[]>();
     for (const skill of skills) {
       const list = grouped.get(skill.category) || [];

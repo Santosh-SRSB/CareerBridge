@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AuthShell } from '@/components/AuthShell';
@@ -10,7 +10,8 @@ import { clearOtpFlow, getOtpFlow, saveOtpFlow } from '@/lib/otp-flow';
 import { clearPendingPassword, getPendingPassword } from '@/lib/pending-password';
 import { requestOtp, verifyOtp } from '@/lib/api';
 import { authErrorMessage } from '@/lib/auth-errors';
-import { formatPhoneDisplay, postAuthPath } from '@/lib/phone';
+import { postAuthPath } from '@/lib/phone';
+import { toast } from '@/components/ui/Toast';
 import { POST_REGISTRATION_PATH } from '@/lib/onboarding-flow';
 import { patchStoredUser } from '@/lib/session';
 import {
@@ -21,7 +22,7 @@ import {
   isFirebaseConfigured,
   sendFirebaseOtp,
 } from '@/lib/firebase';
-import type { OtpChannel } from '@careerbridge/shared';
+import { OTP_EXPIRED_MESSAGE, maskMobileNumber, type OtpChannel } from '@careerbridge/shared';
 
 export default function VerifyOtpPage() {
   const router = useRouter();
@@ -36,6 +37,9 @@ export default function VerifyOtpPage() {
   const [channel, setChannel] = useState<OtpChannel>('MOBILE');
   const [backHref, setBackHref] = useState('/login');
   const [ready, setReady] = useState(false);
+  const [expiryKey, setExpiryKey] = useState(0);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const autoSubmittedRef = useRef('');
 
   useEffect(() => {
     const flow = getOtpFlow();
@@ -80,26 +84,58 @@ export default function VerifyOtpPage() {
     };
   }, [router]);
 
+  // Recompute from the stored deadline on every tick so a throttled tab or clock jump still expires on time.
+  // Expiry is announced once per OTP so a later resend error is not overwritten on the next tick.
   useEffect(() => {
-    if (secondsLeft <= 0) return;
-    const timer = setInterval(() => setSecondsLeft((value) => value - 1), 1000);
+    if (!ready) return;
+    let announced = false;
+    const tick = () => {
+      const flow = getOtpFlow();
+      if (!flow) return;
+      const left = Math.max(0, Math.ceil((flow.expiresAt - Date.now()) / 1000));
+      setSecondsLeft(left);
+      if (left <= 0 && !announced) {
+        announced = true;
+        setErrorCode('OTP_EXPIRED');
+        setError(OTP_EXPIRED_MESSAGE);
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [secondsLeft]);
+  }, [ready, expiryKey]);
 
   const isEmailChannel = channel === 'EMAIL';
   const verifyTitle = isEmailChannel ? 'Verify your email' : 'Verify your mobile number';
   const panelCopy = isEmailChannel
     ? 'Enter the 6-digit OTP sent to your email to confirm your account.'
     : 'Enter the 6-digit OTP sent to your phone to confirm your account.';
-  const destination = isEmailChannel ? email : formatPhoneDisplay(phone);
+  const destination = isEmailChannel ? email : maskMobileNumber(phone);
   const changeLabel = isEmailChannel ? 'Change email' : 'Change mobile number';
+
+  function otpExpired(flow: { expiresAt: number }) {
+    return flow.expiresAt <= Date.now();
+  }
+
+  // Auto-submit once all six digits are entered (typed or pasted).
+  useEffect(() => {
+    if (otp.length !== 6 || loading || autoSubmittedRef.current === otp) return;
+    autoSubmittedRef.current = otp;
+    formRef.current?.requestSubmit();
+  }, [otp, loading]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     const flow = getOtpFlow();
-    if (!flow) return;
+    if (!flow || loading) return;
+    if (otpExpired(flow)) {
+      setSecondsLeft(0);
+      setError(OTP_EXPIRED_MESSAGE);
+      setErrorCode('OTP_EXPIRED');
+      return;
+    }
     if (otp.length < 6) {
-      setError('Incorrect OTP. Please check the code and try again.');
+      setError('Enter the 6-digit OTP.');
       setErrorCode('INVALID_OTP');
       return;
     }
@@ -107,11 +143,6 @@ export default function VerifyOtpPage() {
     setErrorCode('');
     setLoading(true);
     try {
-      if (secondsLeft <= 0) {
-        setError('This OTP has expired.');
-        setErrorCode('OTP_EXPIRED');
-        return;
-      }
       const result =
         flow.channel === 'EMAIL' || isDevOtpEnabled()
           ? await verifyOtp({ requestId: flow.requestId, otp })
@@ -149,11 +180,17 @@ export default function VerifyOtpPage() {
   async function resend() {
     const flow = getOtpFlow();
     if (!flow) return;
+    const password = getPendingPassword();
+    // The password is held in memory only, so it is gone after a page refresh and a registration resend cannot be sent.
+    if (flow.purpose === 'REGISTER' && flow.registration && !password) {
+      setErrorCode('RESEND_NEEDS_DETAILS');
+      setError('For your security, your password is not kept after the page is refreshed. Go back, enter your details again and we will send a new OTP.');
+      return;
+    }
     setError('');
     setErrorCode('');
     setResending(true);
     try {
-      const password = getPendingPassword();
       const result = await requestOtp({
         channel: flow.channel || 'MOBILE',
         purpose: flow.purpose,
@@ -175,7 +212,10 @@ export default function VerifyOtpPage() {
         expiresAt: Date.now() + result.expiresIn * 1000,
       });
       setSecondsLeft(result.expiresIn);
+      setExpiryKey((value) => value + 1);
+      autoSubmittedRef.current = '';
       setOtp('');
+      toast.success('A new OTP has been sent.');
     } catch (err) {
       setError(authErrorMessage(err, 'request'));
     } finally {
@@ -197,16 +237,32 @@ export default function VerifyOtpPage() {
       panelTitle={verifyTitle}
       panelCopy={panelCopy}
     >
-      <form onSubmit={onSubmit} className="space-y-5">
-        <OtpInput value={otp} onChange={setOtp} />
+      <form ref={formRef} onSubmit={onSubmit} className="space-y-5" aria-busy={loading || undefined}>
+        <OtpInput
+          value={otp}
+          onChange={(value) => {
+            setOtp(value);
+            if (errorCode === 'INVALID_OTP') {
+              setError('');
+              setErrorCode('');
+            }
+          }}
+          disabled={loading || resending || expired}
+          invalid={Boolean(error) && errorCode !== 'OTP_EXPIRED'}
+          describedBy={error ? 'otp-error' : undefined}
+        />
 
         <div className="text-center">
-          <span className="font-mono text-base font-bold text-slate-700">
+          <span className="font-mono text-base font-bold text-slate-700" aria-live="off">
             {Math.floor(secondsLeft / 60).toString().padStart(2, '0')}:{(secondsLeft % 60).toString().padStart(2, '0')}
           </span>
         </div>
 
-        {error ? <p className="text-center text-xs font-semibold text-error">{error}</p> : null}
+        {error ? (
+          <p id="otp-error" role="alert" className="text-center text-xs font-semibold text-error">
+            {error}
+          </p>
+        ) : null}
 
         <Button
           type="submit"

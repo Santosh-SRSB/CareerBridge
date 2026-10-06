@@ -23,10 +23,10 @@ export function isStaffRole(role?: string | null): role is StaffRole {
 
 /**
  * Super Admin Workflow capability matrix
- * Skills: Operator = Limited (view only)
+ * Skills / Reports: Admin and Super Admin only (Operations is restricted)
  * AI Usage: Operator = View
  * Audit: Operator = Limited
- * Admin Users / Settings: Super Admin only
+ * Admin Users / Settings (reference lists, notification templates, config): Super Admin only
  */
 export const ADMIN_NAV_ROLES: Record<SuperAdminNavId, StaffRole[]> = {
   dashboard: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
@@ -35,11 +35,11 @@ export const ADMIN_NAV_ROLES: Record<SuperAdminNavId, StaffRole[]> = {
   jobs: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   applications: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   interviews: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
-  skills: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
+  skills: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
   'ai-usage': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   notifications: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   testimonials: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
-  reports: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
+  reports: ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
   admins: ['SUPER_ADMIN'],
   settings: ['SUPER_ADMIN'],
   audit: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],

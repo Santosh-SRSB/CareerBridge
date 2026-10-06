@@ -1,9 +1,15 @@
+import { parseExperienceRange } from './experience-range';
+import type { AiBudgetStatus } from './ai-availability';
+
 export const JOB_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'] as const;
 
 export const WORK_MODES = ['ONSITE', 'HYBRID', 'REMOTE'] as const;
 
-export const JOB_EXPERIENCE_RANGES = [
-  'Fresher',
+/** Experience options offered on new job posts. */
+export const JOB_EXPERIENCE_RANGES = ['Fresher', '0–1 yr', '1–2 yrs', '2–5 yrs', '5+ yrs'] as const;
+
+/** Labels stored by earlier job posts; still accepted on edit and matched by range. */
+export const LEGACY_JOB_EXPERIENCE_RANGES = [
   '0 - 1 Years',
   '1 - 2 Years',
   '2 - 4 Years',
@@ -11,6 +17,21 @@ export const JOB_EXPERIENCE_RANGES = [
   '5 - 8 Years',
   '8+ Years',
 ] as const;
+
+export type JobExperienceRange = (typeof JOB_EXPERIENCE_RANGES)[number];
+
+/** Nearest current job-post experience option for a stored (possibly legacy) label. */
+export function toJobExperienceRange(label: string | null | undefined): JobExperienceRange | null {
+  const raw = String(label || '').trim();
+  if ((JOB_EXPERIENCE_RANGES as readonly string[]).includes(raw)) return raw as JobExperienceRange;
+  const range = parseExperienceRange(raw);
+  if (!range) return null;
+  if (range.max === 0) return 'Fresher';
+  if (range.min >= 5) return '5+ yrs';
+  if (range.min >= 2) return '2–5 yrs';
+  if (range.min >= 1) return '1–2 yrs';
+  return '0–1 yr';
+}
 
 export const JOB_EDUCATION_LEVELS = [
   'Any',
@@ -301,6 +322,7 @@ export const APPLICATION_STATUSES = [
   'UNDER_REVIEW',
   'SHORTLISTED',
   'INTERVIEW',
+  'ON_HOLD',
   'SELECTED',
   'REJECTED',
   'WITHDRAWN',
@@ -333,19 +355,23 @@ export type JobMatch = {
   recommendations: string[];
 };
 
-/** PDF ATS bands for employer + candidate match UI. */
-export type AtsMatchBand = 'EXCELLENT' | 'STRONG' | 'GOOD' | 'POTENTIAL' | 'LOW';
+/** Handbook match bands for employer + candidate match UI. */
+export type AtsMatchBand = 'EXCELLENT' | 'GOOD' | 'MODERATE' | 'LOW';
+
+/** Neutral wording: the score describes profile fit, not a hiring decision. */
+export const PROFILE_MATCH_LABEL = 'Profile Match';
 
 export const ATS_MATCH_BANDS: Array<{
   band: AtsMatchBand;
   min: number;
   label: string;
+  shortLabel: string;
+  color: 'green' | 'blue' | 'amber' | 'grey';
 }> = [
-  { band: 'EXCELLENT', min: 90, label: 'Excellent Match' },
-  { band: 'STRONG', min: 80, label: 'Strong Match' },
-  { band: 'GOOD', min: 70, label: 'Good Match' },
-  { band: 'POTENTIAL', min: 60, label: 'Potential Match' },
-  { band: 'LOW', min: 0, label: 'Low Match' },
+  { band: 'EXCELLENT', min: 90, label: 'Excellent Match', shortLabel: 'Excellent', color: 'green' },
+  { band: 'GOOD', min: 75, label: 'Good Match', shortLabel: 'Good', color: 'blue' },
+  { band: 'MODERATE', min: 50, label: 'Moderate Match', shortLabel: 'Moderate', color: 'amber' },
+  { band: 'LOW', min: 0, label: 'Low Match', shortLabel: 'Low', color: 'grey' },
 ];
 
 /** Handbook Vol.3 match weights (points toward 100). */
@@ -360,15 +386,19 @@ export const ATS_JOB_MATCH_WEIGHTS = {
 export function atsMatchBand(score: number): AtsMatchBand {
   const n = Math.max(0, Math.min(100, Math.round(score)));
   if (n >= 90) return 'EXCELLENT';
-  if (n >= 80) return 'STRONG';
-  if (n >= 70) return 'GOOD';
-  if (n >= 60) return 'POTENTIAL';
+  if (n >= 75) return 'GOOD';
+  if (n >= 50) return 'MODERATE';
   return 'LOW';
 }
 
 export function atsMatchBandLabel(score: number): string {
   const band = atsMatchBand(score);
   return ATS_MATCH_BANDS.find((item) => item.band === band)?.label || 'Low Match';
+}
+
+export function atsMatchBandInfo(score: number) {
+  const band = atsMatchBand(score);
+  return ATS_MATCH_BANDS.find((item) => item.band === band) || ATS_MATCH_BANDS[ATS_MATCH_BANDS.length - 1];
 }
 
 export type AtsMatchFactor = {
@@ -665,6 +695,7 @@ export type InterviewQuestion = {
   prompt: string;
   snippet?: string | null;
   thinkSeconds?: number;
+  aiFallback?: boolean;
 };
 
 export type InterviewFeedback = {
@@ -694,7 +725,8 @@ export type LiveInterviewQuestion = {
   answer?: string;
   answeredAt?: string;
   answerDurationSec?: number;
-  answerMode?: 'TEXT' | 'AUDIO';
+  /** SKIPPED: the candidate skipped the question; it scores 0 and is not sent for AI evaluation. */
+  answerMode?: 'TEXT' | 'AUDIO' | 'SKIPPED';
   analysis?: string;
   improvedAnswer?: string;
   score?: number;
@@ -705,6 +737,10 @@ export type LiveInterviewQuestion = {
   improvementSuggestion?: string;
   snippet?: string | null;
   thinkSeconds?: number;
+  /** The question was prepared from the profile because AI generation was unavailable. */
+  aiFallback?: boolean;
+  /** The answer was scored with the local rubric because AI evaluation was unavailable. */
+  scoredWithoutAi?: boolean;
 };
 
 export type InterviewWarning = {
@@ -724,6 +760,10 @@ export type InterviewReport = {
   /** 1–10 when problem-solving evidence exists; otherwise omitted/null */
   problemSolving?: number | null;
   roleReadiness?: number | null;
+  /** 1–10: how directly the answers addressed the questions asked */
+  relevance?: number | null;
+  /** 1–10: how clear and well-structured the answers were */
+  clarity?: number | null;
   /** 1–10; text-only interviews cannot reliably measure confidence */
   confidence?: number | null;
   confidenceNote?: string | null;
@@ -757,6 +797,8 @@ export type InterviewReport = {
     abuseWarnings?: number;
     nonsenseWarnings?: number;
   };
+  /** True when AI was unavailable for the summary or any answer, so rubric scoring was used. */
+  aiUnavailable?: boolean;
 };
 
 export type InterviewSession = {
@@ -965,6 +1007,9 @@ export type EmployerProfile = {
   panNumber: string | null;
   workEmail: string | null;
   designation: string | null;
+  companySize?: string | null;
+  about?: string | null;
+  linkedinUrl?: string | null;
   logoUrl?: string | null;
   verificationStatus: EmployerVerificationStatus;
   verified: boolean;
@@ -1060,6 +1105,13 @@ export type EmployerDashboard = {
     label: string;
     count: number;
   }>;
+  /** Published jobs only: applications and job-detail views per job. */
+  jobPerformance?: Array<{
+    jobId: string;
+    title: string;
+    applications: number;
+    views: number;
+  }>;
   recent: Array<{
     candidateName: string;
     candidateId?: string;
@@ -1067,6 +1119,7 @@ export type EmployerDashboard = {
     status: string;
     applicationId: string;
     jobId?: string;
+    appliedAt?: string;
   }>;
 };
 
@@ -1084,6 +1137,8 @@ export type EmployerApplication = {
     experienceYears?: number;
   };
   job: { id: string; title: string };
+  /** Private hiring-team note; never shown to the candidate. */
+  employerNote?: string | null;
   match?: JobMatch;
   screeningAnswers?: Array<{ questionId: string; prompt?: string; answer: string }>;
 };
@@ -1097,6 +1152,7 @@ export type EmployerCandidateSearchResult = {
   highestEducation: string | null;
   experienceYears: number;
   experienceMonths?: number;
+  preferredLanguage?: string | null;
   profileCompletion: number;
   skills: string[];
   skillsTotal?: number;
@@ -1105,6 +1161,8 @@ export type EmployerCandidateSearchResult = {
   appliedToEmployer: boolean;
   applicationId?: string | null;
   applicationStatus?: string | null;
+  /** Employer's private shortlist for a matched candidate who has not applied to the job. */
+  talentShortlisted?: boolean;
   availabilityLabel?: string | null;
   availabilityTone?: 'ready' | 'soon' | 'neutral' | string | null;
 };
@@ -1123,6 +1181,10 @@ export type EmployerCandidateSearchResponse = {
   unlocked: boolean;
   unlockLimit: number;
   totalMatched: number;
+  /** Candidates left after filters (across all pages). */
+  total?: number;
+  page?: number;
+  pageSize?: number;
   candidates: EmployerCandidateSearchResult[];
 };
 
@@ -1167,9 +1229,20 @@ export type EmployerInterviewStatus =
   | 'PROPOSED'
   | 'SCHEDULED'
   | 'CONFIRMED'
+  /** Candidate asked for another time; availability not yet submitted. */
+  | 'RESCHEDULE_NEEDED'
+  /** Candidate submitted availability; employer must schedule a new time. */
   | 'RESCHEDULE_REQUESTED'
   | 'COMPLETED'
   | 'CANCELLED';
+
+/** Candidate's reschedule window; `label` reads like "3 April, 3:00 PM - 6:00 PM". */
+export type CandidateRescheduleAvailability = {
+  from: string;
+  until: string;
+  timezone: string;
+  label: string;
+};
 
 export type EmployerInterviewRecord = {
   id: string;
@@ -1184,6 +1257,8 @@ export type EmployerInterviewRecord = {
   status: EmployerInterviewStatus;
   notes: string | null;
   preferredRescheduleAt?: string | null;
+  candidateAvailability?: CandidateRescheduleAvailability | null;
+  rescheduleRequestedAt?: string | null;
   confirmedAt: string | null;
   createdAt: string;
   applicationStatus: string;
@@ -1239,6 +1314,8 @@ export type AdminDashboard = {
     suspendedAccounts: number;
     jobsRequiringAttention: number;
     unreadNotifications: number;
+    /** Today's AI usage against the Super Admin limits; status WARNING at 80%, LIMIT_REACHED when blocked. */
+    aiBudget?: AiBudgetStatus;
   };
   aiUsage?: {
     totalRequests: number;

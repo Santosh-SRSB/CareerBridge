@@ -552,7 +552,7 @@ export default function ProfileDetailsPage() {
           --cd-hair: #e7e9e0;
           --cd-ink: #16211d;
           --cd-ink-soft: #4a534d;
-          --cd-muted: #7d857f;
+          --cd-muted: #5e665f;
           --cd-mint: #e7f1ea;
           --cd-good: #2f6b4f;
           --cd-good-soft: #e6f0e9;

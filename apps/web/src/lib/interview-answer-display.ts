@@ -4,6 +4,7 @@ const AUDIO_PLACEHOLDER_RE =
   /\(audio answer recorded|audio answer recorded|please type a summary for better ai feedback\)/i;
 
 export function formatInterviewAnswerDisplay(item: LiveInterviewQuestion) {
+  if (item.answerMode === 'SKIPPED') return 'Question skipped.';
   const text = (item.answer || '').trim();
   const hasText = Boolean(text) && !AUDIO_PLACEHOLDER_RE.test(text);
   const seconds = item.answerDurationSec;
@@ -26,7 +27,7 @@ export function shouldShowBetterAnswer(item: LiveInterviewQuestion) {
 }
 
 export function isAnsweredInterviewQuestion(item: LiveInterviewQuestion) {
-  if (item.answerMode === 'AUDIO') return true;
+  if (item.answerMode === 'AUDIO' || item.answerMode === 'SKIPPED') return true;
   const text = (item.answer || '').trim();
   return Boolean(text) && !AUDIO_PLACEHOLDER_RE.test(text);
 }

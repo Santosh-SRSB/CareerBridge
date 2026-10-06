@@ -43,8 +43,8 @@ export const OB = {
 export const BACK_HREF: Record<number, string | undefined> = {
   1: undefined,
   2: '/onboarding',
-  3: '/onboarding/name',
-  4: '/onboarding/education',
+  3: '/onboarding/status',
+  4: '/onboarding/preferences',
 };
 
 export const onboardingPrimaryButtonClass =
@@ -264,23 +264,47 @@ export function OnboardingQuestion({
 }
 
 function OnboardingDots({ step }: { step: number }) {
+  const percent = Math.round((Math.min(step, ONBOARDING_TOTAL_STEPS) / ONBOARDING_TOTAL_STEPS) * 100);
   return (
-    <div className="mb-3.5 mt-4 flex justify-center gap-1.5" aria-hidden>
-      {Array.from({ length: ONBOARDING_TOTAL_STEPS }, (_, i) => {
-        const index = i + 1;
-        const active = index === step;
-        const done = index < step;
-        return (
-          <div
-            key={index}
-            className="h-1.5 rounded-[3px] transition-all duration-250"
-            style={{
-              width: active ? 20 : 6,
-              background: active ? OB.accent : done ? OB.accentTintStrong : OB.border,
-            }}
-          />
-        );
-      })}
+    <div className="mb-3.5 mt-4">
+      <div
+        role="progressbar"
+        aria-label="Onboarding progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        aria-valuetext={`Step ${step} of ${ONBOARDING_TOTAL_STEPS}, ${percent}% complete`}
+        data-testid="onboarding-progress"
+        className="h-1.5 w-full overflow-hidden rounded-full"
+        style={{ background: OB.border }}
+      >
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{ width: `${percent}%`, background: OB.accent }}
+        />
+      </div>
+      <p className="mt-1.5 text-center text-[11px] font-medium" style={{ color: OB.muted }}>
+        Step {step} of {ONBOARDING_TOTAL_STEPS} · {percent}%
+      </p>
+    </div>
+  );
+}
+
+/** Inline form error; when `onRetry` is set (save failures) a Retry button repeats the action. */
+export function OnboardingError({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  if (!message) return null;
+  return (
+    <div role="alert" className="flex flex-wrap items-center gap-2 text-xs font-semibold text-red-700">
+      <span>{message}</span>
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="min-h-12 rounded-[8px] border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-50"
+        >
+          Retry
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -291,13 +315,15 @@ export function OnboardingActions({
   backHref,
   onSkip,
   skipLabel = 'Skip for now',
+  skipDisabled = false,
 }: {
   children: ReactNode;
-  /** When set, renders progress dots above the nav row. */
+  /** When set, renders the progress bar above the nav row. */
   step?: number;
   backHref?: string;
   onSkip?: () => void;
   skipLabel?: string;
+  skipDisabled?: boolean;
   /** @deprecated Top back is handled by nav row */
   onBack?: () => void;
 }) {
@@ -320,7 +346,12 @@ export function OnboardingActions({
       </div>
       {onSkip ? (
         <div className="mt-1.5 flex justify-end">
-          <button type="button" onClick={onSkip} className={onboardingSkipButtonClass}>
+          <button
+            type="button"
+            onClick={onSkip}
+            disabled={skipDisabled}
+            className={`${onboardingSkipButtonClass} min-h-12 px-2 disabled:opacity-50`}
+          >
             {skipLabel} <span aria-hidden>→</span>
           </button>
         </div>

@@ -50,6 +50,12 @@ class UpdateSkillDto {
   active?: boolean;
 }
 
+class MergeSkillDto {
+  @IsString()
+  @MinLength(1)
+  targetSkillId: string;
+}
+
 class CreateAdminDto {
   @IsString()
   @MinLength(5)
@@ -78,8 +84,8 @@ class StatusDto {
 }
 
 class JobStatusDto {
-  @IsIn(['DRAFT', 'PUBLISHED', 'PAUSED', 'CLOSED'])
-  status: 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED';
+  @IsIn(['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'PAUSED', 'CLOSED'])
+  status: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'PAUSED' | 'CLOSED';
 }
 
 class SettingsDto {
@@ -112,8 +118,15 @@ export class AdminController {
   }
 
   @Get('candidates')
-  candidates(@Query('query') query?: string) {
-    return this.admin.candidates(query);
+  candidates(
+    @Query('query') query?: string,
+    @Query('location') location?: string,
+    @Query('skill') skill?: string,
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.admin.candidates(query, { location, skill, status, from, to });
   }
 
   @Get('candidates/:id')
@@ -197,18 +210,23 @@ export class AdminController {
   @Post('jobs/:id/approve')
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
   approveJob(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.admin.setJobStatus(user.id, id, 'PUBLISHED');
+    return this.admin.approveJob(user.id, id);
   }
 
   @Post('jobs/:id/reject')
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
   rejectJob(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.admin.setJobStatus(user.id, id, 'CLOSED');
+    return this.admin.rejectJob(user.id, id);
   }
 
   @Get('applications')
   applications(@Query('query') query?: string, @Query('status') status?: string) {
     return this.admin.applications(query, status);
+  }
+
+  @Get('applications/pipeline')
+  applicationPipeline() {
+    return this.admin.applicationPipeline();
   }
 
   @Get('applications/:id')
@@ -227,7 +245,7 @@ export class AdminController {
   }
 
   @Get('skills')
-  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
   skills(@Query('query') query?: string) {
     return this.admin.skills(query);
   }
@@ -236,6 +254,12 @@ export class AdminController {
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
   addSkill(@CurrentUser() user: { id: string }, @Body() dto: CreateSkillDto) {
     return this.admin.addSkill(user.id, dto.name, dto.category, dto.aliases);
+  }
+
+  @Post('skills/:id/merge')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  mergeSkill(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: MergeSkillDto) {
+    return this.admin.mergeSkill(user.id, id, dto.targetSkillId);
   }
 
   @Patch('skills/:id')
@@ -254,9 +278,15 @@ export class AdminController {
   }
 
   @Get('reports')
-  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
   reports() {
     return this.admin.reports();
+  }
+
+  @Get('revenue')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  revenue() {
+    return this.admin.revenue();
   }
 
   @Get('ai-usage')

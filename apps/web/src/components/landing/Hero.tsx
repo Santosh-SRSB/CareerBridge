@@ -25,16 +25,30 @@ export function Hero() {
           </h1>
 
           <p className="mt-[26px] mb-[34px] max-w-[480px] text-[17px] leading-[1.65] text-muted">
-            Build a Career Passport that works for you — sharpening your skills, closing the
-            gaps, and matching you to the right job.
+            Create your resume. Improve your skills. Build a Career Passport that works for
+            you — closing the gaps and matching you to the right job.
           </p>
 
-          <Link
-            href="/login"
-            className="inline-flex rounded-full bg-[#0a2e2c] px-7 py-3 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(10,46,44,0.25)] transition hover:-translate-y-0.5 hover:bg-[#072422]"
-          >
-            Explore
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/register?role=candidate"
+              className="inline-flex min-h-12 items-center rounded-full bg-[#0a2e2c] px-7 py-3 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(10,46,44,0.25)] transition hover:-translate-y-0.5 hover:bg-[#072422]"
+            >
+              Create Free Profile
+            </Link>
+            <Link
+              href="/jobs"
+              className="inline-flex min-h-12 items-center rounded-full border-2 border-[#0a2e2c] bg-white px-7 py-3 text-sm font-extrabold text-[#0a2e2c] transition hover:-translate-y-0.5 hover:bg-[#0a2e2c] hover:text-white"
+            >
+              Find Jobs
+            </Link>
+            <Link
+              href="/employer/welcome"
+              className="inline-flex min-h-12 items-center rounded-full px-4 py-3 text-sm font-extrabold text-[#0a2e2c] underline-offset-4 hover:underline"
+            >
+              Hire Candidates
+            </Link>
+          </div>
 
           <HeroProof />
         </div>

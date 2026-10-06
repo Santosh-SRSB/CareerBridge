@@ -1,5 +1,6 @@
 import { parseCityState } from '@/data/india-locations';
 import { profileLinkError } from '@careerbridge/shared';
+import { RESUME_SUMMARY_MAX } from './resume-entry-validation';
 
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -22,6 +23,7 @@ export interface WizardStepValidationInput {
   location: string;
   email: string;
   phone: string;
+  summary?: string;
   skills: string[];
   educationList: unknown[];
   languages: string[];
@@ -53,6 +55,9 @@ export function validateWizardStep(step: string, input: WizardStepValidationInpu
         errors.push('Phone number is required.');
       } else if (!isValidPhone(input.phone)) {
         errors.push('Enter a valid 10-digit Indian mobile number.');
+      }
+      if ((input.summary || '').length > RESUME_SUMMARY_MAX) {
+        errors.push(`Professional summary must be ${RESUME_SUMMARY_MAX} characters or fewer.`);
       }
       break;
     }

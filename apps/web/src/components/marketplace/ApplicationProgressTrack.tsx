@@ -2,58 +2,60 @@
 
 import type { ApplicationRecord } from '@careerbridge/shared';
 
-const STEP_LABELS: Record<string, string> = {
-  APPLIED: 'Applied',
-  UNDER_REVIEW: 'Review',
-  SHORTLISTED: 'Shortlisted',
-  INTERVIEW: 'Interview',
-  SELECTED: 'Selected',
-  REJECTED: 'Rejected',
-  WITHDRAWN: 'Withdrawn',
-  HIRED: 'Hired',
+const PROGRESS_STEPS = [
+  { key: 'APPLIED', label: 'Applied' },
+  { key: 'SHORTLISTED', label: 'Shortlisted' },
+  { key: 'INTERVIEW', label: 'Interview' },
+] as const;
+
+const OUTCOMES: Record<string, { label: string; failed: boolean }> = {
+  SELECTED: { label: 'Selected', failed: false },
+  HIRED: { label: 'Hired', failed: false },
+  REJECTED: { label: 'Rejected', failed: true },
+  WITHDRAWN: { label: 'Withdrawn', failed: true },
 };
 
-function buildSteps(application: ApplicationRecord) {
-  if (application.status === 'REJECTED') {
-    return [
-      { key: 'APPLIED', label: 'Applied', done: true },
-      { key: 'REJECTED', label: 'Rejected', done: true, failed: true },
-    ];
-  }
+type Step = { key: string; label: string; done: boolean; failed: boolean };
 
-  const order = ['APPLIED', 'SHORTLISTED', 'INTERVIEW', 'SELECTED'];
-  const timeline = application.timeline.length
-    ? application.timeline
-    : order.map((status) => ({ status, at: '', done: false }));
+function buildSteps(application: ApplicationRecord): Step[] {
+  const reached = new Set(
+    application.timeline.filter((item) => item.done).map((item) => item.status),
+  );
+  reached.add('APPLIED');
+  const currentIndex = PROGRESS_STEPS.findIndex((step) => step.key === application.status);
 
-  const relevant = timeline.filter((item) => order.includes(item.status) || item.status === 'UNDER_REVIEW');
-  const merged = order.map((status) => {
-    const hit = relevant.find((item) => item.status === status);
-    return {
-      key: status,
-      label: STEP_LABELS[status] || status,
-      done: hit?.done ?? false,
-      failed: false,
-    };
+  const steps: Step[] = PROGRESS_STEPS.map((step, index) => ({
+    key: step.key,
+    label: step.label,
+    done: reached.has(step.key) || (currentIndex >= 0 && index <= currentIndex),
+    failed: false,
+  }));
+
+  const outcome = OUTCOMES[application.status];
+  steps.push({
+    key: 'OUTCOME',
+    label: outcome?.label ?? 'Outcome',
+    done: Boolean(outcome),
+    failed: outcome?.failed ?? false,
   });
-
-  return merged.filter((step) => step.key !== 'SELECTED' || application.status === 'SELECTED');
+  return steps;
 }
 
 export function ApplicationProgressTrack({ application }: { application: ApplicationRecord }) {
   const steps = buildSteps(application);
 
   return (
-    <div className="cb-app-progress" aria-label="Application status">
+    <div className="cb-app-progress" role="group" aria-label="Application status">
       {steps.map((step, index) => (
-        <span key={step.key} className="cb-app-progress__item">
+        <span key={step.key} className="cb-app-progress__item" data-step={step.key} data-done={step.done}>
           <span
             className={`cb-app-progress__dot${step.done ? ' is-done' : ''}${step.failed ? ' is-failed' : ''}`}
             aria-hidden="true"
           >
-            ●
+            {step.failed ? '✕' : step.done ? '✓' : '○'}
           </span>
           <span className="cb-app-progress__label">{step.label}</span>
+          <span className="sr-only">{step.done ? ' (done)' : ' (pending)'}</span>
           {index < steps.length - 1 ? <span className="cb-app-progress__arrow" aria-hidden="true">→</span> : null}
         </span>
       ))}

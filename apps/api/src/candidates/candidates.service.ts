@@ -22,8 +22,18 @@ import {
   formatGapDateRange,
   CAREER_GAP_REASONS,
   deriveExperienceFlags,
+  computeEmployabilityScore,
+  EMPLOYABILITY_RECENT_INTERVIEWS,
+  type AiFeedbackItem,
+  CANDIDATE_MAX_SKILLS,
+  CANDIDATE_MAX_SKILLS_MESSAGE,
+  employmentStatusNeedsExperience,
+  parseExperienceRange,
+  parseSkippedSteps,
+  validateExpectedSalaryRange,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { CatalogService } from '../catalog/catalog.service';
 import { MatchingService } from '../matching/matching.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { StorageService } from '../common/storage/storage.service';
@@ -42,6 +52,8 @@ import {
   ExplainCareerGapDto,
 } from './dto/update-candidate.dto';
 import { CareerGapReason, CareerGapStatus } from '../prisma/client';
+
+const MAX_PREFERRED_WORK_CITIES = 5;
 import {
   PHOTO_VALIDATION_MESSAGES,
   canonicalProfilePhotoPaths,
@@ -65,6 +77,7 @@ export class CandidatesService {
     private readonly aiGateway: AiGatewayService,
     private readonly storage: StorageService,
     private readonly testimonials: TestimonialsService,
+    private readonly catalog: CatalogService,
   ) {}
 
   async me(userId: string) {
@@ -123,6 +136,115 @@ export class CandidatesService {
       sections,
       missing: profileOverviewMissingLabels(sections, candidate.skills.length),
     };
+  }
+
+  async employability(userId: string) {
+    const candidate = await this.loadCandidate(userId);
+    const sections = buildSections(candidate);
+    const [resumes, interviews] = await Promise.all([
+      this.prisma.resume.findMany({
+        where: { candidateId: candidate.id, archivedAt: null },
+        select: { analysis: { select: { overallScore: true } } },
+      }),
+      this.prisma.interview.findMany({
+        where: { candidateId: candidate.id, status: 'COMPLETED', score: { not: null } },
+        orderBy: { updatedAt: 'desc' },
+        take: EMPLOYABILITY_RECENT_INTERVIEWS,
+        select: { score: true },
+      }),
+    ]);
+    const atsScores = resumes
+      .map((row) => row.analysis?.overallScore)
+      .filter((score): score is number => typeof score === 'number');
+    return computeEmployabilityScore({
+      profileCompletion: computeProfileOverviewCompletion(sections, candidate.skills.length),
+      bestResumeAtsScore: atsScores.length ? Math.max(...atsScores) : null,
+      mockInterviewScores: interviews.map((row) => row.score as number),
+      skillsCount: candidate.skills.length,
+      hasWorkExperience: candidate.experiences.length > 0,
+      projectsCount: parseRecords(candidate.projects).length,
+      certificationsCount: parseRecords(candidate.certifications).length,
+    });
+  }
+
+  /** Stored feedback only (resume reviews, AI improvements, mock interview reports); nothing is generated here. */
+  async aiFeedback(userId: string): Promise<AiFeedbackItem[]> {
+    const candidate = await this.loadCandidate(userId);
+    const [reports, improvements, interviews] = await Promise.all([
+      this.prisma.resumeAtsReport.findMany({
+        where: { resume: { candidateId: candidate.id } },
+        orderBy: { updatedAt: 'desc' },
+        take: 20,
+        include: { resume: { select: { id: true, title: true } } },
+      }),
+      this.prisma.resumeOptimization.findMany({
+        where: { source: { candidateId: candidate.id }, status: 'COMPLETED' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          sourceResumeId: true,
+          resultResumeId: true,
+          beforeScore: true,
+          afterScore: true,
+          improvementsJson: true,
+          createdAt: true,
+          source: { select: { title: true } },
+        },
+      }),
+      this.prisma.interview.findMany({
+        where: { candidateId: candidate.id, status: 'COMPLETED', reportJson: { not: null } },
+        orderBy: { updatedAt: 'desc' },
+        take: 20,
+        select: { id: true, jobRole: true, score: true, reportJson: true, updatedAt: true },
+      }),
+    ]);
+
+    const improvedResumeIds = new Set(improvements.map((row) => row.sourceResumeId));
+    const items: AiFeedbackItem[] = [
+      ...reports.map((row) => ({
+        id: `review-${row.id}`,
+        kind: 'RESUME_REVIEW' as const,
+        title: `Resume review: ${row.resume.title}`,
+        at: row.updatedAt.toISOString(),
+        score: row.overallScore,
+        summary: `${row.label}. ${row.highPriority} high-priority and ${row.mediumPriority} medium-priority suggestions.`,
+        action: improvedResumeIds.has(row.resume.id) ? 'Improved with AI' : null,
+        href: `/ats?resumeId=${encodeURIComponent(row.resume.id)}`,
+      })),
+      ...improvements.map((row) => {
+        const changes = parseStringList(row.improvementsJson);
+        return {
+          id: `improvement-${row.id}`,
+          kind: 'RESUME_IMPROVEMENT' as const,
+          title: `AI resume improvement: ${row.source.title}`,
+          at: row.createdAt.toISOString(),
+          score: row.afterScore,
+          summary:
+            row.afterScore != null
+              ? `ATS score ${row.beforeScore} → ${row.afterScore}.${changes.length ? ` ${changes.slice(0, 2).join('; ')}` : ''}`
+              : `Started from ATS score ${row.beforeScore}.`,
+          action: row.resultResumeId ? 'Saved as a new resume version' : null,
+          href: `/ats?resumeId=${encodeURIComponent(row.resultResumeId || row.sourceResumeId)}`,
+        };
+      }),
+      ...interviews.map((row) => {
+        const report = parseInterviewReportSummary(row.reportJson);
+        return {
+          id: `interview-${row.id}`,
+          kind: 'MOCK_INTERVIEW' as const,
+          title: `Mock interview: ${row.jobRole}`,
+          at: row.updatedAt.toISOString(),
+          score: row.score,
+          summary:
+            [report.recommendation, report.summary].filter(Boolean).join('. ').slice(0, 400) ||
+            'Interview report available.',
+          action: null,
+          href: `/interviews/${row.id}/report`,
+        };
+      }),
+    ];
+    return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 40);
   }
 
   /**
@@ -463,6 +585,43 @@ export class CandidatesService {
         message: 'photoUrl can only be cleared here. Upload photos via POST /candidates/me/photo.',
       });
     }
+    const preferredCities =
+      dto.preferredWorkCity !== undefined
+        ? dto.preferredWorkCity.split(',').map((city) => city.trim()).filter(Boolean)
+        : undefined;
+    if (preferredCities && preferredCities.length > MAX_PREFERRED_WORK_CITIES) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: `You can select up to ${MAX_PREFERRED_WORK_CITIES} locations`,
+      });
+    }
+    if (dto.expectedSalaryMin !== undefined || dto.expectedSalaryMax !== undefined) {
+      const min = dto.expectedSalaryMin !== undefined ? dto.expectedSalaryMin : candidate.expectedSalaryMin;
+      const max = dto.expectedSalaryMax !== undefined ? dto.expectedSalaryMax : candidate.expectedSalaryMax;
+      const salaryError = validateExpectedSalaryRange(min, max);
+      if (salaryError) {
+        throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: salaryError });
+      }
+    }
+    let experienceRangeYears: number | undefined;
+    if (dto.experienceRange) {
+      const level = await this.catalog.findByValue('EXPERIENCE_LEVEL', dto.experienceRange.trim());
+      if (!level || (!level.active && level.value !== candidate.experienceRange)) {
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Please select your years of experience',
+        });
+      }
+      experienceRangeYears = parseExperienceRange(level.label)?.min ?? 0;
+    }
+    const statusNeedsExperience =
+      dto.employmentStatus !== undefined ? employmentStatusNeedsExperience(dto.employmentStatus) : undefined;
+    if (statusNeedsExperience === true && !dto.experienceRange && !candidate.experienceRange) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Please select your years of experience',
+      });
+    }
     await this.prisma.candidate.update({
       where: { userId },
       data: {
@@ -473,10 +632,10 @@ export class CandidatesService {
         ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() || null } : {}),
         ...(dto.city !== undefined ? { city: dto.city.trim() } : {}),
         ...(dto.state !== undefined ? { state: dto.state.trim() || null } : {}),
-        ...(dto.preferredWorkCity !== undefined
+        ...(preferredCities !== undefined
           ? {
-              preferredWorkCity: dto.preferredWorkCity.trim(),
-              ...(dto.city === undefined ? { city: dto.preferredWorkCity.trim() } : {}),
+              preferredWorkCity: preferredCities.join(', ') || null,
+              ...(dto.city === undefined && preferredCities[0] ? { city: preferredCities[0] } : {}),
             }
           : {}),
         ...(dto.about !== undefined ? { about: dto.about.trim() || null } : {}),
@@ -505,6 +664,38 @@ export class CandidatesService {
           : {}),
         ...(dto.photoUrl !== undefined ? { photoUrl: null } : {}),
         ...(dto.links !== undefined ? { profileLinks: JSON.stringify(cleanLinks(dto.links)) } : {}),
+        ...(dto.employmentStatus !== undefined
+          ? {
+              employmentStatus: dto.employmentStatus,
+              stillInCollege: dto.employmentStatus === 'STUDENT',
+              ...(statusNeedsExperience
+                ? { hasExperience: 'YES', experienceLevel: 'experienced' }
+                : {
+                    hasExperience: 'NONE',
+                    experienceLevel: 'fresher',
+                    experienceRange: null,
+                    totalExperienceYears: 0,
+                    totalExperienceMonths: 0,
+                  }),
+            }
+          : {}),
+        ...(dto.experienceRange !== undefined && statusNeedsExperience !== false
+          ? dto.experienceRange
+            ? {
+                experienceRange: dto.experienceRange.trim(),
+                totalExperienceYears: experienceRangeYears ?? 0,
+                totalExperienceMonths: 0,
+              }
+            : { experienceRange: null }
+          : {}),
+        ...(dto.expectedSalaryMin !== undefined ? { expectedSalaryMin: dto.expectedSalaryMin } : {}),
+        ...(dto.expectedSalaryMax !== undefined ? { expectedSalaryMax: dto.expectedSalaryMax } : {}),
+        ...(dto.preferredJobTypes !== undefined
+          ? { preferredJobTypes: JSON.stringify([...new Set(dto.preferredJobTypes)]) }
+          : {}),
+        ...(dto.onboardingSkippedSteps !== undefined
+          ? { onboardingSkippedSteps: JSON.stringify(parseSkippedSteps(dto.onboardingSkippedSteps)) }
+          : {}),
         ...(dto.onboardingCompleted !== undefined ? { onboardingCompleted: dto.onboardingCompleted } : {}),
         ...(dto.dashboardReached !== undefined ? { dashboardReached: dto.dashboardReached } : {}),
         ...(dto.whatsappOptIn !== undefined
@@ -744,6 +935,10 @@ export class CandidatesService {
   async addSkill(userId: string, dto: SkillDto) {
     const candidate = await this.loadCandidate(userId);
     const name = dto.name.trim();
+    const alreadyAdded = candidate.skills.some((skill) => skill.name.toLowerCase() === name.toLowerCase());
+    if (!alreadyAdded && candidate.skills.length >= CANDIDATE_MAX_SKILLS) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: CANDIDATE_MAX_SKILLS_MESSAGE });
+    }
     await this.prisma.candidateSkill.upsert({
       where: { candidateId_name: { candidateId: candidate.id, name } },
       update: {},
@@ -994,6 +1189,14 @@ export class CandidatesService {
       careerInterests: parseInterests(candidate.careerInterests),
       hasExperience: candidate.hasExperience,
       noticePeriod: candidate.noticePeriod ?? null,
+      employmentStatus: candidate.employmentStatus ?? null,
+      experienceRange: candidate.experienceRange ?? null,
+      expectedSalaryMin: candidate.expectedSalaryMin ?? null,
+      expectedSalaryMax: candidate.expectedSalaryMax ?? null,
+      preferredJobTypes: parseInterests(candidate.preferredJobTypes),
+      onboardingSkippedSteps: parseSkippedSteps(candidate.onboardingSkippedSteps).filter(
+        (step) => !onboardingStepAnswered(candidate, step),
+      ),
       profileCompletion: candidate.profileCompletion,
       onboardingCompleted: candidate.onboardingCompleted,
       dashboardReached: candidate.dashboardReached,
@@ -1056,6 +1259,27 @@ function parseOptionalDate(value?: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** Whether the data an onboarding step collects is present (a skipped step stops being flagged once filled). */
+function onboardingStepAnswered(candidate: NonNullable<CandidateRecord>, step: number): boolean {
+  switch (step) {
+    case 1:
+      return Boolean(candidate.state?.trim() || candidate.city?.trim() || candidate.preferredWorkCity?.trim());
+    case 2:
+      return Boolean(candidate.employmentStatus);
+    case 3:
+      return (
+        parseInterests(candidate.careerInterests).length > 0 ||
+        parseInterests(candidate.preferredJobTypes).length > 0 ||
+        candidate.expectedSalaryMin != null ||
+        candidate.expectedSalaryMax != null
+      );
+    case 4:
+      return candidate.skills.length > 0;
+    default:
+      return true;
+  }
+}
+
 function parseInterests(raw: string) {
   try {
     const value = JSON.parse(raw) as unknown;
@@ -1096,6 +1320,38 @@ function parseRecords(raw: string): Array<{ id: string } & Record<string, unknow
     return Array.isArray(value) ? value.filter((item) => item && typeof item === 'object' && 'id' in item) : [];
   } catch {
     return [];
+  }
+}
+
+function parseStringList(raw: string | null | undefined): string[] {
+  try {
+    const value = JSON.parse(raw || '[]') as unknown;
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          const row = item as Record<string, unknown>;
+          return String(row.title ?? row.label ?? row.text ?? row.description ?? '');
+        }
+        return '';
+      })
+      .map((item) => item.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function parseInterviewReportSummary(raw: string | null): { summary: string; recommendation: string | null } {
+  try {
+    const value = JSON.parse(raw || '{}') as { summary?: unknown; recommendation?: unknown };
+    return {
+      summary: typeof value.summary === 'string' ? value.summary.trim() : '',
+      recommendation: typeof value.recommendation === 'string' ? value.recommendation : null,
+    };
+  } catch {
+    return { summary: '', recommendation: null };
   }
 }
 

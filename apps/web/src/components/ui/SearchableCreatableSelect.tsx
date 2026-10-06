@@ -32,7 +32,8 @@ export function SearchableCreatableSelect({
   const [highlight, setHighlight] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
-  const inputId = id || useId();
+  const generatedId = useId();
+  const inputId = id || generatedId;
 
   useEffect(() => {
     setQuery(value);
@@ -89,6 +90,11 @@ export function SearchableCreatableSelect({
     <div ref={rootRef} className="relative block">
       <label htmlFor={inputId} className="mb-1.5 block text-xs font-bold text-primary">
         {label}
+        {required ? (
+          <span className="ml-0.5 text-error" aria-hidden="true">
+            *
+          </span>
+        ) : null}
       </label>
       <input
         id={inputId}
@@ -150,7 +156,15 @@ export function SearchableCreatableSelect({
         </ul>
       ) : null}
       {required ? (
-        <input tabIndex={-1} className="sr-only" required value={value} onChange={() => undefined} />
+        <input
+          tabIndex={-1}
+          className="sr-only"
+          aria-hidden="true"
+          aria-label={label}
+          required
+          value={value}
+          onChange={() => undefined}
+        />
       ) : null}
     </div>
   );

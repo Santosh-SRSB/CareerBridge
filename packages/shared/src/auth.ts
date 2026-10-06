@@ -162,20 +162,32 @@ export function registrationPasswordError(password: string): string | null {
   if (!password || password.length < 8) {
     return 'Password must be at least 8 characters.';
   }
-  if (!/[A-Z]/.test(password)) {
-    return 'Password must include at least one uppercase letter.';
-  }
-  if (!/[0-9]/.test(password)) {
-    return 'Password must include at least one number.';
-  }
-  if (!/[!@#$%^&*()_\-+=[\]{};':"\\|,.<>/?`~]/.test(password)) {
-    return 'Password must include at least one special character.';
+  if (
+    !/[A-Z]/.test(password) ||
+    !/[0-9]/.test(password) ||
+    !/[!@#$%^&*()_\-+=[\]{};':"\\|,.<>/?`~]/.test(password)
+  ) {
+    return 'Password must contain uppercase, number, and special character';
   }
   return null;
 }
 
 export const REGISTRATION_PASSWORD_PATTERN =
   /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_\-+=[\]{};':"\\|,.<>/?`~]).{8,}$/;
+
+export const OTP_EXPIRED_MESSAGE = 'OTP has expired. Please click Resend OTP.';
+
+/** "+91 XXXXX X2345": keeps the country code and last 4 digits so the user can recognise the number. */
+export function maskMobileNumber(value: string | null | undefined): string {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const local = digits.length > 10 ? digits.slice(-10) : digits;
+  const country = digits.length > 10 ? `+${digits.slice(0, digits.length - 10)} ` : '';
+  const visible = local.slice(-4);
+  const masked = `${'X'.repeat(Math.max(0, local.length - 4))}${visible}`;
+  const grouped = masked.length === 10 ? `${masked.slice(0, 5)} ${masked.slice(5)}` : masked;
+  return `${country}${grouped}`;
+}
 
 export type RequestOtpResult = {
   requestId: string;

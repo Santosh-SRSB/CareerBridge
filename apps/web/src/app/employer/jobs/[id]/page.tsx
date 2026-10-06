@@ -1,5 +1,6 @@
 'use client';
 
+import { userFacingError } from '@/lib/client-errors';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -21,7 +22,7 @@ import { MatchedCandidateCard } from '@/components/employer/MatchedCandidateCard
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
 import { StatusBadge } from '@/components/AppNav';
 import { Button } from '@/components/ui/Button';
-import { atsMatchBandLabel, toAtsMatchBreakdown } from '@careerbridge/shared';
+import { PROFILE_MATCH_LABEL, atsMatchBandLabel, toAtsMatchBreakdown } from '@careerbridge/shared';
 
 const ACTIONS = [
   { value: 'REVIEW', label: 'Review' },
@@ -315,7 +316,7 @@ export default function EmployerJobApplicationsPage() {
                     ) : (
                       <div className="ep-applicant__stats">
                         <div className="ep-applicant__stat">
-                          <span>ATS score</span>
+                          <span>{PROFILE_MATCH_LABEL}</span>
                           <strong>{rank?.totalScore ?? '—'}</strong>
                         </div>
                         <div className="ep-applicant__stat">
@@ -437,7 +438,12 @@ export default function EmployerJobApplicationsPage() {
                                 }
                                 await load();
                               } catch (err) {
-                                setError(err instanceof Error ? err.message : 'Could not update status.');
+                                setError(
+                                  userFacingError(
+                                    err,
+                                    action.value === 'SHORTLIST' ? 'shortlist candidate' : 'update candidate status',
+                                  ),
+                                );
                               }
                             }}
                           >
