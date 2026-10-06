@@ -1,0 +1,189 @@
+name: CI
+
+# Validates code before it reaches dev. Never deploys.
+# Also called by deploy-dev.yml so nothing is deployed without passing these checks.
+on:
+  pull_request:
+    branches: [dev]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API · production build + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies (fails if package-lock.json is out of sync)
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate -w api
+
+      - name: API production build (typechecks src, excluding test files)
+        run: npm run build -w api
+
+      - name: API unit tests
+        working-directory: apps/api
+        run: |
+          failed=()
+          for suite in test:auth test:email test:whatsapp test:whatsapp-flow test:whatsapp-profile \
+                       test:employer test:admin test:interview test:ai test:match test:photo \
+                       test:gst test:rag test:resume; do
+            echo "::group::npm run $suite"
+            if npm run "$suite"; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::API suite failed: $suite"
+              failed+=("$suite")
+            fi
+          done
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "Failed API suites: ${failed[*]}"
+            exit 1
+          fi
+
+      # The production build above is the blocking typecheck. Some unit-test files still have
+      # type errors that do not affect the built image; this step surfaces them without blocking.
+      - name: API full typecheck including test files (report-only, known test-file errors)
+        continue-on-error: true
+        run: npx tsc --noEmit -p apps/api/tsconfig.json
+
+  shared:
+    name: Shared package · build + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Shared tests
+        run: npm test -w @careerbridge/shared
+
+  web:
+    name: Web · typecheck + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Next.js route types (next-env.d.ts is not committed)
+        working-directory: apps/web
+        run: npx next typegen
+
+      - name: Web typecheck
+        run: npx tsc --noEmit -p apps/web/tsconfig.json
+
+      # ts-node must resolve apps/api/tsconfig.json (CommonJS); the web tsconfig targets the Next.js bundler.
+      - name: Web unit tests
+        working-directory: apps/api
+        run: |
+          mapfile -t tests < <(find ../web/src -name '*.unit.test.ts' | sort)
+          if [ "${#tests[@]}" -eq 0 ]; then
+            echo "::error::No web unit tests found"
+            exit 1
+          fi
+          printf 'Running %s\n' "${tests[@]}"
+          node -r ts-node/register/transpile-only --test "${tests[@]}"
+
+  security:
+    name: Security · secret scan + dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scan (gitleaks, commits introduced by this change)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+          elif [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            range="${PUSH_BEFORE}..${GITHUB_SHA}"
+          else
+            range="-1 ${GITHUB_SHA}"
+          fi
+          echo "Scanning commits: $range"
+          /tmp/gitleaks git --no-banner --redact --config .gitleaks.toml --log-opts="$range" .
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Report-only until the known critical/high advisories (next, proxy-addr via express, ...) are upgraded.
+      - name: Dependency audit, production deps (report-only)
+        continue-on-error: true
+        run: |
+          if ! npm audit --omit=dev --json > /tmp/audit.json; then
+            echo "Advisories found in production dependencies (details below)."
+          fi
+          node -e '
+            const v = require("/tmp/audit.json").metadata.vulnerabilities;
+            const line = `critical=${v.critical} high=${v.high} moderate=${v.moderate} low=${v.low}`;
+            console.log(line);
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### npm audit (production deps)\n${line}\n`);
+          '
+          npm audit --omit=dev --audit-level=critical
+
+  docker:
+    name: Docker build · ${{ matrix.image }} (no push)
+    # On push to dev, deploy-dev.yml builds and pushes these images right after CI.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/docker-image
+        with:
+          image: ${{ matrix.image }}
+          tags: careerbridge-${{ matrix.image }}:ci-${{ github.sha }}
+          push: 'false'

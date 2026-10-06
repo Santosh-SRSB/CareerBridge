@@ -1,0 +1,80 @@
+name: Build CareerBridge image
+description: >
+  Builds the API or Web image from infrastructure/docker/Dockerfile.<image>.
+  Web build args (public NEXT_PUBLIC_* config) are read from infrastructure/cloudbuild.web.yaml
+  so GitHub Actions and the existing Cloud Build path bake identical values.
+
+inputs:
+  image:
+    description: "api or web"
+    required: true
+  tags:
+    description: "Newline-separated image tags"
+    required: true
+  push:
+    description: "Push the image (requires a prior registry login)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve build args
+      id: args
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        set -euo pipefail
+        case "$IMAGE" in
+          api) echo "build-args=" >> "$GITHUB_OUTPUT"; exit 0 ;;
+          web) ;;
+          *) echo "::error::Unknown image '$IMAGE' (expected api or web)"; exit 1 ;;
+        esac
+        f=infrastructure/cloudbuild.web.yaml
+        get() {
+          local v
+          v=$(yq -r ".substitutions.$1" "$f")
+          if [ -z "$v" ] || [ "$v" = "null" ]; then
+            echo "::error file=$f::substitution $1 is missing" >&2
+            return 1
+          fi
+          printf '%s' "$v"
+        }
+        api_url=$(get _API_URL)
+        dev_otp=$(get _AUTH_DEV_OTP)
+        fb_api_key=$(get _FB_API_KEY)
+        fb_auth_domain=$(get _FB_AUTH_DOMAIN)
+        fb_project_id=$(get _FB_PROJECT_ID)
+        fb_bucket=$(get _FB_STORAGE_BUCKET)
+        fb_sender=$(get _FB_MESSAGING_SENDER_ID)
+        fb_app_id=$(get _FB_APP_ID)
+        fb_measurement=$(get _FB_MEASUREMENT_ID)
+        echo "Web NEXT_PUBLIC_API_URL=$api_url"
+        {
+          echo 'build-args<<__CB_BUILD_ARGS__'
+          echo "NEXT_PUBLIC_API_URL=$api_url"
+          echo "NEXT_PUBLIC_AUTH_DEV_OTP=$dev_otp"
+          echo "NEXT_PUBLIC_FIREBASE_API_KEY=$fb_api_key"
+          echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$fb_auth_domain"
+          echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=$fb_project_id"
+          echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$fb_bucket"
+          echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$fb_sender"
+          echo "NEXT_PUBLIC_FIREBASE_APP_ID=$fb_app_id"
+          echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$fb_measurement"
+          echo '__CB_BUILD_ARGS__'
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build${{ inputs.push == 'true' && ' and push' || '' }} ${{ inputs.image }} image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: infrastructure/docker/Dockerfile.${{ inputs.image }}
+        build-args: ${{ steps.args.outputs.build-args }}
+        tags: ${{ inputs.tags }}
+        push: ${{ inputs.push }}
+        provenance: false
+        cache-from: type=gha,scope=${{ inputs.image }}
+        cache-to: type=gha,mode=max,scope=${{ inputs.image }}

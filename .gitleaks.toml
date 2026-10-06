@@ -1,0 +1,8 @@
+title = "CareerBridge gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Firebase web config is public client configuration (also baked into the web bundle)"
+regexes = ['''AIzaSyBEAdXWyCupaF14a_5j7aNHwxxtEHLnbaU''']
