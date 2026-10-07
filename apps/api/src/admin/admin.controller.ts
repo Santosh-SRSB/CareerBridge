@@ -10,7 +10,8 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+import { Throttle } from '@nestjs/throttler';
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { AdminService } from './admin.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -102,6 +103,21 @@ class AdminPasswordDto {
   @IsString()
   @MinLength(8)
   password: string;
+}
+
+class ChangeOwnPasswordDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  currentPassword: string;
+
+  @IsString()
+  @MaxLength(128)
+  newPassword: string;
+
+  @IsString()
+  @MaxLength(128)
+  confirmPassword: string;
 }
 
 @ApiTags('admin')
@@ -341,6 +357,14 @@ export class AdminController {
     @Body() dto: AdminPasswordDto,
   ) {
     return this.admin.setAdminPassword(user.id, id, dto.password);
+  }
+
+  /** Signed-in staff change their own portal login password; the target is always the caller. */
+  @Post('me/password')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  changeOwnPassword(@CurrentUser() user: { id: string }, @Body() dto: ChangeOwnPasswordDto) {
+    return this.admin.changeOwnPassword(user.id, dto);
   }
 
   @Get('settings')

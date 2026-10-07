@@ -26,7 +26,7 @@
     "test:match": "node -r ts-node/register/transpile-only --test src/intelligence/match-handbook.unit.test.ts",
     "test:auth": "node -r ts-node/register/transpile-only --test src/auth/jwt-secrets.unit.test.ts",
     "test:employer": "node -r ts-node/register/transpile-only --test src/employers/employer-policy.unit.test.ts src/employers/employers.service.unit.test.ts",
-    "test:admin": "node -r ts-node/register/transpile-only --test src/admin/admin.service.unit.test.ts src/notifications/notification-templates.unit.test.ts",
+    "test:admin": "node -r ts-node/register/transpile-only --test src/admin/admin.service.unit.test.ts src/admin/admin-change-password.unit.test.ts src/notifications/notification-templates.unit.test.ts",
     "test:photo": "node -r ts-node/register/transpile-only --test src/candidates/profile-photo.unit.test.ts",
     "test:interview": "node -r ts-node/register/transpile-only --test src/interviews/interview-lifecycle.unit.test.ts src/interviews/interview-evaluation.util.test.ts",
     "test:resume-pipeline": "node -r ts-node/register/transpile-only --test src/resumes/resume-pipeline.unit.test.ts src/resumes/isolation.unit.test.ts"

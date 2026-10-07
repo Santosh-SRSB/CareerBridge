@@ -12,7 +12,8 @@ export type SuperAdminNavId =
   | 'reports'
   | 'admins'
   | 'settings'
-  | 'audit';
+  | 'audit'
+  | 'account';
 
 /** Workflow roles: SUPER_ADMIN | ADMIN (PLATFORM_ADMIN) | OPERATIONS (PLATFORM_OPERATOR) */
 export type StaffRole = 'SUPER_ADMIN' | 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR';
@@ -43,6 +44,7 @@ export const ADMIN_NAV_ROLES: Record<SuperAdminNavId, StaffRole[]> = {
   admins: ['SUPER_ADMIN'],
   settings: ['SUPER_ADMIN'],
   audit: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
+  account: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
 };
 
 export function canOpenAdminTab(role: string | null | undefined, tab: SuperAdminNavId) {

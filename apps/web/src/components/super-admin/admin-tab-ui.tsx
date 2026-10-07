@@ -141,6 +141,15 @@ export const TAB_THEME: Record<
     panel: '#fffbf3',
     pattern: 'linear-gradient(135deg, rgba(217,119,6,0.1), transparent 50%)',
   },
+  account: {
+    accent: '#3d4f63',
+    soft: '#eef1f4',
+    ink: '#2b3643',
+    title: 'My Account',
+    blurb: 'Your portal sign-in and password',
+    panel: '#f6f8fa',
+    pattern: 'linear-gradient(160deg, rgba(61,79,99,0.08), transparent 45%)',
+  },
 };
 
 export function StatusPill({ status }: { status: string }) {

@@ -31,6 +31,7 @@ import {
 } from '@/lib/api';
 import { SuperAdminShell } from '@/components/super-admin/SuperAdminShell';
 import { PlatformCatalogSettings } from '@/components/super-admin/PlatformCatalogSettings';
+import { AdminChangePasswordForm } from '@/components/super-admin/AdminChangePasswordForm';
 import {
   ActionBtn,
   DetailPanel,
@@ -79,6 +80,7 @@ const TABS: SuperAdminNavId[] = [
   'admins',
   'settings',
   'audit',
+  'account',
 ];
 
 const LIST_TABS: SuperAdminNavId[] = [
@@ -1097,6 +1099,8 @@ export default function SuperAdminDashboardInner() {
             )}
           </div>
         )}
+
+        {tab === 'account' && <AdminChangePasswordForm email={getStoredUser()?.email} />}
 
         {tab === 'audit' && (
           <div className="space-y-4">

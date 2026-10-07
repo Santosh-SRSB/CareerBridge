@@ -27,6 +27,7 @@ const NAV: Array<{ id: SuperAdminNavId; label: string; href: string; icon: strin
   { id: 'admins', label: 'Administration', href: '/adminsrsb/dashboard?tab=admins', icon: '🛡' },
   { id: 'settings', label: 'Settings', href: '/adminsrsb/dashboard?tab=settings', icon: '⚙' },
   { id: 'audit', label: 'Audit', href: '/adminsrsb/dashboard?tab=audit', icon: '🧾' },
+  { id: 'account', label: 'My Account', href: '/adminsrsb/dashboard?tab=account', icon: '🔑' },
 ];
 
 function shellMeta(role?: string | null) {

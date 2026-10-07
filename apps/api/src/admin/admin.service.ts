@@ -12,11 +12,12 @@ import {
   aiBudgetStatus,
   aiUsageDayStart,
   parseAiSettings,
+  registrationPasswordError,
 } from '@careerbridge/shared';
 import { UserStatus, UserType } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
-import { hashPlatformPassword } from '../auth/password.util';
+import { hashPlatformPassword, verifyPassword } from '../auth/password.util';
 import { EmployersService } from '../employers/employers.service';
 import { employerPlanUsage, usagePeriod } from '../employers/employer-plan';
 
@@ -37,6 +38,8 @@ const DEFAULT_SETTINGS: Record<string, string> = {
 };
 
 const ALLOWED_SETTING_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
+
+const STAFF_ROLES = new Set<string>(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR']);
 
 const IST_OFFSET_MS = 330 * 60_000;
 
@@ -1738,6 +1741,73 @@ export class AdminService {
       status: admin.status,
       password: plain,
     };
+  }
+
+  async changeOwnPassword(
+    userId: string,
+    input: { currentPassword: string; newPassword: string; confirmPassword: string },
+  ) {
+    const { currentPassword, newPassword, confirmPassword } = input;
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'New password and confirmation do not match.',
+      });
+    }
+    const policyError = registrationPasswordError(newPassword);
+    if (policyError) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: policyError });
+    }
+
+    const admin = await this.prisma.admin.findUnique({
+      where: { userId },
+      include: { user: { select: { userType: true, status: true } } },
+    });
+    if (
+      !admin ||
+      admin.status !== 'ACTIVE' ||
+      admin.user.status !== 'ACTIVE' ||
+      !STAFF_ROLES.has(admin.user.userType)
+    ) {
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN,
+        message: 'Only active admin portal accounts can change their password here.',
+      });
+    }
+
+    // 400 rather than 401: a 401 makes the web client drop the signed-in session.
+    if (!(await verifyPassword(currentPassword, admin.passwordHash))) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Current password is incorrect.',
+      });
+    }
+    if (await verifyPassword(newPassword, admin.passwordHash)) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'New password must be different from the current password.',
+      });
+    }
+
+    const passwordHash = await hashPlatformPassword(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.admin.update({
+        where: { id: admin.id },
+        data: { passwordHash, loginPassword: null },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      }),
+    ]);
+    await this.writeAudit({
+      userId,
+      action: 'CHANGE_OWN_PASSWORD',
+      resourceType: 'ADMIN',
+      resourceId: admin.id,
+      newValue: { email: admin.email },
+    });
+    return { changed: true };
   }
 
   async getSettings() {

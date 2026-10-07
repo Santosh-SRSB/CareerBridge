@@ -88,12 +88,13 @@ export class SeedService implements OnModuleInit {
     } else {
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash, status: 'ACTIVE', userType, phone },
+        data: { status: 'ACTIVE', userType, phone },
       });
     }
+    // Passwords are seeded on create only, so a changed staff password survives restarts.
     await this.prisma.admin.upsert({
       where: { email },
-      update: { passwordHash, loginPassword: password, fullName, status: 'ACTIVE', userId: user.id },
+      update: { fullName, status: 'ACTIVE', userId: user.id },
       create: {
         email,
         passwordHash,
@@ -128,15 +129,13 @@ export class SeedService implements OnModuleInit {
     } else {
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash, status: 'ACTIVE', userType: 'SUPER_ADMIN' },
+        data: { status: 'ACTIVE', userType: 'SUPER_ADMIN' },
       });
     }
 
     await this.prisma.admin.upsert({
       where: { email },
       update: {
-        passwordHash,
-        loginPassword: SRSB_ADMIN_PASSWORD,
         fullName: 'SRSB Super Admin',
         status: 'ACTIVE',
         userId: user.id,

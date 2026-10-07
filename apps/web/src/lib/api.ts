@@ -1719,6 +1719,17 @@ export async function setPlatformAdminPassword(id: string, password: string) {
   });
 }
 
+export async function changeOwnAdminPassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}) {
+  return request<{ changed: true }>('/admin/me/password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getAdminAiUsage() {
   return request<NonNullable<AdminDashboard['aiUsage']>>('/admin/ai-usage');
 }
