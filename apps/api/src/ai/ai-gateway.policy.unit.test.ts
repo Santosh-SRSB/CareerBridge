@@ -9,7 +9,7 @@ function config(values: Record<string, string | undefined>) {
   return { get: (key: string) => values[key] } as never;
 }
 
-type FakeGenerate = (req: { model: string; config?: { abortSignal?: AbortSignal } }) => Promise<unknown>;
+type FakeGenerate = (req: { model: string; config?: { abortSignal?: AbortSignal; maxOutputTokens?: number } }) => Promise<unknown>;
 
 function providerWith(generate: FakeGenerate, values: Record<string, string | undefined> = {}) {
   const provider = new GeminiProvider(
@@ -18,7 +18,7 @@ function providerWith(generate: FakeGenerate, values: Record<string, string | un
   const calls: string[] = [];
   (provider as unknown as { client: unknown }).client = {
     models: {
-      generateContent: async (req: { model: string; config?: { abortSignal?: AbortSignal } }) => {
+      generateContent: async (req: Parameters<FakeGenerate>[0]) => {
         calls.push(req.model);
         return generate(req);
       },
@@ -194,5 +194,75 @@ describe('AI gateway availability and cost controls', () => {
     const third = await ai.generate(request);
     assert.equal(third.unavailableReason, 'DAILY_REQUEST_LIMIT');
     assert.equal(calls.length, 2);
+  });
+});
+
+describe('resume rewrite output budget', () => {
+  const bullets = [
+    'Designed and maintained backend services for the billing platform used by internal finance teams.',
+    'Collaborated with product managers and QA engineers to gather requirements and deliver features in agile sprints.',
+    'Developed REST APIs and background jobs, wrote unit tests and resolved production issues during on-call rotations.',
+    'Reviewed junior developers code and coached them on coding standards, version control and release procedures.',
+    'Prepared technical documentation for new modules and presented design changes to the architecture review group.',
+  ];
+  const summary = 'Backend software engineer experienced in billing systems, REST APIs, automated testing and production support.';
+
+  /** Gemini 3.x thinking model: reasoning tokens are spent first and count toward maxOutputTokens. */
+  function thinkingModel(json: string, reasoningTokens: number) {
+    const caps: number[] = [];
+    const generate: FakeGenerate = async (req) => {
+      const cap = req.config?.maxOutputTokens ?? Number.POSITIVE_INFINITY;
+      caps.push(cap);
+      const answerTokens = Math.ceil(json.length / 4);
+      if (cap >= reasoningTokens + answerTokens) {
+        return { ...ok(json), candidates: [{ finishReason: 'STOP' }] };
+      }
+      return { text: json.slice(0, 70), candidates: [{ finishReason: 'MAX_TOKENS' }], usageMetadata: { promptTokenCount: 400, candidatesTokenCount: 17 } };
+    };
+    return { generate, caps };
+  }
+
+  it('the fake reproduces the old failure: a 500-token cap truncates the JSON after reasoning', async () => {
+    const model = thinkingModel(JSON.stringify({ improvedBullets: bullets }), 1290);
+    const { provider } = providerWith(model.generate);
+    await assert.rejects(provider.generateStructured('s', 'u', { maxOutputTokens: 500 }), /invalid JSON/);
+  });
+
+  it('Try again on an experience entry returns the full suggestion despite ~1.3k reasoning tokens', async () => {
+    const model = thinkingModel(JSON.stringify({ improvedBullets: bullets }), 1290);
+    const { provider, calls } = providerWith(model.generate);
+    const { prisma, interactions } = fakePrisma();
+    const res = await gateway(provider, prisma).improveExperienceBulletsWithStatus({
+      role: 'Senior Software Engineer',
+      bullets: ['Worked on backend services for billing.'],
+      avoidSuggestions: ['Built backend services for billing.'],
+    });
+    assert.deepEqual(res, { data: { improvedBullets: bullets } });
+    assert.deepEqual(calls, ['primary-model'], 'one call, no truncation retries');
+    assert.ok(model.caps[0] > 1290 + 200);
+    assert.equal(interactions[0].status, 'SUCCESS');
+  });
+
+  it('summary rewrite returns the full suggestion despite ~1.2k reasoning tokens', async () => {
+    const model = thinkingModel(JSON.stringify({ improvedSummary: summary }), 1215);
+    const { provider, calls } = providerWith(model.generate);
+    const { prisma, interactions } = fakePrisma();
+    const res = await gateway(provider, prisma).improveResumeSummaryWithStatus({
+      summary: 'I am a backend engineer.',
+      avoidSuggestions: ['Backend engineer.'],
+    });
+    assert.deepEqual(res, { data: { improvedSummary: summary } });
+    assert.deepEqual(calls, ['primary-model']);
+    assert.equal(interactions[0].status, 'SUCCESS');
+  });
+
+  it('output that is still truncated is rejected, never returned as a suggestion', async () => {
+    const model = thinkingModel(JSON.stringify({ improvedBullets: bullets }), 100_000);
+    const { provider, calls } = providerWith(model.generate);
+    const { prisma, interactions } = fakePrisma();
+    const res = await gateway(provider, prisma).improveExperienceBulletsWithStatus({ role: 'Engineer', bullets: ['Built services.'] });
+    assert.deepEqual(res, { data: null, unavailableReason: 'FAILED' });
+    assert.deepEqual(calls, ['primary-model', 'primary-model', 'fallback-model', 'fallback-model']);
+    assert.equal(interactions[0].status, 'FAILED');
   });
 });

@@ -626,7 +626,8 @@ export class AiGatewayService {
         ...options,
         promptVersion: prompt.version,
         temperature: input.avoidSuggestions?.length ? 0.7 : 0.2,
-        maxOutputTokens: 400,
+        // Gemini 3.x reasoning tokens count toward this cap; it must cover reasoning (~1-1.3k) plus the JSON.
+        maxOutputTokens: 4096,
       },
     });
     const improved = res.data && typeof res.data.improvedSummary === 'string' ? res.data.improvedSummary : null;
@@ -647,7 +648,8 @@ export class AiGatewayService {
         ...options,
         promptVersion: prompt.version,
         temperature: input.avoidSuggestions?.length ? 0.7 : 0.2,
-        maxOutputTokens: 500,
+        // Gemini 3.x reasoning tokens count toward this cap; it must cover reasoning (~1-1.3k) plus the JSON.
+        maxOutputTokens: 4096,
       },
     });
     const raw = res.data?.improvedBullets;
