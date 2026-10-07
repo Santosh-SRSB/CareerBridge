@@ -4,6 +4,7 @@ import {
   ADMIN_INTERVIEW_STATUS_OPTIONS,
   adminInterviewFlowSteps,
   adminInterviewStatusLabel,
+  adminWhatsAppStatusLabel,
 } from './admin-interview-status';
 
 test('filter options are the stakeholder statuses, in flow order, with no raw interview enums', () => {
@@ -48,6 +49,14 @@ test('flow marks exactly the current stage; outcome step names the actual outcom
 
   const shortlisted = adminInterviewFlowSteps('PROFILE_SHORTLISTED');
   assert.deepEqual(shortlisted.steps.filter((s) => s.current).map((s) => s.key), ['PROFILE_SHORTLISTED']);
+});
+
+test('WhatsApp interview states are readable and never show raw reschedule enums', () => {
+  assert.equal(adminWhatsAppStatusLabel('RESCHEDULE_NEEDED_VIA_WA'), 'Reschedule requested via WhatsApp');
+  assert.equal(adminWhatsAppStatusLabel('RESCHEDULE_NEEDED_VIA_PORTAL'), 'Reschedule requested via portal');
+  assert.equal(adminWhatsAppStatusLabel('CONFIRMED_VIA_WA'), 'Confirmed via WhatsApp');
+  assert.equal(adminWhatsAppStatusLabel('SKIPPED_BY_EMPLOYER'), 'Skipped by employer');
+  assert.equal(adminWhatsAppStatusLabel(null), null);
 });
 
 test('cancelled is outside the flow: no stage is current', () => {

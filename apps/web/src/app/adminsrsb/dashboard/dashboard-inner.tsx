@@ -49,7 +49,11 @@ import {
   canOpenAdminTab,
   type SuperAdminNavId,
 } from '@/lib/admin-portal';
-import { ADMIN_INTERVIEW_STATUS_OPTIONS, adminInterviewStatusLabel } from '@/lib/admin-interview-status';
+import {
+  ADMIN_INTERVIEW_STATUS_OPTIONS,
+  adminInterviewStatusLabel,
+  adminWhatsAppStatusLabel,
+} from '@/lib/admin-interview-status';
 import { beginEmployerImpersonation, getStoredUser, isPlatformRole, isSuperAdminRole } from '@/lib/session';
 import { RoleDashboardHome, roleDashboardHero } from '@/components/super-admin/role-dashboard-home';
 import {
@@ -1592,7 +1596,7 @@ export default function SuperAdminDashboardInner() {
                         <p className="mt-1 text-[11px] text-[#2255a4]">
                           {shortlistedOnly
                             ? 'Shortlisted · awaiting interview scheduling'
-                            : `Mode ${cell(row.mode)} · WhatsApp ${cell(row.whatsappStatus)}`}
+                            : `Mode ${cell(row.mode)} · WhatsApp ${adminWhatsAppStatusLabel(row.whatsappStatus) ?? '—'}`}
                         </p>
                       </div>
                       <div className="flex flex-col items-end justify-center gap-2">

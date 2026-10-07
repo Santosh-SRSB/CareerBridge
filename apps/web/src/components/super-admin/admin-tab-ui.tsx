@@ -2,7 +2,11 @@
 
 import type { FormEvent, ReactNode } from 'react';
 import type { SuperAdminNavId } from '@/lib/admin-portal';
-import { adminInterviewFlowSteps, adminInterviewStatusLabel } from '@/lib/admin-interview-status';
+import {
+  adminInterviewFlowSteps,
+  adminInterviewStatusLabel,
+  adminWhatsAppStatusLabel,
+} from '@/lib/admin-interview-status';
 
 export const TAB_THEME: Record<
   SuperAdminNavId,
@@ -504,7 +508,12 @@ export function DetailPanel({
             ) : null}
             {data.scheduledAt ? <Field label="Scheduled" value={data.scheduledAt} /> : null}
             {data.mode ? <Field label="Mode" value={data.mode} /> : null}
-            {data.whatsappStatus ? <Field label="WhatsApp" value={data.whatsappStatus} /> : null}
+            {data.whatsappStatus ? (
+              <Field
+                label="WhatsApp"
+                value={adminStatus ? adminWhatsAppStatusLabel(data.whatsappStatus) : data.whatsappStatus}
+              />
+            ) : null}
           </div>
         </Section>
 

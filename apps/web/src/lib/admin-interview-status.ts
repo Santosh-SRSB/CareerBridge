@@ -17,6 +17,18 @@ export function adminInterviewStatusLabel(status: unknown): string | null {
   return typeof status === 'string' ? LABELS.get(status) ?? null : null;
 }
 
+/** Readable interview WhatsApp state, e.g. RESCHEDULE_NEEDED_VIA_WA → "Reschedule requested via WhatsApp". */
+export function adminWhatsAppStatusLabel(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const raw = value.trim().toUpperCase();
+  const via = raw.endsWith('_VIA_WA') ? ' via WhatsApp' : raw.endsWith('_VIA_PORTAL') ? ' via portal' : '';
+  const core = raw.replace(/_VIA_(WA|PORTAL)$/, '');
+  const phrase = core.startsWith('RESCHEDULE_')
+    ? 'Reschedule requested'
+    : core.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+  return `${phrase}${via}`;
+}
+
 export type AdminInterviewFlowStep = { key: string; label: string; current: boolean };
 
 /**
