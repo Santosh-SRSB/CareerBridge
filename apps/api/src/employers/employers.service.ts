@@ -521,13 +521,15 @@ export class EmployersService {
         preferredSkills: JSON.stringify(dto.preferredSkills || []),
         benefits: dto.benefits,
         screeningQuestionsJson: JSON.stringify(screeningQuestions),
-        status: dto.publish ? 'PENDING_REVIEW' : 'DRAFT',
-        publishedAt: null,
+        status: dto.publish ? 'PUBLISHED' : 'DRAFT',
+        publishedAt: dto.publish ? new Date() : null,
       },
     });
     if (dto.publish) {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
-      return { ...job, reviewRequired: true };
+      const followUps = await this.runPublishFollowUps(job.id);
+      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
+      return { ...job, ...followUps };
     }
     return job;
   }
@@ -577,23 +579,18 @@ export class EmployersService {
   }
 
   /**
-   * Employer publish requests: a job that has never been approved goes to PENDING_REVIEW and only an admin
-   * can make it live. Resuming a paused job that was already approved goes straight back to PUBLISHED.
+   * Employer publish makes the job live (PUBLISHED, shown as Active) immediately; there is no admin approval step.
+   * A job still in the legacy PENDING_REVIEW state is published the same way and already counts against the plan.
    */
   async setStatus(userId: string, id: string, status: JobStatus) {
     const job = await this.requireJob(userId, id);
     const employer = await this.requireEmployer(userId);
     if (status === 'PENDING_REVIEW') status = 'PUBLISHED';
     if (status === 'PUBLISHED') {
-      if (job.status === 'PENDING_REVIEW') return { ...job, reviewRequired: true };
       assertKycComplete(employer, 'Complete company KYC before publishing jobs.');
       if (!job.publishedAt) this.assertPublishSalary(job.salaryMin, job.salaryMax);
-      if (job.status !== 'PUBLISHED') await this.assertActiveJobAllowance(employer.id);
+      if (job.status !== 'PUBLISHED' && job.status !== 'PENDING_REVIEW') await this.assertActiveJobAllowance(employer.id);
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
-      if (!job.publishedAt && job.status !== 'PUBLISHED') {
-        const pending = await this.prisma.job.update({ where: { id }, data: { status: 'PENDING_REVIEW' } });
-        return { ...pending, reviewRequired: true };
-      }
     }
     const updated = await this.prisma.job.update({
       where: { id },

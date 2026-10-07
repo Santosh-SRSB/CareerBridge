@@ -70,6 +70,55 @@ describe('admin helpers', () => {
   });
 });
 
+describe('ST-23: admin approve/reject stays available for historical PENDING_REVIEW jobs', () => {
+  function harness(status: string) {
+    const job: Record<string, unknown> = { id: 'j1', status, publishedAt: null };
+    const audits: Array<{ data: { action: string } }> = [];
+    const calls = { approvals: 0, rejections: 0 };
+    const prisma = {
+      job: {
+        findUnique: async () => ({ ...job }),
+        update: async ({ data }: { data: Record<string, unknown> }) => Object.assign(job, data),
+      },
+      auditLog: { create: async (row: { data: { action: string } }) => audits.push(row) },
+    };
+    const employers = {
+      completeJobApproval: async () => {
+        calls.approvals += 1;
+        return { matching: { status: 'COMPUTED' } };
+      },
+      notifyJobRejected: async () => {
+        calls.rejections += 1;
+      },
+    };
+    return { service: new AdminService(prisma as never, {} as never, employers as never), job, audits, calls };
+  }
+
+  it('approving a historical PENDING_REVIEW job publishes it, audits it and runs the go-live follow-ups', async () => {
+    const h = harness('PENDING_REVIEW');
+    const res = (await h.service.approveJob('admin-1', 'j1')) as Record<string, unknown>;
+    assert.equal(res.status, 'PUBLISHED');
+    assert.ok(h.job.publishedAt instanceof Date);
+    assert.deepEqual(h.audits.map((a) => a.data.action), ['JOB_PUBLISHED']);
+    assert.equal(h.calls.approvals, 1);
+  });
+
+  it('rejecting a historical PENDING_REVIEW job returns it to Draft and notifies the employer', async () => {
+    const h = harness('PENDING_REVIEW');
+    await h.service.rejectJob('admin-1', 'j1');
+    assert.equal(h.job.status, 'DRAFT');
+    assert.equal(h.calls.rejections, 1);
+  });
+
+  it('approve/reject endpoints remain restricted to admin roles', () => {
+    const classRoles = Reflect.getMetadata(ROLES_KEY, AdminController) as string[];
+    for (const method of ['approveJob', 'rejectJob'] as const) {
+      const roles = (Reflect.getMetadata(ROLES_KEY, AdminController.prototype[method]) as string[] | undefined) ?? classRoles;
+      assert.ok(roles.length > 0 && roles.every((r) => /ADMIN|OPERATOR/.test(r)), method);
+    }
+  });
+});
+
 describe('AdminService.mergeSkill', () => {
   function harness() {
     const skills = new Map([

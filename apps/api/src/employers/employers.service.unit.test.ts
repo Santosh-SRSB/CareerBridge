@@ -13,6 +13,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JOB_CATEGORIES } from '@careerbridge/shared';
+import { EmployersController } from './employers.controller';
 import { EmployersService } from './employers.service';
 import { JobsService } from '../jobs/jobs.service';
 import { MatchingService } from '../matching/matching.service';
@@ -181,6 +182,7 @@ function harness(opts: Opts = {}) {
     downloads: [] as Array<{ userId: string; resumeId: string }>,
     advisoryLocks: 0,
     recompute: 0,
+    alerts: 0,
   };
   let seq = 0;
 
@@ -341,7 +343,11 @@ function harness(opts: Opts = {}) {
       return true;
     },
   };
-  const jobsService = { notifyCandidatesForPublishedJob: async () => undefined };
+  const jobsService = {
+    notifyCandidatesForPublishedJob: async () => {
+      calls.alerts += 1;
+    },
+  };
   const storage = {
     isConfigured: () => Boolean(opts.storage),
     getBucketName: () => BUCKET,
@@ -694,6 +700,27 @@ describe('Fix 7 — only PUBLISHED jobs are public', () => {
       await assert.rejects(make(status, false).detail('J', 'cU'), NotFoundException, status);
     }
   });
+  it('EDGE-07: a job the employer just published is visible to anonymous users and candidates', async () => {
+    const { svc } = harness();
+    const published: any = await svc.createJob('uA', jobDto({ publish: true }) as any);
+    const make = (status: string) => {
+      const jobs = new JobsService(
+        {
+          job: { findUnique: async () => ({ ...published, status, benefits: null, employer: {} }) },
+          application: { findUnique: async () => null },
+          savedJob: { findUnique: async () => null },
+        } as any,
+        {} as any,
+        {} as any,
+      );
+      (jobs as any).loadCandidate = async () => ({ id: CAND });
+      (jobs as any).toCard = (row: Row) => ({ id: row.id });
+      return jobs;
+    };
+    assert.equal((await make(published.status).detail(published.id)).status, 'PUBLISHED');
+    assert.equal((await make(published.status).detail(published.id, 'cU')).status, 'PUBLISHED');
+    await assert.rejects(make('PENDING_REVIEW').detail(published.id), NotFoundException);
+  });
   it('PUBLISHED is visible; an applicant can still open their PAUSED/CLOSED job but not a DRAFT', async () => {
     assert.equal((await make('PUBLISHED', false).detail('J')).status, 'PUBLISHED');
     assert.equal((await make('PAUSED', true).detail('J', 'cU')).status, 'PAUSED');
@@ -713,28 +740,52 @@ describe('Fix 8 — publish survives an ATS recompute failure', () => {
     assert.equal(db.jobs.find((j) => j.id === 'JA1')!.status, 'PUBLISHED');
     assert.equal(calls.recompute, 1);
   });
-  it('createJob(publish) goes to PENDING_REVIEW: not live, no matching or alerts until approved', async () => {
+  it('UT-E11: createJob(publish) is live immediately — PUBLISHED (Active), matching and alerts run, no admin approval', async () => {
     const { svc, calls, db } = harness({ recomputeThrows: true });
     const res: any = await svc.createJob('uA', jobDto({ publish: true }) as any);
-    assert.equal(res.status, 'PENDING_REVIEW');
-    assert.equal(res.reviewRequired, true);
-    assert.equal(res.publishedAt, null);
-    assert.equal(calls.recompute, 0);
-    assert.equal(db.jobs.find((j) => j.id === res.id)!.status, 'PENDING_REVIEW');
+    assert.equal(res.status, 'PUBLISHED');
+    assert.ok(res.publishedAt instanceof Date);
+    assert.equal(res.reviewRequired, undefined);
+    assert.equal(res.matching.status, 'FAILED');
+    assert.equal(calls.recompute, 1);
+    assert.equal(calls.alerts, 1);
+    assert.equal(db.jobs.find((j) => j.id === res.id)!.status, 'PUBLISHED');
   });
-  it('publishing a never-approved draft submits it for review; publishing again is a no-op', async () => {
+  it('API-17 / UT-E127: POST /employers/jobs/:id/publish on a never-published draft returns and persists PUBLISHED, never PENDING_REVIEW', async () => {
     const { svc, calls, db } = harness();
-    db.jobs.find((j) => j.id === 'JA1')!.status = 'DRAFT';
-    const first: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
-    assert.equal(first.status, 'PENDING_REVIEW');
-    assert.equal(first.reviewRequired, true);
-    const writes = calls.jobUpdates.length;
-    const again: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
-    assert.equal(again.status, 'PENDING_REVIEW');
-    assert.equal(calls.jobUpdates.length, writes);
-    assert.equal(calls.recompute, 0);
+    const job = db.jobs.find((j) => j.id === 'JA1')!;
+    Object.assign(job, { status: 'DRAFT', publishedAt: null });
+    const controller = new EmployersController(svc);
+    const res: any = await controller.publish({ id: 'uA' }, 'JA1');
+    assert.equal(res.status, 'PUBLISHED');
+    assert.equal(res.reviewRequired, undefined);
+    assert.equal(res.matching.status, 'COMPUTED');
+    assert.equal(job.status, 'PUBLISHED');
+    assert.ok(job.publishedAt instanceof Date);
+    assert.equal(calls.recompute, 1);
+    assert.equal(calls.alerts, 1);
+    assert.ok(!calls.jobUpdates.some((u) => u.status === 'PENDING_REVIEW'));
+    await assert.rejects(controller.publish({ id: 'uB' }, 'JA1'), NotFoundException);
   });
-  it('admin approval runs matching and notifies the employer; a failing recompute is reported, not thrown', async () => {
+  it('a job left in the legacy PENDING_REVIEW state is published by the employer without admin approval', async () => {
+    const { svc, calls, db } = harness();
+    db.settings.push({ key: 'billing.starterActiveJobLimit', value: '1' });
+    const job = db.jobs.find((j) => j.id === 'JA1')!;
+    Object.assign(job, { status: 'PENDING_REVIEW', publishedAt: null });
+    const res: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
+    assert.equal(res.status, 'PUBLISHED');
+    assert.equal(job.status, 'PUBLISHED');
+    assert.equal(calls.recompute, 1);
+  });
+  it('publish still enforces the salary rule; nothing is written', async () => {
+    const { svc, calls, db } = harness();
+    const job = db.jobs.find((j) => j.id === 'JA1')!;
+    Object.assign(job, { status: 'DRAFT', publishedAt: null, salaryMin: null, salaryMax: null });
+    await assert.rejects(svc.setStatus('uA', 'JA1', 'PUBLISHED' as any), BadRequestException);
+    assert.equal(calls.jobUpdates.length, 0);
+    assert.equal(job.status, 'DRAFT');
+  });
+  it('ST-23: admin approval of a historical PENDING_REVIEW job runs matching and notifies the employer; a failing recompute is reported, not thrown', async () => {
     const { svc, calls, db } = harness({ recomputeThrows: true });
     const job = db.jobs.find((j) => j.id === 'JA1')!;
     job.employer = db.employers.find((e) => e.id === EMP_A);
@@ -817,7 +868,7 @@ describe('Fix 9 — application transitions', () => {
     assert.equal(calls.jobUpdates.length, 0);
     db.settings.push({ key: 'billing.starterActiveJobLimit', value: '0' });
     const res: any = await svc.setStatus('uA', 'JA6', 'PUBLISHED' as any);
-    assert.equal(res.status, 'PENDING_REVIEW');
+    assert.equal(res.status, 'PUBLISHED');
   });
   it('Starter plan: candidate view credits are counted once per candidate per month and enforced', async () => {
     const { svc, db } = harness();
