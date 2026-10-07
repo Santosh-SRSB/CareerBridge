@@ -32,7 +32,6 @@ import {
   CANDIDATE_REPORT_COLUMNS,
   type CandidateReportRow,
   EMPLOYER_REPORT_COLUMNS,
-  type EmployerReportRow,
   filterSummary,
   REPORT_EXPORT_BATCH,
   REPORT_EXPORT_MAX_ROWS,
@@ -41,6 +40,22 @@ import {
   SUMMARY_COLUMNS,
   type SummaryRow,
 } from './admin-report-export';
+
+import {
+  compareEmployerJobRows,
+  daysRequirementOpen,
+  type EmployerJobReportRow,
+  istDate,
+  JOB_STATUS_LABELS,
+  jobPostedAt,
+  POSTED_JOB_WHERE,
+  type ReportInterview,
+  SHORTLIST_REACHED_APPLICATION_STATUSES,
+  summariseJobInterviews,
+} from './employer-job-report';
+
+/** Rows the Reports page table shows; the Excel export includes every row. */
+const EMPLOYER_REPORT_VIEW_LIMIT = 500;
 
 type CandidateListFilters = { location?: string; skill?: string; status?: string; from?: string; to?: string };
 
@@ -1616,7 +1631,7 @@ export class AdminService {
     const [applicants, shortlistedReached, interviewReached] = await Promise.all([
       this.prisma.application.findMany({ distinct: ['candidateId'], select: { candidateId: true } }).then((r) => r.length),
       this.prisma.application.count({
-        where: { status: { in: ['SHORTLISTED', 'ON_HOLD', 'INTERVIEW', 'SELECTED', 'HIRED'] } },
+        where: { status: { in: [...SHORTLIST_REACHED_APPLICATION_STATUSES] } },
       }),
       this.prisma.application.count({ where: { status: { in: ['INTERVIEW', 'SELECTED', 'HIRED'] } } }),
     ]);
@@ -1744,13 +1759,10 @@ export class AdminService {
     ]);
   }
 
-  /**
-   * Reports → Employer Excel: the Reports "employer" metrics plus every employer matching the
-   * Admin Employers list filters (search, account status).
-   */
-  async employerReportExport(actorId: string, query?: string, status?: string, now = new Date()) {
-    const q = query?.trim();
-    const accountStatus = status?.trim().toUpperCase();
+  /** Employer filters shared by the Employer Report and its export: search (company or email) and account status. */
+  private employerReportFilters(query?: string, status?: string) {
+    const q = query?.trim() || undefined;
+    const accountStatus = status?.trim().toUpperCase() || undefined;
     if (accountStatus && !ACCOUNT_STATUSES.includes(accountStatus)) {
       throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Unknown account status filter.' });
     }
@@ -1764,61 +1776,128 @@ export class AdminService {
       });
     }
     if (accountStatus) and.push({ user: { status: accountStatus } });
-    const where = and.length ? ({ AND: and } as never) : undefined;
+    return { q, accountStatus, employerWhere: and.length ? { AND: and } : undefined };
+  }
 
-    const rows: EmployerReportRow[] = [];
+  /**
+   * Employer Report: one row per posted job (Job is the employer's requirement), with applications,
+   * shortlisted candidates and interviews aggregated per job. Jobs are read in cursor batches and each
+   * batch adds three grouped queries, so there is no per-job query.
+   */
+  private async employerJobReportRows(employerWhere: Record<string, unknown> | undefined, now: Date) {
+    const where = (employerWhere ? { AND: [POSTED_JOB_WHERE, { employer: employerWhere }] } : POSTED_JOB_WHERE) as never;
+    const shortlistReached = new Set<string>(SHORTLIST_REACHED_APPLICATION_STATUSES);
+    const rows: EmployerJobReportRow[] = [];
     let cursor: string | undefined;
     for (;;) {
-      const batch = await this.prisma.employer.findMany({
+      const batch = await this.prisma.job.findMany({
         where,
         select: {
           id: true,
-          companyName: true,
-          verified: true,
-          verificationStatus: true,
+          employerId: true,
+          title: true,
+          status: true,
+          publishedAt: true,
           createdAt: true,
-          user: { select: { email: true, phone: true, status: true } },
-          _count: { select: { jobs: true, interviews: true } },
+          updatedAt: true,
+          employer: { select: { companyName: true } },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: REPORT_EXPORT_BATCH,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       });
-      const applicationsByEmployer = new Map<string, number>();
-      if (batch.length) {
-        const jobs = await this.prisma.job.findMany({
-          where: { employerId: { in: batch.map((e) => e.id) } },
-          select: { employerId: true, _count: { select: { applications: true } } },
-        });
-        for (const job of jobs) {
-          applicationsByEmployer.set(job.employerId, (applicationsByEmployer.get(job.employerId) ?? 0) + job._count.applications);
-        }
+      if (!batch.length) break;
+      const jobIds = batch.map((j) => j.id);
+      const [appGroups, interviews] = await Promise.all([
+        this.prisma.application.groupBy({
+          by: ['jobId', 'status'],
+          where: { jobId: { in: jobIds } },
+          _count: { _all: true },
+        }),
+        this.prisma.employerInterview.findMany({
+          where: { jobId: { in: jobIds } },
+          select: {
+            id: true,
+            jobId: true,
+            applicationId: true,
+            status: true,
+            scheduledAt: true,
+            scheduledEnd: true,
+            durationMin: true,
+            candidateRescheduleRequestedAt: true,
+            createdAt: true,
+            application: { select: { status: true } },
+          },
+        }),
+      ]);
+      const rescheduled = await this.employerRescheduledInterviewIds(interviews.map((iv) => iv.id));
+      const applied = new Map<string, number>();
+      const shortlisted = new Map<string, number>();
+      for (const g of appGroups) {
+        applied.set(g.jobId, (applied.get(g.jobId) ?? 0) + g._count._all);
+        if (shortlistReached.has(g.status)) shortlisted.set(g.jobId, (shortlisted.get(g.jobId) ?? 0) + g._count._all);
       }
-      for (const row of batch) {
+      const interviewsByJob = new Map<string, ReportInterview[]>();
+      for (const iv of interviews) {
+        const list = interviewsByJob.get(iv.jobId) ?? [];
+        list.push({ ...iv, applicationStatus: iv.application?.status ?? null });
+        interviewsByJob.set(iv.jobId, list);
+      }
+      for (const job of batch) {
+        const summary = summariseJobInterviews(interviewsByJob.get(job.id) ?? [], rescheduled, now);
         rows.push({
-          companyName: row.companyName,
-          email: row.user.email,
-          phone: row.user.phone,
-          accountStatus: row.user.status,
-          verified: row.verified,
-          verificationStatus: row.verificationStatus,
-          jobs: row._count.jobs,
-          applications: applicationsByEmployer.get(row.id) ?? 0,
-          interviews: row._count.interviews,
-          createdAt: row.createdAt,
+          jobId: job.id,
+          employerId: job.employerId,
+          employerName: job.employer.companyName,
+          jobTitle: job.title,
+          jobStatus: job.status,
+          jobStatusLabel: JOB_STATUS_LABELS[job.status] ?? job.status,
+          postedDate: istDate(jobPostedAt(job)),
+          candidatesApplied: applied.get(job.id) ?? 0,
+          candidatesShortlisted: shortlisted.get(job.id) ?? 0,
+          interviewStatus: summary.label,
+          interviewStatusCounts: summary.counts,
+          daysOpen: daysRequirementOpen(job, now),
         });
       }
       this.assertExportSize(rows.length);
       if (batch.length < REPORT_EXPORT_BATCH) break;
       cursor = batch[batch.length - 1]!.id;
     }
+    return rows.sort(compareEmployerJobRows);
+  }
+
+  /** Reports → Employer Report table. Shows the newest EMPLOYER_REPORT_VIEW_LIMIT rows; the export has all. */
+  async employerReport(query?: string, status?: string, now = new Date()) {
+    const { employerWhere } = this.employerReportFilters(query, status);
+    const rows = await this.employerJobReportRows(employerWhere, now);
+    return {
+      generatedAt: now.toISOString(),
+      total: rows.length,
+      limit: EMPLOYER_REPORT_VIEW_LIMIT,
+      rows: rows.slice(0, EMPLOYER_REPORT_VIEW_LIMIT),
+    };
+  }
+
+  /**
+   * Reports → Employer Excel: the Reports "employer" metrics plus the per-job Employer Report for every
+   * posted job of the employers matching the filters (search, account status).
+   */
+  async employerReportExport(actorId: string, query?: string, status?: string, now = new Date()) {
+    const { q, accountStatus, employerWhere } = this.employerReportFilters(query, status);
+    const rows = await this.employerJobReportRows(employerWhere, now);
+    const employersWithoutJobs = await this.prisma.employer.count({
+      where: { AND: [...(employerWhere ? [employerWhere] : []), { jobs: { none: POSTED_JOB_WHERE } }] } as never,
+    });
 
     const block = (await this.reports()).employer;
     const summary: SummaryRow[] = [
       { label: 'Report', value: 'CareerBridge Employer Report' },
       { label: 'Generated at (IST)', value: this.istTimestamp(now) },
       { label: 'Filters', value: filterSummary({ search: q, status: accountStatus }) },
-      { label: 'Employers exported', value: rows.length },
+      { label: 'Jobs exported', value: rows.length },
+      { label: 'Employers with jobs', value: new Set(rows.map((r) => r.employerId)).size },
+      { label: 'Employers with no posted jobs', value: employersWithoutJobs },
       { label: 'Jobs created', value: block.jobsCreated },
       { label: 'Jobs published', value: block.jobsPublished },
       { label: 'Applications received', value: block.applicationsReceived },
@@ -1827,7 +1906,7 @@ export class AdminService {
     ];
     return this.finishReportExport(actorId, 'employer', now, rows.length, { query: q, status: accountStatus }, [
       { name: 'Summary', columns: SUMMARY_COLUMNS, rows: summary },
-      { name: 'Employers', columns: EMPLOYER_REPORT_COLUMNS, rows },
+      { name: 'Employer Jobs', columns: EMPLOYER_REPORT_COLUMNS, rows },
     ]);
   }
 

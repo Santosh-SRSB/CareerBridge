@@ -46,6 +46,7 @@ import type {
 } from '@careerbridge/shared';
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './session';
 import { type AdminReportKind, fetchAdminReport, saveBlobFile } from './admin-report-export';
+import type { AdminEmployerReport } from './admin-employer-report';
 import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE } from './client-errors';
 import { fitAvoidList, fitExperienceBullets } from './improve-payload';
 
@@ -1857,6 +1858,10 @@ export async function downloadAdminReport(kind: AdminReportKind) {
   });
   saveBlobFile(file.blob, file.fileName);
   return file.fileName;
+}
+
+export async function getAdminEmployerReport() {
+  return request<AdminEmployerReport>('/admin/reports/employers');
 }
 
 export async function getAdminReports() {

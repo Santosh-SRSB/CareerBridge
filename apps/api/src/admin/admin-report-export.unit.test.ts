@@ -138,13 +138,11 @@ function harness(opts: { candidates?: number; employers?: number } = {}) {
       },
       count: async () => emps.length,
     },
+    // Per-job Employer Report coverage lives in employer-job-report.unit.test.ts.
     job: {
-      findMany: async ({ where }: Row) => {
+      findMany: async () => {
         calls.jobQueries += 1;
-        return where.employerId.in.flatMap((employerId: string) => [
-          { employerId, _count: { applications: 3 } },
-          { employerId, _count: { applications: 1 } },
-        ]);
+        return [];
       },
       count: async () => 10,
     },
@@ -186,18 +184,6 @@ function assertNoSecrets(text: string) {
   for (const marker of SECRET_MARKERS) assert.ok(!text.includes(marker), `workbook contains ${marker}`);
 }
 
-const EMPLOYER_HEADERS = [
-  'Company Name',
-  'Email',
-  'Phone',
-  'Account Status',
-  'Verification',
-  'Verification Status',
-  'Jobs',
-  'Applications Received',
-  'Interviews',
-  'Registered On',
-];
 const CANDIDATE_HEADERS = [
   'Candidate Name',
   'Email',
@@ -302,81 +288,9 @@ describe('report export endpoints — response', () => {
       assert.match(res.headers['access-control-expose-headers'], /Content-Disposition/);
       assert.equal(Number(res.headers['content-length']), res.body.length);
       const wb = await readWorkbook(res.body);
-      assert.deepEqual(wb.worksheets.map((w) => w.name), ['Summary', kind === 'employer' ? 'Employers' : 'Candidates']);
+      assert.deepEqual(wb.worksheets.map((w) => w.name), ['Summary', kind === 'employer' ? 'Employer Jobs' : 'Candidates']);
     });
   }
-});
-
-/* ---------- employer export ---------- */
-
-describe('AdminService.employerReportExport', () => {
-  it('columns mirror the Admin employer report; every employer is present with real values', async () => {
-    const { service, emps } = harness({ employers: 5 });
-    const file = await service.employerReportExport('admin-1', undefined, undefined, NOW);
-    assert.equal(file.fileName, 'careerbridge-employer-report-2026-10-08.xlsx');
-    assert.equal(file.rowCount, 5);
-    const rows = sheetRows(await readWorkbook(file.buffer), 'Employers');
-    assert.deepEqual(rows[0], EMPLOYER_HEADERS);
-    assert.equal(rows.length, 6);
-    const newest = emps[4]!;
-    const first = rows[1]!;
-    assert.equal(first[0], newest.companyName);
-    assert.equal(first[1], newest.user.email);
-    assert.equal(first[2], newest.user.phone);
-    assert.equal(first[3], newest.user.status);
-    assert.equal(first[4], 'Verified employer');
-    assert.equal(first[6], 2);
-    assert.equal(first[7], 4, 'applications summed across the employer jobs');
-    assert.equal(first[8], newest._count.interviews);
-    assert.ok(first[9] instanceof Date);
-  });
-
-  it('summary sheet mirrors the Reports "employer" block and records the filters', async () => {
-    const { service } = harness();
-    const file = await service.employerReportExport('admin-1', 'company 1', 'active', NOW);
-    const summary = Object.fromEntries(sheetRows(await readWorkbook(file.buffer), 'Summary').slice(1).map((r) => [r[0], r[1]]));
-    assert.equal(summary['Jobs created'], 10);
-    assert.equal(summary['Jobs published'], 6);
-    assert.equal(summary['Applications received'], 40);
-    assert.equal(summary['Interviews conducted'], 12);
-    assert.equal(summary['Hires'], 2);
-    assert.equal(summary['Filters'], 'search=company 1; status=ACTIVE');
-    assert.equal(summary['Generated at (IST)'], '2026-10-08 01:30');
-  });
-
-  it('honours the existing employer filters (search, account status)', async () => {
-    const { service, emps } = harness({ employers: 12 });
-    const file = await service.employerReportExport('admin-1', 'company 1', 'ACTIVE', NOW);
-    const names = sheetRows(await readWorkbook(file.buffer), 'Employers').slice(1).map((r) => r[0]);
-    const expected = emps
-      .filter((e) => e.companyName.toLowerCase().includes('company 1') && e.user.status === 'ACTIVE')
-      .map((e) => e.companyName)
-      .reverse();
-    assert.deepEqual(names, expected);
-    await assert.rejects(service.employerReportExport('admin-1', undefined, 'DELETED', NOW), BadRequestException);
-  });
-
-  it('exports every matching employer across batches, one job query per batch (no N+1)', async () => {
-    const total = REPORT_EXPORT_BATCH * 2 + 37;
-    const { service, calls } = harness({ employers: total });
-    const file = await service.employerReportExport('admin-1', undefined, undefined, NOW);
-    assert.equal(file.rowCount, total);
-    assert.equal(sheetRows(await readWorkbook(file.buffer), 'Employers').length, total + 1);
-    assert.equal(calls.employerQueries.length, 3);
-    assert.equal(calls.jobQueries, 3);
-    assert.ok(calls.employerQueries.every((q) => q.take === REPORT_EXPORT_BATCH && q.select && !q.include));
-  });
-
-  it('contains no passwords, hashes, tokens or keys and writes a non-PII audit entry', async () => {
-    const { service, calls } = harness();
-    const file = await service.employerReportExport('admin-1', undefined, undefined, NOW);
-    assertNoSecrets(await workbookText(file.buffer));
-    for (const q of calls.employerQueries) assert.doesNotMatch(JSON.stringify(q.select), /password|token|secret/i);
-    assert.equal(calls.audits.length, 1);
-    assert.equal(calls.audits[0].action, 'EXPORT_EMPLOYER_REPORT');
-    assert.equal(calls.audits[0].userId, 'admin-1');
-    assert.deepEqual(JSON.parse(calls.audits[0].newValue), { rows: 5, filters: 'None (all records)' });
-  });
 });
 
 /* ---------- candidate export ---------- */

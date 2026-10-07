@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import type { EmployerJobReportRow } from './employer-job-report';
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -85,30 +86,16 @@ export const CANDIDATE_REPORT_COLUMNS: ReportColumn<CandidateReportRow>[] = [
   { header: 'Registered On', width: 20, value: (r) => r.createdAt },
 ];
 
-export type EmployerReportRow = {
-  companyName: string;
-  email: string | null;
-  phone: string | null;
-  accountStatus: string;
-  verified: boolean;
-  verificationStatus: string | null;
-  jobs: number;
-  applications: number;
-  interviews: number;
-  createdAt: Date;
-};
-
-export const EMPLOYER_REPORT_COLUMNS: ReportColumn<EmployerReportRow>[] = [
-  { header: 'Company Name', width: 32, value: (r) => r.companyName },
-  { header: 'Email', width: 32, value: (r) => r.email },
-  { header: 'Phone', width: 18, value: (r) => r.phone },
-  { header: 'Account Status', width: 16, value: (r) => r.accountStatus },
-  { header: 'Verification', width: 22, value: (r) => (r.verified ? 'Verified employer' : 'Pending verification') },
-  { header: 'Verification Status', width: 20, value: (r) => r.verificationStatus },
-  { header: 'Jobs', width: 10, value: (r) => r.jobs },
-  { header: 'Applications Received', width: 22, value: (r) => r.applications },
-  { header: 'Interviews', width: 12, value: (r) => r.interviews },
-  { header: 'Registered On', width: 20, value: (r) => r.createdAt },
+/** One row per posted job; the Admin Reports Employer Report table shows the same columns. */
+export const EMPLOYER_REPORT_COLUMNS: ReportColumn<EmployerJobReportRow>[] = [
+  { header: 'Employer Name', width: 32, value: (r) => r.employerName },
+  { header: 'Job Posted Date', width: 16, value: (r) => r.postedDate },
+  { header: 'Job Name', width: 36, value: (r) => r.jobTitle },
+  { header: 'Candidates Applied', width: 18, value: (r) => r.candidatesApplied },
+  { header: 'Candidates Shortlisted', width: 22, value: (r) => r.candidatesShortlisted },
+  { header: 'Interview Status', width: 44, value: (r) => r.interviewStatus },
+  { header: 'Days Requirement Open', width: 22, value: (r) => r.daysOpen },
+  { header: 'Job Status', width: 16, value: (r) => r.jobStatusLabel },
 ];
 
 export function filterSummary(filters: Record<string, string | undefined>): string {

@@ -33,6 +33,7 @@ import { SuperAdminShell } from '@/components/super-admin/SuperAdminShell';
 import { PlatformCatalogSettings } from '@/components/super-admin/PlatformCatalogSettings';
 import { AdminChangePasswordForm } from '@/components/super-admin/AdminChangePasswordForm';
 import { ReportExportPanel } from '@/components/super-admin/ReportExportPanel';
+import { EmployerJobReportPanel } from '@/components/super-admin/EmployerJobReportPanel';
 import {
   ActionBtn,
   DetailPanel,
@@ -974,6 +975,7 @@ export default function SuperAdminDashboardInner() {
               <>
               <FunnelConversionPanel funnel={reportFunnel} />
               <RevenuePanel />
+              <EmployerJobReportPanel />
               <div className="grid gap-4 md:grid-cols-2">
                 {reportBlocks.map((block, idx) => {
                   const accents = ['#1f9d68', '#0aa3c2', '#d97706', '#da542e', '#852b99'];

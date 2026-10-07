@@ -312,6 +312,12 @@ export class AdminController {
     return this.admin.reports();
   }
 
+  @Get('reports/employers')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  employerReport(@Query('query') query?: string, @Query('status') status?: string) {
+    return this.admin.employerReport(query, status);
+  }
+
   @Get('reports/employers/export')
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
