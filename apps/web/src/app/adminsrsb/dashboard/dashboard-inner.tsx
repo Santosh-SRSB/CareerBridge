@@ -32,6 +32,7 @@ import {
 import { SuperAdminShell } from '@/components/super-admin/SuperAdminShell';
 import { PlatformCatalogSettings } from '@/components/super-admin/PlatformCatalogSettings';
 import { AdminChangePasswordForm } from '@/components/super-admin/AdminChangePasswordForm';
+import { ReportExportPanel } from '@/components/super-admin/ReportExportPanel';
 import {
   ActionBtn,
   DetailPanel,
@@ -966,6 +967,7 @@ export default function SuperAdminDashboardInner() {
 
         {tab === 'reports' && (
           <div className="space-y-4">
+            <ReportExportPanel />
             {listLoading && !reports ? (
               <p className="text-sm text-[#888]">Loading reports…</p>
             ) : (

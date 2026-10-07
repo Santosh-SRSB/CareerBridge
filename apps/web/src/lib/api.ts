@@ -45,6 +45,7 @@ import type {
   VerifyOtpResult,
 } from '@careerbridge/shared';
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './session';
+import { type AdminReportKind, fetchAdminReport, saveBlobFile } from './admin-report-export';
 import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE } from './client-errors';
 import { fitAvoidList, fitExperienceBullets } from './improve-payload';
 
@@ -1845,6 +1846,18 @@ export type AdminFunnelStage = {
   conversionRate: number | null;
   basis: string | null;
 };
+
+/** Downloads the Excel report and returns the saved file name. */
+export async function downloadAdminReport(kind: AdminReportKind) {
+  const file = await fetchAdminReport(kind, {
+    fetch: (url, init) => fetch(url, init),
+    baseUrl: API_URL,
+    token: getAccessToken(),
+    refreshToken: async () => ((await refreshSession()) ? getAccessToken() : null),
+  });
+  saveBlobFile(file.blob, file.fileName);
+  return file.fileName;
+}
 
 export async function getAdminReports() {
   return request<Record<string, unknown>>('/admin/reports');

@@ -6,8 +6,10 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
 import { Throttle } from '@nestjs/throttler';
@@ -16,6 +18,17 @@ import { AdminService } from './admin.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { contentDisposition, type ReportFile, XLSX_MIME } from './admin-report-export';
+
+/** Writes the workbook directly: the global interceptor would otherwise wrap it in the JSON envelope. */
+function sendXlsx(res: Response, file: ReportFile) {
+  res.setHeader('Content-Type', XLSX_MIME);
+  res.setHeader('Content-Disposition', contentDisposition(file.fileName));
+  res.setHeader('Content-Length', String(file.buffer.length));
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Request-ID');
+  res.status(200).end(file.buffer);
+}
 
 class CreateSkillDto {
   @IsString()
@@ -297,6 +310,34 @@ export class AdminController {
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
   reports() {
     return this.admin.reports();
+  }
+
+  @Get('reports/employers/export')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async exportEmployerReport(
+    @CurrentUser() user: { id: string },
+    @Res() res: Response,
+    @Query('query') query?: string,
+    @Query('status') status?: string,
+  ) {
+    sendXlsx(res, await this.admin.employerReportExport(user.id, query, status));
+  }
+
+  @Get('reports/candidates/export')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async exportCandidateReport(
+    @CurrentUser() user: { id: string },
+    @Res() res: Response,
+    @Query('query') query?: string,
+    @Query('location') location?: string,
+    @Query('skill') skill?: string,
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    sendXlsx(res, await this.admin.candidateReportExport(user.id, query, { location, skill, status, from, to }));
   }
 
   @Get('revenue')

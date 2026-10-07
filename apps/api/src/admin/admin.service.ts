@@ -27,6 +27,24 @@ import {
   isAdminInterviewStatus,
   isRawEmployerInterviewStatus,
 } from './admin-interview-status';
+import {
+  buildWorkbook,
+  CANDIDATE_REPORT_COLUMNS,
+  type CandidateReportRow,
+  EMPLOYER_REPORT_COLUMNS,
+  type EmployerReportRow,
+  filterSummary,
+  REPORT_EXPORT_BATCH,
+  REPORT_EXPORT_MAX_ROWS,
+  type ReportFile,
+  reportFileName,
+  SUMMARY_COLUMNS,
+  type SummaryRow,
+} from './admin-report-export';
+
+type CandidateListFilters = { location?: string; skill?: string; status?: string; from?: string; to?: string };
+
+const ACCOUNT_STATUSES = ['ACTIVE', 'INACTIVE', 'SUSPENDED'];
 
 const DEFAULT_SETTINGS: Record<string, string> = {
   // Workflow: Settings → Platform / Resume / ATS / AI / Notifications / System
@@ -423,15 +441,40 @@ export class AdminService {
     };
   }
 
-  async candidates(
-    query?: string,
-    filters: { location?: string; skill?: string; status?: string; from?: string; to?: string } = {},
-  ) {
+  async candidates(query?: string, filters: CandidateListFilters = {}) {
+    const rows = await this.prisma.candidate.findMany({
+      where: this.candidateListWhere(query, filters),
+      include: {
+        user: { select: { phone: true, email: true, status: true, createdAt: true } },
+        skills: { take: 5 },
+        _count: { select: { applications: true, resumes: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      name: [row.firstName, row.lastName].filter(Boolean).join(' ') || '—',
+      location: [row.city, row.state].filter(Boolean).join(', ') || '—',
+      profileCompletion: row.profileCompletion ?? 0,
+      primarySkills: row.skills.map((s) => s.name),
+      resumeCount: row._count.resumes,
+      applications: row._count.applications,
+      accountStatus: row.user.status,
+      email: row.user.email,
+      phone: row.user.phone,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  private candidateListWhere(query?: string, filters: CandidateListFilters = {}) {
     const q = query?.trim();
     const location = filters.location?.trim();
     const skill = filters.skill?.trim();
     const status = filters.status?.trim().toUpperCase();
-    if (status && !['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(status)) {
+    if (status && !ACCOUNT_STATUSES.includes(status)) {
       throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Unknown account status filter.' });
     }
     const from = parseDateFilter(filters.from, 'start');
@@ -465,31 +508,7 @@ export class AdminService {
     if (skill) and.push({ skills: { some: { name: { contains: skill, mode: 'insensitive' } } } });
     if (status) and.push({ user: { status } });
     if (from || to) and.push({ createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } });
-    const rows = await this.prisma.candidate.findMany({
-      where: and.length ? ({ AND: and } as never) : undefined,
-      include: {
-        user: { select: { phone: true, email: true, status: true, createdAt: true } },
-        skills: { take: 5 },
-        _count: { select: { applications: true, resumes: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-
-    return rows.map((row) => ({
-      id: row.id,
-      userId: row.userId,
-      name: [row.firstName, row.lastName].filter(Boolean).join(' ') || '—',
-      location: [row.city, row.state].filter(Boolean).join(', ') || '—',
-      profileCompletion: row.profileCompletion ?? 0,
-      primarySkills: row.skills.map((s) => s.name),
-      resumeCount: row._count.resumes,
-      applications: row._count.applications,
-      accountStatus: row.user.status,
-      email: row.user.email,
-      phone: row.user.phone,
-      createdAt: row.createdAt.toISOString(),
-    }));
+    return and.length ? ({ AND: and } as never) : undefined;
   }
 
   async candidateDetails(id: string) {
@@ -1661,6 +1680,186 @@ export class AdminService {
         byUser: u.byUser,
       })),
     };
+  }
+
+  /**
+   * Reports → Candidate Excel: the Reports "candidate" metrics plus every candidate matching the
+   * Admin Candidates list filters (all rows, not one page).
+   */
+  async candidateReportExport(actorId: string, query?: string, filters: CandidateListFilters = {}, now = new Date()) {
+    const where = this.candidateListWhere(query, filters);
+    const rows: CandidateReportRow[] = [];
+    let cursor: string | undefined;
+    for (;;) {
+      const batch = await this.prisma.candidate.findMany({
+        where,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          city: true,
+          state: true,
+          profileCompletion: true,
+          createdAt: true,
+          user: { select: { email: true, phone: true, status: true } },
+          skills: { select: { name: true }, take: 5 },
+          _count: { select: { applications: true, resumes: true } },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: REPORT_EXPORT_BATCH,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+      for (const row of batch) {
+        rows.push({
+          name: [row.firstName, row.lastName].filter(Boolean).join(' ') || '—',
+          email: row.user.email,
+          phone: row.user.phone,
+          location: [row.city, row.state].filter(Boolean).join(', ') || '—',
+          profileCompletion: row.profileCompletion ?? 0,
+          primarySkills: row.skills.map((s) => s.name),
+          applications: row._count.applications,
+          resumeCount: row._count.resumes,
+          accountStatus: row.user.status,
+          createdAt: row.createdAt,
+        });
+      }
+      this.assertExportSize(rows.length);
+      if (batch.length < REPORT_EXPORT_BATCH) break;
+      cursor = batch[batch.length - 1]!.id;
+    }
+
+    const block = (await this.reports()).candidate;
+    const summary: SummaryRow[] = [
+      { label: 'Report', value: 'CareerBridge Candidate Report' },
+      { label: 'Generated at (IST)', value: this.istTimestamp(now) },
+      { label: 'Filters', value: filterSummary({ search: query, ...filters }) },
+      { label: 'Candidates exported', value: rows.length },
+      { label: 'Profiles completed', value: block.profilesCompleted },
+      { label: 'Resumes created', value: block.resumesCreated },
+      { label: 'Average ATS score', value: block.avgAtsScore },
+    ];
+    return this.finishReportExport(actorId, 'candidate', now, rows.length, { query, ...filters }, [
+      { name: 'Summary', columns: SUMMARY_COLUMNS, rows: summary },
+      { name: 'Candidates', columns: CANDIDATE_REPORT_COLUMNS, rows },
+    ]);
+  }
+
+  /**
+   * Reports → Employer Excel: the Reports "employer" metrics plus every employer matching the
+   * Admin Employers list filters (search, account status).
+   */
+  async employerReportExport(actorId: string, query?: string, status?: string, now = new Date()) {
+    const q = query?.trim();
+    const accountStatus = status?.trim().toUpperCase();
+    if (accountStatus && !ACCOUNT_STATUSES.includes(accountStatus)) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Unknown account status filter.' });
+    }
+    const and: Record<string, unknown>[] = [];
+    if (q) {
+      and.push({
+        OR: [
+          { companyName: { contains: q, mode: 'insensitive' } },
+          { user: { email: { contains: q, mode: 'insensitive' } } },
+        ],
+      });
+    }
+    if (accountStatus) and.push({ user: { status: accountStatus } });
+    const where = and.length ? ({ AND: and } as never) : undefined;
+
+    const rows: EmployerReportRow[] = [];
+    let cursor: string | undefined;
+    for (;;) {
+      const batch = await this.prisma.employer.findMany({
+        where,
+        select: {
+          id: true,
+          companyName: true,
+          verified: true,
+          verificationStatus: true,
+          createdAt: true,
+          user: { select: { email: true, phone: true, status: true } },
+          _count: { select: { jobs: true, interviews: true } },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: REPORT_EXPORT_BATCH,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+      const applicationsByEmployer = new Map<string, number>();
+      if (batch.length) {
+        const jobs = await this.prisma.job.findMany({
+          where: { employerId: { in: batch.map((e) => e.id) } },
+          select: { employerId: true, _count: { select: { applications: true } } },
+        });
+        for (const job of jobs) {
+          applicationsByEmployer.set(job.employerId, (applicationsByEmployer.get(job.employerId) ?? 0) + job._count.applications);
+        }
+      }
+      for (const row of batch) {
+        rows.push({
+          companyName: row.companyName,
+          email: row.user.email,
+          phone: row.user.phone,
+          accountStatus: row.user.status,
+          verified: row.verified,
+          verificationStatus: row.verificationStatus,
+          jobs: row._count.jobs,
+          applications: applicationsByEmployer.get(row.id) ?? 0,
+          interviews: row._count.interviews,
+          createdAt: row.createdAt,
+        });
+      }
+      this.assertExportSize(rows.length);
+      if (batch.length < REPORT_EXPORT_BATCH) break;
+      cursor = batch[batch.length - 1]!.id;
+    }
+
+    const block = (await this.reports()).employer;
+    const summary: SummaryRow[] = [
+      { label: 'Report', value: 'CareerBridge Employer Report' },
+      { label: 'Generated at (IST)', value: this.istTimestamp(now) },
+      { label: 'Filters', value: filterSummary({ search: q, status: accountStatus }) },
+      { label: 'Employers exported', value: rows.length },
+      { label: 'Jobs created', value: block.jobsCreated },
+      { label: 'Jobs published', value: block.jobsPublished },
+      { label: 'Applications received', value: block.applicationsReceived },
+      { label: 'Interviews conducted', value: block.interviewsConducted },
+      { label: 'Hires', value: block.hires },
+    ];
+    return this.finishReportExport(actorId, 'employer', now, rows.length, { query: q, status: accountStatus }, [
+      { name: 'Summary', columns: SUMMARY_COLUMNS, rows: summary },
+      { name: 'Employers', columns: EMPLOYER_REPORT_COLUMNS, rows },
+    ]);
+  }
+
+  private assertExportSize(count: number) {
+    if (count > REPORT_EXPORT_MAX_ROWS) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: `This report has more than ${REPORT_EXPORT_MAX_ROWS} rows. Narrow the filters and try again.`,
+      });
+    }
+  }
+
+  private istTimestamp(now: Date) {
+    return new Date(now.getTime() + IST_OFFSET_MS).toISOString().slice(0, 16).replace('T', ' ');
+  }
+
+  private async finishReportExport(
+    actorId: string,
+    kind: 'candidate' | 'employer',
+    now: Date,
+    rowCount: number,
+    filters: Record<string, string | undefined>,
+    sheets: Parameters<typeof buildWorkbook>[0],
+  ): Promise<ReportFile> {
+    const buffer = await buildWorkbook(sheets, now);
+    await this.writeAudit({
+      userId: actorId,
+      action: kind === 'candidate' ? 'EXPORT_CANDIDATE_REPORT' : 'EXPORT_EMPLOYER_REPORT',
+      resourceType: 'REPORT',
+      newValue: { rows: rowCount, filters: filterSummary(filters) },
+    });
+    return { fileName: reportFileName(kind, now), buffer, rowCount };
   }
 
   /**
