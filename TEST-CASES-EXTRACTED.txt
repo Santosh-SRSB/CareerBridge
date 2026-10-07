@@ -1,0 +1,6192 @@
+﻿
+Product Engineering Handbook
+Volume 3 â€” UI & Design System
+Unit & System Test Case Document
+
+1. Candidate Portal â€” Unit Test Cases
+The following test cases cover all major modules of the Candidate Portal, including registration, OTP verification, onboarding, dashboard, profile management, skills, resume builder, AI guidance, job search, applications, interviews, and mock interviews.
+
+Test ID
+Module
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C01
+Registration
+Validate name is mandatory
+Empty name field
+Error: "Name is required"
+P0
+UT-C02
+Registration
+Validate mobile is mandatory
+Empty mobile field
+Error: "Mobile number is required"
+P0
+UT-C03
+Registration
+Validate mobile format
+Invalid mobile (e.g., "12345")
+Error: "Please enter a valid mobile number"
+P0
+UT-C04
+Registration
+Validate email format
+Invalid email (e.g., "abc@")
+Error: "Please enter a valid email"
+P1
+UT-C05
+Registration
+Validate terms acceptance required
+Terms checkbox unchecked
+Error: "You must accept Terms and Privacy Policy"
+P0
+UT-C06
+Registration
+Successful registration
+Valid name, mobile, email, terms accepted
+POST /auth/register called; account created
+P0
+UT-C07
+OTP Verification
+Verify valid OTP
+Correct 6-digit OTP
+POST /auth/verify succeeds; user authenticated
+P0
+UT-C08
+OTP Verification
+Reject invalid OTP
+Incorrect OTP
+Error: "Verification rejected"
+P0
+UT-C09
+OTP Verification
+Resend OTP
+Click "Resend OTP" after timer expires
+POST /auth/resend-otp called; new OTP sent
+P1
+UT-C10
+OTP Verification
+Timer countdown display
+OTP screen loaded
+Countdown timer visible (e.g., 00:42)
+P1
+UT-C11
+Onboarding
+Progressive step navigation
+Complete Step 1 of 4
+Step 2 loads; progress bar updates to 50%
+P1
+UT-C12
+Onboarding
+Skip onboarding step
+Click "Skip for now"
+Next step or dashboard loads
+P1
+UT-C13
+Dashboard
+Display profile completion %
+Profile 80% complete
+Progress bar shows "80%"
+P0
+UT-C14
+Dashboard
+Display recommended jobs
+GET /candidate/dashboard returns jobs
+Job cards rendered with title, company, salary, match %
+P0
+UT-C15
+Dashboard
+Display upcoming interview
+Interview scheduled
+Interview card shows job title, date, time
+P1
+UT-C16
+Profile
+Load profile data
+GET /candidate/profile
+All sections (Personal, Education, Experience, Skills, Preferences) displayed
+P0
+UT-C17
+Profile
+Save profile changes
+Edit and save profile
+PUT /candidate/profile called; success toast shown
+P0
+UT-C18
+Skills
+Search for a skill
+Type "Communication"
+Matching skills displayed in suggestions
+P0
+UT-C19
+Skills
+Add a skill
+Click [+] on suggested skill
+Skill added to "My Skills" list
+P0
+UT-C20
+Skills
+Remove a skill
+Click [x] on selected skill
+Skill removed from "My Skills" list
+P0
+UT-C21
+Skills
+Save skills
+Click "Save"
+PUT /candidate/skills called; skills persisted
+P0
+UT-C22
+Resume Builder
+Wizard step navigation
+Complete Personal > Education > Experience > Skills > Languages > Preferences > Review
+Each step loads correctly; progress tracked
+P0
+UT-C23
+Resume Builder
+Create resume
+Fill all sections and save
+POST /resume called; resume created
+P0
+UT-C24
+Resume Builder
+Edit resume
+Modify existing resume
+PUT /resume/:id called; changes saved
+P0
+UT-C25
+Resume Preview
+Render resume preview
+GET /resume/:id
+Resume displayed with all sections (Summary, Skills, Experience, Education)
+P0
+UT-C26
+Resume Preview
+Download resume
+Click "Download"
+Resume file downloaded
+P1
+UT-C27
+AI Resume Guidance
+Generate AI suggestions
+Click "Improve with AI"
+POST /ai/resume/analyze called; suggestions displayed
+P1
+UT-C28
+AI Resume Guidance
+Accept AI suggestion
+Click "Accept" on suggestion
+Original text replaced with AI suggestion
+P1
+UT-C29
+AI Resume Guidance
+Reject AI suggestion
+Click "Ignore" on suggestion
+Original text preserved
+P1
+UT-C30
+AI Resume Guidance
+Regenerate suggestion
+Click "Try Again"
+New AI suggestion generated
+P1
+UT-C31
+AI Resume Guidance
+Never auto-overwrite candidate data
+AI suggestion generated
+Original information preserved until explicit accept
+P0
+UT-C32
+Job Search
+Search by keyword
+Enter "Customer Service"
+GET /jobs called; relevant jobs displayed
+P0
+UT-C33
+Job Search
+Filter by location
+Select "Chennai"
+Jobs filtered to Chennai only
+P0
+UT-C34
+Job Search
+Filter by salary/experience/type/skills
+Apply multiple filters
+Results filtered correctly
+P1
+UT-C35
+Job Search
+Display result count
+Search executed
+"124 jobs found" displayed
+P1
+UT-C36
+Job Details
+Display job information
+GET /jobs/:id
+Title, company, salary, type, description, requirements, match % shown
+P0
+UT-C37
+Job Details
+Display match percentage
+Candidate views job
+"Your match: 86%" displayed
+P1
+UT-C38
+Apply
+Submit application
+Click "Apply Now"
+POST /applications called; confirmation screen shown
+P0
+UT-C39
+Application Confirmation
+Display confirmation
+Application submitted
+"Application Submitted" with job title and navigation options
+P0
+UT-C40
+Applications
+List all applications
+GET /applications
+Applications listed with job title, company, date, status pipeline
+P0
+UT-C41
+Applications
+Display status pipeline
+Application in "Shortlisted" state
+Pipeline shows: Applied > Shortlisted > Interview
+P0
+UT-C42
+Interview Dashboard
+Display upcoming interviews
+GET /interviews
+Interview cards with job title, date, time, status
+P0
+UT-C43
+Interview
+Confirm interview
+Click "Confirm"
+POST /interviews/:id/confirm called; status = Confirmed
+P0
+UT-C44
+Interview
+Request reschedule
+Click "Request Reschedule"
+POST /interviews/:id/reschedule called; request recorded
+P1
+UT-C45
+Mock Interview
+Select job role and start
+Choose role, question count, click "Start"
+POST /ai/interview/start called; first question displayed
+P1
+UT-C46
+Mock Interview
+Submit text answer
+Type answer and click "Submit"
+POST /ai/interview/:id/answer called; next question loads
+P1
+UT-C47
+Mock Interview
+Display results
+All questions answered
+Scores (Communication, Relevance, Clarity, Confidence) and feedback displayed
+P1
+UT-C48
+Navigation
+Bottom navigation renders 5 items
+Mobile view
+Home, Jobs, Applications, Interviews, Profile visible
+P0
+
+2. Employer Portal â€” Unit Test Cases
+These test cases cover the Employer Portal modules including registration, company profile setup, dashboard KPIs, multi-step job creation, publishing, candidate search and matching, shortlisting, interview scheduling and outcomes, and billing.
+
+Test ID
+Module
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E01
+Registration
+Validate all mandatory fields
+Empty form submission
+Errors for Name, Company, Email, Mobile, Password, Terms
+P0
+UT-E02
+Registration
+Successful registration
+Valid data + terms accepted
+POST /employer/register called; account created
+P0
+UT-E03
+Verification
+Verify OTP
+Correct OTP entered
+Account verified
+P0
+UT-E04
+Company Profile
+Save company profile
+Fill all fields (logo, name, industry, size, location, about, website)
+GET/PUT /employer/profile; profile saved
+P0
+UT-E05
+Dashboard
+Display summary metrics
+GET /employer/dashboard
+Active Jobs, Applications, Shortlisted, Interviews counts shown
+P0
+UT-E06
+Dashboard
+Display recent applications
+Dashboard loaded
+Table with Candidate, Job, Status columns
+P0
+UT-E07
+Create Job - Step 1
+Job basics form
+Enter title, department, type, location
+Fields validated; "Continue" navigates to Step 2
+P0
+UT-E08
+Create Job - Step 2
+Job requirements form
+Add experience, skills, education, languages
+Skills selector works; "Continue" navigates to Step 3
+P0
+UT-E09
+Create Job - Step 3
+Compensation & description
+Enter salary range, description, benefits
+Fields saved; "Continue" navigates to preview
+P0
+UT-E10
+Job Preview
+Preview before publish
+All steps completed
+Full job preview rendered; "Edit" and "Publish Job" buttons available
+P0
+UT-E11
+Publish Job
+Publish job
+Click "Publish Job"
+POST /jobs/:id/publish called; job status = Active
+P0
+UT-E12
+Job Management
+List all jobs
+GET /employer/jobs
+Jobs listed with title, status, application count
+P0
+UT-E13
+Job Management
+Pause/Close job
+Click "Pause" or "Close"
+Job status updated accordingly
+P1
+UT-E14
+Applications
+View applications for a job
+GET /jobs/:id/applications
+Candidates listed with name, experience, match %, status
+P0
+UT-E15
+Applications
+Filter applications
+Apply Experience/Location/Skills filters
+Results filtered correctly
+P1
+UT-E16
+Candidate Search
+Search candidates
+Enter keywords + filters
+GET /candidates/search; results displayed with match %
+P0
+UT-E17
+Candidate Search
+Display search results
+Search executed
+Candidate cards with name, location, experience, skills, match %, actions
+P0
+UT-E18
+Candidate Profile
+View candidate profile
+GET /candidates/:id
+Name, location, match %, skills, experience, education, resume link shown
+P0
+UT-E19
+Candidate Matching
+Deterministic match score
+Job requirements vs candidate profile
+Score: Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%
+P1
+UT-E20
+Shortlisting
+Shortlist candidate
+Click "Shortlist" + optional note
+POST /applications/:id/shortlist called; confirmation modal shown
+P0
+UT-E21
+Interview Scheduling
+Schedule interview
+Fill date, time, duration, type, location, notification preferences
+POST /interviews called; interview created
+P0
+UT-E22
+Interview Scheduling
+WhatsApp notification checkbox
+Check "Notify candidate on WhatsApp"
+WhatsApp notification triggered via event system
+P0
+UT-E23
+Interview Management
+List interviews
+GET /interviews
+Table with Candidate, Job, Date, Status; actions: View, Reschedule, Cancel
+P0
+UT-E24
+Interview Details
+View interview details
+Select interview
+Full details with status, reschedule/cancel options, notes field
+P0
+UT-E25
+Interview Outcome
+Record outcome
+Select Selected/Rejected/Further Interview/On Hold + notes
+POST /interviews/:id/outcome called; recruitment loop closed
+P0
+UT-E26
+Billing
+Display credits remaining
+GET /employer/billing
+Plan name, credits remaining (progress bar), usage stats shown
+P1
+
+3. Admin Portal â€” Unit Test Cases
+These test cases cover Admin Portal functionality: platform dashboard metrics, candidate and employer management, job moderation, application and interview monitoring, skills taxonomy management, AI usage tracking, WhatsApp monitoring, business reporting, revenue dashboards, and role-based access control (RBAC).
+
+Test ID
+Module
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-A01
+Dashboard
+Display platform metrics
+GET /admin/dashboard
+Candidates, Employers, Active Jobs, Applications, Interviews, Hires, AI Usage counts shown
+P0
+UT-A02
+Dashboard
+Display recent activity feed
+Dashboard loaded
+Timestamped activity entries (registrations, job posts, interviews, shortlists)
+P0
+UT-A03
+Dashboard
+Display system health status
+Dashboard loaded
+API, Database, AI Gateway, WhatsApp, Storage statuses shown (Healthy/Unhealthy)
+P0
+UT-A04
+Candidate Mgmt
+Search candidates
+Search by Name/Mobile/Email/ID
+GET /admin/candidates; matching results displayed
+P0
+UT-A05
+Candidate Mgmt
+Filter candidates
+Apply Location/Status/Skills/Date filters
+Results filtered correctly
+P1
+UT-A06
+Candidate Mgmt
+View candidate details
+GET /admin/candidates/:id
+Full profile with ID, status, profile, skills, resume, applications, interviews
+P0
+UT-A07
+Candidate Mgmt
+Suspend candidate
+Click "Suspend Account"
+PUT /admin/candidates/:id/status; status = Suspended; audit event logged
+P0
+UT-A08
+Candidate Mgmt
+Activate candidate
+Click "Activate"
+PUT /admin/candidates/:id/status; status = Active; audit event logged
+P0
+UT-A09
+Employer Mgmt
+Search employers
+Search by Company/Email/ID
+GET /admin/employers; matching results displayed
+P0
+UT-A10
+Employer Mgmt
+View employer details
+GET /admin/employers/:id
+Company info, jobs, applications, interviews, hires, plan, credits shown
+P0
+UT-A11
+Employer Mgmt
+Suspend employer
+Click "Suspend"
+PUT /admin/employers/:id/status; audit event ADMIN_EMPLOYER_SUSPENDED
+P0
+UT-A12
+Employer Mgmt
+Verify employer
+Click "Verify"
+Status = Verified; audit event ADMIN_EMPLOYER_VERIFIED
+P0
+UT-A13
+Job Moderation
+List jobs with status filter
+GET /admin/jobs
+Jobs listed with title, company, status; actions: View, Approve, Reject, Pause
+P0
+UT-A14
+Job Moderation
+Approve job
+Click "Approve"
+POST /admin/jobs/:id/approve; status = Published; audit event ADMIN_JOB_APPROVED
+P0
+UT-A15
+Job Moderation
+Reject job
+Click "Reject"
+POST /admin/jobs/:id/reject; status = Rejected; audit event ADMIN_JOB_REJECTED
+P0
+UT-A16
+Application Monitoring
+View application pipeline
+GET /admin/applications
+Applied, Shortlisted, Interview, Selected, Rejected counts displayed
+P0
+UT-A17
+Interview Monitoring
+View today's interviews
+GET /admin/interviews
+Table with Candidate, Employer, Time, Status
+P0
+UT-A18
+Skills Mgmt
+Add new skill
+Fill name, category, description, synonyms, proficiency levels
+POST /admin/skills; skill created; audit event ADMIN_SKILL_CREATED
+P0
+UT-A19
+Skills Mgmt
+Edit skill
+Modify skill details
+PUT /admin/skills/:id; audit event ADMIN_SKILL_MODIFIED
+P1
+UT-A20
+Skills Mgmt
+Deactivate skill
+Click "Deactivate"
+POST /admin/skills/:id/deactivate; skill deactivated
+P1
+UT-A21
+Skills Mgmt
+Merge duplicate skills
+Click "Merge"
+Skills consolidated; candidates updated
+P2
+UT-A22
+AI Usage
+Display AI usage metrics
+GET /admin/ai/usage
+Requests, Input/Output Tokens, Estimated Cost, Feature breakdown shown
+P1
+UT-A23
+WhatsApp Monitoring
+Display delivery metrics
+GET /admin/notifications
+Messages Sent, Delivered, Failed, Delivery Rate, Recent Failures shown
+P1
+UT-A24
+Business Dashboard
+Display recruitment funnel
+Reports loaded
+Candidates > Applications > Shortlisted > Interviews > Hires with counts
+P1
+UT-A25
+Revenue Dashboard
+Display employer revenue
+Revenue page loaded
+Revenue, Paying Employers, New Employers, Credits Consumed shown
+P2
+UT-A26
+RBAC
+SUPER_ADMIN access
+Login as SUPER_ADMIN
+All admin features accessible
+P0
+UT-A27
+RBAC
+ADMIN access
+Login as ADMIN
+Candidates, Employers, Jobs, Skills, Reports accessible; Settings restricted
+P0
+UT-A28
+RBAC
+OPERATIONS access
+Login as OPERATIONS
+Candidates, Employers, Applications, Interviews accessible; Skills/Reports restricted
+P0
+
+4. Design System & Component Library â€” Unit Test Cases
+These test cases validate all reusable UI components including buttons, form inputs, selects, skill selectors, match and status badges, cards, tables, modals, toasts, empty states, loading states, error boundaries, navigation, responsive layouts, and accessibility compliance.
+
+Test ID
+Component
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-DS01
+Button
+Primary button renders
+type="primary"
+Styled as primary action button
+P0
+UT-DS02
+Button
+All states render correctly
+Normal, Hover, Focus, Pressed, Disabled, Loading
+Each state visually distinct and accessible
+P0
+UT-DS03
+Button
+Loading state shows spinner
+isLoading=true
+Button text changes (e.g., "Creating...") with spinner; click disabled
+P0
+UT-DS04
+Button
+Danger variant renders
+type="danger"
+Styled as danger/destructive action
+P0
+UT-DS05
+Input
+Required field validation
+Empty required field on submit
+Error message "Please enter a valid [field]" displayed
+P0
+UT-DS06
+Input
+Helper text displays
+helperText provided
+Helper text visible below input
+P1
+UT-DS07
+Input
+Error state renders
+Validation fails
+Red border + error message displayed
+P0
+UT-DS08
+Select
+Dropdown opens and selects
+Click select > choose option
+Selected value displayed; dropdown closes
+P0
+UT-DS09
+Select
+Searchable select works
+Type in search field
+Options filtered by search term
+P1
+UT-DS10
+Skill Selector
+Search skills
+Type "Comm"
+Matching skills shown in suggestions
+P0
+UT-DS11
+Skill Selector
+Add/remove skills
+Click [+] / [x]
+Skill added to / removed from selected list
+P0
+UT-DS12
+Match Badge
+Excellent match (90-100%)
+score=91
+Green "Excellent" badge displayed
+P1
+UT-DS13
+Match Badge
+Good match (75-89%)
+score=82
+"Good" badge displayed
+P1
+UT-DS14
+Match Badge
+Moderate match (50-74%)
+score=60
+"Moderate" badge displayed
+P1
+UT-DS15
+Match Badge
+Low match (<50%)
+score=40
+"Low" badge displayed
+P1
+UT-DS16
+Match Badge
+Label says "Profile match"
+Any score
+Label reads "Profile match" (not "Candidate suitability")
+P0
+UT-DS17
+Status Badge
+All statuses render
+ACTIVE, INACTIVE, PENDING, APPROVED, REJECTED, SHORTLISTED, INTERVIEW, SELECTED, CLOSED, SUSPENDED
+Each badge renders with correct styling
+P0
+UT-DS18
+Card
+Candidate card renders
+Candidate data provided
+Name, location, experience, skills, match %, actions displayed
+P0
+UT-DS19
+Card
+Job card renders
+Job data provided
+Title, company, location, salary, type displayed
+P0
+UT-DS20
+Table
+Sorting works
+Click column header
+Rows sorted ascending/descending
+P1
+UT-DS21
+Table
+Pagination works
+>10 rows
+Pagination controls visible and functional
+P1
+UT-DS22
+Table
+Empty state renders
+No data
+"No [items] found" message with CTA button
+P0
+UT-DS23
+Table
+Loading state renders
+Data loading
+Skeleton/spinner displayed
+P0
+UT-DS24
+Modal
+Confirmation modal renders
+Trigger destructive action
+Modal with message, Cancel, and Confirm buttons
+P0
+UT-DS25
+Modal
+Cancel dismisses modal
+Click "Cancel"
+Modal closes; no action taken
+P0
+UT-DS26
+Toast
+Success toast displays
+Action succeeds
+Green toast: "Profile saved successfully" (auto-dismiss)
+P1
+UT-DS27
+Toast
+Error toast displays
+Action fails
+Red toast: "Unable to [action]. Please try again."
+P1
+UT-DS28
+Empty State
+Candidate no applications
+Zero applications
+"You haven't applied for any jobs yet." + [Find Jobs] button
+P0
+UT-DS29
+Empty State
+Employer no jobs
+Zero jobs
+"Create your first job to start receiving applications." + [Create Job] button
+P0
+UT-DS30
+Loading State
+Skeleton loading renders
+API in progress
+Skeleton placeholder blocks visible
+P0
+UT-DS31
+Error State
+Generic error renders
+API failure
+"Something went wrong. We couldn't load the information." + [Try Again]
+P0
+UT-DS32
+Error State
+No technical errors exposed
+500/ECONNRESET/timeout
+User sees friendly message; technical details in logs only
+P0
+UT-DS33
+Error Boundary
+Unhandled error caught
+React error thrown
+User-friendly message + Error ID displayed; error logged
+P0
+UT-DS34
+Navigation
+Candidate mobile nav
+Mobile viewport
+5 items: Home, Jobs, Applications, Interviews, Profile
+P0
+UT-DS35
+Navigation
+Employer desktop nav
+Desktop viewport
+Dashboard, Jobs, Candidates, Interviews, Reports, Notifications, Company
+P0
+UT-DS36
+Navigation
+Admin sidebar nav
+Admin login
+Dashboard, Candidates, Employers, Jobs, Applications, Interviews, Skills, AI Usage, Reports, Settings
+P0
+UT-DS37
+Responsive
+Mobile breakpoint
+Viewport < 768px
+Mobile layout renders correctly
+P0
+UT-DS38
+Responsive
+Tablet breakpoint
+Viewport 768-1023px
+Tablet layout renders correctly
+P1
+UT-DS39
+Responsive
+Desktop breakpoint
+Viewport >= 1024px
+Desktop layout renders correctly
+P0
+UT-DS40
+Accessibility
+Keyboard navigation
+Tab through form
+All interactive elements focusable in logical order
+P0
+UT-DS41
+Accessibility
+Visible focus state
+Tab to element
+Focus ring/outline visible
+P0
+UT-DS42
+Accessibility
+Input labels present
+Form rendered
+All inputs have associated labels
+P0
+UT-DS43
+Accessibility
+Sufficient contrast
+All text elements
+Text meets WCAG contrast ratio requirements
+P1
+
+5. System / Integration Test Cases
+These integration test cases validate cross-portal flows, end-to-end journeys, the interview state machine, WhatsApp notification delivery, AI gateway routing, admin operations, API contract validation, responsive behaviour, and error handling across the full platform.
+
+Test ID
+Scenario
+Steps
+Expected Result
+Priority
+Candidate End-to-End Journey
+ST-01
+Candidate registration to application
+Register > Verify OTP > Complete profile > Add skills > Build resume > Search jobs > View job > Apply
+Application created; appears in "My Applications" with status "Applied"
+P0
+ST-02
+Candidate receives interview and confirms
+Employer shortlists > schedules interview > WhatsApp sent > Candidate confirms on portal
+Interview status = Confirmed; employer sees confirmation
+P0
+ST-03
+Candidate reschedules interview
+Interview scheduled > Candidate clicks "Request Reschedule"
+Reschedule request recorded; status = RESCHEDULE_REQUESTED; employer notified
+P1
+ST-04
+AI Resume improvement flow
+Candidate creates resume > clicks "Improve with AI" > accepts suggestion > saves
+Resume updated with AI suggestion; original preserved until accept
+P1
+ST-05
+Mock Interview full flow
+Select role > Start > Answer 5 questions > View results
+Scores for Communication, Relevance, Clarity, Confidence displayed with feedback
+P1
+Employer End-to-End Journey
+ST-06
+Employer registration to job publish
+Register > Verify > Create company profile > Create job (3 steps) > Preview > Publish
+Job visible to candidates in search results
+P0
+ST-07
+Employer shortlists and schedules interview
+Candidate applies > Employer views application > Shortlists > Schedules interview with WhatsApp notification
+Interview created; WhatsApp notification sent to candidate
+P0
+ST-08
+Employer completes hiring loop
+Shortlist > Interview > Record outcome "Selected"
+Candidate status = Selected; recruitment loop closed
+P0
+ST-09
+Employer candidate search and matching
+Employer searches by skills/location/experience
+Candidates returned with deterministic match scores (Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%)
+P1
+Interview State Machine
+ST-10
+SHORTLISTED > INTERVIEW_PROPOSED
+Employer initiates interview for shortlisted candidate
+State transitions to INTERVIEW_PROPOSED
+P0
+ST-11
+INTERVIEW_PROPOSED > INTERVIEW_SCHEDULED
+Employer sets date/time
+State transitions to INTERVIEW_SCHEDULED
+P0
+ST-12
+INTERVIEW_SCHEDULED > CONFIRMED
+Candidate confirms
+State transitions to CONFIRMED
+P0
+ST-13
+INTERVIEW_SCHEDULED > RESCHEDULE_REQUESTED
+Candidate requests reschedule
+State transitions to RESCHEDULE_REQUESTED
+P1
+ST-14
+CONFIRMED > COMPLETED
+Interview conducted
+State transitions to COMPLETED
+P0
+ST-15
+COMPLETED > SELECTED / REJECTED
+Employer records outcome
+State transitions to SELECTED or REJECTED
+P0
+WhatsApp Integration
+ST-16
+WhatsApp notification delivery
+Interview created with WhatsApp enabled
+Notification Service > WhatsApp Provider > Candidate receives message with Confirm/Reschedule buttons
+P0
+ST-17
+WhatsApp webhook confirmation
+Candidate clicks "Confirm" in WhatsApp
+Webhook > Notification Service > Interview Service > Status updated to Confirmed
+P0
+ST-18
+WhatsApp delivery failure + retry
+WhatsApp delivery fails
+Retry mechanism triggered; failure logged; Admin WhatsApp monitoring shows failure
+P1
+AI Gateway Integration
+ST-19
+AI calls routed through backend
+Frontend requests AI resume analysis
+Next.js > NestJS > AI Gateway > Gemini/AI Provider (never direct frontend > AI)
+P0
+ST-20
+AI usage tracking
+AI resume analysis performed
+Request count, tokens (input/output), estimated cost recorded
+P1
+ST-21
+AI cost controls enforced
+Usage exceeds threshold
+Rate limiting or alerts triggered
+P2
+Admin Operations
+ST-22
+Admin suspends candidate
+Admin searches candidate > clicks Suspend
+Candidate status = Suspended; audit event logged; candidate cannot login
+P0
+ST-23
+Admin approves a historical Pending Review job
+Job in Pending Review (historical record) > Admin reviews > Approves
+Job status = Published; visible to candidates; audit event logged. Admin approval is not part of the normal employer publish flow (employer Publish makes the job live immediately)
+P0
+ST-24
+Admin rejects employer job
+Admin reviews job > Rejects
+Job status = Rejected; not visible to candidates; audit event logged
+P0
+ST-25
+Admin manages skills taxonomy
+Admin adds skill with category, synonyms, proficiency levels
+Skill available in Candidate Profile, Resume Builder, Employer Job Creation, Candidate Search
+P0
+ST-26
+Admin views recruitment funnel
+Admin opens Business Dashboard
+Funnel: Candidates > Applications > Shortlisted > Interviews > Hires with conversion rates
+P1
+Cross-Portal Integration
+ST-27
+Full marketplace loop
+Candidate registers + applies > Employer shortlists > Interview > WhatsApp > Confirm > Hire
+Complete business loop from registration to placement
+P0
+ST-28
+Candidate profile visible to employer
+Candidate completes profile with skills
+Employer search returns candidate with correct match score
+P0
+ST-29
+Job published by employer visible to candidate
+Employer publishes job
+Candidate job search returns the job with correct details and match %
+P0
+ST-30
+Application status sync
+Employer shortlists candidate
+Candidate's "My Applications" shows status updated to "Shortlisted"
+P0
+API Contract Validation
+ST-31
+POST /auth/register
+Valid registration payload
+201 Created; user account returned
+P0
+ST-32
+POST /auth/verify
+Valid OTP
+200 OK; authentication token returned
+P0
+ST-33
+POST /applications
+Valid jobId + resumeId
+201 Created; {id, status: "APPLIED"} returned
+P0
+ST-34
+POST /interviews
+Valid candidateId, jobId, date, startTime, durationMinutes, type, location
+201 Created; InterviewCreated event published
+P0
+ST-35
+GET /admin/dashboard
+Admin authenticated
+200 OK; all platform metrics returned
+P0
+Responsive & Accessibility
+ST-36
+Candidate journey on mobile
+Complete full candidate journey on < 768px viewport
+All screens functional; bottom navigation works; forms usable
+P0
+ST-37
+Employer journey on desktop
+Complete full employer journey on >= 1024px viewport
+All screens functional; top navigation works
+P0
+ST-38
+Keyboard-only navigation
+Navigate entire candidate registration + profile flow using keyboard only
+All elements reachable; focus states visible; forms submittable
+P1
+Error Handling
+ST-39
+API failure on job search
+Backend returns 500
+User sees "Something went wrong" + "Try Again"; no technical error exposed
+P0
+ST-40
+Network timeout on resume save
+Request times out
+Error toast displayed; data not lost; retry possible
+P0
+ST-41
+AI Gateway unavailable
+AI service down
+Graceful degradation; user informed; core features still work
+P1
+
+Summary
+This document covers 170+ test cases across five sections, providing comprehensive validation of all portals, components, integrations, and system behaviours defined in the Product Engineering Handbook â€” Volume 3.
+
+Section
+Scope
+Test Count
+1. Candidate Portal
+Registration, OTP, Onboarding, Dashboard, Profile, Skills, Resume Builder, AI Guidance, Job Search, Applications, Interviews, Mock Interviews
+48 unit tests
+2. Employer Portal
+Registration, Company Profile, Dashboard, Job Creation (3-step), Publishing, Applications, Candidate Search & Matching, Shortlisting, Interview Scheduling & Outcomes, Billing
+26 unit tests
+3. Admin Portal
+Dashboard, Candidate/Employer/Job Management, Application & Interview Monitoring, Skills Taxonomy, AI Usage, WhatsApp Monitoring, Business Metrics, Revenue, RBAC
+28 unit tests
+4. Design System & Components
+Buttons, Inputs, Selects, Skill Selector, Match/Status Badges, Cards, Tables, Modals, Toasts, Empty/Loading/Error States, Navigation, Responsive, Accessibility
+43 unit tests
+5. System / Integration
+End-to-End Journeys, Interview State Machine, WhatsApp Integration, AI Gateway, Admin Operations, Cross-Portal Sync, API Contracts, Responsive Testing, Error Handling
+41 integration tests
+Total Test Cases
+186 tests
+
+
+Coverage Highlights
+All P0 (critical) scenarios are covered across every portal and integration flow.
+The interview state machine is fully validated with all 6 state transitions (SHORTLISTED through SELECTED/REJECTED).
+AI integration is validated end-to-end: resume guidance, mock interview, usage tracking, cost controls, and AI gateway routing.
+WhatsApp notification delivery, webhook confirmation, and failure/retry paths are all tested.
+Match scoring algorithm validated at system level: Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%.
+WCAG accessibility requirements, keyboard navigation, and focus states are explicitly covered.
+Responsive behaviour validated at three breakpoints: Mobile (<768px), Tablet (768-1023px), Desktop (>=1024px).
+All API contracts (POST, GET, PUT) are validated with correct HTTP status codes and response shapes.
+Admin RBAC is validated for all three roles: SUPER_ADMIN, ADMIN, and OPERATIONS.
+Error handling tests ensure no raw technical errors (500/ECONNRESET/timeout) are ever exposed to end users.
+
+
+
+Candidate Portal â€” Unit Test Cases
+
+Test ID
+Module
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C01
+Registration
+Validate name is mandatory
+Empty name field
+Error: "Name is required"
+P0
+UT-C02
+Registration
+Validate mobile is mandatory
+Empty mobile field
+Error: "Mobile number is required"
+P0
+UT-C03
+Registration
+Validate mobile format
+Invalid mobile (e.g., "12345")
+Error: "Please enter a valid mobile number"
+P0
+UT-C04
+Registration
+Validate email format
+Invalid email (e.g., "abc@")
+Error: "Please enter a valid email"
+P1
+UT-C05
+Registration
+Validate terms acceptance required
+Terms checkbox unchecked
+Error: "You must accept Terms and Privacy Policy"
+P0
+UT-C06
+Registration
+Successful registration
+Valid name, mobile, email, terms accepted
+POST /auth/register called; account created
+P0
+UT-C07
+OTP Verification
+Verify valid OTP
+Correct 6-digit OTP
+POST /auth/verify succeeds; user authenticated
+P0
+UT-C08
+OTP Verification
+Reject invalid OTP
+Incorrect OTP
+Error: "Verification rejected"
+P0
+UT-C09
+OTP Verification
+Resend OTP
+Click "Resend OTP" after timer expires
+POST /auth/resend-otp called; new OTP sent
+P1
+UT-C10
+OTP Verification
+Timer countdown display
+OTP screen loaded
+Countdown timer visible (e.g., 00:42)
+P1
+UT-C11
+Onboarding
+Progressive onboarding step navigation
+Complete Step 1 of 4
+Step 2 loads; progress bar updates to 50%
+P1
+UT-C12
+Onboarding
+Skip onboarding step
+Click "Skip for now"
+Next step or dashboard loads
+P1
+UT-C13
+Dashboard
+Display profile completion percentage
+Profile 80% complete
+Progress bar shows "80%"
+P0
+UT-C14
+Dashboard
+Display recommended jobs
+GET /candidate/dashboard returns jobs
+Job cards rendered with title, company, salary, match %
+P0
+UT-C15
+Dashboard
+Display upcoming interview
+Interview scheduled
+Interview card shows job title, date, time
+P1
+UT-C16
+Profile
+Load profile data
+GET /candidate/profile
+All sections (Personal, Education, Experience, Skills, Preferences) displayed
+P0
+UT-C17
+Profile
+Save profile changes
+Edit and save profile
+PUT /candidate/profile called; success toast shown
+P0
+UT-C18
+Skills
+Search for a skill
+Type "Communication"
+Matching skills displayed in suggestions
+P0
+UT-C19
+Skills
+Add a skill
+Click [+] on suggested skill
+Skill added to "My Skills" list
+P0
+UT-C20
+Skills
+Remove a skill
+Click [Ã—] on selected skill
+Skill removed from "My Skills" list
+P0
+UT-C21
+Skills
+Save skills
+Click "Save"
+PUT /candidate/skills called; skills persisted
+P0
+UT-C22
+Resume Builder
+Wizard step navigation
+Complete Personal â†’ Education â†’ Experience â†’ Skills â†’ Languages â†’ Preferences â†’ Review
+Each step loads correctly; progress tracked
+P0
+UT-C23
+Resume Builder
+Create resume
+Fill all sections and save
+POST /resume called; resume created
+P0
+UT-C24
+Resume Builder
+Edit resume
+Modify existing resume
+PUT /resume/:id called; changes saved
+P0
+UT-C25
+Resume Preview
+Render resume preview
+GET /resume/:id
+Resume displayed with all sections (Summary, Skills, Experience, Education)
+P0
+UT-C26
+Resume Preview
+Download resume
+Click "Download"
+Resume file downloaded
+P1
+UT-C27
+AI Resume Guidance
+Generate AI suggestions
+Click "Improve with AI"
+POST /ai/resume/analyze called; suggestions displayed
+P1
+UT-C28
+AI Resume Guidance
+Accept AI suggestion
+Click "Accept" on suggestion
+Original text replaced with AI suggestion
+P1
+UT-C29
+AI Resume Guidance
+Reject AI suggestion
+Click "Ignore" on suggestion
+Original text preserved
+P1
+UT-C30
+AI Resume Guidance
+Regenerate suggestion
+Click "Try Again"
+New AI suggestion generated
+P1
+UT-C31
+AI Resume Guidance
+Never auto-overwrite candidate data
+AI suggestion generated
+Original information preserved until explicit accept
+P0
+UT-C32
+Job Search
+Search by keyword
+Enter "Customer Service"
+GET /jobs called; relevant jobs displayed
+P0
+UT-C33
+Job Search
+Filter by location
+Select "Chennai"
+Jobs filtered to Chennai only
+P0
+UT-C34
+Job Search
+Filter by salary/experience/type/skills
+Apply multiple filters
+Results filtered correctly
+P1
+UT-C35
+Job Search
+Display result count
+Search executed
+"124 jobs found" displayed
+P1
+UT-C36
+Job Details
+Display job information
+GET /jobs/:id
+Title, company, salary, type, description, requirements, match % shown
+P0
+UT-C37
+Job Details
+Display match percentage
+Candidate views job
+"Your match: 86%" displayed
+P1
+UT-C38
+Apply
+Submit application
+Click "Apply Now"
+POST /applications called; confirmation screen shown
+P0
+UT-C39
+Application Confirmation
+Display confirmation
+Application submitted
+"Application Submitted" with job title and navigation options
+P0
+UT-C40
+Applications
+List all applications
+GET /applications
+Applications listed with job title, company, date, status pipeline
+P0
+UT-C41
+Applications
+Display status pipeline
+Application in "Shortlisted" state
+Pipeline shows: Applied âœ“ â†’ Shortlisted âœ“ â†’ Interview â—‹
+P0
+UT-C42
+Interview Dashboard
+Display upcoming interviews
+GET /interviews
+Interview cards with job title, date, time, status
+P0
+UT-C43
+Interview
+Confirm interview
+Click "Confirm"
+POST /interviews/:id/confirm called; status = Confirmed
+P0
+UT-C44
+Interview
+Request reschedule
+Click "Request Reschedule"
+POST /interviews/:id/reschedule called; request recorded
+P1
+UT-C45
+Mock Interview
+Select job role and start
+Choose role, question count, click "Start"
+POST /ai/interview/start called; first question displayed
+P1
+UT-C46
+Mock Interview
+Submit text answer
+Type answer and click "Submit"
+POST /ai/interview/:id/answer called; next question loads
+P1
+UT-C47
+Mock Interview
+Display results
+All questions answered
+GET /ai/interview/:id/result; scores (Communication, Relevance, Clarity, Confidence) and feedback displayed
+P1
+UT-C48
+Navigation
+Bottom navigation renders 5 items
+Mobile view
+Home, Jobs, Applications, Interviews, Profile visible
+P0
+
+
+Employer Portal â€” Unit Test Cases
+Test ID
+Module
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E01
+Registration
+Validate all mandatory fields
+Empty form submission
+Errors for Name, Company, Email, Mobile, Password, Terms
+P0
+UT-E02
+Registration
+Successful registration
+Valid data + terms accepted
+POST /employer/register called; account created
+P0
+UT-E03
+Verification
+Verify OTP
+Correct OTP entered
+Account verified
+P0
+UT-E04
+Company Profile
+Save company profile
+Fill all fields (logo, name, industry, size, location, about, website)
+GET/PUT /employer/profile; profile saved
+P0
+UT-E05
+Dashboard
+Display summary metrics
+GET /employer/dashboard
+Active Jobs, Applications, Shortlisted, Interviews counts shown
+P0
+UT-E06
+Dashboard
+Display recent applications
+Dashboard loaded
+Table with Candidate, Job, Status columns
+P0
+UT-E07
+Create Job â€” Step 1
+Job basics form
+Enter title, department, type, location
+Fields validated; "Continue" navigates to Step 2
+P0
+UT-E08
+Create Job â€” Step 2
+Job requirements form
+Add experience, skills, education, languages
+Skills selector works; "Continue" navigates to Step 3
+P0
+UT-E09
+Create Job â€” Step 3
+Compensation & description
+Enter salary range, description, benefits
+Fields saved; "Continue" navigates to preview
+P0
+UT-E10
+Job Preview
+Preview before publish
+All steps completed
+Full job preview rendered; "Edit" and "Publish Job" buttons available
+P0
+UT-E11
+Publish Job
+Publish job
+Click "Publish Job"
+POST /jobs/:id/publish called; job status = Active
+P0
+UT-E12
+Job Management
+List all jobs
+GET /employer/jobs
+Jobs listed with title, status, application count
+P0
+UT-E13
+Job Management
+Pause/Close job
+Click "Pause" or "Close"
+Job status updated accordingly
+P1
+UT-E14
+Applications
+View applications for a job
+GET /jobs/:id/applications
+Candidates listed with name, experience, match %, status
+P0
+UT-E15
+Applications
+Filter applications
+Apply Experience/Location/Skills filters
+Results filtered correctly
+P1
+UT-E16
+Candidate Search
+Search candidates
+Enter keywords + filters
+GET /candidates/search; results displayed with match %
+P0
+UT-E17
+Candidate Search
+Display search results
+Search executed
+Candidate cards with name, location, experience, skills, match %, actions
+P0
+UT-E18
+Candidate Profile
+View candidate profile
+GET /candidates/:id
+Name, location, match %, skills, experience, education, resume link shown
+P0
+UT-E19
+Candidate Matching
+Deterministic match score
+Job requirements vs candidate profile
+Score calculated: Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%
+P1
+UT-E20
+Shortlisting
+Shortlist candidate
+Click "Shortlist" + optional note
+POST /applications/:id/shortlist called; confirmation modal shown
+P0
+UT-E21
+Interview Scheduling
+Schedule interview
+Fill date, time, duration, type, location, notification preferences
+POST /interviews called; interview created
+P0
+UT-E22
+Interview Scheduling
+WhatsApp notification checkbox
+Check "Notify candidate on WhatsApp"
+WhatsApp notification triggered via event system
+P0
+UT-E23
+Interview Management
+List interviews
+GET /interviews
+Table with Candidate, Job, Date, Status; actions: View, Reschedule, Cancel
+P0
+UT-E24
+Interview Details
+View interview details
+Select interview
+Full details with status, reschedule/cancel options, notes field
+P0
+UT-E25
+Interview Outcome
+Record outcome
+Select Selected/Rejected/Further Interview/On Hold + notes
+POST /interviews/:id/outcome called; recruitment loop closed
+P0
+UT-E26
+Billing
+Display credits remaining
+GET /employer/billing
+Plan name, credits remaining (progress bar), usage stats shown
+P1
+
+
+Admin Portal â€” Unit Test Cases
+
+Test ID
+Module
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-A01
+Dashboard
+Display platform metrics
+GET /admin/dashboard
+Candidates, Employers, Active Jobs, Applications, Interviews, Hires, AI Usage counts shown
+P0
+UT-A02
+Dashboard
+Display recent activity feed
+Dashboard loaded
+Timestamped activity entries (registrations, job posts, interviews, shortlists)
+P0
+UT-A03
+Dashboard
+Display system health status
+Dashboard loaded
+API, Database, AI Gateway, WhatsApp, Storage statuses shown (Healthy/Unhealthy)
+P0
+UT-A04
+Candidate Mgmt
+Search candidates
+Search by Name/Mobile/Email/ID
+GET /admin/candidates; matching results displayed
+P0
+UT-A05
+Candidate Mgmt
+Filter candidates
+Apply Location/Status/Skills/Date filters
+Results filtered correctly
+P1
+UT-A06
+Candidate Mgmt
+View candidate details
+GET /admin/candidates/:id
+Full profile with ID, status, profile, skills, resume, applications, interviews
+P0
+UT-A07
+Candidate Mgmt
+Suspend candidate
+Click "Suspend Account"
+PUT /admin/candidates/:id/status; status = Suspended; audit event ADMIN_CANDIDATE_SUSPENDED
+P0
+UT-A08
+Candidate Mgmt
+Activate candidate
+Click "Activate"
+PUT /admin/candidates/:id/status; status = Active; audit event ADMIN_CANDIDATE_ACTIVATED
+P0
+UT-A09
+Employer Mgmt
+Search employers
+Search by Company/Email/ID
+GET /admin/employers; matching results displayed
+P0
+UT-A10
+Employer Mgmt
+View employer details
+GET /admin/employers/:id
+Company info, jobs, applications, interviews, hires, plan, credits shown
+P0
+UT-A11
+Employer Mgmt
+Suspend employer
+Click "Suspend"
+PUT /admin/employers/:id/status; audit event ADMIN_EMPLOYER_SUSPENDED
+P0
+UT-A12
+Employer Mgmt
+Verify employer
+Click "Verify"
+Status = Verified; audit event ADMIN_EMPLOYER_VERIFIED
+P0
+UT-A13
+Job Moderation
+List jobs with status filter
+GET /admin/jobs
+Jobs listed with title, company, status; actions: View, Approve, Reject, Pause
+P0
+UT-A14
+Job Moderation
+Approve job
+Click "Approve"
+POST /admin/jobs/:id/approve; status = Published; audit event ADMIN_JOB_APPROVED
+P0
+UT-A15
+Job Moderation
+Reject job
+Click "Reject"
+POST /admin/jobs/:id/reject; status = Rejected; audit event ADMIN_JOB_REJECTED
+P0
+UT-A16
+Application Monitoring
+View application pipeline
+GET /admin/applications
+Applied, Shortlisted, Interview, Selected, Rejected counts displayed
+P0
+UT-A17
+Interview Monitoring
+View today's interviews
+GET /admin/interviews
+Table with Candidate, Employer, Time, Status
+P0
+UT-A18
+Skills Mgmt
+Add new skill
+Fill name, category, description, synonyms, proficiency levels
+POST /admin/skills; skill created; audit event ADMIN_SKILL_CREATED
+P0
+UT-A19
+Skills Mgmt
+Edit skill
+Modify skill details
+PUT /admin/skills/:id; audit event ADMIN_SKILL_MODIFIED
+P1
+UT-A20
+Skills Mgmt
+Deactivate skill
+Click "Deactivate"
+POST /admin/skills/:id/deactivate; skill deactivated
+P1
+UT-A21
+Skills Mgmt
+Merge duplicate skills
+Click "Merge"
+Skills consolidated; candidates updated
+P2
+UT-A22
+AI Usage
+Display AI usage metrics
+GET /admin/ai/usage
+Requests, Input/Output Tokens, Estimated Cost, Feature breakdown shown
+P1
+UT-A23
+WhatsApp Monitoring
+Display delivery metrics
+GET /admin/notifications
+Messages Sent, Delivered, Failed, Delivery Rate, Recent Failures shown
+P1
+UT-A24
+Business Dashboard
+Display recruitment funnel
+Reports loaded
+Candidates â†’ Applications â†’ Shortlisted â†’ Interviews â†’ Hires with counts
+P1
+UT-A25
+Revenue Dashboard
+Display employer revenue
+Revenue page loaded
+Revenue, Paying Employers, New Employers, Credits Consumed shown
+P2
+UT-A26
+RBAC
+SUPER_ADMIN access
+Login as SUPER_ADMIN
+All admin features accessible
+P0
+UT-A27
+RBAC
+ADMIN access
+Login as ADMIN
+Candidates, Employers, Jobs, Skills, Reports accessible; Settings restricted
+P0
+UT-A28
+RBAC
+OPERATIONS access
+Login as OPERATIONS
+Candidates, Employers, Applications, Interviews accessible; Skills/Reports restricted
+P0
+
+
+Design System & Component Library â€” Unit Test Cases
+
+Test ID
+Component
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-DS01
+Button
+Primary button renders
+type="primary"
+Styled as primary action button
+P0
+UT-DS02
+Button
+All states render correctly
+Normal, Hover, Focus, Pressed, Disabled, Loading
+Each state visually distinct and accessible
+P0
+UT-DS03
+Button
+Loading state shows spinner
+isLoading=true
+Button text changes (e.g., "Creating...") with spinner; click disabled
+P0
+UT-DS04
+Button
+Danger variant renders
+type="danger"
+Styled as danger/destructive action
+P0
+UT-DS05
+Input
+Required field validation
+Empty required field on submit
+Error message "âš  Please enter a valid [field]" displayed
+P0
+UT-DS06
+Input
+Helper text displays
+helperText provided
+Helper text visible below input
+P1
+UT-DS07
+Input
+Error state renders
+validation fails
+Red border + error message displayed
+P0
+UT-DS08
+Select
+Dropdown opens and selects
+Click select â†’ choose option
+Selected value displayed; dropdown closes
+P0
+UT-DS09
+Select
+Searchable select works
+Type in search field
+Options filtered by search term
+P1
+UT-DS10
+Skill Selector
+Search skills
+Type "Comm"
+Matching skills shown in suggestions
+P0
+UT-DS11
+Skill Selector
+Add/remove skills
+Click [+] / [Ã—]
+Skill added to / removed from selected list
+P0
+UT-DS12
+Match Badge
+Excellent match (90-100%)
+score=91
+Green "Excellent" badge displayed
+P1
+UT-DS13
+Match Badge
+Good match (75-89%)
+score=82
+"Good" badge displayed
+P1
+UT-DS14
+Match Badge
+Moderate match (50-74%)
+score=60
+"Moderate" badge displayed
+P1
+UT-DS15
+Match Badge
+Low match (<50%)
+score=40
+"Low" badge displayed
+P1
+UT-DS16
+Match Badge
+Label says "Profile match" not "Candidate suitability"
+Any score
+Label reads "Profile match"
+P0
+UT-DS17
+Status Badge
+All statuses render
+ACTIVE, INACTIVE, PENDING, APPROVED, REJECTED, SHORTLISTED, INTERVIEW, SELECTED, CLOSED, SUSPENDED
+Each badge renders with correct styling
+P0
+UT-DS18
+Card
+Candidate card renders
+Candidate data provided
+Name, location, experience, skills, match %, actions displayed
+P0
+UT-DS19
+Card
+Job card renders
+Job data provided
+Title, company, location, salary, type displayed
+P0
+UT-DS20
+Table
+Sorting works
+Click column header
+Rows sorted ascending/descending
+P1
+UT-DS21
+Table
+Pagination works
+>10 rows
+Pagination controls visible and functional
+P1
+UT-DS22
+Table
+Empty state renders
+No data
+"No [items] found" message with CTA button
+P0
+UT-DS23
+Table
+Loading state renders
+Data loading
+Skeleton/spinner displayed
+P0
+UT-DS24
+Modal
+Confirmation modal renders
+Trigger destructive action
+Modal with message, Cancel, and Confirm buttons
+P0
+UT-DS25
+Modal
+Cancel dismisses modal
+Click "Cancel"
+Modal closes; no action taken
+P0
+UT-DS26
+Toast
+Success toast displays
+Action succeeds
+Green toast: "Profile saved successfully" (auto-dismiss)
+P1
+UT-DS27
+Toast
+Error toast displays
+Action fails
+Red toast: "Unable to [action]. Please try again."
+P1
+UT-DS28
+Empty State
+Candidate no applications
+Zero applications
+"You haven't applied for any jobs yet." + [Find Jobs] button
+P0
+UT-DS29
+Empty State
+Employer no jobs
+Zero jobs
+"Create your first job to start receiving applications." + [Create Job] button
+P0
+UT-DS30
+Loading State
+Skeleton loading renders
+API in progress
+Skeleton placeholder blocks visible
+P0
+UT-DS31
+Error State
+Generic error renders
+API failure
+"Something went wrong. We couldn't load the information." + [Try Again]
+P0
+UT-DS32
+Error State
+No technical errors exposed
+500/ECONNRESET/timeout
+User sees friendly message; technical details in logs only
+P0
+UT-DS33
+Error Boundary
+Unhandled error caught
+React error thrown
+User-friendly message + Error ID displayed; error logged
+P0
+UT-DS34
+Navigation
+Candidate mobile nav
+Mobile viewport
+5 items: Home, Jobs, Applications, Interviews, Profile
+P0
+UT-DS35
+Navigation
+Employer desktop nav
+Desktop viewport
+Dashboard, Jobs, Candidates, Interviews, Reports, Notifications, Company
+P0
+UT-DS36
+Navigation
+Admin sidebar nav
+Admin login
+Dashboard, Candidates, Employers, Jobs, Applications, Interviews, Skills, AI Usage, Reports, Settings
+P0
+UT-DS37
+Responsive
+Mobile breakpoint
+Viewport < 768px
+Mobile layout renders correctly
+P0
+UT-DS38
+Responsive
+Tablet breakpoint
+Viewport 768â€“1023px
+Tablet layout renders correctly
+P1
+UT-DS39
+Responsive
+Desktop breakpoint
+Viewport â‰¥ 1024px
+Desktop layout renders correctly
+P0
+UT-DS40
+Accessibility
+Keyboard navigation
+Tab through form
+All interactive elements focusable in logical order
+P0
+UT-DS41
+Accessibility
+Visible focus state
+Tab to element
+Focus ring/outline visible
+P0
+UT-DS42
+Accessibility
+Input labels present
+Form rendered
+All inputs have associated labels
+P0
+UT-DS43
+Accessibility
+Sufficient contrast
+All text elements
+Text meets WCAG contrast ratio requirements
+P1
+
+
+System / Integration Test Cases
+Test ID
+Scenario
+Steps
+Expected Result
+Priority
+Candidate End-to-End Journey
+
+
+
+
+ST-01
+Candidate registration â†’ profile â†’ resume â†’ job â†’ apply
+Register â†’ Verify OTP â†’ Complete profile â†’ Add skills â†’ Build resume â†’ Search jobs â†’ View job â†’ Apply
+Application created; appears in "My Applications" with status "Applied"
+P0
+ST-02
+Candidate receives interview and confirms
+Employer shortlists â†’ schedules interview â†’ WhatsApp sent â†’ Candidate confirms on portal
+Interview status = Confirmed; employer sees confirmation
+P0
+ST-03
+Candidate reschedules interview
+Interview scheduled â†’ Candidate clicks "Request Reschedule"
+Reschedule request recorded; status = RESCHEDULE_REQUESTED; employer notified
+P1
+ST-04
+AI Resume improvement flow
+Candidate creates resume â†’ clicks "Improve with AI" â†’ accepts suggestion â†’ saves
+Resume updated with AI suggestion; original preserved until accept
+P1
+ST-05
+Mock Interview full flow
+Select role â†’ Start â†’ Answer 5 questions â†’ View results
+Scores for Communication, Relevance, Clarity, Confidence displayed with feedback
+P1
+Employer End-to-End Journey
+
+
+
+
+ST-06
+Employer registration â†’ job creation â†’ publish
+Register â†’ Verify â†’ Create company profile â†’ Create job (3 steps) â†’ Preview â†’ Publish
+Job visible to candidates in search results
+P0
+ST-07
+Employer receives application â†’ shortlists â†’ schedules interview
+Candidate applies â†’ Employer views application â†’ Shortlists â†’ Schedules interview with WhatsApp notification
+Interview created; WhatsApp notification sent to candidate
+P0
+ST-08
+Employer completes hiring loop
+Shortlist â†’ Interview â†’ Record outcome "Selected"
+Candidate status = Selected; recruitment loop closed
+P0
+ST-09
+Employer candidate search and matching
+Employer searches by skills/location/experience
+Candidates returned with deterministic match scores (Skills 40%, Experience 20%, Location 15%, Language 15%, Education 10%)
+P1
+Interview State Machine
+
+
+
+
+ST-10
+Interview state: SHORTLISTED â†’ INTERVIEW_PROPOSED
+Employer initiates interview for shortlisted candidate
+State transitions to INTERVIEW_PROPOSED
+P0
+ST-11
+Interview state: INTERVIEW_PROPOSED â†’ INTERVIEW_SCHEDULED
+Employer sets date/time
+State transitions to INTERVIEW_SCHEDULED
+P0
+ST-12
+Interview state: INTERVIEW_SCHEDULED â†’ CONFIRMED
+Candidate confirms
+State transitions to CONFIRMED
+P0
+ST-13
+Interview state: INTERVIEW_SCHEDULED â†’ RESCHEDULE_REQUESTED
+Candidate requests reschedule
+State transitions to RESCHEDULE_REQUESTED
+P1
+ST-14
+Interview state: CONFIRMED â†’ COMPLETED
+Interview conducted
+State transitions to COMPLETED
+P0
+ST-15
+Interview state: COMPLETED â†’ SELECTED / REJECTED
+Employer records outcome
+State transitions to SELECTED or REJECTED
+P0
+WhatsApp Integration
+
+
+
+
+ST-16
+WhatsApp notification delivery
+Interview created with WhatsApp enabled
+Notification Service â†’ WhatsApp Provider â†’ Candidate receives message with Confirm/Reschedule buttons
+P0
+ST-17
+WhatsApp webhook confirmation
+Candidate clicks "Confirm" in WhatsApp
+Webhook â†’ Notification Service â†’ Interview Service â†’ Status updated to Confirmed
+P0
+ST-18
+WhatsApp delivery failure + retry
+WhatsApp delivery fails
+Retry mechanism triggered; failure logged; Admin WhatsApp monitoring shows failure
+P1
+AI Gateway Integration
+
+
+
+
+ST-19
+AI calls routed through backend
+Frontend requests AI resume analysis
+Next.js â†’ NestJS â†’ AI Gateway â†’ Gemini/AI Provider (never direct frontend â†’ AI)
+P0
+ST-20
+AI usage tracking
+AI resume analysis performed
+Request count, tokens (input/output), estimated cost recorded
+P1
+ST-21
+AI cost controls enforced
+Usage exceeds threshold
+Rate limiting or alerts triggered
+P2
+Admin Operations
+
+
+
+
+ST-22
+Admin suspends candidate
+Admin searches candidate â†’ clicks Suspend
+Candidate status = Suspended; audit event logged; candidate cannot login
+P0
+ST-23
+Admin approves a historical Pending Review job
+Job in Pending Review (historical record) â†’ Admin reviews â†’ Approves
+Job status = Published; visible to candidates; audit event logged. Admin approval is not part of the normal employer publish flow (employer Publish makes the job live immediately)
+P0
+ST-24
+Admin rejects employer job
+Admin reviews job â†’ Rejects
+Job status = Rejected; not visible to candidates; audit event logged
+P0
+ST-25
+Admin manages skills taxonomy
+Admin adds skill with category, synonyms, proficiency levels
+Skill available in Candidate Profile, Resume Builder, Employer Job Creation, Candidate Search
+P0
+ST-26
+Admin views recruitment funnel
+Admin opens Business Dashboard
+Funnel: Candidates â†’ Applications â†’ Shortlisted â†’ Interviews â†’ Hires with conversion rates
+P1
+Cross-Portal Integration
+
+
+
+
+ST-27
+Full marketplace loop
+Candidate registers + applies â†’ Employer shortlists â†’ Interview â†’ WhatsApp â†’ Confirm â†’ Hire
+Complete business loop from registration to placement
+P0
+ST-28
+Candidate profile visible to employer
+Candidate completes profile with skills
+Employer search returns candidate with correct match score
+P0
+ST-29
+Job published by employer visible to candidate
+Employer publishes job
+Candidate job search returns the job with correct details and match %
+P0
+ST-30
+Application status sync
+Employer shortlists candidate
+Candidate's "My Applications" shows status updated to "Shortlisted"
+P0
+API Contract Validation
+
+
+
+
+ST-31
+POST /auth/register
+Valid registration payload
+201 Created; user account returned
+P0
+ST-32
+POST /auth/verify
+Valid OTP
+200 OK; authentication token returned
+P0
+ST-33
+POST /applications
+Valid jobId + resumeId
+201 Created; {id, status: "APPLIED"} returned
+P0
+ST-34
+POST /interviews
+Valid candidateId, jobId, date, startTime, durationMinutes, type, location
+201 Created; InterviewCreated event published
+P0
+ST-35
+GET /admin/dashboard
+Admin authenticated
+200 OK; all platform metrics returned
+P0
+Responsive & Accessibility
+
+
+
+
+ST-36
+Candidate journey on mobile
+Complete full candidate journey on < 768px viewport
+All screens functional; bottom navigation works; forms usable
+P0
+ST-37
+Employer journey on desktop
+Complete full employer journey on â‰¥ 1024px viewport
+All screens functional; top navigation works
+P0
+ST-38
+Keyboard-only navigation
+Navigate entire candidate registration + profile flow using keyboard only
+All elements reachable; focus states visible; forms submittable
+P1
+Error Handling
+
+
+
+
+ST-39
+API failure on job search
+Backend returns 500
+User sees "Something went wrong" + "Try Again"; no technical error exposed
+P0
+ST-40
+Network timeout on resume save
+Request times out
+Error toast displayed; data not lost; retry possible
+P0
+
+
+Security & Authentication Tests
+Test ID
+Category
+Test Case
+Input / Precondition
+Expected Result
+Priority
+SEC-01
+AI Security
+Frontend cannot call AI provider directly
+Attempt direct call from Next.js to Gemini/AI Provider
+Request blocked; all AI calls must route Next.js â†’ NestJS â†’ AI Gateway â†’ Provider
+P0
+SEC-02
+AI Security
+AI provider API keys not exposed to frontend
+Inspect frontend bundle/network requests
+No AI provider API keys visible in client-side code or network traffic
+P0
+SEC-03
+AI Security
+Prompt governance via AI Gateway
+AI resume analysis triggered
+Prompts managed centrally through AI Gateway; no ad-hoc prompts from frontend
+P0
+SEC-04
+AI Security
+AI provider switching without frontend changes
+Switch AI provider in backend config
+Frontend continues to function; no code changes required
+P1
+SEC-05
+Secrets Mgmt
+No secrets in Admin UI configuration
+Navigate Admin â†’ Settings â†’ Platform Configuration
+No infrastructure secrets, API keys, or database credentials visible
+P0
+SEC-06
+Secrets Mgmt
+Credentials stored in cloud secret manager
+Inspect deployment configuration
+All secrets stored in cloud secret-management mechanism only
+P0
+SEC-07
+Auth
+Expired/invalid auth token rejected
+Send API request with expired token
+401 Unauthorized returned; user redirected to login
+P0
+SEC-08
+Auth
+Unauthenticated access to protected routes
+Access /candidate/profile without login
+Redirected to login page
+P0
+SEC-09
+Auth
+Unauthenticated access to admin routes
+Access /admin/dashboard without admin login
+Redirected to admin login; access denied
+P0
+SEC-10
+Audit Trail
+All admin actions generate audit events
+Admin performs suspend, activate, approve, reject, create skill, modify skill
+Corresponding audit events logged (ADMIN_CANDIDATE_SUSPENDED, ADMIN_CANDIDATE_ACTIVATED, ADMIN_EMPLOYER_SUSPENDED, ADMIN_EMPLOYER_VERIFIED, ADMIN_JOB_APPROVED, ADMIN_JOB_REJECTED, ADMIN_SKILL_CREATED, ADMIN_SKILL_MODIFIED)
+P0
+SEC-11
+Data Privacy
+Employer sees only recruitment-appropriate candidate data
+Employer views candidate profile
+Personal data restricted; only professional profile visible
+P0
+SEC-12
+Data Privacy
+Match score label says "Profile match" not "Candidate suitability"
+Any match score displayed
+Label reads "Profile match" to avoid implying hiring decision
+P0
+SEC-13
+Toast Security
+Toast notifications do not display sensitive info
+Any toast notification triggered
+No PII, tokens, or technical details in toast messages
+P0
+SEC-14
+Error Security
+Error ID generated for unhandled errors
+Unhandled React error occurs
+Error ID (e.g., ERR-20260829-12345) displayed to user; full stack trace in logs only
+P0
+
+
+Edge Case & Negative Tests
+Test ID
+Category
+Test Case
+Input / Precondition
+Expected Result
+Priority
+EDGE-01
+Candidate
+Duplicate application prevention
+Candidate applies for same job twice
+System prevents duplicate; error or "Already Applied" shown
+P0
+EDGE-02
+Candidate
+AI suggestion generated but no action taken
+AI generates suggestion; candidate does nothing
+Original text preserved; no change applied
+P0
+EDGE-03
+Candidate
+Skip onboarding reflects in profile completion
+Candidate skips Step 2 of 4 in onboarding
+Dashboard shows reduced profile completion %; skipped section flagged
+P1
+EDGE-04
+Candidate
+OTP timer expires before entry
+Timer reaches 00:00
+"Resend OTP" button becomes active; expired OTP rejected if submitted
+P0
+EDGE-05
+Candidate
+Resume download before AI improvement
+Candidate downloads resume without accepting AI suggestions
+Original resume downloaded (not AI-modified version)
+P1
+EDGE-06
+Candidate
+Mock interview text-only answer (no audio)
+Candidate submits text answer
+Text answer accepted as valid input for MVP
+P1
+EDGE-07
+Employer
+Job published without admin approval
+Employer publishes job
+Job is PUBLISHED (Active) immediately with publishedAt set; visible to candidates in job search and job detail; no Pending Review state and no admin approval required
+P0
+EDGE-08
+Employer
+Employer runs out of credits
+Credits = 0; employer attempts candidate search/contact
+Action blocked; "Buy More Credits" prompt shown
+P0
+EDGE-09
+Employer
+Employer contacts candidate without subscription
+No active subscription/credits
+Commercial rule enforced; access denied with upgrade prompt
+P0
+EDGE-10
+Employer
+Interview scheduled but candidate not confirmed
+Interview in INTERVIEW_SCHEDULED state
+Status remains "Pending"; employer sees "Awaiting Confirmation"
+P1
+EDGE-11
+Employer
+Record outcome before interview completed
+Employer attempts to record outcome on CONFIRMED interview
+Outcome recorded; state transitions directly (or system enforces COMPLETED first)
+P1
+EDGE-12
+Admin
+Suspend candidate mid-application
+Candidate has active applications; admin suspends
+Candidate cannot login; existing applications remain in system but candidate locked out
+P0
+EDGE-13
+Admin
+Reject job with existing applications
+Job has 10 applications; admin rejects job
+Job status = Rejected; not visible to new candidates; existing applications preserved
+P0
+EDGE-14
+Admin
+AI cost exceeds threshold
+AI usage exceeds daily/monthly limit
+Rate limiting triggered; alerts sent to admin; AI features gracefully degraded
+P1
+EDGE-15
+Interview
+Candidate reschedules after confirming
+Interview in CONFIRMED state; candidate requests reschedule
+State transitions to RESCHEDULE_REQUESTED; employer notified
+P1
+EDGE-16
+Interview
+Interview cancelled after confirmation
+Employer cancels CONFIRMED interview
+POST /interviews/:id/cancel called; candidate notified; state updated
+P1
+EDGE-17
+Interview
+Free-text interview status prevented
+Attempt to store arbitrary status string
+System rejects; only state machine transitions allowed
+P0
+EDGE-18
+Interview
+Invalid state transition attempted
+Attempt SHORTLISTED â†’ COMPLETED (skipping intermediate states)
+Transition rejected; error returned
+P0
+
+
+Career Passport Tests
+Test ID
+Category
+Test Case
+Input / Precondition
+Expected Result
+Priority
+CP-01
+Career Passport
+All 14 sections accessible
+Candidate navigates Career Passport
+Personal Info, Education, Experience, Skills, Certifications, Languages, Projects, Portfolio, Resume Versions, Interview History, AI Feedback, Employability Score, Career Goals, Job Preferences all accessible
+P0
+CP-02
+Career Passport
+Add/edit Personal Information
+Update name, contact, location
+Changes saved; reflected across platform
+P0
+CP-03
+Career Passport
+Add/edit Education entries
+Add degree, institution, year
+Education entry saved and displayed
+P0
+CP-04
+Career Passport
+Add/edit Experience entries
+Add role, company, duration, description
+Experience entry saved and displayed
+P0
+CP-05
+Career Passport
+Add/edit Certifications
+Add certification name, issuer, date
+Certification saved and displayed
+P1
+CP-06
+Career Passport
+Add/edit Languages
+Add language with proficiency level
+Language saved and displayed
+P1
+CP-07
+Career Passport
+Add/edit Projects
+Add project name, description, tech stack
+Project saved and displayed
+P1
+CP-08
+Career Passport
+Add/edit Portfolio items
+Add portfolio link/file
+Portfolio item saved and accessible
+P2
+CP-09
+Resume Versions
+Multiple resume versions from Career Passport
+Create 2+ resumes from same Career Passport
+Each resume is a generated view; all versions listed
+P0
+CP-10
+Resume Versions
+Resume is generated from Career Passport data as an independent, editable version. The Career Passport remains the master source of truth and is not modified when a resume version is edited.
+Create resume from Career Passport, then edit the resume
+Resume is prefilled with the Career Passport data; the resume can be edited independently; editing the resume does not modify the Career Passport, which remains unchanged
+P0
+CP-11
+Interview History
+Display past interviews
+Candidate has completed interviews
+Interview History section shows job, date, outcome, feedback
+P1
+CP-12
+AI Feedback
+Display AI feedback history
+Candidate has used AI guidance
+AI Feedback section shows past suggestions and actions taken
+P1
+CP-13
+Employability Score
+Display employability score
+Profile sufficiently complete
+Employability Score calculated and displayed
+P1
+CP-14
+Career Goals
+Set career goals
+Candidate enters career goals/preferences
+Goals saved; used for job recommendations
+P1
+
+
+Monetization & Billing Tests
+Test ID
+Category
+Test Case
+Input / Precondition
+Expected Result
+Priority
+BIL-01
+Candidate Free
+All candidate features free
+Candidate uses Registration, Profile, Resume, AI Guidance, Job Search, Applications, Mock Interview, Interview
+No charges; all features accessible without payment
+P0
+BIL-02
+Employer Plan
+Display current plan
+GET /employer/billing
+Plan name (e.g., "Professional") displayed
+P0
+BIL-03
+Credits
+Display credits remaining
+Employer has 75 credits
+Progress bar shows "75 credits remaining"
+P0
+BIL-04
+Credits
+Credit consumed on candidate view/contact
+Employer views/contacts candidate
+Credit count decremented by 1
+P0
+BIL-05
+Credits
+Buy more credits flow
+Click "Buy More Credits"
+Purchase flow initiated; credits added on completion
+P1
+BIL-06
+Billing History
+View billing history
+Click "Billing History"
+Past transactions displayed with dates and amounts
+P1
+BIL-07
+Usage Tracking
+Candidate views tracked per month
+Employer views 15 candidates
+"Candidate Views: 15" shown in usage stats
+P1
+BIL-08
+Usage Tracking
+Shortlists tracked per month
+Employer shortlists 5 candidates
+"Shortlists: 5" shown in usage stats
+P1
+BIL-09
+Commercial Rules
+Job posting subject to commercial rule
+Employer on free trial posts job
+Commercial rule enforced (limit or payment required)
+P1
+BIL-10
+Admin Revenue
+Admin revenue dashboard displays metrics
+GET /admin/revenue
+Revenue, Paying Employers, New Employers, Credits Consumed shown
+P2
+
+
+Notification Tests
+Test ID
+Category
+Test Case
+Input / Precondition
+Expected Result
+Priority
+NOTIF-01
+Multi-Channel
+Interview notification sent via WhatsApp + Email
+Interview scheduled with both checkboxes enabled
+Both WhatsApp message and email sent to candidate
+P0
+NOTIF-02
+Email
+Email notification delivered on interview schedule
+"Send email notification" checked
+Email sent with interview details (date, time, company, role)
+P0
+NOTIF-03
+WhatsApp Template
+WhatsApp message contains required fields
+Interview created
+Message includes: Company name, Job title, Date, Time, Confirm button, Reschedule button
+P0
+NOTIF-04
+WhatsApp Compliance
+WhatsApp template complies with Business API rules
+Template reviewed
+Template wording complies with WhatsApp Business messaging requirements
+P1
+NOTIF-05
+Portal Notification
+Application status update shown in portal
+Employer shortlists candidate
+Candidate sees notification in Notification Centre
+P0
+NOTIF-06
+Portal Notification
+Interview confirmation shown to employer
+Candidate confirms interview
+Employer sees confirmation notification in portal
+P0
+NOTIF-07
+Portal Notification
+Reschedule request shown to employer
+Candidate requests reschedule
+Employer sees reschedule notification in portal
+P1
+NOTIF-08
+Toast
+Success toast auto-dismisses
+Profile saved successfully
+Green toast appears and auto-dismisses after timeout
+P1
+NOTIF-09
+Toast
+Error toast displays action-specific message
+Interview scheduling fails
+Red toast: "Unable to schedule interview. Please try again."
+P1
+NOTIF-10
+WhatsApp Failure
+Invalid recipient logged separately
+WhatsApp sent to invalid number
+Failure reason = "Invalid recipient"; logged in Admin WhatsApp Monitoring
+P1
+NOTIF-11
+WhatsApp Retry
+Automatic retry on delivery failure
+First delivery attempt fails
+Retry mechanism triggered automatically; retry count tracked
+P1
+
+
+Performance & Device Tests
+Test ID
+Category
+Test Case
+Input / Precondition
+Expected Result
+Priority
+PERF-01
+Mobile
+Candidate portal on low-cost Android phone
+Load candidate screens on budget Android device
+All screens render correctly; interactions responsive
+P0
+PERF-02
+Mobile
+Touch targets adequate size
+Mobile viewport
+All buttons/links meet minimum touch target size (48x48px)
+P1
+PERF-03
+Search
+Job search returns results within acceptable time
+Search with keyword + filters
+Results displayed within 2-3 seconds
+P1
+PERF-04
+Search
+Candidate search returns results within acceptable time
+Employer searches candidates
+Results displayed within 2-3 seconds
+P1
+PERF-05
+API
+API responses within acceptable latency
+Standard API calls
+Responses within 500ms for CRUD; 3s for AI operations
+P1
+PERF-06
+Loading
+No blank screens during data loading
+Navigate between screens
+Skeleton loaders or spinners shown; never a blank screen
+P0
+
+
+Configuration Management Tests
+Test ID
+Category
+Test Case
+Input / Precondition
+Expected Result
+Priority
+CFG-01
+Platform Settings
+Manage Job Categories
+Admin â†’ Settings â†’ Job Categories
+CRUD operations on job categories
+P1
+CFG-02
+Platform Settings
+Manage Locations
+Admin â†’ Settings â†’ Locations
+CRUD operations on locations
+P1
+CFG-03
+Platform Settings
+Manage Experience Levels
+Admin â†’ Settings â†’ Experience Levels
+CRUD operations on experience levels
+P1
+CFG-04
+Platform Settings
+Manage Languages
+Admin â†’ Settings â†’ Languages
+CRUD operations on languages
+P1
+CFG-05
+Platform Settings
+Manage Notification Templates
+Admin â†’ Settings â†’ Notification Templates
+Templates editable; changes reflected in notifications
+P1
+CFG-06
+Feature Flags
+Feature flags manageable
+Admin â†’ Settings â†’ Feature Flags
+Feature flags togglable; features enabled/disabled accordingly
+P1
+CFG-07
+AI Config
+AI model config NOT in Admin UI
+Navigate Admin â†’ Settings
+No AI model configuration buttons/fields visible; managed via backend config only
+P0
+
+
+Additional API Contract Tests
+Test ID
+Endpoint
+Test Case
+Input
+Expected Result
+Priority
+API-01
+PUT /candidate/profile
+Update candidate profile
+Valid profile payload
+200 OK; profile updated
+P0
+API-02
+PUT /candidate/skills
+Update candidate skills
+Valid skills array
+200 OK; skills updated
+P0
+API-03
+PUT /resume/:id
+Update resume
+Valid resume payload
+200 OK; resume updated
+P0
+API-04
+POST /interviews/:id/cancel
+Cancel interview
+Valid interview ID
+200 OK; interview cancelled; notification sent
+P0
+API-05
+POST /interviews/:id/reschedule
+Reschedule interview
+Valid interview ID + new date/time
+200 OK; reschedule request recorded
+P1
+API-06
+POST /interviews/:id/outcome
+Record interview outcome
+{outcome: "SELECTED", notes: "..."}
+200 OK; outcome recorded; state updated
+P0
+API-07
+POST /ai/interview/start
+Start mock interview
+{roleId, questionCount}
+201 Created; first question returned
+P1
+API-08
+POST /ai/interview/:id/answer
+Submit mock interview answer
+{answer: "..."}
+200 OK; evaluation + next question returned
+P1
+API-09
+GET /ai/interview/:id/result
+Get mock interview results
+Valid interview ID
+200 OK; scores (Communication, Relevance, Clarity, Confidence) + feedback
+P1
+API-10
+Any endpoint
+Invalid request body (400)
+Malformed JSON / missing required fields
+400 Bad Request; validation errors returned
+P0
+API-11
+Any endpoint
+Unauthenticated request (401)
+No auth token
+401 Unauthorized
+P0
+API-12
+Any endpoint
+Unauthorized role access (403)
+OPERATIONS user accesses /admin/skills
+403 Forbidden
+P0
+API-13
+Any endpoint
+Resource not found (404)
+GET /candidates/nonexistent-id
+404 Not Found
+P0
+API-14
+Any endpoint
+Server error (500)
+Backend throws unhandled exception
+500 Internal Server Error; friendly message to user; error logged with Error ID
+P0
+API-15
+GET /jobs
+Pagination support
+page=2&limit=20
+Paginated results with total count, page info
+P1
+API-16
+GET /candidates/search
+Pagination support
+page=1&limit=10
+Paginated results with total count
+P1
+API-17
+POST /jobs/:id/publish
+Publish job
+Valid job ID
+200 OK; job status = Active; InterviewCreated event NOT published
+P0
+API-18
+POST /admin/jobs/:id/approve
+Admin approve job
+Valid job ID + admin auth
+200 OK; job status = Published; audit event ADMIN_JOB_APPROVED
+P0
+
+
+Definition of Done â€” Screen Validation Tests
+Test ID
+Screen Category
+Test Case
+Validation Criteria
+Expected Result
+Priority
+DOD-01
+All Candidate Screens
+Desktop layout tested
+Every candidate screen on â‰¥1024px viewport
+All screens render correctly on desktop
+P0
+DOD-02
+All Candidate Screens
+Mobile layout tested
+Every candidate screen on <768px viewport
+All screens render correctly on mobile (low-cost Android)
+P0
+DOD-03
+All Candidate Screens
+Loading state implemented
+Trigger loading on every screen
+Skeleton/spinner shown; no blank screens
+P0
+DOD-04
+All Candidate Screens
+Empty state implemented
+Zero data on every list/table screen
+Friendly message + CTA button shown
+P0
+DOD-05
+All Candidate Screens
+Error state implemented
+API failure on every screen
+"Something went wrong" + "Try Again" shown
+P0
+DOD-06
+All Employer Screens
+Desktop layout tested
+Every employer screen on â‰¥1024px viewport
+All screens render correctly on desktop
+P0
+DOD-07
+All Employer Screens
+Mobile layout tested
+Every employer screen on <768px viewport
+All screens render correctly on mobile
+P0
+DOD-08
+All Employer Screens
+Loading/Empty/Error states
+Every employer screen
+All three states implemented per screen
+P0
+DOD-09
+All Admin Screens
+Desktop layout tested
+Every admin screen on â‰¥1024px viewport
+All screens render correctly with sidebar navigation
+P0
+DOD-10
+All Admin Screens
+Loading/Empty/Error states
+Every admin screen
+All three states implemented per screen
+P0
+DOD-11
+All Screens
+Validation implemented
+Every form across all portals
+Required fields marked with *; inline validation on failure
+P0
+DOD-12
+All Screens
+API failure handling
+Every API call across all portals
+Graceful error handling; no technical errors exposed
+P0
+DOD-13
+All Screens
+Accessibility baseline met
+Every screen across all portals
+Keyboard nav, focus states, labels, contrast all pass
+P0
+
+
+Detailed Testing
+Candidate Portal â€” Registration Tests
+
+1A. Landing Page Tests - Detailed
+Test ID
+Field / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C001
+Landing Page
+Page renders with value proposition
+First-time visitor
+"BUILD YOUR CAREER" headline, "Create your resume. Improve your skills." subtext displayed
+P0
+UT-C002
+Landing Page
+"Create Free Profile" CTA navigates to registration
+Click "Create Free Profile"
+Navigates to Registration screen (C02)
+P0
+UT-C003
+Landing Page
+"Find Jobs" CTA navigates to job search
+Click "Find Jobs"
+Navigates to Job Search screen
+P0
+UT-C004
+Landing Page
+"How it works" section renders 5 steps
+Page loaded
+Steps shown: â‘  Create Profile â†’ â‘¡ Build Resume â†’ â‘¢ Find Jobs â†’ â‘£ Prepare for Interview â†’ â‘¤ Get Hired
+P1
+UT-C005
+Landing Page
+"Hire Candidates" CTA for employers
+Click "Hire Candidates"
+Navigates to Employer registration/portal
+P1
+UT-C006
+Landing Page
+Login link navigates to login
+Click "Login"
+Navigates to Login screen
+P0
+
+
+1B. Registration Tests â€” Detailed
+Candidate Portal â€” Registration Tests (Detailed)
+Test ID
+Field / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C010
+Full Name
+Name is mandatory
+Empty name, click "Create Profile"
+Error: "Name is required"
+P0
+UT-C011
+Full Name
+Name minimum 2 characters
+Enter "A"
+Error: "Please enter your full name"
+P0
+UT-C012
+Full Name
+Valid name accepted
+Enter "Rahul Kumar"
+No error; field valid
+P0
+UT-C013
+Mobile
+Mobile is mandatory
+Empty mobile, click "Create Profile"
+Error: "Mobile number is required"
+P0
+UT-C014
+Mobile
+Mobile must be 10 digits
+Enter "12345"
+Error: "Please enter a valid 10-digit mobile number"
+P0
+UT-C015
+Mobile
+Mobile must be numeric only
+Enter "98765abcde"
+Error: "Mobile number must contain digits only"
+P0
+UT-C016
+Mobile
+Valid mobile accepted
+Enter "9876543210"
+No error; field valid
+P0
+UT-C017
+Mobile
+Country code prefix displayed
+Registration form loaded
+"+91" prefix shown before mobile input
+P1
+UT-C018
+Email
+Email is optional
+Leave email empty, submit
+No error; form proceeds
+P1
+UT-C019
+Email
+Invalid email format rejected
+Enter "abc@"
+Error: "Please enter a valid email address"
+P1
+UT-C020
+Email
+Valid email accepted
+Enter "rahul@example.com"
+No error; field valid
+P1
+UT-C021
+Location
+Location is optional
+Leave location empty, submit
+No error; form proceeds
+P1
+UT-C022
+Location
+City dropdown renders
+Click location field
+Dropdown with city options displayed
+P1
+UT-C023
+Terms
+Terms checkbox is mandatory
+Checkbox unchecked, click "Create Profile"
+Error: "You must accept the Terms and Privacy Policy to continue"
+P0
+UT-C024
+Terms
+Terms accepted enables submission
+Check terms checkbox
+"Create Profile" button becomes active
+P0
+UT-C025
+Button
+"Create Profile" disabled when form invalid
+Required fields empty
+Button disabled/greyed out
+P0
+UT-C026
+Button
+Loading state on submit
+Click "Create Profile" with valid data
+Button shows "Creating..." with spinner; form fields disabled
+P0
+UT-C027
+API
+Successful registration
+Valid name, mobile, terms accepted
+POST /auth/register called; response: {userId, status: "OTP_SENT"}
+P0
+UT-C028
+Error
+Duplicate mobile number
+Mobile already registered
+Error: "This mobile number is already registered. Please login."
+P0
+UT-C029
+Error
+API failure on registration
+Backend returns 500
+Error: "Something went wrong. Please try again."
+P0
+UT-C030
+Error
+Network timeout
+Request times out
+Error: "Unable to connect. Please check your connection and try again."
+P1
+UT-C031
+Navigation
+"Already registered? Login" link
+Click "Login"
+Navigates to Login screen
+P1
+
+1C. OTP Verification Tests â€” Detailed
+Candidate Portal â€” OTP Verification Tests (Detailed)
+Test ID
+Field / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C040
+OTP Display
+6 individual digit input boxes render
+OTP screen loaded
+6 separate input boxes displayed
+P0
+UT-C041
+OTP Display
+Masked mobile number shown
+OTP screen loaded
+"+91 XXXXX XXXXX" displayed (partial masking)
+P0
+UT-C042
+OTP Input
+Auto-advance to next box on digit entry
+Enter digit in box 1
+Cursor moves to box 2 automatically
+P0
+UT-C043
+OTP Input
+Paste 6-digit OTP auto-populates all boxes
+Paste "123456"
+All 6 boxes populated; auto-submit triggered
+P1
+UT-C044
+OTP Input
+Auto-submit on 6th digit entry
+Enter 6th digit
+Form submits automatically; POST /auth/verify called
+P0
+UT-C045
+OTP Input
+Only numeric input accepted
+Enter "a" in OTP box
+Input rejected; only digits allowed
+P0
+UT-C046
+Timer
+Countdown timer displays
+OTP screen loaded
+Timer shows countdown (e.g., 00:60 â†’ 00:00)
+P0
+UT-C047
+Timer
+Resend OTP disabled while timer active
+Timer at 00:42
+"Resend OTP" button disabled/greyed
+P0
+UT-C048
+Timer
+Resend OTP enabled when timer expires
+Timer reaches 00:00
+"Resend OTP" button becomes active
+P0
+UT-C049
+Resend
+Resend OTP calls API
+Click "Resend OTP" after timer expires
+POST /auth/resend-otp called; new OTP sent; timer resets
+P0
+UT-C050
+Resend
+Resend button shows loading
+Click "Resend OTP"
+Button shows "Sending..." state
+P1
+UT-C051
+Verify
+Valid OTP accepted
+Enter correct 6-digit OTP
+POST /auth/verify succeeds; {token, userId} returned; navigate to Onboarding
+P0
+UT-C052
+Verify
+Invalid OTP rejected
+Enter wrong OTP
+Error: "Invalid OTP. Please try again."
+P0
+UT-C053
+Verify
+Expired OTP rejected
+Enter OTP after expiry
+Error: "OTP has expired. Please click Resend OTP."
+P0
+UT-C054
+Verify
+Max attempts exceeded
+Enter wrong OTP 3+ times
+Error: "Too many attempts. Please request a new OTP."
+P1
+UT-C055
+Verify
+Loading state on verify
+OTP submitted
+"Verifying..." with spinner; all inputs disabled
+P0
+UT-C056
+Error
+API failure on verify
+Backend returns 500
+Error: "Something went wrong. Please try again."
+P0
+
+
+1D. Onboarding Wizard Tests â€” Detailed
+Candidate Portal â€” Onboarding Wizard Tests (Detailed)
+Test ID
+Step / Field
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C060
+Step 1
+Progress bar shows 25%
+Step 1 loaded
+Progress bar at 25%
+P0
+UT-C061
+Step 1 â€” Location
+Current Location is mandatory
+Click Continue without selecting
+Error: "Please select your current location"
+P0
+UT-C062
+Step 1 â€” Location
+City dropdown loads from API
+Step 1 loaded
+GET /locations called; cities populated
+P0
+UT-C063
+Step 1 â€” Location
+City dropdown shows loading skeleton
+API in progress
+Skeleton placeholder in dropdown
+P0
+UT-C064
+Step 1 â€” Preferred
+Preferred locations optional
+Click Continue without preferred locations
+Step 2 loads; no error
+P1
+UT-C065
+Step 1 â€” Preferred
+Multiple preferred locations selectable
+Select Chennai + Bengaluru
+Both cities shown as selected chips
+P1
+UT-C066
+Step 1 â€” Preferred
+Maximum 5 preferred locations enforced
+Attempt to select 6th location
+6th blocked; message: "You can select up to 5 locations"
+P1
+UT-C067
+Step 1
+"Skip for now" navigates to Step 2
+Click "Skip for now"
+Step 2 loads; Step 1 marked skipped; profile completion reduced
+P1
+UT-C068
+Step 1
+Save location via API
+Valid location selected, click Continue
+PUT /candidate/profile called with {currentLocation, preferredLocations[]}
+P0
+UT-C069
+Step 2
+Progress bar shows 50%
+Step 2 loaded
+Progress bar at 50%
+P0
+UT-C070
+Step 2 â€” Status
+Employment status is mandatory
+Click Continue without selection
+Error: "Please select your employment status"
+P0
+UT-C071
+Step 2 â€” Status
+4 employment status options render
+Step 2 loaded
+Radio buttons: Fresher, Currently Employed, Not Currently Employed, Student
+P0
+UT-C072
+Step 2 â€” Experience
+Experience dropdown appears for "Currently Employed"
+Select "Currently Employed"
+Years of Experience dropdown visible
+P0
+UT-C073
+Step 2 â€” Experience
+Experience dropdown appears for "Not Currently Employed"
+Select "Not Currently Employed"
+Years of Experience dropdown visible
+P0
+UT-C074
+Step 2 â€” Experience
+Experience dropdown hidden for "Fresher"
+Select "Fresher"
+Years of Experience dropdown hidden
+P0
+UT-C075
+Step 2 â€” Experience
+Experience dropdown hidden for "Student"
+Select "Student"
+Years of Experience dropdown hidden
+P0
+UT-C076
+Step 2 â€” Experience
+Experience required when visible
+Select "Currently Employed"; leave experience blank
+Error: "Please select your years of experience"
+P0
+UT-C077
+Step 2 â€” Experience
+Experience options correct
+Dropdown opened
+Options: Less than 1 year, 1â€“2 years, 2â€“5 years, 5+ years
+P0
+UT-C078
+Step 2
+Back button returns to Step 1 with data preserved
+Click Back
+Step 1 loads with previously entered data intact
+P0
+UT-C079
+Step 3
+Progress bar shows 75%
+Step 3 loaded
+Progress bar at 75%
+P0
+UT-C080
+Step 3 â€” Category
+Preferred Job Category is optional
+Click Continue without category
+Step 4 loads; no error
+P1
+UT-C081
+Step 3 â€” Category
+Maximum 3 job categories enforced
+Attempt to select 4th category
+4th blocked; message: "You can select up to 3 job categories"
+P1
+UT-C082
+Step 3 â€” Salary
+Expected salary range is optional
+Leave salary empty
+Accepted without error
+P1
+UT-C083
+Step 3 â€” Salary
+Salary min must be less than max
+Min: 50000, Max: 30000
+Error: "Please enter a valid salary range"
+P1
+UT-C084
+Step 3 â€” Salary
+Salary must be positive
+Enter negative value
+Error: "Please enter a valid salary range"
+P1
+UT-C085
+Step 3 â€” Job Type
+Job type preferences optional
+Leave unchecked
+Accepted without error
+P1
+UT-C086
+Step 3 â€” Job Type
+Multiple job types selectable
+Check Full Time + Part Time
+Both selected
+P1
+UT-C087
+Step 4
+Progress bar shows 100%
+Step 4 loaded
+Progress bar at 100%
+P0
+UT-C088
+Step 4 â€” Skills
+Skill search triggers suggestions
+Type "Comm"
+Matching skills from GET /skills displayed
+P0
+UT-C089
+Step 4 â€” Skills
+Skill search loading state
+API in progress
+Skeleton/spinner in suggestions area
+P0
+UT-C090
+Step 4 â€” Skills
+No skills found empty state
+Type "xyzabc"
+"No skills found. Try a different search term."
+P1
+UT-C091
+Step 4 â€” Skills
+Maximum 20 skills enforced
+Attempt to add 21st skill
+Blocked; message: "You have reached the maximum skill limit"
+P1
+UT-C092
+Step 4
+"Complete Profile" button label on final step
+Step 4 loaded
+Primary button reads "Complete Profile" (not "Continue")
+P0
+UT-C093
+Step 4
+Complete Profile saves and navigates to Dashboard
+Click "Complete Profile"
+POST /candidate/skills called; navigate to Dashboard (C05)
+P0
+UT-C094
+Any Step
+API failure on save
+Backend returns 500
+Error: "We couldn't save your information. Please try again." + Retry
+P0
+UT-C095
+Any Step
+Skip for now on any step
+Click "Skip for now"
+Next step loads; skipped step marked; profile completion % reduced
+P1
+
+
+1E. Dashboard Tests â€” Detailed
+Candidate Portal â€” Dashboard Tests (Detailed)
+Test ID
+Widget / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C100
+Dashboard
+Dashboard loads with all widgets
+GET /candidate/dashboard
+Profile completion, Recommended Jobs, Upcoming Interviews, Application Status all rendered
+P0
+UT-C101
+Profile Completion
+Progress bar shows correct %
+Profile 80% complete
+Progress bar at 80%; "80% Complete" label
+P0
+UT-C102
+Profile Completion
+Incomplete sections highlighted
+Profile missing Skills + Education
+"Complete your Skills" and "Add Education" CTAs shown
+P0
+UT-C103
+Profile Completion
+100% completion state
+All sections complete
+"Profile Complete âœ“" badge; no pending CTAs
+P1
+UT-C104
+Recommended Jobs
+Job cards rendered
+API returns 3 recommended jobs
+3 job cards with title, company, salary, match %
+P0
+UT-C105
+Recommended Jobs
+Empty state â€” no recommendations
+API returns 0 jobs
+"Complete your profile to get job recommendations" + CTA
+P0
+UT-C106
+Recommended Jobs
+Job card click navigates to details
+Click job card
+Navigates to Job Details screen (C12)
+P0
+UT-C107
+Upcoming Interview
+Interview card rendered
+Interview scheduled
+Card shows job title, company, date, time, status
+P0
+UT-C108
+Upcoming Interview
+Empty state â€” no interviews
+No interviews scheduled
+"No upcoming interviews" message
+P1
+UT-C109
+Application Status
+Recent applications displayed
+Candidate has applications
+Application entries with job title, company, status badge
+P0
+UT-C110
+Application Status
+Empty state â€” no applications
+Zero applications
+"You haven't applied for any jobs yet." + [Find Jobs] button
+P0
+UT-C111
+Dashboard
+Loading state
+API in progress
+Skeleton loaders for all widgets; no blank screen
+P0
+UT-C112
+Dashboard
+Error state
+API failure
+"Something went wrong. We couldn't load the information." + [Try Again]
+P0
+
+
+1F. Resume Builder Tests â€” Detailed
+Candidate Portal â€” Resume Builder Tests (Detailed)
+Test ID
+Step / Field
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C120
+Wizard
+All 7 steps render
+Resume Builder opened
+Steps: Personal â†’ Education â†’ Experience â†’ Skills â†’ Languages â†’ Preferences â†’ Review
+P0
+UT-C121
+Wizard
+Progress indicator updates per step
+Navigate through steps
+Progress bar advances proportionally
+P0
+UT-C122
+Wizard
+Cannot skip to later step
+Click Step 4 while on Step 1
+Navigation blocked; must complete current step
+P0
+UT-C123
+Wizard
+Back navigation preserves data
+Enter data on Step 2, go back, return
+Step 2 data preserved
+P0
+UT-C124
+Wizard
+Profile data pre-populated
+Candidate has existing profile
+Name, education, experience, skills pre-filled from Career Passport
+P1
+UT-C125
+Step 1 â€” Name
+Name pre-populated from profile
+Profile has name
+Full name auto-filled
+P0
+UT-C126
+Step 1 â€” Name
+Name is mandatory
+Empty name on submit
+Error: "Name is required"
+P0
+UT-C127
+Step 1 â€” Summary
+Professional Summary textarea renders
+Step 1 loaded
+Multi-line text area visible
+P0
+UT-C128
+Step 1 â€” Summary
+Summary is optional on first save
+Empty summary, click Save & Continue
+Proceeds to Step 2
+P1
+UT-C129
+Step 1 â€” Summary
+Summary character limit enforced
+Enter >500 characters
+Character counter shown; input capped or warning
+P1
+UT-C130
+Step 1 â€” Summary
+AI suggestion available for summary
+Click "Improve with AI"
+AI suggestion generated for Professional Summary
+P1
+UT-C131
+Step 2 â€” Education
+"+ Add Education" button renders
+Step 2 loaded
+Button visible
+P0
+UT-C132
+Step 2 â€” Education
+Add education entry expands form
+Click "+ Add Education"
+Fields: Degree, Institution, Year of Completion, Grade/Percentage
+P0
+UT-C133
+Step 2 â€” Degree
+Degree is mandatory
+Empty degree on save
+Error: "Degree is required"
+P0
+UT-C134
+Step 2 â€” Institution
+Institution is mandatory
+Empty institution on save
+Error: "Institution name is required"
+P0
+UT-C135
+Step 2 â€” Year
+Year of completion is mandatory
+Empty year on save
+Error: "Year of completion is required"
+P0
+UT-C136
+Step 2 â€” Year
+Future year rejected
+Enter 2030
+Error: "Year cannot be in the future"
+P0
+UT-C137
+Step 2 â€” Year
+Very old year rejected
+Enter 1940
+Error: "Please enter a valid year"
+P1
+UT-C138
+Step 2 â€” Grade
+Grade is optional
+Leave grade empty
+Accepted without error
+P1
+UT-C139
+Step 2 â€” Education
+Multiple entries allowed
+Add 2nd education
+Both entries displayed; each editable/deletable
+P0
+UT-C140
+Step 2 â€” Education
+Delete entry shows confirmation
+Click delete
+Confirmation modal; entry removed on confirm
+P1
+UT-C141
+Step 2 â€” Education
+Empty state
+No entries added
+"No education added yet. Click + Add Education to begin."
+P0
+UT-C142
+Step 3 â€” Experience
+"+ Add Experience" button renders
+Step 3 loaded
+Button visible
+P0
+UT-C143
+Step 3 â€” Experience
+Add experience expands form
+Click "+ Add Experience"
+Fields: Job Title, Company, Start Date, End Date, Currently Working Here, Description
+P0
+UT-C144
+Step 3 â€” Title
+Job title is mandatory
+Empty title on save
+Error: "Job title is required"
+P0
+UT-C145
+Step 3 â€” Company
+Company is mandatory
+Empty company on save
+Error: "Company name is required"
+P0
+UT-C146
+Step 3 â€” Start Date
+Start date is mandatory
+Empty start date
+Error: "Start date is required"
+P0
+UT-C147
+Step 3 â€” End Date
+End date mandatory unless currently working
+End date empty, checkbox unchecked
+Error: "End date is required"
+P0
+UT-C148
+Step 3 â€” Currently Working
+Checkbox hides end date
+Check "Currently Working Here"
+End date field hidden/disabled
+P0
+
+
+1G. AI Resume Guidance Tests â€” Detailed
+Candidate Portal â€” AI Resume Guidance Tests (Detailed)
+Test ID
+Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C170
+AI Trigger
+"Improve with AI" button visible on resume sections
+Resume Builder loaded
+Button visible on Professional Summary, Experience descriptions
+P1
+UT-C171
+AI Call
+AI analysis triggered
+Click "Improve with AI"
+POST /ai/resume/analyze called via NestJS â†’ AI Gateway (never direct)
+P0
+UT-C172
+AI Suggestion
+Suggestion displayed
+AI returns improvement
+Suggestion shown alongside original text with Accept/Ignore/Try Again
+P1
+UT-C173
+Accept
+Accept replaces original
+Click "Accept"
+Original text replaced with AI suggestion
+P1
+UT-C174
+Ignore
+Ignore preserves original
+Click "Ignore"
+Original text preserved; suggestion dismissed
+P1
+UT-C175
+Try Again
+Regenerate produces new suggestion
+Click "Try Again"
+New POST /ai/resume/analyze called; different suggestion displayed
+P1
+UT-C176
+Safety
+AI never auto-overwrites candidate data
+AI suggestion generated
+Original information preserved until explicit "Accept" click
+P0
+UT-C177
+Safety
+No action taken = no change
+AI suggestion shown; candidate navigates away
+Original text unchanged
+P0
+UT-C178
+Loading
+AI loading state
+AI analysis in progress
+Loading spinner/skeleton shown; "Analyzing..." text
+P1
+UT-C179
+Error
+AI Gateway unavailable
+AI service down
+Error: "AI suggestions are temporarily unavailable. You can continue editing manually."
+P1
+UT-C180
+Error
+AI analysis fails
+POST /ai/resume/analyze returns error
+Error message shown; original text preserved; manual editing still works
+P1
+
+
+
+1H. Job Search & Application Tests â€” Detailed
+Candidate Portal â€” Job Search and Application Tests (Detailed)
+Test ID
+Screen / Field
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C190
+Job Search
+Search by keyword
+Enter "Customer Service"
+GET /jobs called; relevant jobs displayed
+P0
+UT-C191
+Job Search
+Filter by location
+Select "Chennai"
+Jobs filtered to Chennai only
+P0
+UT-C192
+Job Search
+Filter by salary range
+Set min: 20000, max: 40000
+Jobs within salary range displayed
+P1
+UT-C193
+Job Search
+Filter by experience
+Select "2â€“5 years"
+Jobs matching experience displayed
+P1
+UT-C194
+Job Search
+Filter by job type
+Select "Full Time"
+Only full-time jobs displayed
+P1
+UT-C195
+Job Search
+Filter by skills
+Select "Communication" skill
+Jobs requiring Communication displayed
+P1
+UT-C196
+Job Search
+Multiple filters combined
+Location + Salary + Type
+Results match all applied filters
+P1
+UT-C197
+Job Search
+Result count displayed
+Search executed
+"124 jobs found" count shown
+P1
+UT-C198
+Job Search
+Empty state â€” no results
+Search with no matches
+"No jobs found matching your criteria. Try adjusting your filters."
+P0
+UT-C199
+Job Search
+Loading state
+API in progress
+Skeleton loaders for job cards
+P0
+UT-C200
+Job Search
+Error state
+API failure
+"Something went wrong" + [Try Again]
+P0
+UT-C201
+Job Card
+Card renders all fields
+Job data returned
+Title, company, location, salary range, job type displayed
+P0
+UT-C202
+Job Card
+Click navigates to Job Details
+Click job card
+Navigates to Job Details screen (C12)
+P0
+UT-C203
+Job Details
+All fields displayed
+GET /jobs/:id
+Title, company, salary, type, description, requirements, match % shown
+P0
+UT-C204
+Job Details
+Match percentage displayed
+Candidate views job
+"Your match: 86%" with appropriate badge (Excellent/Good/Moderate/Low)
+P1
+UT-C205
+Job Details
+"Apply Now" button visible
+Job not yet applied
+"Apply Now" primary button displayed
+P0
+UT-C206
+Job Details
+"Already Applied" state
+Candidate already applied
+"Apply Now" replaced with "Already Applied" (disabled)
+P0
+UT-C207
+Apply
+Submit application
+Click "Apply Now"
+POST /applications called; {id, status: "APPLIED"} returned
+P0
+UT-C208
+Apply
+Loading state on apply
+Click "Apply Now"
+Button shows "Applying..." with spinner
+P0
+UT-C209
+Apply
+Application confirmation screen
+Application submitted
+"Application Submitted âœ“" with job title, company, and navigation options
+P0
+UT-C210
+Apply
+Duplicate application prevented
+Apply for same job twice
+System prevents duplicate; "Already Applied" shown
+P0
+UT-C211
+My Applications
+List all applications
+GET /applications
+Applications listed with job title, company, date applied, status
+P0
+UT-C212
+My Applications
+Status pipeline rendered
+Application in "Shortlisted" state
+Pipeline: Applied âœ“ â†’ Shortlisted âœ“ â†’ Interview â—‹ â†’ Outcome â—‹
+P0
+UT-C213
+My Applications
+Empty state
+Zero applications
+"You haven't applied for any jobs yet." + [Find Jobs] button
+P0
+UT-C214
+My Applications
+Loading state
+API in progress
+Skeleton loaders for application list
+P0
+UT-C215
+My Applications
+Click navigates to job details
+Click application entry
+Navigates to Job Details with application status
+P1
+
+
+1I. Interview Tests â€” Detailed
+Candidate Portal â€” Interview Tests (Detailed)
+Test ID
+Screen / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C220
+Interview Dashboard
+Display upcoming interviews
+GET /interviews
+Interview cards with job title, company, date, time, status
+P0
+UT-C221
+Interview Dashboard
+Empty state
+No interviews
+"No upcoming interviews" message
+P0
+UT-C222
+Interview Dashboard
+Loading state
+API in progress
+Skeleton loaders for interview cards
+P0
+UT-C223
+Interview Dashboard
+Error state
+API failure
+"Something went wrong" + [Try Again]
+P0
+UT-C224
+Interview Card
+Card shows all required fields
+Interview data returned
+Job title, company name, date, time, duration, type (In-person/Online), status badge
+P0
+UT-C225
+Interview Card
+Status badge renders correctly
+Various statuses
+PROPOSED, SCHEDULED, CONFIRMED, COMPLETED each with correct badge styling
+P0
+UT-C226
+Interview Details
+Full details displayed
+Click interview card
+Date, time, duration, type, location/link, interviewer, notes, status shown
+P0
+UT-C227
+Confirm
+Confirm interview
+Click "Confirm"
+POST /interviews/:id/confirm called; status = Confirmed; success toast
+P0
+UT-C228
+Confirm
+Confirm button loading state
+Click "Confirm"
+Button shows "Confirming..." with spinner
+P0
+UT-C229
+Confirm
+Confirm button hidden after confirmation
+Interview already confirmed
+"Confirmed âœ“" badge shown instead of button
+P0
+UT-C230
+Reschedule
+Request reschedule
+Click "Request Reschedule"
+POST /interviews/:id/reschedule called; status = RESCHEDULE_REQUESTED
+P1
+UT-C231
+Reschedule
+Reschedule reason field
+Click "Request Reschedule"
+Optional reason text field shown before submission
+P1
+UT-C232
+Interview History
+Past interviews displayed
+Candidate has completed interviews
+History shows job, date, outcome (Selected/Rejected), feedback
+P1
+UT-C233
+Online Interview
+Meeting link displayed
+Interview type = Online
+Clickable meeting link shown (e.g., "https://...")
+P0
+UT-C234
+In-person Interview
+Location displayed
+Interview type = In-person
+Physical address/location shown
+P0
+
+
+1J. Mock Interview Tests â€” Detailed
+Candidate Portal â€” Mock Interview Tests (Detailed)
+Test ID
+Screen / Field
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C240
+Start Screen
+Start screen renders all fields
+Mock Interview opened
+Job Role dropdown, Interview Type radio, Question Count dropdown, Difficulty Level radio, info box, Start button
+P1
+UT-C241
+Start â€” Role
+Job Role is mandatory
+Click "Start" without selecting role
+Error: "Please select a job role"
+P1
+UT-C242
+Start â€” Role
+Job Role dropdown is searchable
+Type "Customer"
+Matching roles filtered in dropdown
+P1
+UT-C243
+Start â€” Role
+Roles loaded from API
+Screen loaded
+GET /jobs/roles called; roles populated
+P1
+UT-C244
+Start â€” Role
+Roles loading skeleton
+API in progress
+Skeleton in dropdown while loading
+P1
+UT-C245
+Start â€” Role
+Roles API failure
+GET /jobs/roles fails
+Error: "Unable to load job roles. Please try again."
+P1
+UT-C246
+Start â€” Type
+Interview Type defaults to "Role Specific"
+Screen loaded
+"Role Specific" radio pre-selected
+P1
+UT-C247
+Start â€” Questions
+Question count options: 5, 10, 15
+Dropdown opened
+Three options available: 5, 10, 15
+P1
+UT-C248
+Start â€” Difficulty
+Difficulty defaults to "Intermediate"
+Screen loaded
+"Intermediate" radio pre-selected
+P1
+UT-C249
+Start â€” Difficulty
+3 difficulty levels available
+Screen loaded
+Beginner, Intermediate, Advanced radio buttons
+P1
+UT-C250
+Start
+Start Mock Interview calls API
+Click "Start Mock Interview"
+POST /ai/interview/start called with {roleId, interviewType, questionCount, difficultyLevel}
+P1
+UT-C251
+Start
+Loading state on start
+Click "Start"
+Button shows "Starting..." with spinner
+P1
+UT-C252
+Start
+API failure on start
+POST fails
+Error: "Unable to start interview. Please try again."
+P1
+UT-C253
+Question Screen
+Question displayed with number
+First question returned
+"Question 1 of 5" with progress bar at 20%
+P1
+UT-C254
+Question Screen
+Question text in card
+Question returned
+Question text displayed in styled card
+P1
+UT-C255
+Question Screen
+Tip/hint displayed
+Question loaded
+"ðŸ’¡ Tip: Use a specific example from your experience." shown
+P2
+UT-C256
+Answer â€” Text
+Text answer mode default
+Question screen loaded
+Text input mode active by default (MVP)
+P1
+UT-C257
+Answer â€” Text
+Text answer minimum 20 characters
+Enter "Yes" (3 chars)
+Error: minimum character requirement not met
+P1
+UT-C258
+Answer â€” Text
+Text answer maximum 1000 characters
+Enter >1000 chars
+Character counter: "1000 / 1000"; input capped
+P1
+UT-C259
+Answer â€” Text
+Character counter displayed
+Typing answer
+"Characters: 245 / 1000" shown below textarea
+P1
+UT-C260
+Answer â€” Voice
+Voice recording option available
+Question screen loaded
+"Voice" toggle visible
+P2
+UT-C261
+Answer â€” Voice
+Recording timer displayed
+Start recording
+"Recording time: 00:15 / 02:00" shown
+P2
+UT-C262
+Submit
+Submit answer calls API
+Click "Submit Answer"
+POST /ai/interview/:sessionId/answer called with {questionId, answerText, timeTakenSeconds}
+P1
+UT-C263
+Submit
+Next question loads after submit
+Answer submitted
+Next question displayed; progress bar advances
+P1
+UT-C264
+Skip
+Skip question moves to next
+Click "Skip Question"
+Next question loads; skipped question marked
+P1
+UT-C265
+Results
+Results screen displays after last question
+All questions answered
+GET /ai/interview/:id/result called; results screen rendered
+P1
+UT-C266
+Results â€” Scores
+4 scoring dimensions displayed
+Results loaded
+Communication, Relevance, Clarity, Confidence scores shown (e.g., 7/10 each)
+P1
+UT-C267
+Results â€” Feedback
+"What you did well" section
+Results loaded
+Positive feedback points listed
+P1
+UT-C268
+Results â€” Feedback
+"Areas to improve" section
+Results loaded
+Improvement suggestions listed
+P1
+UT-C269
+Results â€” Overall
+Overall score displayed
+Results loaded
+Aggregate score or rating shown
+P1
+UT-C270
+Results
+"Try Again" button
+Results screen
+Button to start new mock interview session
+P1
+UT-C271
+Results
+"Back to Dashboard" button
+Results screen
+Navigates back to Candidate Dashboard
+P1
+
+
+1K. Navigation & Responsive Tests â€” Detailed
+Candidate Portal â€” Navigation and Responsive Tests
+Test ID
+Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-C280
+Bottom Nav
+5 navigation items render on mobile
+Viewport < 768px
+Home, Jobs, Applications, Interviews, Profile visible
+P0
+UT-C281
+Bottom Nav
+Active tab highlighted
+Navigate to Jobs
+"Jobs" tab highlighted/active
+P0
+UT-C282
+Bottom Nav
+Each tab navigates correctly
+Click each tab
+Correct screen loads for each tab
+P0
+UT-C283
+Responsive
+Mobile layout on < 768px
+Viewport < 768px
+Mobile-first layout; bottom nav; single column
+P0
+UT-C284
+Responsive
+Tablet layout on 768â€“1023px
+Viewport 768px
+Tablet layout renders correctly
+P1
+UT-C285
+Responsive
+Desktop layout on â‰¥ 1024px
+Viewport â‰¥ 1024px
+Desktop layout with top navigation
+P0
+UT-C286
+Responsive
+Low-cost Android phone rendering
+Budget Android device
+All candidate screens render and function correctly
+P0
+UT-C287
+Accessibility
+Keyboard navigation through all forms
+Tab through registration form
+All fields focusable in logical order
+P0
+UT-C288
+Accessibility
+Visible focus states on all elements
+Tab to any interactive element
+Focus ring/outline visible
+P0
+UT-C289
+Accessibility
+All inputs have labels
+Any form rendered
+Every input has associated accessible label
+P0
+UT-C290
+Accessibility
+WCAG contrast compliance
+All text elements
+Text meets WCAG contrast ratio requirements
+P1
+
+Expanded Section Summary
+Candidate Portal â€” Expanded Coverage Summary
+Sub-Section
+Area
+Original Tests
+1A
+Landing Page
+0
+1B
+Registration
+6
+1C
+OTP Verification
+4
+1D
+Onboarding Wizard
+2
+1E
+Dashboard
+3
+1F
+Resume Builder
+4
+1G
+AI Resume Guidance
+5
+1H
+Job Search & Applications
+10
+1I
+Interviews
+3
+1J
+Mock Interview
+3
+
+
+2A. Employer Registration Tests â€” Detailed
+
+Test ID
+Field / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E001
+Registration
+Registration form renders all fields
+Screen loaded
+Your Name, Company Name, Work Email, Mobile Number, Password, Terms checkbox, Create button all visible
+P0
+UT-E002
+Your Name
+Name is mandatory
+Empty name, click Create
+Error: "Name is required"
+P0
+UT-E003
+Your Name
+Name minimum 2 characters
+Enter "A"
+Error: "Please enter a valid name"
+P0
+UT-E004
+Your Name
+Valid name accepted
+Enter "John Smith"
+No error; field valid
+P0
+UT-E005
+Company Name
+Company name is mandatory
+Empty company, click Create
+Error: "Company name is required"
+P0
+UT-E006
+Company Name
+Company name min 2 / max 100 chars
+Enter "A" or >100 chars
+Appropriate error message
+P0
+UT-E007
+Work Email
+Work email is mandatory
+Empty email, click Create
+Error: "Please enter a valid work email address"
+P0
+UT-E008
+Work Email
+Invalid email format rejected
+Enter "john@"
+Error: "Please enter a valid work email address"
+P0
+UT-E009
+Work Email
+Valid work email accepted
+Enter "john@abcservices.com"
+No error; field valid
+P0
+UT-E010
+Mobile
+Mobile is mandatory
+Empty mobile, click Create
+Error: "Please enter a valid 10-digit mobile number"
+P0
+UT-E011
+Mobile
+Mobile must be 10 digits
+Enter "12345"
+Error: "Please enter a valid 10-digit mobile number"
+P0
+UT-E012
+Mobile
+Mobile must be numeric only
+Enter "98765abcde"
+Error: "Mobile number must contain digits only"
+P0
+UT-E013
+Mobile
+Country code prefix displayed
+Form loaded
+"+91" prefix shown
+P1
+UT-E014
+Password
+Password is mandatory
+Empty password, click Create
+Error: "Password must be at least 8 characters"
+P0
+UT-E015
+Password
+Password min 8 characters
+Enter "Pass1!"
+Error: "Password must be at least 8 characters"
+P0
+UT-E016
+Password
+Password requires uppercase + number + special char
+Enter "password123"
+Error: "Password must contain uppercase, number, and special character"
+P0
+UT-E017
+Password
+Valid password accepted
+Enter "SecurePass@1"
+No error; field valid
+P0
+UT-E018
+Password
+Toggle visibility (eye icon)
+Click ðŸ‘ icon
+Password toggles between masked and visible
+P1
+UT-E019
+Terms
+Terms checkbox is mandatory
+Checkbox unchecked, click Create
+Error: "You must accept the Terms and Privacy Policy to continue"
+P0
+UT-E020
+Button
+Button disabled when form invalid
+Required fields empty
+"Create Employer Account" button disabled/greyed
+P0
+UT-E021
+Button
+Loading state on submit
+Click Create with valid data
+Button shows "Creating..." with spinner; all fields disabled
+P0
+UT-E022
+API
+Successful registration
+Valid data submitted
+POST /employer/register called; {employerId, status: "OTP_SENT"} returned; navigate to OTP
+P0
+UT-E023
+Error
+Duplicate email
+Email already registered
+Error: "This email is already registered. Please login."
+P0
+UT-E024
+Error
+Duplicate mobile
+Mobile already registered
+Error: "This mobile number is already registered."
+P0
+UT-E025
+Error
+API failure
+Backend returns 500
+Error: "Something went wrong. Please try again."
+P0
+UT-E026
+Error
+Network timeout
+Request times out
+Error: "Unable to connect. Please check your connection."
+P1
+UT-E027
+Navigation
+"Already registered? Login" link
+Click Login
+Navigates to Employer Login screen
+P1
+
+
+2B. Employer OTP Verification Tests â€” Detailed
+Test ID
+Field / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E030
+OTP Display
+6 individual digit input boxes render
+OTP screen loaded
+6 separate input boxes displayed
+P0
+UT-E031
+OTP Display
+Masked mobile number shown
+OTP screen loaded
+"+91 XXXXX XXXXX" displayed
+P0
+UT-E032
+OTP Input
+Auto-advance to next box
+Enter digit in box 1
+Cursor moves to box 2
+P0
+UT-E033
+OTP Input
+Paste 6-digit OTP auto-populates
+Paste "123456"
+All 6 boxes populated; auto-submit triggered
+P1
+UT-E034
+OTP Input
+Auto-submit on 6th digit
+Enter 6th digit
+POST /auth/verify called automatically
+P0
+UT-E035
+OTP Input
+Only numeric input accepted
+Enter "a"
+Input rejected
+P0
+UT-E036
+Timer
+Countdown timer displays
+Screen loaded
+Timer counts down from 00:60
+P0
+UT-E037
+Timer
+Resend disabled while timer active
+Timer at 00:42
+"Resend OTP" button disabled
+P0
+UT-E038
+Timer
+Resend enabled when timer expires
+Timer reaches 00:00
+"Resend OTP" button active
+P0
+UT-E039
+Resend
+Resend calls API
+Click "Resend OTP"
+POST /auth/resend-otp called; timer resets
+P0
+UT-E040
+Verify
+Valid OTP accepted
+Correct 6-digit OTP
+{token, employerId} returned; navigate to Company Profile
+P0
+UT-E041
+Verify
+Invalid OTP rejected
+Wrong OTP
+Error: "Invalid OTP. Please try again."
+P0
+UT-E042
+Verify
+Expired OTP rejected
+OTP after expiry
+Error: "OTP has expired. Please click Resend OTP."
+P0
+UT-E043
+Verify
+Max attempts exceeded
+3+ wrong attempts
+Error: "Too many attempts. Please request a new OTP."
+P1
+UT-E044
+Verify
+Loading state
+OTP submitted
+"Verifying..." with spinner; inputs disabled
+P0
+UT-E045
+Navigation
+"Change Mobile" link
+Click "Wrong number? Change Mobile"
+Navigate back to registration to correct mobile
+P1
+
+
+2C. Company Profile Tests â€” Detailed
+
+Test ID
+Field / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E050
+Profile
+Company Profile form renders all fields
+Screen loaded
+Logo upload, Company Name, Industry, Company Size, Location, About, Website, LinkedIn URL, Save button visible
+P0
+UT-E051
+Logo
+Logo upload accepts JPG/PNG
+Upload valid JPG
+Logo preview displayed
+P1
+UT-E052
+Logo
+Logo rejects non-image files
+Upload .pdf file
+Error: "Please upload a JPG or PNG image under 2MB"
+P1
+UT-E053
+Logo
+Logo max 2MB enforced
+Upload 5MB image
+Error: "Please upload a JPG or PNG image under 2MB"
+P1
+UT-E054
+Logo
+Logo is optional
+Leave logo empty, save
+Profile saved without error
+P1
+UT-E055
+Company Name
+Pre-populated from registration
+Profile loaded
+Company name auto-filled from registration data
+P0
+UT-E056
+Company Name
+Company name is mandatory
+Clear name, click Save
+Error: "Company name is required"
+P0
+UT-E057
+Industry
+Industry dropdown renders
+Click Industry field
+Dropdown with industry options (e.g., BPO/Customer Service, IT, Healthcare)
+P0
+UT-E058
+Industry
+Industry is mandatory
+Leave blank, click Save
+Error: "Please select an industry"
+P0
+UT-E059
+Company Size
+Size dropdown renders
+Click Size field
+Options: 1â€“10, 11â€“50, 51â€“200, 201â€“500, 500+
+P0
+UT-E060
+Company Size
+Size is mandatory
+Leave blank, click Save
+Error: "Please select company size"
+P0
+UT-E061
+Location
+Location is mandatory
+Leave blank, click Save
+Error: "Please select a location"
+P0
+UT-E062
+About
+About Company is optional
+Leave empty, save
+Accepted without error
+P1
+UT-E063
+About
+About character limit
+Enter >1000 characters
+Character counter shown; input capped
+P1
+UT-E064
+Website
+Website is optional
+Leave empty, save
+Accepted without error
+P1
+UT-E065
+Website
+Invalid URL rejected
+Enter "not-a-url"
+Error: "Please enter a valid URL"
+P1
+UT-E066
+LinkedIn
+LinkedIn URL is optional
+Leave empty, save
+Accepted without error
+P2
+UT-E067
+Save
+Save Profile calls API
+Click "Save Profile"
+PUT /employer/company called; 200 OK
+P0
+UT-E068
+Save
+Loading state on save
+Click "Save Profile"
+Button shows "Saving..." with spinner
+P0
+UT-E069
+Save
+Success toast on save
+API returns 200
+Toast: "Company profile saved successfully"
+P0
+UT-E070
+Error
+API failure on save
+Backend returns 500
+Error toast: "Unable to save profile. Please try again."
+P0
+
+
+2D. Employer Dashboard Tests â€” Expanded
+Test ID
+Widget / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E080
+Dashboard
+Dashboard loads with all widgets
+GET /employer/dashboard
+Active Jobs, Total Applications, Interviews Scheduled, Candidates Shortlisted widgets rendered
+P0
+UT-E081
+Active Jobs
+Active Jobs count displayed
+Employer has 5 active jobs
+Widget shows "5" with "Active Jobs" label
+P0
+UT-E082
+Active Jobs
+Click navigates to Job Management
+Click Active Jobs widget
+Navigates to Job Management screen
+P0
+UT-E083
+Applications
+Total Applications count displayed
+42 applications received
+Widget shows "42" with "Total Applications" label
+P0
+UT-E084
+Interviews
+Interviews Scheduled count displayed
+8 interviews scheduled
+Widget shows "8" with "Interviews Scheduled" label
+P0
+UT-E085
+Shortlisted
+Candidates Shortlisted count displayed
+15 shortlisted
+Widget shows "15" with "Candidates Shortlisted" label
+P0
+UT-E086
+Recent Apps
+Recent Applications table renders
+Applications exist
+Table with Candidate Name, Job Title, Date Applied, Status columns
+P0
+UT-E087
+Recent Apps
+Click row navigates to application
+Click application row
+Navigates to Application Details
+P1
+UT-E088
+Job Performance
+Job performance metrics displayed
+Active jobs exist
+Applications per job, views per job metrics shown
+P1
+UT-E089
+Dashboard
+Loading state
+API in progress
+Skeleton loaders for all widgets; no blank screen
+P0
+UT-E090
+Dashboard
+Error state
+API failure
+"Something went wrong" + [Try Again]
+P0
+UT-E091
+Dashboard
+Empty state â€” new employer
+Zero jobs, zero applications
+"Welcome! Create your first job to start receiving applications." + [Create Job] CTA
+P0
+
+
+2E. Create Job Wizard Tests â€” Expanded
+Test ID
+Step / Field
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E100
+Wizard
+3-step wizard renders
+Create Job opened
+Steps: Job Details â†’ Requirements â†’ Compensation & Description
+P0
+UT-E101
+Wizard
+Progress indicator updates per step
+Navigate steps
+Progress bar advances at each step
+P0
+UT-E102
+Wizard
+Back navigation preserves data
+Enter data on Step 2, go back, return
+Step 2 data preserved
+P0
+UT-E103
+Step 1 â€” Title
+Job Title is mandatory
+Empty title, click Next
+Error: "Job title is required"
+P0
+UT-E104
+Step 1 â€” Title
+Valid title accepted
+Enter "Customer Service Executive"
+No error
+P0
+UT-E105
+Step 1 â€” Dept
+Department is mandatory
+Empty department, click Next
+Error: "Department is required"
+P0
+UT-E106
+Step 1 â€” Type
+Job Type is mandatory
+No selection, click Next
+Error: "Job type is required"
+P0
+UT-E107
+Step 1 â€” Type
+Job Type options correct
+Dropdown opened
+Options: Full Time, Part Time, Contract, Internship
+P0
+UT-E108
+Step 1 â€” Location
+Location is mandatory
+Empty location, click Next
+Error: "Location is required"
+P0
+UT-E109
+Step 1 â€” Location
+Location dropdown loads from API
+Step 1 loaded
+GET /locations called; cities populated
+P0
+UT-E110
+Step 2 â€” Experience
+Experience is mandatory
+Empty experience, click Next
+Error: "Experience is required"
+P0
+UT-E111
+Step 2 â€” Experience
+Experience options correct
+Dropdown opened
+Fresher, 0â€“1 yr, 1â€“2 yrs, 2â€“5 yrs, 5+ yrs
+P0
+UT-E112
+Step 2 â€” Skills
+At least one skill required
+No skills selected, click Next
+Error: "At least one skill is required"
+P0
+UT-E113
+Step 2 â€” Skills
+Skill search and add
+Type "Comm", select "Communication"
+Skill added as tag/chip
+P0
+UT-E114
+Step 2 â€” Skills
+Multiple skills selectable
+Add 3 skills
+All 3 displayed as tags
+P0
+UT-E115
+Step 2 â€” Skills
+Remove skill
+Click Ã— on skill tag
+Skill removed from list
+P0
+UT-E116
+Step 2 â€” Education
+Education is mandatory
+No selection, click Next
+Error: "Education is required"
+P0
+UT-E117
+Step 2 â€” Education
+Education options correct
+Dropdown opened
+10th Pass, 12th Pass, Diploma, Any Graduate, Post Graduate
+P0
+UT-E118
+Step 2 â€” Language
+Language selection optional
+Leave empty
+Accepted without error
+P1
+UT-E119
+Step 3 â€” Salary
+Salary range min is required
+Empty min, click Publish
+Error: "Minimum salary is required"
+P0
+UT-E120
+Step 3 â€” Salary
+Salary range max is required
+Empty max, click Publish
+Error: "Maximum salary is required"
+P0
+UT-E121
+Step 3 â€” Salary
+Min must be less than max
+Min: 50000, Max: 30000
+Error: "Minimum salary must be less than maximum"
+P0
+UT-E122
+Step 3 â€” Salary
+Salary must be positive
+Enter negative value
+Error: "Please enter a valid salary"
+P0
+UT-E123
+Step 3 â€” Description
+Job Description is mandatory
+Empty description, click Publish
+Error: "Job description is required"
+P0
+UT-E124
+Step 3 â€” Description
+Description character limit
+Enter >5000 characters
+Character counter; input capped or warning
+P1
+UT-E125
+Preview
+Job Preview renders before publish
+Click "Preview"
+Full job listing preview with all entered data
+P0
+UT-E126
+Save Draft
+Save as Draft
+Click "Save Draft"
+POST /jobs called with status: "DRAFT"; success toast
+P1
+UT-E127
+Publish
+Publish Job calls API
+Click "Publish Job"
+POST /employers/jobs/:id/publish called; job status = PUBLISHED (Active) immediately; no admin approval queue; PENDING_REVIEW is never created
+P0
+UT-E128
+Publish
+Loading state on publish
+Click "Publish Job"
+Button shows "Publishing..." with spinner
+P0
+UT-E129
+Publish
+Success on publish
+API returns 201
+Toast: "Job published successfully"; navigate to Job Management
+P0
+UT-E130
+Error
+API failure on save/publish
+Backend returns 500
+Error toast; user remains on current step; data not lost
+P0
+
+
+2F. Job Management Tests â€” Expanded
+Test ID
+Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E140
+Job List
+All jobs displayed
+GET /employer/jobs
+Jobs listed with title, status, applications count, date posted
+P0
+UT-E141
+Status Filter
+Filter by Draft
+Select "Draft" filter
+Only draft jobs shown
+P0
+UT-E142
+Status Filter
+Filter by Active
+Select "Active" filter
+Only active/published jobs shown
+P0
+UT-E143
+Status Filter
+Filter by Closed
+Select "Closed" filter
+Only closed jobs shown
+P0
+UT-E144
+Status Filter
+Filter by Pending Review (historical records)
+Select "Pending Review" filter
+Only jobs in the Pending Review status are shown (historical records only); newly published jobs never appear here, so an empty list with the empty-state message is valid
+P0
+UT-E145
+Status Badge
+Correct badge per status
+Various job statuses
+Draft (grey), Active (green), Closed (red), Pending Review (amber) badges
+P0
+UT-E146
+Edit Job
+Edit button visible for Draft/Active jobs
+Job in Draft or Active status
+"Edit" button visible
+P0
+UT-E147
+Edit Job
+Edit navigates to job wizard
+Click "Edit"
+Job wizard opens pre-populated with existing data
+P0
+UT-E148
+Close Job
+Close button visible for Active jobs
+Job in Active status
+"Close Job" button visible
+P0
+UT-E149
+Close Job
+Close confirmation modal
+Click "Close Job"
+Modal: "Close this job? It will no longer accept applications." with Cancel and Confirm
+P0
+UT-E150
+Close Job
+Close calls API
+Confirm close
+PUT /jobs/:id/close called; status = Closed
+P0
+UT-E151
+Applications Count
+Applications count per job
+Job has 12 applications
+"12 Applications" shown on job card
+P0
+UT-E152
+Applications Count
+Click count navigates to applications
+Click "12 Applications"
+Navigates to Application Management filtered by that job
+P1
+UT-E153
+Empty State
+No jobs created
+Zero jobs
+"Create your first job to start receiving applications." + [Create Job]
+P0
+UT-E154
+Loading
+Loading state
+API in progress
+Skeleton loaders for job cards
+P0
+UT-E155
+Error
+Error state
+API failure
+"Something went wrong" + [Try Again]
+P0
+
+
+2G. Candidate Search & Matching Tests â€” Expanded
+Test ID
+Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E160
+Search
+Search screen renders all filters
+Screen loaded
+Keyword, Location, Experience, Skills, Language, Education, Availability filters visible
+P0
+UT-E161
+Keyword
+Keyword search with min 2 chars
+Type "Cu"
+Search triggered; results filtered
+P1
+UT-E162
+Location
+Location filter dropdown
+Select "Chennai"
+Results filtered to Chennai candidates
+P0
+UT-E163
+Experience
+Experience filter dropdown
+Select "2â€“5 years"
+Results filtered by experience
+P0
+UT-E164
+Skills
+Multi-select skill tags
+Add "Communication" + "English"
+Results filtered by both skills
+P0
+UT-E165
+Skills
+Maximum 10 skills enforced
+Attempt to add 11th skill
+11th blocked; limit message shown
+P1
+UT-E166
+Language
+Language filter dropdown
+Select "English"
+Results filtered by language
+P1
+UT-E167
+Education
+Education filter dropdown
+Select "Any Graduate"
+Results filtered by education
+P1
+UT-E168
+Availability
+Availability filter
+Select "Immediate"
+Results filtered by availability
+P1
+UT-E169
+Combined
+Multiple filters combined
+Location + Skills + Experience
+Results match ALL applied filters
+P0
+UT-E170
+Clear All
+Clear All resets filters
+Click "Clear All"
+All filters reset; full results shown
+P1
+UT-E171
+Results Count
+Result count displayed
+Search executed
+"324 candidates found" shown
+P0
+UT-E172
+Sort
+Sort by Best Match (default)
+Results loaded
+Sorted by match score descending
+P0
+UT-E173
+Sort
+Sort by Most Recent
+Select "Most Recent"
+Sorted by registration/update date
+P1
+UT-E174
+Sort
+Sort by Experience
+Select "Experience (High to Low)"
+Sorted by years of experience descending
+P1
+UT-E175
+Match â€” Skills
+Skills weight = 40%
+Candidate matches 3/4 required skills
+Skills score = (3/4) Ã— 40 = 30
+P0
+UT-E176
+Match â€” Experience
+Experience weight = 20%
+Exact experience match
+Experience score = 20
+P0
+UT-E177
+Match â€” Experience
+Adjacent experience range
+Close but not exact match
+Experience score = 10
+P1
+UT-E178
+Match â€” Location
+Location weight = 15%
+Exact city match
+Location score = 15
+P0
+UT-E179
+Match â€” Location
+Same state different city
+Same state, different city
+Location score = 7
+P1
+UT-E180
+Match â€” Language
+Language weight = 15%
+All languages matched
+Language score = 15
+P0
+UT-E181
+Match â€” Language
+Partial language match
+1 of 2 languages matched
+Language score = 7
+P1
+UT-E182
+Match â€” Education
+Education weight = 10%
+Meets education requirement
+Education score = 10
+P0
+UT-E183
+Match â€” Total
+Total score calculated correctly
+All factors scored
+Total = Skills + Experience + Location + Language + Education (out of 100%)
+P0
+UT-E184
+Match Badge
+90â€“100% = "Excellent Match" (green)
+Score = 91%
+Green badge: "Excellent Match"
+P0
+UT-E185
+Match Badge
+75â€“89% = "Good Match"
+Score = 82%
+Blue badge: "Good Match"
+P0
+UT-E186
+Match Badge
+50â€“74% = "Moderate Match"
+Score = 65%
+Amber badge: "Moderate Match"
+P0
+UT-E187
+Match Badge
+<50% = "Low Match"
+Score = 35%
+Grey badge: "Low Match"
+P0
+UT-E188
+Match Label
+Label reads "Profile Match" not "Candidate Suitability"
+Any match displayed
+Label text = "Profile Match"
+P0
+UT-E189
+Card
+Candidate card renders all fields
+Results loaded
+Name, Location, Experience, Skills tags, Education, Match %, View Profile, Shortlist buttons
+P0
+UT-E190
+Pagination
+Default 10 results per page
+Search executed
+10 candidate cards per page; pagination controls visible
+P1
+UT-E191
+Pagination
+Navigate to page 2
+Click page 2
+Next 10 results loaded
+P1
+UT-E192
+No Credits
+Search blocked when credits exhausted
+Credits = 0
+"You have used all your candidate search credits." + [Buy More Credits]
+P0
+UT-E193
+Empty
+No candidates found
+Search with no matches
+"No candidates found matching your criteria. Try adjusting your filters."
+P0
+UT-E194
+Loading
+Loading state
+API in progress
+Skeleton loaders for candidate cards
+P0
+UT-E195
+Error
+Error state
+API failure
+"Something went wrong. We couldn't load candidates." + [Try Again]
+P0
+
+
+2H. Shortlist & Reject Tests â€” Expanded
+Test ID
+Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E200
+Shortlist
+"Shortlist" button on candidate card
+Search results loaded
+"Shortlist" button visible on each card
+P0
+UT-E201
+Shortlist
+"Shortlist" button on candidate profile
+Employer views profile
+"Shortlist" primary button visible
+P0
+UT-E202
+Modal
+Confirmation modal renders
+Click "Shortlist"
+Modal with candidate name, job title, optional note, Cancel and "Shortlist Candidate" buttons
+P0
+UT-E203
+Modal â€” Note
+Note field is optional
+Leave empty, confirm
+Shortlist proceeds without error
+P1
+UT-E204
+Modal â€” Note
+Note character limit 500
+Enter >500 chars
+Character counter; input capped
+P1
+UT-E205
+Modal â€” Cancel
+Cancel dismisses modal
+Click "Cancel"
+Modal closes; no action taken
+P0
+UT-E206
+Modal â€” Confirm
+Loading state on confirm
+Click "Shortlist Candidate"
+"Shortlisting..." with spinner; buttons disabled
+P0
+UT-E207
+API
+Shortlist API called
+Confirm shortlist
+POST /applications/:id/shortlist called
+P0
+UT-E208
+Success
+Success toast and status update
+API returns 200
+Toast: "Candidate shortlisted"; badge changes to "Shortlisted"
+P0
+UT-E209
+Notification
+Candidate notified
+Shortlist confirmed
+Candidate portal notification triggered; application status updated
+P0
+UT-E210
+Duplicate
+Already shortlisted candidate
+Attempt re-shortlist
+Button disabled or shows "Shortlisted âœ“"
+P0
+UT-E211
+Error
+API failure on shortlist
+Backend returns 500
+Error toast: "Unable to shortlist candidate. Please try again."; modal stays open
+P0
+UT-E212
+Reject
+"Reject" danger button visible
+Employer views candidate
+"Reject" button displayed
+P0
+UT-E213
+Reject Modal
+Reject confirmation modal
+Click "Reject"
+Modal: "Reject this candidate?" with optional reason, Cancel and "Reject Candidate"
+P0
+UT-E214
+Reject API
+Reject API called
+Confirm reject
+POST /applications/:id/reject called; status = Rejected
+P0
+UT-E215
+Reject Success
+Reject toast and status update
+API returns 200
+Toast: "Candidate rejected"; badge changes to "Rejected"
+P0
+
+
+2I. Interview Scheduling Tests â€” Expanded
+Test ID
+Field / Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E220
+Screen
+All scheduling fields render
+Click "Schedule Interview"
+Candidate name, Interview Type, Date, Time, Duration, Location/Link, WhatsApp checkbox, Email checkbox, Schedule button
+P0
+UT-E221
+Candidate
+Candidate name pre-populated
+Screen opened from candidate
+Name displayed as read-only
+P0
+UT-E222
+Type
+Interview Type is mandatory
+Leave blank, click Schedule
+Error: "Please select an interview type"
+P0
+UT-E223
+Type
+Options: In-person, Online, Phone
+Dropdown opened
+Three options available
+P0
+UT-E224
+Date
+Date picker renders
+Click date field
+Calendar picker opens
+P0
+UT-E225
+Date
+Date is mandatory
+Leave empty, click Schedule
+Error: "Please select an interview date"
+P0
+UT-E226
+Date
+Past date rejected
+Select yesterday
+Error: "Interview date must be in the future"
+P0
+UT-E227
+Date
+Human-readable format
+Date selected
+Displayed as "12 September 2026"
+P1
+UT-E228
+Time
+Time dropdown in 30-min increments
+Click time field
+09:00 AM, 09:30 AM, 10:00 AM, ...
+P0
+UT-E229
+Time
+Time is mandatory
+Leave empty, click Schedule
+Error: "Please select an interview time"
+P0
+UT-E230
+Time
+Past time on today rejected
+Today + past time
+Error: "Interview time must be in the future"
+P0
+UT-E231
+Duration
+Duration options correct
+Dropdown opened
+15 min, 30 min, 45 min, 60 min, 90 min
+P0
+UT-E232
+Duration
+Duration is mandatory
+Leave empty, click Schedule
+Error: "Please select interview duration"
+P0
+UT-E233
+Duration
+Default 30 minutes
+Screen loaded
+"30 minutes" pre-selected
+P1
+UT-E234
+Location
+Label changes for In-person
+Select "In-person"
+Field label: "Interview Location"
+P0
+UT-E235
+Location
+Label changes for Online
+Select "Online"
+Field label: "Meeting Link"
+P0
+UT-E236
+Location
+Location/Link is mandatory
+Leave empty, click Schedule
+Error: "Please enter interview location" or "Please enter meeting link"
+P0
+UT-E237
+Location
+Valid URL for Online
+Enter "https://meet.google.com/abc"
+Accepted
+P0
+UT-E238
+WhatsApp
+WhatsApp checkbox checked by default
+Screen loaded
+â˜‘ "Notify via WhatsApp" pre-checked
+P0
+UT-E239
+WhatsApp
+Uncheck WhatsApp
+Uncheck checkbox
+WhatsApp notification will NOT be sent
+P1
+UT-E240
+Email
+Email checkbox checked by default
+Screen loaded
+â˜‘ "Send email notification" pre-checked
+P0
+UT-E241
+Email
+Uncheck Email
+Uncheck checkbox
+Email notification will NOT be sent
+P1
+UT-E242
+API
+Schedule calls API
+Click "Schedule Interview"
+POST /interviews called with {candidateId, jobId, date, startTime, durationMinutes, type, location}
+P0
+UT-E243
+API
+InterviewCreated event published
+API returns 201
+Event triggers Notification Service â†’ WhatsApp + Email
+P0
+UT-E244
+Success
+Success toast
+API returns 201
+Toast: "Interview scheduled"; navigate to Interview Management
+P0
+UT-E245
+Loading
+Loading state on schedule
+Click "Schedule Interview"
+"Scheduling..." with spinner; fields disabled
+P0
+UT-E246
+Error
+API failure
+Backend returns 500
+Error toast: "Unable to schedule interview. Please try again."
+P0
+
+
+2J. Interview Management & Outcome Tests â€” Expanded
+Test ID
+Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E250
+List
+All interviews displayed
+GET /employer/interviews
+Interviews listed with candidate name, job title, date, time, status
+P0
+UT-E251
+Status Badge
+Status badges render correctly
+Various statuses
+PROPOSED (grey), SCHEDULED (blue), CONFIRMED (green), COMPLETED (purple), SELECTED (green), REJECTED (red)
+P0
+UT-E252
+Filter
+Filter by status
+Select "Confirmed"
+Only confirmed interviews shown
+P1
+UT-E253
+Filter
+Filter by date range
+Select date range
+Interviews within range shown
+P1
+UT-E254
+Details
+Interview details screen
+Click interview
+Full details: candidate, job, date, time, duration, type, location/link, status, notes
+P0
+UT-E255
+Reschedule
+Reschedule interview
+Click "Reschedule"
+Scheduling form opens pre-populated; PUT /interviews/:id called on save
+P1
+UT-E256
+Cancel
+Cancel interview
+Click "Cancel Interview" (danger button)
+Confirmation modal; POST /interviews/:id/cancel called; candidate notified
+P1
+UT-E257
+Outcome
+"Record Outcome" button visible
+Interview in COMPLETED state
+"Record Outcome" button visible
+P0
+UT-E258
+Outcome
+Outcome options correct
+Click "Record Outcome"
+Options: Selected, Rejected, Further Interview, On Hold
+P0
+UT-E259
+Outcome â€” Selected
+Record Selected
+Select "Selected" + notes
+POST /interviews/:id/outcome called with {outcome: "SELECTED"}; status updated
+P0
+UT-E260
+Outcome â€” Rejected
+Record Rejected
+Select "Rejected" + reason
+POST /interviews/:id/outcome called with {outcome: "REJECTED"}; status updated
+P0
+UT-E261
+Outcome â€” Further
+Record Further Interview
+Select "Further Interview"
+Status updated; new interview can be scheduled
+P1
+UT-E262
+Outcome â€” On Hold
+Record On Hold
+Select "On Hold"
+Status updated to On Hold
+P1
+UT-E263
+Outcome Notes
+Notes field optional
+Leave empty, submit
+Outcome recorded without notes
+P1
+UT-E264
+Outcome Success
+Success toast on outcome
+API returns 200
+Toast: "Interview outcome recorded"; status badge updated
+P0
+UT-E265
+Empty
+No interviews
+Zero interviews
+"No interviews scheduled yet. Shortlist candidates to begin."
+P0
+UT-E266
+Loading
+Loading state
+API in progress
+Skeleton loaders
+P0
+UT-E267
+Error
+Error state
+API failure
+"Something went wrong" + [Try Again]
+P0
+
+
+2K. Billing & Credits Tests â€” Expanded
+Test ID
+Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E270
+Plan
+Current plan displayed
+GET /employer/billing
+Plan name (e.g., "Professional") shown
+P0
+UT-E271
+Credits
+Credits remaining with progress bar
+75 credits remaining
+Progress bar + "75 credits remaining" label
+P0
+UT-E272
+Credits
+Credits at zero
+0 credits
+Progress bar empty; "No credits remaining" warning
+P0
+UT-E273
+Buy Credits
+"Buy More Credits" button visible
+Screen loaded
+CTA button displayed
+P0
+UT-E274
+Buy Credits
+Click navigates to purchase flow
+Click "Buy More Credits"
+Purchase/payment flow initiated
+P1
+UT-E275
+Usage
+Candidate views this month
+15 views used
+"Candidate Views: 15" displayed
+P1
+UT-E276
+Usage
+Shortlists this month
+5 shortlists used
+"Shortlists: 5" displayed
+P1
+UT-E277
+Billing History
+"Billing History" button visible
+Screen loaded
+Button displayed
+P1
+UT-E278
+Billing History
+History table renders
+Click "Billing History"
+Table with Date, Description, Amount, Status columns
+P1
+UT-E279
+Loading
+Loading state
+API in progress
+Skeleton loaders for billing widgets
+P0
+UT-E280
+Error
+Error state
+API failure
+"Something went wrong" + [Try Again]
+P0
+
+
+2L. Employer Navigation & Responsive Tests
+Test ID
+Element
+Test Case
+Input / Precondition
+Expected Result
+Priority
+UT-E290
+Top Nav
+Desktop top navigation renders
+Viewport â‰¥ 1024px
+Dashboard, Jobs, Candidates, Interviews, Reports, Notifications, Company items visible
+P0
+UT-E291
+Top Nav
+Active tab highlighted
+Navigate to Jobs
+"Jobs" tab highlighted
+P0
+UT-E292
+Mobile Nav
+Hamburger menu on mobile
+Viewport < 768px
+Hamburger icon visible; bottom bar: Home, Jobs, Candidates, Interviews, Profile
+P0
+UT-E293
+Mobile Nav
+Hamburger opens full menu
+Click hamburger
+Full navigation menu slides in
+P0
+UT-E294
+Responsive
+Desktop layout
+Viewport â‰¥ 1024px
+Full top navigation; multi-column layout
+P0
+UT-E295
+Responsive
+Mobile layout
+Viewport < 768px
+Single column; bottom nav; hamburger menu
+P0
+UT-E296
+Responsive
+Tablet layout
+Viewport 768â€“1023px
+Intermediate layout renders correctly
+P1
+UT-E297
+Accessibility
+Keyboard navigation
+Tab through forms
+All elements focusable in logical order
+P0
+UT-E298
+Accessibility
+Visible focus states
+Tab to any element
+Focus ring visible
+P0
+UT-E299
+Accessibility
+All inputs have labels
+Any form rendered
+Every input has accessible label
+P0
+UT-E300
+Notifications
+Notification bell icon
+Desktop nav
+ðŸ””icon with unread count badge
+P1
+UT-E301
+Notifications
+Click bell opens notifications
+Click ðŸ””
+Notification dropdown/panel opens with recent notifications
+P1
+
+
+Employer Portal â€” Detailed Coverage Summary
+Sub-Section
+Area
+Original Tests
+Expanded Tests
+Total
+2A
+Employer Registration
+4
+27
+27
+2B
+OTP Verification
+0
+16
+16
+2C
+Company Profile
+2
+21
+21
+2D
+Employer Dashboard
+2
+12
+12
+2E
+Create Job Wizard
+6
+31
+31
+2F
+Job Management
+2
+16
+16
+2G
+Candidate Search & Matching
+4
+36
+36
+2H
+Shortlist & Reject
+2
+16
+16
+2I
+Interview Scheduling
+2
+27
+27
+2J
+Interview Management & Outcome
+1
+18
+18
+2K
+Billing & Credits
+1
+11
+11
+2L
+Navigation & Responsive
+0
+12
+12
+
+TOTALS
+26
+243
+243
+
+
+
+
+
