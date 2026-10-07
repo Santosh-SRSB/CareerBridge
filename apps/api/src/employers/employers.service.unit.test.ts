@@ -183,6 +183,7 @@ function harness(opts: Opts = {}) {
     advisoryLocks: 0,
     recompute: 0,
     alerts: 0,
+    audits: [] as Row[],
   };
   let seq = 0;
 
@@ -276,6 +277,12 @@ function harness(opts: Opts = {}) {
         const row = db.interviews.find((i) => i.id === where.id)!;
         Object.assign(row, data);
         return hydrateInterview(db, row);
+      },
+    },
+    auditLog: {
+      create: async ({ data }: Row) => {
+        calls.audits.push(data);
+        return data;
       },
     },
     $executeRaw: async () => {
@@ -1046,6 +1053,51 @@ describe('Fix 10 — interview scheduling', () => {
     assert.equal(mail.meetingUrl, null);
     assert.match(String(mail.portalUrl), new RegExp(`/interviews/scheduled/${iv.id}$`));
     assert.doesNotMatch(JSON.stringify(mail), /old-link/);
+  });
+  it('employer reschedule writes one INTERVIEW_RESCHEDULED audit row without sensitive data', async () => {
+    const h2 = h;
+    const iv: any = await h2.svc.scheduleInterview('uA', schedule({ location: 'https://meet.google.com/old-link' }));
+    await h2.svc.updateInterviewStatus('uA', iv.id, 'confirm');
+    await h2.svc.updateInterviewStatus('uA', iv.id, 'notes', { notes: 'bring id' });
+    assert.equal(h2.calls.audits.length, 0, 'only reschedules are audited');
+    const next = future(72);
+    await h2.svc.updateInterviewStatus('uA', iv.id, 'reschedule', {
+      scheduledAt: next,
+      meetingUrl: 'https://meet.google.com/new-link',
+    });
+    assert.equal(h2.calls.audits.length, 1);
+    const audit = h2.calls.audits[0];
+    assert.equal(audit.action, 'INTERVIEW_RESCHEDULED');
+    assert.equal(audit.resourceType, 'INTERVIEW');
+    assert.equal(audit.resourceId, iv.id);
+    assert.equal(audit.userId, 'uA');
+    const oldValue = JSON.parse(audit.oldValue);
+    const newValue = JSON.parse(audit.newValue);
+    assert.equal(oldValue.status, 'CONFIRMED');
+    assert.equal(newValue.status, 'SCHEDULED');
+    assert.equal(newValue.scheduledAt, new Date(next).toISOString());
+    assert.equal(newValue.applicationId, 'APP1');
+    assert.equal(newValue.candidateId, CAND);
+    assert.equal(newValue.meetingLinkChanged, true);
+    assert.doesNotMatch(JSON.stringify(audit), /meet\.google|old-link|new-link|@|\+91/);
+  });
+  it('a failed reschedule audit write does not fail the reschedule', async () => {
+    const h2 = h;
+    h2.prisma.auditLog.create = async () => {
+      throw new Error('db down');
+    };
+    const iv: any = await h2.svc.scheduleInterview('uA', schedule());
+    const moved: any = await h2.svc.updateInterviewStatus('uA', iv.id, 'reschedule', { scheduledAt: future(72) });
+    assert.equal(moved.status, 'SCHEDULED');
+  });
+  it('a rejected reschedule (past time) writes no audit row', async () => {
+    const h2 = h;
+    const iv: any = await h2.svc.scheduleInterview('uA', schedule());
+    await assert.rejects(
+      h2.svc.updateInterviewStatus('uA', iv.id, 'reschedule', { scheduledAt: new Date(Date.now() - 3_600_000).toISOString() }),
+      (err) => httpStatus(err) === 400,
+    );
+    assert.equal(h2.calls.audits.length, 0);
   });
   it('reschedule may replace the meeting link; a non-URL link is rejected', async () => {
     const iv: any = await h.svc.scheduleInterview('uA', schedule({ location: 'https://meet.google.com/old-link' }));

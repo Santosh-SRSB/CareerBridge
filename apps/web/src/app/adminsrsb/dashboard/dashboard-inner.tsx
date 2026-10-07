@@ -49,6 +49,7 @@ import {
   canOpenAdminTab,
   type SuperAdminNavId,
 } from '@/lib/admin-portal';
+import { ADMIN_INTERVIEW_STATUS_OPTIONS, adminInterviewStatusLabel } from '@/lib/admin-interview-status';
 import { beginEmployerImpersonation, getStoredUser, isPlatformRole, isSuperAdminRole } from '@/lib/session';
 import { RoleDashboardHome, roleDashboardHero } from '@/components/super-admin/role-dashboard-home';
 import {
@@ -206,7 +207,7 @@ function sortAdminRows(rows: Array<Record<string, unknown>>, sort: ListSort) {
     case 'oldest':
       return sortRows(rows, rowTime, 'asc');
     case 'status':
-      return sortRows(rows, (row) => String(row.accountStatus ?? row.status ?? '') || null, 'asc');
+      return sortRows(rows, (row) => String(row.adminStatusLabel ?? row.accountStatus ?? row.status ?? '') || null, 'asc');
     default:
       return rows;
   }
@@ -575,12 +576,16 @@ export default function SuperAdminDashboardInner() {
     setAppliedSearch(search.trim());
   }
 
-  async function openDetail(kind: 'candidates' | 'employers' | 'jobs' | 'applications' | 'interviews', id: string) {
+  async function openDetail(
+    kind: 'candidates' | 'employers' | 'jobs' | 'applications' | 'interviews',
+    id: string,
+    extra?: Record<string, unknown>,
+  ) {
     setError('');
     setOk('');
     try {
       const row = await getAdminRecord(`${kind}/${id}`);
-      setDetail({ kind, ...row });
+      setDetail({ kind, ...row, ...extra });
       // Scroll detail into view after paint.
       requestAnimationFrame(() => {
         document.getElementById('admin-record-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1192,13 +1197,11 @@ export default function SuperAdminDashboardInner() {
                         </option>
                       ))}
                     {tab === 'interviews' &&
-                      ['PROPOSED', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED', 'COMPLETED', 'CANCELLED'].map(
-                        (s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ),
-                      )}
+                      ADMIN_INTERVIEW_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     {(tab === 'candidates' || tab === 'employers' || tab === 'admins') &&
                       ['ACTIVE', 'INACTIVE', 'SUSPENDED'].map((s) => (
                         <option key={s} value={s}>
@@ -1569,31 +1572,50 @@ export default function SuperAdminDashboardInner() {
 
             {tab === 'interviews' && !listLoading && rows.length > 0 && (
               <div className="space-y-3">
-                {sortedRows.map((row) => (
-                  <article
-                    key={String(row.id)}
-                    className="grid gap-3 border border-[#d5dff0] bg-white p-4 md:grid-cols-[140px_1fr_auto]"
-                  >
-                    <div className="bg-[#2255a4] px-3 py-3 text-center text-white">
-                      <p className="text-[10px] uppercase tracking-wide text-white/70">Scheduled</p>
-                      <p className="mt-1 text-xs font-bold leading-snug">{cell(row.scheduledAt)}</p>
-                    </div>
-                    <div>
-                      <p className="font-bold text-[#333]">{cell(row.candidateName)}</p>
-                      <p className="text-sm text-[#666]">{cell(row.jobTitle)}</p>
-                      <p className="text-xs text-[#888]">{cell(row.companyName)}</p>
-                      <p className="mt-1 text-[11px] text-[#2255a4]">
-                        Mode {cell(row.mode)} · WhatsApp {cell(row.whatsappStatus)}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end justify-center gap-2">
-                      <StatusPill status={String(row.status ?? '')} />
-                      <ActionBtn accent="#2255a4" onClick={() => void openDetail('interviews', String(row.id))}>
-                        View
-                      </ActionBtn>
-                    </div>
-                  </article>
-                ))}
+                {sortedRows.map((row) => {
+                  const shortlistedOnly = row.recordType === 'APPLICATION';
+                  return (
+                    <article
+                      key={`${String(row.recordType ?? 'INTERVIEW')}-${String(row.id)}`}
+                      className="grid gap-3 border border-[#d5dff0] bg-white p-4 md:grid-cols-[140px_1fr_auto]"
+                    >
+                      <div className="bg-[#2255a4] px-3 py-3 text-center text-white">
+                        <p className="text-[10px] uppercase tracking-wide text-white/70">Scheduled</p>
+                        <p className="mt-1 text-xs font-bold leading-snug">
+                          {shortlistedOnly ? 'Not scheduled yet' : cell(row.scheduledAt)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-bold text-[#333]">{cell(row.candidateName)}</p>
+                        <p className="text-sm text-[#666]">{cell(row.jobTitle)}</p>
+                        <p className="text-xs text-[#888]">{cell(row.companyName)}</p>
+                        <p className="mt-1 text-[11px] text-[#2255a4]">
+                          {shortlistedOnly
+                            ? 'Shortlisted · awaiting interview scheduling'
+                            : `Mode ${cell(row.mode)} · WhatsApp ${cell(row.whatsappStatus)}`}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end justify-center gap-2">
+                        <StatusPill
+                          status={String(row.adminStatus ?? row.status ?? '')}
+                          label={adminInterviewStatusLabel(row.adminStatus)}
+                        />
+                        <ActionBtn
+                          accent="#2255a4"
+                          onClick={() =>
+                            void (shortlistedOnly
+                              ? openDetail('applications', String(row.applicationId ?? row.id), {
+                                  adminStatus: row.adminStatus,
+                                })
+                              : openDetail('interviews', String(row.id)))
+                          }
+                        >
+                          View
+                        </ActionBtn>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
 

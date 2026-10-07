@@ -111,6 +111,9 @@ export const ACTIVE_INTERVIEW_STATUSES = [
   'RESCHEDULE_REQUESTED',
 ] as const;
 
+/** AuditLog action for an employer reschedule; the interview itself returns to SCHEDULED with no marker. */
+export const INTERVIEW_RESCHEDULED_AUDIT_ACTION = 'INTERVIEW_RESCHEDULED';
+
 /** Candidate asked for another time; the current scheduledAt is no longer agreed. */
 export function isReschedulePending(status: string) {
   return status === 'RESCHEDULE_NEEDED' || status === 'RESCHEDULE_REQUESTED';

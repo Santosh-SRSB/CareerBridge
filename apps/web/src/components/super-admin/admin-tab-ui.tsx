@@ -2,6 +2,7 @@
 
 import type { FormEvent, ReactNode } from 'react';
 import type { SuperAdminNavId } from '@/lib/admin-portal';
+import { adminInterviewFlowSteps, adminInterviewStatusLabel } from '@/lib/admin-interview-status';
 
 export const TAB_THEME: Record<
   SuperAdminNavId,
@@ -152,14 +153,15 @@ export const TAB_THEME: Record<
   },
 };
 
-export function StatusPill({ status }: { status: string }) {
+/** `status` picks the colour; `label` (e.g. an admin display label) replaces the text when given. */
+export function StatusPill({ status, label }: { status: string; label?: string | null }) {
   const s = status.toUpperCase();
   const bg =
     ['ACTIVE', 'PUBLISHED', 'CONFIRMED', 'HIRED', 'DELIVERED', 'SELECTED', 'COMPLETED', 'SUCCESS', 'VERIFIED', 'APPROVED'].includes(s)
       ? '#1e7a50'
       : ['SUSPENDED', 'CLOSED', 'FAILED', 'REJECTED', 'CANCELLED', 'INACTIVE'].includes(s)
         ? '#b93c1c'
-        : ['PAUSED', 'PENDING', 'PENDING_REVIEW', 'QUEUED', 'DRAFT', 'SHORTLISTED', 'SCHEDULED', 'PROPOSED', 'RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED', 'UNDER_REVIEW', 'ON_HOLD'].includes(
+        : ['PAUSED', 'PENDING', 'PENDING_REVIEW', 'QUEUED', 'DRAFT', 'SHORTLISTED', 'SCHEDULED', 'PROPOSED', 'RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED', 'UNDER_REVIEW', 'ON_HOLD', 'PROFILE_SHORTLISTED', 'INTERVIEW_RESCHEDULED', 'FEEDBACK_PENDING'].includes(
               s,
             )
           ? '#a35f00'
@@ -169,7 +171,7 @@ export function StatusPill({ status }: { status: string }) {
       className="inline-flex rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
       style={{ backgroundColor: bg }}
     >
-      {status || '—'}
+      {label || status || '—'}
     </span>
   );
 }
@@ -335,6 +337,55 @@ function personName(data: Record<string, unknown>) {
   return '—';
 }
 
+function InterviewStatusFlow({
+  status,
+  events,
+  accent,
+}: {
+  status: string;
+  events: Array<Record<string, unknown>>;
+  accent: string;
+}) {
+  const { steps, cancelled } = adminInterviewFlowSteps(status);
+  return (
+    <Section title="Interview status flow">
+      {cancelled ? (
+        <p className="mb-2 rounded bg-[#fbe9e5] px-2 py-1 text-xs font-semibold text-[#b93c1c]">
+          Cancelled — this interview is outside the normal flow.
+        </p>
+      ) : null}
+      <ol className="flex flex-wrap items-center gap-1.5" aria-label="Interview status flow">
+        {steps.map((step, i) => (
+          <li key={step.key} className="flex items-center gap-1.5">
+            <span
+              aria-current={step.current ? 'step' : undefined}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                step.current ? 'text-white' : 'border border-[#ddd] bg-white text-[#888]'
+              }`}
+              style={step.current ? { backgroundColor: accent } : undefined}
+            >
+              {step.label}
+            </span>
+            {i < steps.length - 1 ? <span className="text-[#bbb]">→</span> : null}
+          </li>
+        ))}
+      </ol>
+      <p className="mt-2 text-[11px] text-[#888]">
+        Highlighted stage is the current status. Not every candidate passes through every stage.
+      </p>
+      {events.length > 0 ? (
+        <ul className="mt-3 space-y-1.5">
+          {events.map((event, i) => (
+            <li key={`${txt(event.at)}-${i}`} className="text-xs text-[#555]">
+              <span className="font-semibold text-[#333]">{txt(event.label)}</span> · {txt(event.at)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Section>
+  );
+}
+
 /** Human-readable record viewer — never dumps raw JSON. */
 export function DetailPanel({
   title,
@@ -348,7 +399,10 @@ export function DetailPanel({
   onClose: () => void;
 }) {
   const kind = String(data.kind || '');
-  const status = String(data.accountStatus ?? data.status ?? '');
+  const adminStatus = typeof data.adminStatus === 'string' ? data.adminStatus : '';
+  const adminStatusLabel = adminInterviewStatusLabel(adminStatus);
+  const status = adminStatus || String(data.accountStatus ?? data.status ?? '');
+  const statusEvents = asList(data.statusEvents);
   const email =
     data.email ??
     (data.user && typeof data.user === 'object' ? (data.user as Record<string, unknown>).email : null);
@@ -409,7 +463,7 @@ export function DetailPanel({
           <h2 className="text-lg font-bold">{heading}</h2>
         </div>
         <div className="flex items-center gap-2">
-          {status ? <StatusPill status={status} /> : null}
+          {status ? <StatusPill status={status} label={adminStatusLabel} /> : null}
           <button
             type="button"
             className="rounded bg-white/15 px-3 py-1 text-xs font-bold text-white hover:bg-white/25"
@@ -424,7 +478,10 @@ export function DetailPanel({
         <Section title="Overview">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Name / title" value={heading} />
-            <Field label="Status" value={status || '—'} />
+            <Field label="Status" value={adminStatusLabel || status || '—'} />
+            {adminStatus && data.applicationStatus ? (
+              <Field label="Application status" value={data.applicationStatus} />
+            ) : null}
             <Field label="Email" value={email} />
             <Field label="Phone" value={phone} />
             <Field label="Location" value={location} />
@@ -450,6 +507,8 @@ export function DetailPanel({
             {data.whatsappStatus ? <Field label="WhatsApp" value={data.whatsappStatus} /> : null}
           </div>
         </Section>
+
+        {adminStatusLabel && <InterviewStatusFlow status={adminStatus} events={statusEvents} accent={accent} />}
 
         {(kind === 'candidates' || profile) && (
           <Section title="Profile">

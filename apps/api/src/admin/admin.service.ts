@@ -20,6 +20,13 @@ import { AuthService } from '../auth/auth.service';
 import { hashPlatformPassword, verifyPassword } from '../auth/password.util';
 import { EmployersService } from '../employers/employers.service';
 import { employerPlanUsage, usagePeriod } from '../employers/employer-plan';
+import { ACTIVE_INTERVIEW_STATUSES, INTERVIEW_RESCHEDULED_AUDIT_ACTION } from '../employers/employer-policy';
+import {
+  adminInterviewStatusLabel,
+  deriveAdminInterviewStatus,
+  isAdminInterviewStatus,
+  isRawEmployerInterviewStatus,
+} from './admin-interview-status';
 
 const DEFAULT_SETTINGS: Record<string, string> = {
   // Workflow: Settings → Platform / Resume / ATS / AI / Notifications / System
@@ -42,6 +49,10 @@ const ALLOWED_SETTING_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
 const STAFF_ROLES = new Set<string>(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR']);
 
 const IST_OFFSET_MS = 330 * 60_000;
+
+const ADMIN_LIST_LIMIT = 100;
+/** Rows scanned before applying a derived-status filter (the derived status is not a DB column). */
+const ADMIN_INTERVIEW_SCAN_LIMIT = 500;
 
 /** Parses a YYYY-MM-DD filter as the start or end of that day in India time. */
 export function parseDateFilter(raw: string | undefined, edge: 'start' | 'end'): Date | null {
@@ -630,11 +641,22 @@ export class AdminService {
         job: { select: { title: true } },
         candidate: { select: { firstName: true, lastName: true } },
         employer: { select: { companyName: true } },
+        application: {
+          select: { status: true, hiringOutcome: { select: { outcome: true, decidedAt: true } } },
+        },
       },
     });
     if (!row) {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Interview not found' });
     }
+    const activity = await this.resourceActivity('INTERVIEW', id);
+    const employerReschedules = activity.filter((a) => a.action === INTERVIEW_RESCHEDULED_AUDIT_ACTION);
+    const applicationStatus = row.application?.status ?? null;
+    const adminStatus = deriveAdminInterviewStatus({
+      applicationStatus,
+      interview: row,
+      employerRescheduled: employerReschedules.length > 0,
+    });
     const whatsapp = await this.prisma.whatsAppMessage
       .findMany({
         where: { interviewId: id },
@@ -651,15 +673,35 @@ export class AdminService {
         },
       })
       .catch(() => []);
+    const outcome = row.application?.hiringOutcome;
+    const events = [
+      { at: row.createdAt, label: 'Interview scheduled by employer' },
+      ...employerReschedules.map((a) => ({ at: new Date(a.time), label: 'Employer rescheduled the interview' })),
+      { at: row.candidateRescheduleRequestedAt, label: 'Candidate asked for another time' },
+      { at: row.confirmedAt, label: 'Candidate confirmed the interview' },
+      { at: row.candidateFeedbackAt, label: 'Candidate shared interview feedback' },
+      {
+        at: outcome?.decidedAt,
+        label: outcome ? `Hiring outcome recorded: ${outcome.outcome.replace(/_/g, ' ').toLowerCase()}` : '',
+      },
+    ]
+      .filter((e): e is { at: Date; label: string } => Boolean(e.at && e.label))
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+      .map((e) => ({ at: e.at.toISOString(), label: e.label }));
     return {
       id: row.id,
       status: row.status,
+      applicationId: row.applicationId,
+      applicationStatus,
+      adminStatus,
+      adminStatusLabel: adminInterviewStatusLabel(adminStatus),
       mode: row.mode,
       scheduledAt: row.scheduledAt.toISOString(),
       whatsappStatus: row.whatsappStatus,
       candidateName: [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ') || '—',
       jobTitle: row.job.title,
       companyName: row.employer.companyName,
+      statusEvents: events,
       candidate: row.candidate,
       job: row.job,
       employer: row.employer,
@@ -672,7 +714,7 @@ export class AdminService {
         error: m.errorJson,
         createdAt: m.createdAt.toISOString(),
       })),
-      activity: await this.resourceActivity('INTERVIEW', id),
+      activity,
     };
   }
 
@@ -1083,39 +1125,156 @@ export class AdminService {
     };
   }
 
+  /**
+   * Interview rows plus shortlisted applications that have no active interview yet, each with the
+   * Admin-only derived `adminStatus`. `status` accepts an admin status key or (back-compat) a raw
+   * EmployerInterview status.
+   */
   async interviews(query?: string, status?: string) {
     const q = query?.trim();
-    const rows = await this.prisma.employerInterview.findMany({
+    const filter = status?.trim().toUpperCase() || '';
+    const adminFilter = isAdminInterviewStatus(filter) ? filter : null;
+    const rawFilter = !adminFilter && isRawEmployerInterviewStatus(filter) ? filter : null;
+    if (filter && !adminFilter && !rawFilter) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Unknown interview status filter.' });
+    }
+    const name = (c: { firstName: string | null; lastName: string | null }) =>
+      [c.firstName, c.lastName].filter(Boolean).join(' ') || '—';
+
+    type ListRow = {
+      id: string;
+      recordType: 'INTERVIEW' | 'APPLICATION';
+      interviewId: string | null;
+      applicationId: string;
+      status: string | null;
+      applicationStatus: string | null;
+      adminStatus: string | null;
+      adminStatusLabel: string | null;
+      mode: string | null;
+      scheduledAt: string | null;
+      whatsappStatus: string | null;
+      jobTitle: string;
+      companyName: string;
+      candidateName: string;
+      sortAt: number;
+    };
+
+    const result: ListRow[] = [];
+    if (adminFilter !== 'PROFILE_SHORTLISTED') {
+      const rows = await this.prisma.employerInterview.findMany({
+        where: {
+          ...(rawFilter ? { status: rawFilter as never } : {}),
+          ...(q
+            ? {
+                OR: [
+                  { job: { title: { contains: q, mode: 'insensitive' } } },
+                  { candidate: { firstName: { contains: q, mode: 'insensitive' } } },
+                  { employer: { companyName: { contains: q, mode: 'insensitive' } } },
+                ],
+              }
+            : {}),
+        },
+        include: {
+          job: { select: { title: true } },
+          candidate: { select: { firstName: true, lastName: true } },
+          employer: { select: { companyName: true } },
+          application: { select: { status: true } },
+        },
+        orderBy: { scheduledAt: 'desc' },
+        take: adminFilter ? ADMIN_INTERVIEW_SCAN_LIMIT : ADMIN_LIST_LIMIT,
+      });
+      const rescheduled = await this.employerRescheduledInterviewIds(rows.map((r) => r.id));
+      const now = new Date();
+      for (const row of rows) {
+        const applicationStatus = row.application?.status ?? null;
+        const adminStatus = deriveAdminInterviewStatus({
+          applicationStatus,
+          interview: row,
+          employerRescheduled: rescheduled.has(row.id),
+          now,
+        });
+        result.push({
+          id: row.id,
+          recordType: 'INTERVIEW',
+          interviewId: row.id,
+          applicationId: row.applicationId,
+          status: row.status,
+          applicationStatus,
+          adminStatus,
+          adminStatusLabel: adminInterviewStatusLabel(adminStatus),
+          mode: row.mode,
+          scheduledAt: row.scheduledAt.toISOString(),
+          whatsappStatus: row.whatsappStatus,
+          jobTitle: row.job.title,
+          companyName: row.employer.companyName,
+          candidateName: name(row.candidate),
+          sortAt: row.scheduledAt.getTime(),
+        });
+      }
+    }
+
+    if (!rawFilter && (!adminFilter || adminFilter === 'PROFILE_SHORTLISTED')) {
+      const apps = await this.prisma.application.findMany({
+        where: {
+          status: 'SHORTLISTED',
+          employerInterviews: { none: { status: { in: [...ACTIVE_INTERVIEW_STATUSES] } } },
+          ...(q
+            ? {
+                OR: [
+                  { job: { title: { contains: q, mode: 'insensitive' } } },
+                  { candidate: { firstName: { contains: q, mode: 'insensitive' } } },
+                  { job: { employer: { companyName: { contains: q, mode: 'insensitive' } } } },
+                ],
+              }
+            : {}),
+        },
+        include: {
+          job: { select: { title: true, employer: { select: { companyName: true } } } },
+          candidate: { select: { firstName: true, lastName: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: ADMIN_LIST_LIMIT,
+      });
+      for (const app of apps) {
+        const adminStatus = deriveAdminInterviewStatus({ applicationStatus: app.status, interview: null });
+        result.push({
+          id: app.id,
+          recordType: 'APPLICATION',
+          interviewId: null,
+          applicationId: app.id,
+          status: null,
+          applicationStatus: app.status,
+          adminStatus,
+          adminStatusLabel: adminInterviewStatusLabel(adminStatus),
+          mode: null,
+          scheduledAt: null,
+          whatsappStatus: null,
+          jobTitle: app.job.title,
+          companyName: app.job.employer.companyName,
+          candidateName: name(app.candidate),
+          sortAt: app.updatedAt.getTime(),
+        });
+      }
+    }
+
+    const filtered = adminFilter ? result.filter((row) => row.adminStatus === adminFilter) : result;
+    return filtered
+      .sort((a, b) => b.sortAt - a.sortAt)
+      .slice(0, adminFilter ? ADMIN_LIST_LIMIT : ADMIN_LIST_LIMIT * 2)
+      .map(({ sortAt: _sortAt, ...row }) => row);
+  }
+
+  private async employerRescheduledInterviewIds(interviewIds: string[]): Promise<Set<string>> {
+    if (!interviewIds.length) return new Set();
+    const rows = await this.prisma.auditLog.findMany({
       where: {
-        ...(status ? { status: status as never } : {}),
-        ...(q
-          ? {
-              OR: [
-                { job: { title: { contains: q, mode: 'insensitive' } } },
-                { candidate: { firstName: { contains: q, mode: 'insensitive' } } },
-                { employer: { companyName: { contains: q, mode: 'insensitive' } } },
-              ],
-            }
-          : {}),
+        action: INTERVIEW_RESCHEDULED_AUDIT_ACTION,
+        resourceType: 'INTERVIEW',
+        resourceId: { in: interviewIds },
       },
-      include: {
-        job: { select: { title: true } },
-        candidate: { select: { firstName: true, lastName: true } },
-        employer: { select: { companyName: true } },
-      },
-      orderBy: { scheduledAt: 'desc' },
-      take: 100,
+      select: { resourceId: true },
     });
-    return rows.map((row) => ({
-      id: row.id,
-      status: row.status,
-      mode: row.mode,
-      scheduledAt: row.scheduledAt.toISOString(),
-      whatsappStatus: row.whatsappStatus,
-      jobTitle: row.job.title,
-      companyName: row.employer.companyName,
-      candidateName: [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ') || '—',
-    }));
+    return new Set(rows.map((r) => r.resourceId).filter((id): id is string => Boolean(id)));
   }
 
   async skills(query?: string) {

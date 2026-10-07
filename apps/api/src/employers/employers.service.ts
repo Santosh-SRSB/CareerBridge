@@ -35,6 +35,7 @@ import {
   DEFAULT_INTERVIEW_TIMEZONE,
   formatAvailabilityWindow,
   hasCompletedKyc,
+  INTERVIEW_RESCHEDULED_AUDIT_ACTION,
   intervalsOverlap,
   interviewActionCheck,
   parseCompanyWebsite,
@@ -1476,6 +1477,41 @@ export class EmployersService {
     return sent ? 'SENT' : 'FAILED';
   }
 
+  /**
+   * Durable record of an employer reschedule (the interview row returns to SCHEDULED with no marker).
+   * Read by the admin Interviews page; a failed write must not fail the reschedule itself.
+   */
+  private async auditInterviewRescheduled(
+    actorUserId: string,
+    before: { id: string; applicationId: string; candidateId: string; jobId: string; status: string; scheduledAt: Date },
+    after: { status: string; scheduledAt: Date },
+    meetingLinkChanged: boolean,
+  ) {
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId: actorUserId,
+          action: INTERVIEW_RESCHEDULED_AUDIT_ACTION,
+          resourceType: 'INTERVIEW',
+          resourceId: before.id,
+          oldValue: JSON.stringify({ status: before.status, scheduledAt: before.scheduledAt.toISOString() }),
+          newValue: JSON.stringify({
+            status: after.status,
+            scheduledAt: after.scheduledAt.toISOString(),
+            applicationId: before.applicationId,
+            candidateId: before.candidateId,
+            jobId: before.jobId,
+            meetingLinkChanged,
+          }),
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Interview ${before.id} reschedule audit write failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   async updateInterviewStatus(
     userId: string,
     interviewId: string,
@@ -1613,6 +1649,10 @@ export class EmployersService {
         },
       },
     });
+
+    if (action === 'reschedule') {
+      await this.auditInterviewRescheduled(userId, interview, updated, location !== interview.location);
+    }
 
     if (notifyCandidate) {
       const candidateUser = updated.application.candidate.user;
