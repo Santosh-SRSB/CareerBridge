@@ -16,6 +16,12 @@ import {
   reportFileName,
   XLSX_MIME,
 } from './admin-report-export';
+import {
+  candidateCurrentPosition,
+  candidateYearsOfExperience,
+  COMPLETED_MOCK_INTERVIEW_STATUS,
+  mockInterviewTaken,
+} from './candidate-report-fields';
 
 type Row = Record<string, any>;
 
@@ -92,9 +98,28 @@ function candidates(n: number): Row[] {
       passwordHash: 'v2:should-never-leak',
     },
     skills: [{ name: i % 2 ? 'Java' : 'Excel' }, { name: 'Communication' }],
+    hasExperience: null,
+    experienceLevel: null,
+    totalExperienceYears: 0,
+    totalExperienceMonths: 0,
+    experiences: [],
+    interviews: [],
+    humanMockInterviews: [],
     _count: { applications: i % 5, resumes: 1 },
   }));
 }
+
+const role = (jobTitle: string, extra: Row = {}): Row => ({
+  jobTitle,
+  company: 'Acme',
+  isInternship: false,
+  stillInCompany: false,
+  startDate: null,
+  endDate: null,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  description: 'never exported',
+  ...extra,
+});
 
 function employers(n: number): Row[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -118,7 +143,14 @@ function harness(opts: { candidates?: number; employers?: number } = {}) {
     for (const [k, v] of Object.entries(sel)) {
       if (v === true) out[k] = row[k];
       else if (k === 'skills') out[k] = row.skills.slice(0, v.take ?? undefined).map((s: Row) => ({ name: s.name }));
-      else if (k === '_count') out[k] = row._count;
+      else if (k === '_count') {
+        out[k] = Object.fromEntries(
+          Object.entries(v.select as Row).map(([rel, c]) => [
+            rel,
+            c === true ? row._count[rel] : (row[rel] as Row[]).filter((x) => matchesWhere(x, c.where)).length,
+          ]),
+        );
+      } else if (Array.isArray(row[k])) out[k] = row[k].map((x: Row) => select(x, v.select));
       else out[k] = select(row[k], v.select);
     }
     return out;
@@ -195,6 +227,9 @@ const CANDIDATE_HEADERS = [
   'Resumes',
   'Account Status',
   'Registered On',
+  'Current Position',
+  'Mock Interview Taken',
+  'Years of Experience',
 ];
 
 /* ---------- helpers ---------- */
@@ -315,6 +350,7 @@ describe('AdminService.candidateReportExport', () => {
     assert.equal(first[7], 1);
     assert.equal(first[8], newest.user.status);
     assert.ok(first[9] instanceof Date);
+    assert.deepEqual(first.slice(10), ['Fresher', 'No', 'Fresher']);
     const injected = rows.at(-1)!;
     assert.equal(injected[0], `'=HYPERLINK("http://x")`, 'formula-like names are stored as text');
   });
@@ -387,5 +423,136 @@ describe('AdminService.candidateReportExport', () => {
     assert.equal(calls.audits[0].action, 'EXPORT_CANDIDATE_REPORT');
     assert.equal(calls.audits[0].resourceType, 'REPORT');
     assert.deepEqual(JSON.parse(calls.audits[0].newValue), { rows: 3, filters: 'location=Pune' });
+  });
+});
+
+/* ---------- candidate recruitment fields ---------- */
+
+describe('Candidate Report — Current Position, Mock Interview Taken, Years of Experience', () => {
+  const profile = (extra: Row = {}): Row => ({
+    hasExperience: null,
+    experienceLevel: null,
+    totalExperienceYears: 0,
+    totalExperienceMonths: 0,
+    experiences: [],
+    ...extra,
+  });
+
+  it('1/A. a fresher shows Fresher for position and experience', () => {
+    for (const p of [profile(), profile({ hasExperience: 'NONE', experienceLevel: 'fresher' })]) {
+      assert.equal(candidateCurrentPosition(p as never), 'Fresher');
+      assert.equal(candidateYearsOfExperience(p as never), 'Fresher');
+    }
+  });
+
+  it('D. no experience but education and an internship → still Fresher (internships are not a current position)', () => {
+    const p = profile({ hasExperience: 'INTERNSHIP', experiences: [role('Marketing Intern', { isInternship: true, stillInCompany: true })] });
+    assert.equal(candidateCurrentPosition(p as never), 'Fresher');
+    assert.equal(candidateYearsOfExperience(p as never), 'Fresher');
+  });
+
+  it('2/3/4/B. experienced: current paid role title and stored years (+ months as one decimal)', () => {
+    const p = profile({
+      hasExperience: 'YES',
+      totalExperienceYears: 7,
+      totalExperienceMonths: 6,
+      experiences: [
+        role('Junior Developer', { startDate: new Date('2016-01-01') }),
+        role('Senior Java Developer', { stillInCompany: true, startDate: new Date('2021-04-01') }),
+        role('Java Developer', { startDate: new Date('2019-01-01') }),
+      ],
+    });
+    assert.equal(candidateCurrentPosition(p as never), 'Senior Java Developer');
+    assert.equal(candidateYearsOfExperience(p as never), 7.5);
+    assert.equal(candidateYearsOfExperience(profile({ hasExperience: 'YES', totalExperienceYears: 3 }) as never), 3);
+    assert.equal(candidateYearsOfExperience(profile({ hasExperience: 'YES', totalExperienceYears: 1, totalExperienceMonths: 4 }) as never), 1.3);
+    assert.equal(candidateYearsOfExperience(profile({ hasExperience: 'YES', totalExperienceMonths: 6 }) as never), 0.5);
+  });
+
+  it('without a current role the most recently started paid role is the position', () => {
+    const p = profile({
+      hasExperience: 'YES',
+      totalExperienceYears: 4,
+      experiences: [role('Frontend Developer', { startDate: new Date('2022-02-01') }), role('Web Designer', { startDate: new Date('2019-06-01') })],
+    });
+    assert.equal(candidateCurrentPosition(p as never), 'Frontend Developer');
+  });
+
+  it('ties between current roles prefer a real company over a resume-sync placeholder, in either order', () => {
+    const same = { stillInCompany: true, startDate: new Date('2023-06-01') };
+    const real = role('Team Lead', { ...same, company: 'Infinite Potential Digital Marketing', createdAt: new Date('2026-09-28T05:47:14.100Z') });
+    const placeholder = role('Team Leader', { ...same, company: 'Company', createdAt: new Date('2026-09-28T05:47:14.900Z') });
+    for (const experiences of [[real, placeholder], [placeholder, real]]) {
+      assert.equal(candidateCurrentPosition(profile({ hasExperience: 'YES', totalExperienceYears: 5, experiences }) as never), 'Team Lead');
+    }
+  });
+
+  it('C. experienced with no titled paid role → no position (never invented)', () => {
+    for (const experiences of [[], [role('   ')], [role('Role')], [role('Data Intern', { isInternship: true })]]) {
+      const p = profile({ hasExperience: 'YES', totalExperienceYears: 2, experiences });
+      assert.equal(candidateCurrentPosition(p as never), null, JSON.stringify(experiences.map((e) => e.jobTitle)));
+    }
+  });
+
+  it('8/F. experienced with no stored years (incomplete or legacy profile) → no experience value, not a guess', () => {
+    const p = profile({ hasExperience: 'YES', experiences: [role('Project Manager', { startDate: new Date('2015-01-01') })] });
+    assert.equal(candidateYearsOfExperience(p as never), null);
+    assert.equal(candidateCurrentPosition(p as never), 'Project Manager');
+  });
+
+  it('5/6/7/E. Mock Interview Taken is Yes when at least one AI or human mock interview is completed', () => {
+    assert.equal(mockInterviewTaken({ interviews: 1, humanMockInterviews: 0 }), 'Yes');
+    assert.equal(mockInterviewTaken({ interviews: 0, humanMockInterviews: 1 }), 'Yes');
+    assert.equal(mockInterviewTaken({ interviews: 3, humanMockInterviews: 2 }), 'Yes');
+    assert.equal(mockInterviewTaken({ interviews: 0, humanMockInterviews: 0 }), 'No');
+    assert.equal(COMPLETED_MOCK_INTERVIEW_STATUS, 'COMPLETED');
+  });
+
+  it('9/10. Excel has the three headers after the existing columns and resolved values per candidate', async () => {
+    const { service, cands, calls } = harness({ candidates: 6 });
+    // Newest first: cands[5] is the first data row.
+    Object.assign(cands[5]!, {
+      hasExperience: 'YES',
+      totalExperienceYears: 5,
+      experiences: [role('Software Engineer', { stillInCompany: true, startDate: new Date('2023-01-01') })],
+      interviews: [{ status: 'IN_PROGRESS' }, { status: 'COMPLETED' }, { status: 'COMPLETED' }],
+    });
+    Object.assign(cands[4]!, {
+      hasExperience: 'NONE',
+      interviews: [{ status: 'IN_PROGRESS' }],
+      humanMockInterviews: [{ status: 'SCHEDULED' }, { status: 'CANCELLED' }],
+    });
+    Object.assign(cands[3]!, { hasExperience: 'NONE', humanMockInterviews: [{ status: 'COMPLETED' }] });
+    Object.assign(cands[2]!, { hasExperience: 'YES', totalExperienceYears: 2, totalExperienceMonths: 6, experiences: [role('Role')] });
+    Object.assign(cands[1]!, { hasExperience: 'YES', experiences: [role('Project Manager')] });
+    const file = await service.candidateReportExport('admin-1', undefined, {}, NOW);
+    const rows = sheetRows(await readWorkbook(file.buffer), 'Candidates');
+    assert.deepEqual(rows[0]!.slice(0, 10), CANDIDATE_HEADERS.slice(0, 10), 'existing columns unchanged and in order');
+    assert.deepEqual(rows[0]!.slice(10), ['Current Position', 'Mock Interview Taken', 'Years of Experience']);
+    assert.equal(rows.length, 7, 'one row per candidate');
+    assert.deepEqual(
+      rows.slice(1).map((r) => r.slice(10)),
+      [
+        ['Software Engineer', 'Yes', 5],
+        ['Fresher', 'No', 'Fresher'],
+        ['Fresher', 'Yes', 'Fresher'],
+        ['—', 'No', 2.5],
+        ['Project Manager', 'No', '—'],
+        ['Fresher', 'No', 'Fresher'],
+      ],
+    );
+    const q = calls.candidateQueries[0];
+    assert.deepEqual(q.select._count.select.interviews, { where: { status: 'COMPLETED' } });
+    assert.deepEqual(q.select._count.select.humanMockInterviews, { where: { status: 'COMPLETED' } });
+    assert.ok(!('description' in q.select.experiences.select), 'only the fields the report needs');
+  });
+
+  it('performance: the new fields add no query — still one candidate query per batch', async () => {
+    const total = REPORT_EXPORT_BATCH + 10;
+    const { service, calls } = harness({ candidates: total });
+    // The fake has no interview / humanMockInterview / candidateExperience delegates: any per-candidate lookup would throw.
+    const file = await service.candidateReportExport('admin-1', undefined, {}, NOW);
+    assert.equal(file.rowCount, total);
+    assert.equal(calls.candidateQueries.length, 2);
   });
 });

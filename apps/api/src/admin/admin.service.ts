@@ -56,6 +56,13 @@ import {
   summariseJobInterviews,
 } from './employer-job-report';
 import { buildCandidateProgress, buildEmployerProgress } from './admin-progress-report';
+import {
+  candidateCurrentPosition,
+  candidateYearsOfExperience,
+  COMPLETED_MOCK_INTERVIEW_STATUS,
+  mockInterviewTaken,
+  REPORT_EMPTY_VALUE,
+} from './candidate-report-fields';
 import { adminStatusAuditAction, toAdminStatusResult, toUserStatusResult } from './admin-status';
 import {
   bucketFor,
@@ -1729,9 +1736,23 @@ export class AdminService {
           state: true,
           profileCompletion: true,
           createdAt: true,
+          hasExperience: true,
+          experienceLevel: true,
+          totalExperienceYears: true,
+          totalExperienceMonths: true,
           user: { select: { email: true, phone: true, status: true } },
           skills: { select: { name: true }, take: 5 },
-          _count: { select: { applications: true, resumes: true } },
+          experiences: {
+            select: { jobTitle: true, company: true, isInternship: true, stillInCompany: true, startDate: true, createdAt: true },
+          },
+          _count: {
+            select: {
+              applications: true,
+              resumes: true,
+              interviews: { where: { status: COMPLETED_MOCK_INTERVIEW_STATUS } },
+              humanMockInterviews: { where: { status: COMPLETED_MOCK_INTERVIEW_STATUS } },
+            },
+          },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: REPORT_EXPORT_BATCH,
@@ -1749,6 +1770,9 @@ export class AdminService {
           resumeCount: row._count.resumes,
           accountStatus: row.user.status,
           createdAt: row.createdAt,
+          currentPosition: candidateCurrentPosition(row) ?? REPORT_EMPTY_VALUE,
+          mockInterviewTaken: mockInterviewTaken(row._count),
+          yearsOfExperience: candidateYearsOfExperience(row) ?? REPORT_EMPTY_VALUE,
         });
       }
       this.assertExportSize(rows.length);

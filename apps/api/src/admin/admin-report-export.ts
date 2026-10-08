@@ -71,6 +71,9 @@ export type CandidateReportRow = {
   resumeCount: number;
   accountStatus: string;
   createdAt: Date;
+  currentPosition: string;
+  mockInterviewTaken: 'Yes' | 'No';
+  yearsOfExperience: number | string;
 };
 
 export const CANDIDATE_REPORT_COLUMNS: ReportColumn<CandidateReportRow>[] = [
@@ -84,6 +87,9 @@ export const CANDIDATE_REPORT_COLUMNS: ReportColumn<CandidateReportRow>[] = [
   { header: 'Resumes', width: 12, value: (r) => r.resumeCount },
   { header: 'Account Status', width: 16, value: (r) => r.accountStatus },
   { header: 'Registered On', width: 20, value: (r) => r.createdAt },
+  { header: 'Current Position', width: 28, value: (r) => r.currentPosition },
+  { header: 'Mock Interview Taken', width: 20, value: (r) => r.mockInterviewTaken },
+  { header: 'Years of Experience', width: 18, value: (r) => r.yearsOfExperience },
 ];
 
 /** One row per posted job; the Admin Reports Employer Report table shows the same columns. */
