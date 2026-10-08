@@ -332,9 +332,23 @@ enum PaymentStatus {
   REFUNDED
 }
 
+/// One row per GSTIN. Several employer (staff) accounts may link to the same company.
+model Company {
+  id        String   @id @default(uuid())
+  gstin     String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  employers Employer[]
+
+  @@map("companies")
+}
+
 model Employer {
   id                 String                     @id @default(uuid())
   userId             String                     @unique @map("user_id")
+  companyId          String?                    @map("company_id")
   companyName        String                     @map("company_name")
   industry           String?
   city               String?
@@ -355,6 +369,7 @@ model Employer {
   updatedAt          DateTime                   @updatedAt @map("updated_at")
 
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company        Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   jobs           Job[]
   payments       EmployerPayment[]
   hiringOutcomes HiringOutcome[]
@@ -362,6 +377,7 @@ model Employer {
   candidateViews EmployerCandidateView[]
   talentShortlists EmployerTalentShortlist[]
 
+  @@index([companyId])
   @@map("employers")
 }
 

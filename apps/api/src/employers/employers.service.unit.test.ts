@@ -117,6 +117,7 @@ function makeDb() {
     notifications: [] as Row[],
     settings: [] as Row[],
     candidateViews: [] as Row[],
+    companies: [] as Row[],
   };
 }
 type Db = ReturnType<typeof makeDb>;
@@ -163,6 +164,8 @@ type Opts = {
   smtp?: boolean;
   storage?: boolean;
   sendTextResult?: { ok: boolean };
+  /** Runs before company.create's unique check, to simulate a concurrent registration winning the race. */
+  beforeCompanyCreate?: (db: Db) => void;
 };
 
 function harness(opts: Opts = {}) {
@@ -185,10 +188,29 @@ function harness(opts: Opts = {}) {
     recompute: 0,
     alerts: 0,
     audits: [] as Row[],
+    companyCreates: [] as Row[],
+    companyUpdates: 0,
   };
   let seq = 0;
 
   const prisma: any = {
+    company: {
+      findUnique: async ({ where }: Row) => db.companies.find((c) => c.gstin === where.gstin) ?? null,
+      create: async ({ data }: Row) => {
+        opts.beforeCompanyCreate?.(db);
+        if (db.companies.some((c) => c.gstin === data.gstin)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (`gstin`)'), { code: 'P2002' });
+        }
+        calls.companyCreates.push(data);
+        const row = { id: `CO${++seq}`, ...data };
+        db.companies.push(row);
+        return { ...row };
+      },
+      update: async () => {
+        calls.companyUpdates += 1;
+        assert.fail('company canonical details must not be updated by a staff registration');
+      },
+    },
     employer: {
       findUnique: async ({ where }: Row) => db.employers.find((e) => e.userId === where.userId) ?? null,
       findFirst: async ({ where }: Row) => db.employers.find((e) => matches(e, where, db)) ?? null,
@@ -256,7 +278,10 @@ function harness(opts: Opts = {}) {
       findFirst: async ({ where }: Row) => db.notifications.find((n) => matches(n, where, db)) ?? null,
     },
     employerInterview: {
-      findMany: async ({ where }: Row) => db.interviews.filter((i) => matches(i, where, db)),
+      findMany: async ({ where, include }: Row) => {
+        const rows = db.interviews.filter((i) => matches(i, where, db));
+        return include ? rows.map((row) => hydrateInterview(db, row)) : rows;
+      },
       findFirst: async ({ where }: Row) => {
         const row = db.interviews.find((i) => matches(i, where, db));
         return row ? hydrateInterview(db, row) : null;
@@ -525,15 +550,6 @@ describe('Fix 3 — PATCH /employers/me/kyc validates GSTIN on the server', () =
     });
     assert.equal(calls.employerUpdates.length, 0);
   });
-  it('GSTIN already used by another employer → 409', async () => {
-    const { svc, db, calls } = harness();
-    db.employers.find((e) => e.id === EMP_B)!.gstNumber = VALID_GSTIN.toLowerCase();
-    await assert.rejects(svc.saveKyc('uU', kyc()), (err) => {
-      assert.equal(httpStatus(err), 409);
-      return true;
-    });
-    assert.equal(calls.employerUpdates.length, 0);
-  });
   it('resaving your own GSTIN is not a duplicate', async () => {
     const { svc, db } = harness();
     db.employers.find((e) => e.id === EMP_U)!.gstNumber = VALID_GSTIN;
@@ -566,6 +582,103 @@ describe('Fix 3 — PATCH /employers/me/kyc validates GSTIN on the server', () =
     const { svc, calls } = harness();
     await assert.rejects(svc.saveKyc('uU', kyc({ website: 'javascript:alert(1)' })), BadRequestException);
     assert.equal(calls.gst.length, 0);
+  });
+});
+
+describe('Multiple employer accounts under one GSTIN link to one company', () => {
+  const kyc = (extra: Row = {}) => ({
+    gstNumber: VALID_GSTIN,
+    panNumber: 'AAPFU0939F',
+    website: 'https://acme.in',
+    ...extra,
+  });
+  const employer = (db: Db, id: string) => db.employers.find((e) => e.id === id)!;
+
+  it('first account with a new GSTIN creates the company and links to it', async () => {
+    const { svc, db, calls } = harness();
+    const res = await svc.saveKyc('uU', kyc());
+    assert.equal(db.companies.length, 1);
+    assert.deepEqual(calls.companyCreates, [{ gstin: VALID_GSTIN, name: 'Acme Pvt Ltd' }]);
+    assert.equal(employer(db, EMP_U).companyId, db.companies[0].id);
+    assert.deepEqual(res.company, { id: db.companies[0].id, name: 'Acme Pvt Ltd', gstin: VALID_GSTIN, existing: false });
+  });
+
+  it('second account with the same GSTIN is linked to the existing company instead of a 409', async () => {
+    const { svc, db, calls } = harness();
+    await svc.saveKyc('uU', kyc());
+    employer(db, EMP_B).companyName = 'Acme Branch Office';
+    const res = await svc.saveKyc('uB', kyc({ gstNumber: VALID_GSTIN.toLowerCase() }));
+    assert.equal(db.companies.length, 1, 'no duplicate company');
+    assert.equal(calls.companyCreates.length, 1);
+    assert.equal(employer(db, EMP_B).companyId, employer(db, EMP_U).companyId);
+    assert.equal(employer(db, EMP_B).gstNumber, VALID_GSTIN);
+    assert.deepEqual(res.company, { id: db.companies[0].id, name: 'Acme Pvt Ltd', gstin: VALID_GSTIN, existing: true });
+  });
+
+  it("a later account never overwrites the company's canonical details", async () => {
+    const { svc, db, calls } = harness({
+      gstResult: { success: true, verified: true, status: 'ACTIVE', trademark: 'FIRST TRADERS', provider: 'GSTINAPI', mock: false },
+    });
+    await svc.saveKyc('uU', kyc());
+    const before = { ...db.companies[0] };
+    const second = harness({
+      gstResult: { success: true, verified: true, status: 'ACTIVE', trademark: 'RENAMED TRADERS', provider: 'GSTINAPI', mock: false },
+    });
+    second.db.companies.push(before);
+    await second.svc.saveKyc('uB', kyc());
+    assert.deepEqual(second.db.companies, [before]);
+    assert.equal(second.calls.companyUpdates, 0);
+    assert.equal(calls.companyUpdates, 0);
+    assert.equal(employer(second.db, EMP_B).companyId, before.id);
+  });
+
+  it('existing accounts are unaffected when another account joins the company', async () => {
+    const { svc, db } = harness();
+    await svc.saveKyc('uU', kyc());
+    const firstBefore = { ...employer(db, EMP_U) };
+    const legacyBefore = { ...employer(db, EMP_A) };
+    await svc.saveKyc('uB', kyc());
+    assert.deepEqual(employer(db, EMP_U), firstBefore);
+    assert.deepEqual(employer(db, EMP_A), legacyBefore);
+  });
+
+  it('concurrent first registrations create exactly one company and link both accounts to it', async () => {
+    const { svc, db } = harness();
+    const [a, b] = await Promise.all([svc.saveKyc('uU', kyc()), svc.saveKyc('uB', kyc())]);
+    assert.equal(db.companies.length, 1);
+    assert.equal(a.company.id, b.company.id);
+    assert.equal(employer(db, EMP_U).companyId, db.companies[0].id);
+    assert.equal(employer(db, EMP_B).companyId, db.companies[0].id);
+    assert.deepEqual([a.company.existing, b.company.existing].sort(), [false, true]);
+  });
+
+  it('losing the insert race (unique violation) re-reads and links to the winning company', async () => {
+    const winner = { id: 'CO-WINNER', gstin: VALID_GSTIN, name: 'Winner Pvt Ltd' };
+    const { svc, db } = harness({
+      beforeCompanyCreate: (state) => {
+        if (!state.companies.length) state.companies.push({ ...winner });
+      },
+    });
+    const res = await svc.saveKyc('uU', kyc());
+    assert.deepEqual(db.companies, [winner]);
+    assert.equal(employer(db, EMP_U).companyId, 'CO-WINNER');
+    assert.deepEqual(res.company, { ...winner, existing: true });
+  });
+
+  it('invalid GSTIN is still rejected and creates no company', async () => {
+    const { svc, db, calls } = harness();
+    await assert.rejects(svc.saveKyc('uU', kyc({ gstNumber: '27AAPFU0939F1ZX' })), BadRequestException);
+    await assert.rejects(svc.saveKyc('uU', kyc({ gstNumber: 'NOTAGSTIN' })), BadRequestException);
+    assert.equal(db.companies.length, 0);
+    assert.equal(calls.employerUpdates.length, 0);
+  });
+
+  it('inactive GSTIN is still rejected and creates no company', async () => {
+    const { svc, db } = harness({
+      gstResult: { success: true, verified: false, status: 'NOT_ACTIVE', message: 'This GSTIN is not active.', provider: 'GSTINAPI', mock: false },
+    });
+    await assert.rejects(svc.saveKyc('uU', kyc()), BadRequestException);
+    assert.equal(db.companies.length, 0);
   });
 });
 
@@ -1198,6 +1311,40 @@ describe('Fix 10 — interview scheduling', () => {
     assert.equal(res.delivery.inApp, 'CREATED');
     assert.equal(res.delivery.email, 'NOT_CONFIGURED');
     assert.equal(res.delivery.whatsapp, 'NOT_SUPPORTED');
+  });
+  it('a cancelled interview leaves the normal list but stays stored, notified, and listed as cancelled history', async () => {
+    const scheduled: any = await h.svc.scheduleInterview('uA', schedule());
+    const confirmed: any = await h.svc.scheduleInterview('uA', schedule({ applicationId: 'APP2', scheduledAt: future(72) }));
+    await h.svc.updateInterviewStatus('uA', confirmed.id, 'confirm');
+    h.db.applications.find((a) => a.id === 'APP3')!.status = 'SHORTLISTED';
+    const cancelledIv: any = await h.svc.scheduleInterview('uA', schedule({ applicationId: 'APP3', scheduledAt: future(96) }));
+    await h.svc.updateInterviewStatus('uA', cancelledIv.id, 'cancel');
+
+    const normal = await h.svc.listInterviews('uA');
+    assert.deepEqual(
+      normal.map((row) => [row.id, row.status]).sort(),
+      [
+        [scheduled.id, 'SCHEDULED'],
+        [confirmed.id, 'CONFIRMED'],
+      ].sort(),
+    );
+
+    const stored = h.db.interviews.find((row) => row.id === cancelledIv.id);
+    assert.equal(stored?.status, 'CANCELLED', 'the cancelled record is kept, not deleted');
+    assert.equal(h.db.interviews.length, 3);
+
+    const note = h.calls.notifications.find((n) => n.templateKey === 'INTERVIEW_CANCELLED');
+    assert.equal(note?.userId, 'cO');
+    assert.equal(note?.link, `/interviews/scheduled/${cancelledIv.id}`);
+
+    const history = await h.svc.listInterviews('uA', 'CANCELLED');
+    assert.deepEqual(history.map((row) => [row.id, row.status]), [[cancelledIv.id, 'CANCELLED']]);
+  });
+  it('the cancelled filter is scoped to the employer, and unknown status values fall back to the normal list', async () => {
+    const mine: any = await h.svc.scheduleInterview('uA', schedule());
+    await h.svc.updateInterviewStatus('uA', mine.id, 'cancel');
+    assert.deepEqual(await h.svc.listInterviews('uB', 'CANCELLED'), []);
+    assert.deepEqual(await h.svc.listInterviews('uA', 'COMPLETED'), []);
   });
 });
 

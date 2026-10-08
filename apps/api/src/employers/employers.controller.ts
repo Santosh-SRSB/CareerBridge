@@ -546,8 +546,8 @@ export class EmployersController {
   }
 
   @Get('interviews')
-  interviews(@CurrentUser() user: { id: string }) {
-    return this.employers.listInterviews(user.id);
+  interviews(@CurrentUser() user: { id: string }, @Query('status') status?: string) {
+    return this.employers.listInterviews(user.id, status);
   }
 
   @Post('interviews')

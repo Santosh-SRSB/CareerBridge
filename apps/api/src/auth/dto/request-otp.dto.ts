@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, Matches, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AuthPurpose, OtpChannel, PREFERRED_LANGUAGES, REGISTRATION_PASSWORD_PATTERN } from '@careerbridge/shared';
 
@@ -87,4 +87,11 @@ export class RequestOtpDto {
   @IsOptional()
   @IsBoolean()
   whatsappOptIn?: boolean;
+
+  /** Registration only: an earlier unverified OTP request that stops being verifiable once this one is issued. */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  replacesRequestId?: string;
 }

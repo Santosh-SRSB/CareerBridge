@@ -8,7 +8,7 @@ export function cancelledInterviewMessage(interview: Pick<ScheduledJobInterview,
   return interview.cancelledBy === 'CANDIDATE' ? 'You declined this interview.' : EMPLOYER_CANCELLED_MESSAGE;
 }
 
-/** The interview card kept visible but faded and non-interactive, with the cancellation message centred over it. */
+/** Interview detail opened from a cancellation notification: the cancellation message above the stored details. */
 export function CancelledInterviewCard({
   interview,
   children,
@@ -18,22 +18,17 @@ export function CancelledInterviewCard({
 }) {
   return (
     <article
-      aria-disabled="true"
       data-testid="cancelled-interview-card"
-      className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
     >
-      <div inert className="pointer-events-none select-none opacity-50">
-        {children}
-      </div>
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <p
-          role="status"
-          data-testid="cancelled-interview-message"
-          className="max-w-sm rounded-xl border border-red-200 bg-white px-4 py-3 text-center text-sm font-bold leading-relaxed text-red-800 shadow-md"
-        >
-          {cancelledInterviewMessage(interview)}
-        </p>
-      </div>
+      <p
+        role="status"
+        data-testid="cancelled-interview-message"
+        className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-relaxed text-red-800"
+      >
+        {cancelledInterviewMessage(interview)}
+      </p>
+      {children}
     </article>
   );
 }

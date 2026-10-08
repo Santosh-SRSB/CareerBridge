@@ -297,22 +297,12 @@ export class EmployersService {
       });
     }
 
-    const duplicate = await this.prisma.employer.findFirst({
-      where: { gstNumber: { equals: gst, mode: 'insensitive' }, id: { not: employer.id } },
-      select: { id: true },
-    });
-    if (duplicate) {
-      throw new HttpException(
-        {
-          code: SharedError.DUPLICATE_RESOURCE,
-          message: 'This GSTIN is already registered to another employer account.',
-        },
-        HttpStatus.CONFLICT,
-      );
-    }
-
     // Only a live lookup may rename the company; client-supplied and mock trade names are not proof.
     const verifiedTradeName = verification.mock ? '' : (verification.trademark || '').trim().replace(/\s+/g, ' ');
+    const { company, created } = await this.companyForGstin(
+      gst,
+      verifiedTradeName.length >= 2 ? verifiedTradeName : employer.companyName,
+    );
     const gstChanged = (employer.gstNumber || '').trim().toUpperCase() !== gst;
     const current = employer.verificationStatus;
     const nextStatus =
@@ -324,6 +314,7 @@ export class EmployersService {
       where: { id: employer.id },
       data: {
         gstNumber: gst,
+        companyId: company.id,
         cin: cin || null,
         website: site.value,
         panNumber: pan,
@@ -335,7 +326,26 @@ export class EmployersService {
     return {
       ...(await this.profile(updated)),
       gstVerification: { status: verification.status, provider: verification.provider, mock: verification.mock },
+      company: { id: company.id, name: company.name, gstin: company.gstin, existing: !created },
     };
+  }
+
+  /**
+   * One company per GSTIN (UNIQUE on companies.gstin). A later staff account links to the existing row and
+   * never overwrites its canonical details; a concurrent first registration that loses the insert race
+   * re-reads the winner's row.
+   */
+  private async companyForGstin(gstin: string, name: string) {
+    const existing = await this.prisma.company.findUnique({ where: { gstin } });
+    if (existing) return { company: existing, created: false };
+    try {
+      return { company: await this.prisma.company.create({ data: { gstin, name } }), created: true };
+    } catch (err) {
+      if (!(err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002')) throw err;
+      const winner = await this.prisma.company.findUnique({ where: { gstin } });
+      if (!winner) throw err;
+      return { company: winner, created: false };
+    }
   }
 
   async submitVerification(
@@ -1222,10 +1232,14 @@ export class EmployersService {
     return this.resumes.download(applied.candidate.userId, resumeId);
   }
 
-  async listInterviews(userId: string) {
+  /** Cancelled interviews are left out of the normal list; `status=CANCELLED` returns only those, as history. */
+  async listInterviews(userId: string, status?: string) {
     const employer = await this.requireEmployer(userId);
     const rows = await this.prisma.employerInterview.findMany({
-      where: { employerId: employer.id },
+      where: {
+        employerId: employer.id,
+        status: status === 'CANCELLED' ? 'CANCELLED' : { not: 'CANCELLED' },
+      },
       include: {
         application: {
           include: {

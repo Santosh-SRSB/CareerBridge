@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { formatTimeSlotLabel, timeSlots, type EmployerInterviewRecord } from '@careerbridge/shared';
 import {
@@ -160,26 +160,32 @@ export default function EmployerInterviewsPage() {
   const [cancelRow, setCancelRow] = useState<EmployerInterviewRecord | null>(null);
   const [cancelReason, setCancelReason] = useState('');
 
-  async function load() {
+  // Cancelled interviews are not part of the normal list; the "Cancelled" status filter fetches them on demand.
+  const showCancelled = statusFilter === 'CANCELLED';
+
+  async function load(cancelled = showCancelled) {
     setError('');
-    const rows = await listEmployerInterviews();
+    const rows = await listEmployerInterviews(cancelled ? { status: 'CANCELLED' } : undefined);
     setItems(rows);
   }
 
   const [loadFailed, setLoadFailed] = useState(false);
 
-  function initialLoad() {
+  function initialLoad(cancelled = showCancelled) {
     setLoading(true);
     setLoadFailed(false);
-    void load()
+    void load(cancelled)
       .catch(() => setLoadFailed(true))
       .finally(() => setLoading(false));
   }
 
+  const loadedCancelled = useRef<boolean | null>(null);
   useEffect(() => {
-    initialLoad();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
-  }, []);
+    if (loadedCancelled.current === showCancelled) return;
+    loadedCancelled.current = showCancelled;
+    initialLoad(showCancelled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when switching to/from the cancelled list
+  }, [showCancelled]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -383,10 +389,10 @@ export default function EmployerInterviewsPage() {
             {error}
           </p>
         ) : null}
-        {!loading && loadFailed ? <ErrorState onRetry={initialLoad} /> : null}
+        {!loading && loadFailed ? <ErrorState onRetry={() => initialLoad()} /> : null}
         {message ? <p className="ep-ivdesk__alert ep-ivdesk__alert--ok">{message}</p> : null}
 
-        {!loading && items.length > 0 ? (
+        {!loading && (items.length > 0 || showCancelled) ? (
           <div className="ep-ivdesk__tabs" role="tablist" aria-label="Interview filters">
             {tabs.map((tab) => (
               <button
@@ -403,7 +409,7 @@ export default function EmployerInterviewsPage() {
           </div>
         ) : null}
 
-        {!loading && items.length > 0 ? (
+        {!loading && (items.length > 0 || showCancelled) ? (
           <div className="flex flex-wrap items-end gap-3" role="group" aria-label="Status and date filters">
             <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800" htmlFor="ep-iv-status">
               Status
@@ -467,7 +473,7 @@ export default function EmployerInterviewsPage() {
 
         {loading ? <SkeletonList rows={3} label="Loading interviews…" /> : null}
 
-        {!loading && !loadFailed && items.length === 0 ? (
+        {!loading && !loadFailed && items.length === 0 && !showCancelled ? (
           <section className="ep-ivdesk__empty">
             <h2>No interviews yet</h2>
             <p>Shortlist an applicant, then book a time. Candidates get notified with the details.</p>
@@ -477,7 +483,7 @@ export default function EmployerInterviewsPage() {
           </section>
         ) : null}
 
-        {!loading && items.length > 0 && visible.length === 0 ? (
+        {!loading && !loadFailed && (items.length > 0 || showCancelled) && visible.length === 0 ? (
           <section className="ep-ivdesk__empty" role="status">
             <h2>No interviews match these filters</h2>
             <p>Change the status, dates or tab to see other interviews.</p>

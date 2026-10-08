@@ -1501,8 +1501,10 @@ export async function getEmployerCandidate(id: string, jobId?: string) {
   return request<EmployerCandidatePassport>(`/employers/candidates/${id}${suffix}`);
 }
 
-export async function listEmployerInterviews() {
-  return request<EmployerInterviewRecord[]>('/employers/interviews');
+/** Cancelled interviews are excluded unless requested explicitly with `status: 'CANCELLED'`. */
+export async function listEmployerInterviews(filter?: { status?: 'CANCELLED' }) {
+  const suffix = filter?.status ? `?status=${filter.status}` : '';
+  return request<EmployerInterviewRecord[]>(`/employers/interviews${suffix}`);
 }
 
 export async function scheduleEmployerInterview(payload: {

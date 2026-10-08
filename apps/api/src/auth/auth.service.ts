@@ -245,6 +245,14 @@ export class AuthService {
       }
     }
 
+    // "Change mobile number": once the new registration OTP is issued, the earlier one can no longer be verified.
+    if (dto.purpose === 'REGISTER' && dto.replacesRequestId && dto.replacesRequestId !== request.id) {
+      await this.prisma.otpRequest.updateMany({
+        where: { id: dto.replacesRequestId, purpose: 'REGISTER', verifiedAt: null },
+        data: { expiresAt: new Date() },
+      });
+    }
+
     const revealOtp =
       this.isDevOtp() ||
       (channel === 'EMAIL' && !this.email.isConfigured() && this.config.get('NODE_ENV') !== 'production');

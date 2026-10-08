@@ -192,10 +192,11 @@ export class ApplicationsService {
     return this.get(userId, id);
   }
 
+  /** The candidate's interview page. Cancelled interviews stay in the DB and are surfaced only via notifications and the detail endpoint. */
   async listScheduledInterviews(userId: string) {
     const candidate = await this.requireCandidate(userId);
     const rows = await this.prisma.employerInterview.findMany({
-      where: { candidateId: candidate.id },
+      where: { candidateId: candidate.id, status: { not: 'CANCELLED' } },
       include: {
         application: {
           include: {

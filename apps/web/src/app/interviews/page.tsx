@@ -6,18 +6,15 @@ import { useRouter } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import { Button } from '@/components/ui/Button';
-import { CancelledInterviewCard } from '@/components/marketplace/CancelledInterviewCard';
 import {
   WhatsAppInterviewNotice,
   type CandidateAvailabilityPayload,
 } from '@/components/marketplace/WhatsAppInterviewNotice';
 import {
+  candidateInterviewSections,
   confirmScheduledInterview,
   fetchScheduledInterviews,
-  isCancelledUpcomingInterview,
-  isUpcomingInterview,
   rescheduleScheduledInterview,
-  sortInterviewsByTime,
 } from '@/lib/candidate-marketplace-api';
 import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
 import { toast } from '@/components/ui/Toast';
@@ -87,15 +84,7 @@ export default function InterviewsHubPage() {
     void loadScheduled();
   }, [loadScheduled]);
 
-  const inUpcoming = (item: ScheduledJobInterview) => isUpcomingInterview(item) || isCancelledUpcomingInterview(item);
-  const upcoming = [
-    ...sortInterviewsByTime((scheduled || []).filter((item) => isUpcomingInterview(item)), 'asc'),
-    ...sortInterviewsByTime((scheduled || []).filter((item) => isCancelledUpcomingInterview(item)), 'asc'),
-  ];
-  const history = sortInterviewsByTime(
-    (scheduled || []).filter((item) => !inUpcoming(item)),
-    'desc',
-  );
+  const { upcoming, history } = candidateInterviewSections(scheduled || []);
 
   const loadCompleted = useCallback(async () => {
     setCompletedLoading(true);
@@ -191,9 +180,8 @@ export default function InterviewsHubPage() {
           ) : null}
           {upcoming.map((interview) => {
             const badge = interviewStatusBadge(interview);
-            const cancelled = interview.status === 'CANCELLED';
-            const details = (
-              <>
+            return (
+              <article key={interview.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="text-base font-extrabold text-slate-900">{interview.jobTitle}</h3>
                 <p className="mt-1 text-sm font-semibold text-slate-700">{interview.companyName}</p>
                 <p className="mt-3 text-sm text-slate-700">{formatInterviewDate(interview.scheduledDate)}</p>
@@ -220,20 +208,6 @@ export default function InterviewsHubPage() {
                     Prepare for Interview
                   </Button>
                 </div>
-              </>
-            );
-
-            if (cancelled) {
-              return (
-                <CancelledInterviewCard key={interview.id} interview={interview}>
-                  {details}
-                </CancelledInterviewCard>
-              );
-            }
-
-            return (
-              <article key={interview.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                {details}
                 <div className="mt-5">
                   <WhatsAppInterviewNotice
                     interview={interview}
@@ -255,8 +229,7 @@ export default function InterviewsHubPage() {
             </h2>
             {history.length === 0 ? (
               <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-700" role="status">
-                No past employer interviews yet. Completed and cancelled interviews will appear here with
-                their outcome.
+                No past employer interviews yet. Completed interviews will appear here with their outcome.
               </div>
             ) : null}
             {history.map((item) => {

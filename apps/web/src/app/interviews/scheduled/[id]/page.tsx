@@ -206,7 +206,9 @@ function ScheduledInterviewDetail() {
             ) : null}
             <dt className="font-semibold text-slate-600">{interview.mode === 'VIDEO' ? 'Link' : 'Location'}</dt>
             <dd className="break-words text-slate-800">
-              {interview.mode === 'VIDEO' && interview.meetingUrl ? (
+              {interview.status === 'CANCELLED' && interview.mode === 'VIDEO' ? (
+                '—'
+              ) : interview.mode === 'VIDEO' && interview.meetingUrl ? (
                 <a href={interview.meetingUrl} className="font-semibold text-[#0a2e2c] underline">
                   Join interview
                 </a>
@@ -235,11 +237,13 @@ function ScheduledInterviewDetail() {
             Status: {statusCopy}
           </p>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button type="button" onClick={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}>
-              Prepare for Interview
-            </Button>
-          </div>
+          {interview.status !== 'CANCELLED' ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" onClick={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}>
+                Prepare for Interview
+              </Button>
+            </div>
+          ) : null}
         </InterviewDetailsCard>
 
         <WhatsAppInterviewNotice

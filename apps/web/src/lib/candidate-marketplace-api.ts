@@ -134,30 +134,7 @@ export async function fetchScheduledInterviews(): Promise<ScheduledJobInterview[
   return listCandidateScheduledInterviews();
 }
 
-function interviewStartMs(item: ScheduledJobInterview) {
-  const at = item.scheduledAt ? Date.parse(item.scheduledAt) : Number.NaN;
-  return Number.isNaN(at) ? Date.parse(`${item.scheduledDate}T00:00:00`) : at;
-}
-
-export function isUpcomingInterview(item: ScheduledJobInterview, now = Date.now()) {
-  if (item.status === 'COMPLETED' || item.status === 'CANCELLED') return false;
-  const start = interviewStartMs(item);
-  if (Number.isNaN(start)) return true;
-  return start + (item.durationMin || 60) * 60_000 > now;
-}
-
-/** Cancelled but its slot has not passed yet — still shown with the upcoming interviews, disabled. */
-export function isCancelledUpcomingInterview(item: ScheduledJobInterview, now = Date.now()) {
-  if (item.status !== 'CANCELLED') return false;
-  const start = interviewStartMs(item);
-  if (Number.isNaN(start)) return false;
-  return start + (item.durationMin || 60) * 60_000 > now;
-}
-
-export function sortInterviewsByTime(items: ScheduledJobInterview[], direction: 'asc' | 'desc' = 'asc') {
-  const sign = direction === 'asc' ? 1 : -1;
-  return [...items].sort((a, b) => sign * (interviewStartMs(a) - interviewStartMs(b)));
-}
+export { candidateInterviewSections, isUpcomingInterview, sortInterviewsByTime } from '@/lib/interview-list';
 
 export async function fetchScheduledInterview(id: string): Promise<ScheduledJobInterview> {
   return getCandidateScheduledInterview(id);

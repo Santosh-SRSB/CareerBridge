@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, type MouseEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AuthShell } from '@/components/AuthShell';
@@ -8,6 +8,7 @@ import { OtpInput } from '@/components/OtpInput';
 import { Button } from '@/components/ui/Button';
 import { clearOtpFlow, getOtpFlow, saveOtpFlow } from '@/lib/otp-flow';
 import { clearPendingPassword, getPendingPassword } from '@/lib/pending-password';
+import { clearRegistrationDraft, markRegistrationDraftForChange } from '@/lib/registration-draft';
 import { requestOtp, verifyOtp } from '@/lib/api';
 import { authErrorMessage } from '@/lib/auth-errors';
 import { postAuthPath } from '@/lib/phone';
@@ -153,6 +154,7 @@ export default function VerifyOtpPage() {
       clearOtpFlow();
       clearFirebaseOtp();
       clearPendingPassword();
+      clearRegistrationDraft();
       if ('signInRequired' in result && result.signInRequired) {
         router.replace('/login?registered=1&role=employer');
         return;
@@ -223,6 +225,18 @@ export default function VerifyOtpPage() {
     }
   }
 
+  // Registration: go back to the filled-in form; the current OTP request is abandoned so the old number
+  // stops being the verification target, and the next submission tells the server to expire it.
+  function changeContact(event: MouseEvent<HTMLAnchorElement>) {
+    const flow = getOtpFlow();
+    if (!flow || flow.purpose !== 'REGISTER') return;
+    event.preventDefault();
+    markRegistrationDraftForChange(flow.requestId);
+    clearOtpFlow();
+    clearFirebaseOtp();
+    router.push(`${backHref}&change=${flow.channel === 'EMAIL' ? 'email' : 'mobile'}`);
+  }
+
   if (!ready) return null;
 
   const expired = secondsLeft <= 0 || errorCode === 'OTP_EXPIRED';
@@ -289,7 +303,7 @@ export default function VerifyOtpPage() {
           Resend OTP
         </Button>
         <div>
-          <Link href={backHref} className="text-slate-500 hover:text-slate-800 text-xs transition">
+          <Link href={backHref} onClick={changeContact} className="text-slate-500 hover:text-slate-800 text-xs transition">
             {changeLabel}
           </Link>
         </div>

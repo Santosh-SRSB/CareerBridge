@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PhoneField } from '@/components/PhoneField';
@@ -19,9 +19,11 @@ import {
 import { COUNTRIES, DEFAULT_COUNTRY, toE164 } from '@/lib/phone';
 import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
-import { setPendingPassword } from '@/lib/pending-password';
+import { clearPendingPassword, getPendingPassword, setPendingPassword } from '@/lib/pending-password';
+import { clearRegistrationDraft, loadRegistrationDraft, saveRegistrationDraft } from '@/lib/registration-draft';
 import { authErrorMessage } from '@/lib/auth-errors';
 import {
+  clearFirebaseOtp,
   isDevOtpEnabled,
   isFirebaseConfigured,
   sendFirebaseOtp,
@@ -67,6 +69,53 @@ export function RegistrationForm() {
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const replacesRequestId = useRef<string | undefined>(undefined);
+
+  // Back from the OTP page ("Change mobile number"): refill everything except what was never stored.
+  // The password only survives in memory, so it is refilled after client-side navigation but not after a refresh.
+  useEffect(() => {
+    const draft = loadRegistrationDraft('CANDIDATE');
+    if (!draft) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage is client-only; restored once after hydration
+    setFullName(draft.fullName);
+    setEmail(draft.email);
+    setDial(draft.dial || DEFAULT_COUNTRY.dial);
+    setNational(draft.national);
+    setLocation(draft.location || '');
+    setOtpChannel(draft.otpChannel);
+    setAgreedToTerms(draft.agreedToTerms);
+    setWhatsappOptIn(Boolean(draft.whatsappOptIn));
+    const pendingPassword = getPendingPassword();
+    if (pendingPassword) {
+      setPassword(pendingPassword);
+      setConfirmPassword(pendingPassword);
+    }
+    replacesRequestId.current = draft.pendingRequestId;
+    setRestored(true);
+    const change = new URLSearchParams(window.location.search).get('change');
+    document.getElementById(change === 'email' ? 'cand-email' : 'cand-mobile')?.focus();
+  }, []);
+
+  function startOver() {
+    clearRegistrationDraft();
+    clearPendingPassword();
+    replacesRequestId.current = undefined;
+    setFullName('');
+    setEmail('');
+    setDial(DEFAULT_COUNTRY.dial);
+    setNational('');
+    setLocation('');
+    setPassword('');
+    setConfirmPassword('');
+    setOtpChannel(null);
+    setAgreedToTerms(false);
+    setWhatsappOptIn(false);
+    setTouched({});
+    setSubmitAttempted(false);
+    setSubmitError('');
+    setRestored(false);
+  }
 
   const country = COUNTRIES.find((item) => item.dial === dial) || DEFAULT_COUNTRY;
   const errors = validateCandidateRegistration({
@@ -124,16 +173,31 @@ export function RegistrationForm() {
         preferredLanguage: 'English',
         password,
         whatsappOptIn,
+        ...(replacesRequestId.current ? { replacesRequestId: replacesRequestId.current } : {}),
       });
 
       if (otpChannel === 'MOBILE' && !isDevOtpEnabled()) {
         if (!isFirebaseConfigured()) {
           throw new Error('Mobile OTP is not available right now. Please try Email OTP or try again later.');
         }
+        clearFirebaseOtp();
         await sendFirebaseOtp(phone);
       }
 
       setPendingPassword(password);
+      replacesRequestId.current = result.requestId;
+      saveRegistrationDraft({
+        accountType: 'CANDIDATE',
+        fullName,
+        email,
+        dial,
+        national,
+        otpChannel,
+        agreedToTerms,
+        location,
+        whatsappOptIn,
+        pendingRequestId: result.requestId,
+      });
       saveOtpFlow({
         requestId: result.requestId,
         phone,
@@ -166,6 +230,14 @@ export function RegistrationForm() {
 
   return (
     <form onSubmit={onSubmit} className="cb-auth-form-stack" noValidate aria-busy={loading || undefined}>
+      {restored ? (
+        <p className="cb-auth-field__hint" role="status" data-testid="registration-restored">
+          Your details are filled in. Update your mobile number and submit to get a new OTP.{' '}
+          <button type="button" className="cb-auth-meta__link" onClick={startOver}>
+            Start over
+          </button>
+        </p>
+      ) : null}
       <fieldset disabled={loading} className="cb-auth-form-stack">
         <AuthField id="cand-full-name" label="Full Name" required icon={<UserIcon />} error={nameError}>
           <input
