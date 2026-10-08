@@ -1,4 +1,3 @@
-import { ACTIVE_JOB_STATUSES } from '../employers/employer-plan';
 import {
   ADMIN_INTERVIEW_STATUS_LABELS,
   type AdminInterviewStatus,
@@ -38,13 +37,9 @@ export const POSTED_JOB_WHERE = { OR: [{ publishedAt: { not: null } }, { status:
 export type ReportJob = {
   status: string;
   publishedAt: Date | null;
+  closedAt: Date | null;
   createdAt: Date;
-  updatedAt: Date;
 };
-
-export function isJobOpen(status: string): boolean {
-  return (ACTIVE_JOB_STATUSES as readonly string[]).includes(status);
-}
 
 export function jobPostedAt(job: Pick<ReportJob, 'publishedAt' | 'createdAt'>): Date {
   return job.publishedAt ?? job.createdAt;
@@ -62,15 +57,24 @@ export function istDate(value: Date | null | undefined): string | null {
   return validDate(value) ? new Date(value.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10) : null;
 }
 
+/** India date the job was closed; null unless it is CLOSED with a recorded close time. */
+export function jobClosedDate(job: Pick<ReportJob, 'status' | 'closedAt'>): string | null {
+  return job.status === 'CLOSED' ? istDate(job.closedAt) : null;
+}
+
 /**
- * Whole India calendar days from the posted date. Open jobs count to `now`; a paused, closed or draft job
- * stops at its last update (the schema stores no closed date). Never negative; null for an unusable date.
+ * Whole India calendar days from the posted date: to today while the job is not closed, to its recorded
+ * close once it is. A CLOSED job without closedAt (closed before close times were recorded, with no audit
+ * evidence of when) is null rather than a guessed duration. Never negative; null for an unusable date.
  */
 export function daysRequirementOpen(job: ReportJob, now = new Date()): number | null {
   const posted = jobPostedAt(job);
   if (!validDate(posted) || !validDate(now)) return null;
-  let end = isJobOpen(job.status) ? now : job.updatedAt;
-  if (!validDate(end) || end.getTime() > now.getTime()) end = now;
+  let end = now;
+  if (job.status === 'CLOSED') {
+    if (!validDate(job.closedAt)) return null;
+    if (job.closedAt.getTime() < now.getTime()) end = job.closedAt;
+  }
   return Math.max(0, istDayNumber(end) - istDayNumber(posted));
 }
 
@@ -143,6 +147,7 @@ export type EmployerJobReportRow = {
   candidatesShortlisted: number;
   interviewStatus: string;
   interviewStatusCounts: Partial<Record<AdminInterviewStatus, number>>;
+  closedDate: string | null;
   daysOpen: number | null;
 };
 

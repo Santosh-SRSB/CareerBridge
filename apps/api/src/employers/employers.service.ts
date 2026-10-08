@@ -73,6 +73,7 @@ import { StorageService } from '../common/storage/storage.service';
 import { candidateInterviewUrl, interviewMeetingUrl } from '../common/web/public-web-url';
 import { TestimonialsService } from '../testimonials/testimonials.service';
 import { employerPlanUsage, usagePeriod } from './employer-plan';
+import { closedAtForStatusChange } from './job-lifecycle';
 
 const APPLICATION_STATUS_NOTICE: Partial<Record<ApplicationStatus, NotificationTemplateKey>> = {
   SHORTLISTED: 'APPLICATION_SHORTLISTED',
@@ -595,7 +596,11 @@ export class EmployersService {
     }
     const updated = await this.prisma.job.update({
       where: { id },
-      data: { status, publishedAt: status === 'PUBLISHED' ? new Date() : undefined },
+      data: {
+        status,
+        publishedAt: status === 'PUBLISHED' ? new Date() : undefined,
+        closedAt: closedAtForStatusChange(job.status, status, new Date()),
+      },
     });
     if (status !== 'PUBLISHED') return updated;
     const followUps = await this.runPublishFollowUps(job.id);

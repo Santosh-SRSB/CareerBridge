@@ -19,8 +19,11 @@ const row: AdminEmployerJobRow = {
   candidatesShortlisted: 0,
   interviewStatus: 'No Interview',
   interviewStatusCounts: {},
+  closedDate: null,
   daysOpen: 6,
 };
+
+const valueOf = (r: AdminEmployerJobRow, label: string) => EMPLOYER_REPORT_COLUMNS.find((c) => c.label === label)!.value(r);
 
 test('table columns are the stakeholder columns, in order, matching the Excel headers', () => {
   assert.deepEqual(
@@ -32,6 +35,7 @@ test('table columns are the stakeholder columns, in order, matching the Excel he
       'Candidates Applied',
       'Candidates Shortlisted',
       'Interview Status',
+      'Closed Date',
       'Days Requirement Open',
       'Job Status',
     ],
@@ -46,15 +50,43 @@ test('a job with no applications renders 0 | 0 | No Interview with its days open
     0,
     0,
     'No Interview',
+    '—',
     6,
     'Active',
   ]);
 });
 
+test('an open job shows a dash for Closed Date and its days open to today', () => {
+  const open = { ...row, postedDate: '2026-09-30', daysOpen: 8 };
+  assert.equal(valueOf(open, 'Closed Date'), '—');
+  assert.equal(valueOf(open, 'Days Requirement Open'), 8);
+  assert.equal(valueOf(open, 'Job Status'), 'Active');
+});
+
+test('a closed job shows its closed date and the days from posting to closing', () => {
+  const closed = {
+    ...row,
+    jobStatus: 'CLOSED',
+    jobStatusLabel: 'Closed',
+    postedDate: '2026-09-28',
+    closedDate: '2026-10-02',
+    daysOpen: 4,
+  };
+  assert.deepEqual(EMPLOYER_REPORT_COLUMNS.slice(6).map((c) => c.value(closed)), ['2026-10-02', 4, 'Closed']);
+  const sameDay = { ...closed, postedDate: '2026-09-30', closedDate: '2026-09-30', daysOpen: 0 };
+  assert.equal(valueOf(sameDay, 'Closed Date'), '2026-09-30');
+  assert.equal(valueOf(sameDay, 'Days Requirement Open'), 0, 'zero days stays numeric');
+});
+
+test('a legacy closed job with no recorded close shows dashes, never "null"', () => {
+  const legacy = { ...row, jobStatus: 'CLOSED', jobStatusLabel: 'Closed', closedDate: null, daysOpen: null };
+  assert.deepEqual(EMPLOYER_REPORT_COLUMNS.slice(6).map((c) => c.value(legacy)), ['—', '—', 'Closed']);
+});
+
 test('missing posted date or days open shows a dash, never "null"', () => {
   const values = EMPLOYER_REPORT_COLUMNS.map((c) => c.value({ ...row, postedDate: null, daysOpen: null }));
   assert.equal(values[1], '—');
-  assert.equal(values[6], '—');
+  assert.equal(values[7], '—');
   assert.equal(values[3], 0, 'zero counts stay numeric');
 });
 

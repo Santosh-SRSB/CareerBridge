@@ -119,6 +119,67 @@ describe('ST-23: admin approve/reject stays available for historical PENDING_REV
   });
 });
 
+describe('Job closedAt on admin status changes (Employer Report "Closed Date")', () => {
+  function harness(initial: Record<string, unknown>) {
+    const job: Record<string, unknown> = { id: 'j1', publishedAt: new Date('2026-09-28T04:30:00.000Z'), closedAt: null, ...initial };
+    const updates: Array<Record<string, unknown>> = [];
+    const prisma = {
+      job: {
+        findUnique: async () => ({ ...job }),
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          updates.push(data);
+          // Prisma leaves a field unchanged when its value is undefined.
+          Object.assign(job, Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)));
+          return { ...job };
+        },
+      },
+      auditLog: { create: async () => undefined },
+    };
+    const employers = { completeJobApproval: async () => null, notifyJobRejected: async () => undefined };
+    return { service: new AdminService(prisma as never, {} as never, employers as never), job, updates };
+  }
+  const original = new Date('2026-10-02T05:00:00.000Z');
+
+  it('I. admin closing a live, paused or pending job records closedAt and keeps the posted date', async () => {
+    for (const status of ['PUBLISHED', 'PAUSED', 'PENDING_REVIEW', 'DRAFT']) {
+      const h = harness({ status });
+      const before = Date.now();
+      await h.service.setJobStatus('admin-1', 'j1', 'CLOSED');
+      assert.equal(h.job.status, 'CLOSED', status);
+      assert.ok(h.job.closedAt instanceof Date && (h.job.closedAt as Date).getTime() >= before, status);
+      assert.equal((h.job.publishedAt as Date).toISOString(), '2026-09-28T04:30:00.000Z', status);
+    }
+  });
+
+  it('I. admin reject of a live job closes it and records closedAt; reject of a pending job does not', async () => {
+    const live = harness({ status: 'PUBLISHED' });
+    await live.service.rejectJob('admin-1', 'j1');
+    assert.equal(live.job.status, 'CLOSED');
+    assert.ok(live.job.closedAt instanceof Date);
+    const pending = harness({ status: 'PENDING_REVIEW' });
+    await pending.service.rejectJob('admin-1', 'j1');
+    assert.equal(pending.job.status, 'DRAFT');
+    assert.equal(pending.job.closedAt, null);
+  });
+
+  it('H. admin setting CLOSED on an already CLOSED job (or rejecting it) leaves closedAt unchanged', async () => {
+    const h = harness({ status: 'CLOSED', closedAt: original });
+    await h.service.setJobStatus('admin-1', 'j1', 'CLOSED');
+    await h.service.rejectJob('admin-1', 'j1');
+    assert.equal(h.job.closedAt, original);
+    assert.ok(h.updates.every((u) => u.closedAt === undefined));
+  });
+
+  it('J. admin reopening a CLOSED job clears closedAt; closing again records the new close', async () => {
+    const h = harness({ status: 'CLOSED', closedAt: original });
+    await h.service.setJobStatus('admin-1', 'j1', 'PUBLISHED');
+    assert.equal(h.job.closedAt, null);
+    const before = Date.now();
+    const reclosed = (await h.service.setJobStatus('admin-1', 'j1', 'CLOSED')) as { closedAt: unknown };
+    assert.ok(reclosed.closedAt instanceof Date && reclosed.closedAt.getTime() >= before);
+  });
+});
+
 describe('AdminService.mergeSkill', () => {
   function harness() {
     const skills = new Map([

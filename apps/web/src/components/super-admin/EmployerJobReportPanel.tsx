@@ -42,7 +42,7 @@ export function EmployerJobReportPanel() {
         </p>
       ) : data && data.rows.length > 0 ? (
         <div className="max-h-[560px] overflow-auto">
-          <table className="min-w-[960px] w-full text-left text-sm">
+          <table className="min-w-[1060px] w-full text-left text-sm">
             <thead className="sticky top-0 bg-[#d97706] text-xs uppercase tracking-wide text-white">
               <tr>
                 {EMPLOYER_REPORT_COLUMNS.map((col) => (

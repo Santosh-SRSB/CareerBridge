@@ -12,6 +12,7 @@ import { AdminService } from './admin.service';
 import { REPORT_EXPORT_BATCH } from './admin-report-export';
 import {
   daysRequirementOpen,
+  jobClosedDate,
   NO_INTERVIEW_LABEL,
   SHORTLIST_REACHED_APPLICATION_STATUSES,
   summariseJobInterviews,
@@ -28,6 +29,7 @@ const EMPLOYER_REPORT_HEADERS = [
   'Candidates Applied',
   'Candidates Shortlisted',
   'Interview Status',
+  'Closed Date',
   'Days Requirement Open',
   'Job Status',
 ];
@@ -86,6 +88,7 @@ function harness(seed: Seed) {
   const jobs: Row[] = seed.jobs.map((j) => ({
     status: 'PUBLISHED',
     publishedAt: null,
+    closedAt: null,
     createdAt: ist('2026-09-01'),
     updatedAt: ist('2026-09-01'),
     ...j,
@@ -250,6 +253,7 @@ describe('Employer Report — one row per posted job', () => {
         candidatesShortlisted: 0,
         interviewStatus: NO_INTERVIEW_LABEL,
         interviewStatusCounts: undefined,
+        closedDate: null,
         daysOpen: 6,
       },
     );
@@ -407,40 +411,94 @@ describe('Employer Report — counts', () => {
 
 /* ---------- days open ---------- */
 
-describe('Days Requirement Open', () => {
-  const job = (extra: Row) => ({ status: 'PUBLISHED', publishedAt: ist('2026-10-01'), createdAt: ist('2026-09-01'), updatedAt: ist('2026-10-02'), ...extra });
+describe('Closed Date and Days Requirement Open', () => {
+  const OCT_8 = ist('2026-10-08', '12:00');
+  const job = (extra: Row) => ({ status: 'PUBLISHED', publishedAt: ist('2026-10-01'), closedAt: null, createdAt: ist('2026-09-01'), ...extra });
 
-  it('13. an open job counts India calendar days from the posted date to today', () => {
+  it('A. open job posted 30 Sep, today 8 Oct → 8 days, no closed date', () => {
+    const open = job({ publishedAt: ist('2026-09-30') });
+    assert.equal(daysRequirementOpen(open as never, OCT_8), 8);
+    assert.equal(jobClosedDate(open as never), null);
+  });
+
+  it('B. closed the same day it was posted → closed date that day, 0 days', () => {
+    const closed = job({ status: 'CLOSED', publishedAt: ist('2026-09-30', '09:00'), closedAt: ist('2026-09-30', '18:00') });
+    assert.equal(jobClosedDate(closed as never), '2026-09-30');
+    assert.equal(daysRequirementOpen(closed as never, OCT_8), 0);
+  });
+
+  it('C. posted 28 Sep, closed 2 Oct → closed date 2 Oct, 4 days', () => {
+    const closed = job({ status: 'CLOSED', publishedAt: ist('2026-09-28'), closedAt: ist('2026-10-02') });
+    assert.equal(jobClosedDate(closed as never), '2026-10-02');
+    assert.equal(daysRequirementOpen(closed as never, OCT_8), 4);
+  });
+
+  it('D. a closed job edited later (updatedAt 8 Oct) still reports its close: 4 days, not 10', () => {
+    const closed = job({ status: 'CLOSED', publishedAt: ist('2026-09-28'), closedAt: ist('2026-10-02'), updatedAt: ist('2026-10-08') });
+    assert.equal(jobClosedDate(closed as never), '2026-10-02');
+    assert.equal(daysRequirementOpen(closed as never, OCT_8), 4);
+  });
+
+  it('E. an open job edited yesterday still counts to today: posted 30 Sep → 8 days on 8 Oct', () => {
+    const open = job({ publishedAt: ist('2026-09-30'), updatedAt: ist('2026-10-07') });
+    assert.equal(daysRequirementOpen(open as never, OCT_8), 8);
+  });
+
+  it('F. a legacy CLOSED job with no recorded close time → no closed date and no days (not guessed)', () => {
+    const legacy = job({ status: 'CLOSED', publishedAt: ist('2026-09-01'), closedAt: null, updatedAt: ist('2026-09-11') });
+    assert.equal(jobClosedDate(legacy as never), null);
+    assert.equal(daysRequirementOpen(legacy as never, NOW), null);
+  });
+
+  it('every job that is not closed (active, pending review, paused, posted draft) counts India days to today', () => {
     assert.equal(daysRequirementOpen(job({}) as never, NOW), 6);
-    assert.equal(daysRequirementOpen(job({ status: 'PENDING_REVIEW' }) as never, NOW), 6);
+    for (const status of ['PENDING_REVIEW', 'PAUSED', 'DRAFT']) {
+      assert.equal(daysRequirementOpen(job({ status, updatedAt: ist('2026-10-02') }) as never, NOW), 6, status);
+      assert.equal(jobClosedDate(job({ status, closedAt: ist('2026-10-02') }) as never), null, `${status} has no closed date`);
+    }
     assert.equal(daysRequirementOpen(job({ publishedAt: ist('2026-10-07', '00:05') }) as never, NOW), 0, 'posted today');
     assert.equal(daysRequirementOpen(job({ publishedAt: new Date('2026-10-01T20:00:00Z') }) as never, NOW), 5, '01:30 IST on 2 Oct');
   });
 
-  it('14. a closed or paused job stops counting at its last update (no closed date is stored)', () => {
-    assert.equal(daysRequirementOpen(job({ status: 'CLOSED', updatedAt: ist('2026-10-04') }) as never, NOW), 3);
-    assert.equal(daysRequirementOpen(job({ status: 'PAUSED', updatedAt: ist('2026-10-05') }) as never, NOW), 4);
-    assert.equal(daysRequirementOpen(job({ status: 'DRAFT', updatedAt: ist('2026-10-02') }) as never, NOW), 1);
+  it('closed date is the India calendar date of the close (late-evening UTC is the next day in India)', () => {
+    const closed = job({ status: 'CLOSED', publishedAt: ist('2026-09-28'), closedAt: new Date('2026-10-01T20:00:00Z') });
+    assert.equal(jobClosedDate(closed as never), '2026-10-02');
+    assert.equal(daysRequirementOpen(closed as never, NOW), 4);
   });
 
-  it('15. future, inverted or invalid dates are safe: never negative, null when unusable', () => {
+  it('future, inverted or invalid dates are safe: never negative, null when unusable', () => {
     assert.equal(daysRequirementOpen(job({ publishedAt: ist('2026-10-20') }) as never, NOW), 0, 'future posted date');
-    assert.equal(daysRequirementOpen(job({ status: 'CLOSED', updatedAt: ist('2026-09-01') }) as never, NOW), 0, 'closed before posted');
-    assert.equal(daysRequirementOpen(job({ status: 'CLOSED', updatedAt: ist('2026-12-01') }) as never, NOW), 6, 'update in the future capped at now');
+    assert.equal(daysRequirementOpen(job({ status: 'CLOSED', closedAt: ist('2026-09-01') }) as never, NOW), 0, 'closed before posted');
+    assert.equal(daysRequirementOpen(job({ status: 'CLOSED', closedAt: ist('2026-12-01') }) as never, NOW), 6, 'close in the future capped at now');
     assert.equal(daysRequirementOpen(job({ publishedAt: new Date('not a date') }) as never, NOW), null);
-    assert.equal(daysRequirementOpen(job({ status: 'CLOSED', updatedAt: new Date('bad') }) as never, NOW), 6, 'bad end falls back to now');
+    assert.equal(daysRequirementOpen(job({ status: 'CLOSED', closedAt: new Date('bad') }) as never, NOW), null, 'unusable close time');
+    assert.equal(jobClosedDate(job({ status: 'CLOSED', closedAt: new Date('bad') }) as never), null);
   });
 
-  it('report rows carry the same days-open value', async () => {
-    const { rows } = await rowsOf({
+  it('report rows carry the closed date and days from closedAt, never from updatedAt', async () => {
+    const { rows, calls } = await rowsOf({
       employers: [{ id: 'emp-a', companyName: 'Acme' }],
       jobs: [
-        { id: 'open', employerId: 'emp-a', title: 'Open', publishedAt: ist('2026-10-01') },
-        { id: 'closed', employerId: 'emp-a', title: 'Closed', status: 'CLOSED', publishedAt: ist('2026-09-01'), updatedAt: ist('2026-09-11') },
+        { id: 'open', employerId: 'emp-a', title: 'Open', publishedAt: ist('2026-10-01'), updatedAt: ist('2026-10-03') },
+        {
+          id: 'closed',
+          employerId: 'emp-a',
+          title: 'Closed',
+          status: 'CLOSED',
+          publishedAt: ist('2026-09-01'),
+          closedAt: ist('2026-09-11'),
+          updatedAt: ist('2026-10-06'),
+        },
+        { id: 'legacy', employerId: 'emp-a', title: 'Legacy closed', status: 'CLOSED', publishedAt: ist('2026-09-02'), updatedAt: ist('2026-09-05') },
       ],
     });
-    const by = Object.fromEntries(rows.map((r) => [r.jobId, r.daysOpen]));
-    assert.deepEqual(by, { open: 6, closed: 10 });
+    const by = Object.fromEntries(rows.map((r) => [r.jobId, [r.closedDate, r.daysOpen, r.jobStatusLabel]]));
+    assert.deepEqual(by, {
+      open: [null, 6, 'Active'],
+      closed: ['2026-09-11', 10, 'Closed'],
+      legacy: [null, null, 'Closed'],
+    });
+    assert.ok(calls.jobQueries.every((q) => q.select.closedAt === true && !('updatedAt' in q.select)));
   });
 });
 
@@ -510,12 +568,21 @@ describe('Employer Excel export — per-job rows', () => {
     seed.employers.push({ id: 'emp-b', companyName: 'Beta Labs' }, { id: 'emp-c', companyName: 'No Jobs Ltd' });
     seed.jobs.push(
       { id: 'b-1', employerId: 'emp-b', title: 'Tester', publishedAt: ist('2026-09-30') },
-      { id: 'b-2', employerId: 'emp-b', title: 'Closed role', status: 'CLOSED', publishedAt: ist('2026-09-01'), updatedAt: ist('2026-09-11') },
+      {
+        id: 'b-2',
+        employerId: 'emp-b',
+        title: 'Closed role',
+        status: 'CLOSED',
+        publishedAt: ist('2026-09-01'),
+        closedAt: ist('2026-09-11'),
+        updatedAt: ist('2026-10-05'),
+      },
     );
     const { report, file } = await exportOf(seed);
     assert.equal(file.fileName, 'careerbridge-employer-report-2026-10-07.xlsx');
     assert.equal(file.rowCount, 3);
-    const { wb, rows } = await sheet(file.buffer, 'Employer Jobs');
+    const { wb, rows: rawRows } = await sheet(file.buffer, 'Employer Jobs');
+    const rows = rawRows.map((r) => Array.from(r, (v) => v ?? null));
     assert.deepEqual(wb.worksheets.map((w) => w.name), ['Summary', 'Employer Jobs']);
     assert.deepEqual(rows[0], EMPLOYER_REPORT_HEADERS);
     assert.equal(rows.length - 1, report.total);
@@ -528,6 +595,7 @@ describe('Employer Excel export — per-job rows', () => {
         r.candidatesApplied,
         r.candidatesShortlisted,
         r.interviewStatus,
+        r.closedDate,
         r.daysOpen,
         r.jobStatusLabel,
       ]),
@@ -539,10 +607,11 @@ describe('Employer Excel export — per-job rows', () => {
       10,
       7,
       '2 Interview Scheduled, 2 Interview Rescheduled, 1 Feedback Pending, 1 Selected, 1 Rejected, 1 Cancelled',
+      null,
       6,
       'Active',
     ]);
-    assert.deepEqual(rows[3], ['Beta Labs', '2026-09-01', 'Closed role', 0, 0, 'No Interview', 10, 'Closed']);
+    assert.deepEqual(rows[3], ['Beta Labs', '2026-09-01', 'Closed role', 0, 0, 'No Interview', '2026-09-11', 10, 'Closed']);
   });
 
   it('26. Summary sheet keeps the Phase 3 Reports metrics and counts exported job rows', async () => {

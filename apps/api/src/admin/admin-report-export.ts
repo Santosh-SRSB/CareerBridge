@@ -94,6 +94,7 @@ export const EMPLOYER_REPORT_COLUMNS: ReportColumn<EmployerJobReportRow>[] = [
   { header: 'Candidates Applied', width: 18, value: (r) => r.candidatesApplied },
   { header: 'Candidates Shortlisted', width: 22, value: (r) => r.candidatesShortlisted },
   { header: 'Interview Status', width: 44, value: (r) => r.interviewStatus },
+  { header: 'Closed Date', width: 14, value: (r) => r.closedDate },
   { header: 'Days Requirement Open', width: 22, value: (r) => r.daysOpen },
   { header: 'Job Status', width: 16, value: (r) => r.jobStatusLabel },
 ];

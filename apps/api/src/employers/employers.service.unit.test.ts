@@ -24,6 +24,7 @@ import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service
 import { consentedWhatsAppNumber } from '../whatsapp/interview-lifecycle.util';
 import { companyLogoUrl } from './company-logo.util';
 import { withNotifyPrefs } from './employer-policy';
+import { closedAtForStatusChange } from './job-lifecycle';
 
 const BUCKET = 'srsbbucket';
 const EMP_A = '6d318eed-780b-4ee3-9027-5827611b6d55';
@@ -812,6 +813,52 @@ describe('Fix 8 — publish survives an ATS recompute failure', () => {
     const again: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
     assert.equal(again.status, 'PUBLISHED');
     assert.equal(calls.recompute, 2);
+  });
+  it('closedAtForStatusChange: entering CLOSED stamps, staying CLOSED keeps, leaving CLOSED clears', () => {
+    const now = new Date('2026-10-08T06:30:00.000Z');
+    for (const from of ['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'PAUSED']) {
+      assert.equal(closedAtForStatusChange(from, 'CLOSED', now), now, `${from} → CLOSED`);
+      assert.equal(closedAtForStatusChange('CLOSED', from, now), null, `CLOSED → ${from}`);
+      assert.equal(closedAtForStatusChange(from, 'PUBLISHED', now), undefined, `${from} → PUBLISHED`);
+    }
+    assert.equal(closedAtForStatusChange('CLOSED', 'CLOSED', now), undefined);
+  });
+  it('G. employer close (OPEN → CLOSED) records closedAt at the transition', async () => {
+    const { svc, db, calls } = harness();
+    const job = db.jobs.find((j) => j.id === 'JA1')!;
+    assert.equal(job.status, 'PUBLISHED');
+    const before = Date.now();
+    const closed: any = await svc.setStatus('uA', 'JA1', 'CLOSED' as any);
+    assert.equal(closed.status, 'CLOSED');
+    assert.ok(closed.closedAt instanceof Date && closed.closedAt.getTime() >= before && closed.closedAt.getTime() <= Date.now());
+    assert.equal(job.closedAt, closed.closedAt);
+    assert.equal(calls.jobUpdates.at(-1)!.publishedAt, undefined, 'closing keeps the posted date');
+  });
+  it('H. closing an already CLOSED job, or editing it, leaves closedAt unchanged', async () => {
+    const { svc, db } = harness();
+    const job = db.jobs.find((j) => j.id === 'JA1')!;
+    const original = new Date('2026-10-02T05:00:00.000Z');
+    Object.assign(job, { status: 'CLOSED', closedAt: original });
+    await svc.setStatus('uA', 'JA1', 'CLOSED' as any);
+    assert.equal(job.closedAt, original);
+    await svc.updateJob('uA', 'JA1', jobDto({ title: 'Renamed after close' }) as any);
+    assert.equal(job.title, 'Renamed after close');
+    assert.equal(job.status, 'CLOSED');
+    assert.equal(job.closedAt, original);
+  });
+  it('J. reopening clears closedAt and closing again records the new close; pausing never sets it', async () => {
+    const { svc, db } = harness();
+    const job = db.jobs.find((j) => j.id === 'JA1')!;
+    Object.assign(job, { status: 'CLOSED', closedAt: new Date('2026-10-02T05:00:00.000Z') });
+    const reopened: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
+    assert.equal(reopened.status, 'PUBLISHED');
+    assert.equal(job.closedAt, null);
+    const paused: any = await svc.setStatus('uA', 'JA1', 'PAUSED' as any);
+    assert.equal(paused.status, 'PAUSED');
+    assert.equal(job.closedAt, null);
+    const before = Date.now();
+    const reclosed: any = await svc.setStatus('uA', 'JA1', 'CLOSED' as any);
+    assert.ok(reclosed.closedAt instanceof Date && reclosed.closedAt.getTime() >= before);
   });
   it('editing a published job with failing recompute still saves', async () => {
     const { svc } = harness({ recomputeThrows: true });

@@ -20,6 +20,7 @@ import { AuthService } from '../auth/auth.service';
 import { hashPlatformPassword, verifyPassword } from '../auth/password.util';
 import { EmployersService } from '../employers/employers.service';
 import { employerPlanUsage, usagePeriod } from '../employers/employer-plan';
+import { closedAtForStatusChange } from '../employers/job-lifecycle';
 import { ACTIVE_INTERVIEW_STATUSES, INTERVIEW_RESCHEDULED_AUDIT_ACTION } from '../employers/employer-policy';
 import {
   adminInterviewStatusLabel,
@@ -47,6 +48,7 @@ import {
   type EmployerJobReportRow,
   istDate,
   JOB_STATUS_LABELS,
+  jobClosedDate,
   jobPostedAt,
   POSTED_JOB_WHERE,
   type ReportInterview,
@@ -1094,6 +1096,7 @@ export class AdminService {
       data: {
         status,
         publishedAt: status === 'PUBLISHED' ? job.publishedAt || new Date() : job.publishedAt,
+        closedAt: closedAtForStatusChange(job.status, status, new Date()),
       },
     });
     await this.writeAudit({
@@ -1808,8 +1811,8 @@ export class AdminService {
           title: true,
           status: true,
           publishedAt: true,
+          closedAt: true,
           createdAt: true,
-          updatedAt: true,
           employer: { select: { companyName: true } },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -1867,6 +1870,7 @@ export class AdminService {
           candidatesShortlisted: shortlisted.get(job.id) ?? 0,
           interviewStatus: summary.label,
           interviewStatusCounts: summary.counts,
+          closedDate: jobClosedDate(job),
           daysOpen: daysRequirementOpen(job, now),
         });
       }

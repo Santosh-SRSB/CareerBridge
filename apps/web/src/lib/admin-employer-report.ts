@@ -12,6 +12,7 @@ export type AdminEmployerJobRow = {
   candidatesShortlisted: number;
   interviewStatus: string;
   interviewStatusCounts: Record<string, number>;
+  closedDate: string | null;
   daysOpen: number | null;
 };
 
@@ -37,6 +38,7 @@ export const EMPLOYER_REPORT_COLUMNS: EmployerReportColumn[] = [
   { label: 'Candidates Applied', numeric: true, value: (r) => r.candidatesApplied },
   { label: 'Candidates Shortlisted', numeric: true, value: (r) => r.candidatesShortlisted },
   { label: 'Interview Status', value: (r) => r.interviewStatus },
+  { label: 'Closed Date', value: (r) => dash(r.closedDate) },
   { label: 'Days Requirement Open', numeric: true, value: (r) => dash(r.daysOpen) },
   { label: 'Job Status', value: (r) => r.jobStatusLabel },
 ];
