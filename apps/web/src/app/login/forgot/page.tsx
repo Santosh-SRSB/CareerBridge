@@ -9,7 +9,8 @@ import { parseAccountKind, RoleToggle } from '@/components/RoleToggle';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { authErrorMessage } from '@/lib/auth-errors';
-import { requestOtp, resetPassword } from '@/lib/api';
+import { requestOtp } from '@/lib/api';
+import { submitPasswordReset } from '@/lib/password-reset';
 import { validateEmailAddress } from '@/lib/validation';
 import { registrationPasswordError, type AccountKind, type LoginAccountType } from '@careerbridge/shared';
 
@@ -37,12 +38,12 @@ function ForgotPasswordBody() {
     router.replace(`/login/forgot?role=${next.toLowerCase()}`, { scroll: false });
   }
 
-  async function onRequestCode(event: FormEvent) {
-    event.preventDefault();
+  async function sendCode() {
     setError('');
     setMessage('');
     const emailProblem = validateEmailAddress(email.trim(), true);
     if (emailProblem) {
+      setStep('request');
       setError(emailProblem);
       return;
     }
@@ -55,6 +56,7 @@ function ForgotPasswordBody() {
         accountType: role,
       });
       setRequestId(result.requestId);
+      setOtp('');
       setStep('reset');
       setMessage(
         result.devOtp
@@ -66,6 +68,11 @@ function ForgotPasswordBody() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function onRequestCode(event: FormEvent) {
+    event.preventDefault();
+    void sendCode();
   }
 
   async function onReset(event: FormEvent) {
@@ -87,16 +94,9 @@ function ForgotPasswordBody() {
     }
     setLoading(true);
     try {
-      const result = await resetPassword({
-        requestId,
-        otp: otp.trim(),
-        accountType: role,
-        password,
-      });
-      setMessage(result.message);
-      router.replace(`/login?role=${role.toLowerCase()}`);
+      router.replace(await submitPasswordReset({ requestId, otp: otp.trim(), accountType: role, password }));
     } catch (err) {
-      setError(authErrorMessage(err, 'verify'));
+      setError(authErrorMessage(err, 'reset'));
     } finally {
       setLoading(false);
     }
@@ -174,6 +174,14 @@ function ForgotPasswordBody() {
           <Button type="submit" loading={loading} loadingLabel="Updating…" className="w-full">
             Update password
           </Button>
+          <button
+            type="button"
+            disabled={loading}
+            className="w-full text-center text-xs font-bold text-[#0d9488] hover:underline disabled:opacity-50"
+            onClick={() => void sendCode()}
+          >
+            Send a new code
+          </button>
           <button
             type="button"
             className="w-full text-center text-xs font-bold text-[#0d9488] hover:underline"

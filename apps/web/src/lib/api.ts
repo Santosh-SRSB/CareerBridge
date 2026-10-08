@@ -194,7 +194,7 @@ export async function resetPassword(payload: {
   accountType: 'CANDIDATE' | 'EMPLOYER';
   password: string;
 }) {
-  return request<{ success: true; message: string }>('/auth/password/reset', {
+  return request<{ message: string }>('/auth/password/reset', {
     method: 'POST',
     auth: false,
     body: JSON.stringify(payload),

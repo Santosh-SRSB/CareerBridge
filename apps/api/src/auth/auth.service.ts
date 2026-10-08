@@ -749,7 +749,8 @@ export class AuthService {
       data: { verifiedAt: new Date() },
     });
 
-    return { success: true as const, message: 'Password updated. You can sign in now.' };
+    // No `success` key: RequestIdInterceptor passes such objects through unwrapped, and clients read `data`.
+    return { message: 'Password updated. You can sign in now.' };
   }
 
   async registerEmployer(dto: {
