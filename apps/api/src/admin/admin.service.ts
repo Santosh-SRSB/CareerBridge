@@ -54,6 +54,7 @@ import {
   summariseJobInterviews,
 } from './employer-job-report';
 import { buildCandidateProgress, buildEmployerProgress } from './admin-progress-report';
+import { adminStatusAuditAction, toAdminStatusResult, toUserStatusResult } from './admin-status';
 import {
   bucketFor,
   JOB_POSTING_PROVIDER_REF_PREFIX,
@@ -781,7 +782,7 @@ export class AdminService {
       oldValue: { status: user.status },
       newValue: { status },
     });
-    return updated;
+    return toUserStatusResult(updated);
   }
 
   async employers(query?: string) {
@@ -2144,13 +2145,13 @@ export class AdminService {
     ]);
     await this.writeAudit({
       userId: actorId,
-      action: status === 'SUSPENDED' ? 'SUSPEND_ADMIN' : 'ACTIVATE_ADMIN',
+      action: adminStatusAuditAction(status),
       resourceType: 'ADMIN',
       resourceId: adminId,
       oldValue: { status: admin.status },
       newValue: { status },
     });
-    return updatedAdmin;
+    return toAdminStatusResult(updatedAdmin);
   }
 
   async setAdminRole(
