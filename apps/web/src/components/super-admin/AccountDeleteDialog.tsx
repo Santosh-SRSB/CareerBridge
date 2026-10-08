@@ -82,24 +82,30 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
   }
 
   return (
-    <div className="ep-modal" role="alertdialog" aria-modal="true" aria-labelledby={titleId} data-testid="account-delete-dialog">
+    <div
+      className="fixed inset-0 z-[80] grid place-items-center p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      data-testid="account-delete-dialog"
+    >
       <button
         type="button"
-        className="ep-modal__backdrop"
+        className="absolute inset-0 cursor-pointer border-0 bg-[rgba(12,51,44,0.45)]"
         aria-label="Close"
         onClick={() => !busyRef.current && onClose()}
       />
-      <div className="ep-modal__card">
-        <header className="ep-modal__head">
-          <h2 id={titleId} className="ep-modal__title text-[#b42318]">
+      <div className="relative z-[1] max-h-[90vh] w-full max-w-[520px] overflow-y-auto rounded-lg border-t-4 border-[#b42318] bg-white p-5 shadow-2xl">
+        <header className="mb-4">
+          <h2 id={titleId} className="text-lg font-bold text-[#b42318]">
             Permanently delete {label}?
           </h2>
-          <p className="ep-modal__sub">
+          <p className="mt-1 text-sm text-[#555]">
             {target.name} will be removed for good. This cannot be undone.
           </p>
         </header>
 
-        <div className="space-y-3 px-1 text-sm text-[#333]">
+        <div className="space-y-3 text-sm text-[#333]">
           {loading ? <p className="text-[#666]">Checking the account…</p> : null}
           {preview ? (
             <>
@@ -144,7 +150,7 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
                     onChange={(e) => setTyped(e.target.value)}
                     autoComplete="off"
                     disabled={busy}
-                    className="w-full border border-[#ccc] px-3 py-2 text-sm"
+                    className="w-full rounded border border-[#ccc] px-3 py-2 text-sm focus:border-[#b42318] focus:outline-none"
                     data-testid="delete-confirm-input"
                   />
                 </>
@@ -158,7 +164,7 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
           ) : null}
         </div>
 
-        <footer className="ep-modal__actions">
+        <footer className="mt-5 flex flex-wrap justify-end gap-2">
           <Button ref={cancelRef} type="button" variant="secondary" block={false} disabled={busy} onClick={onClose}>
             Cancel
           </Button>
