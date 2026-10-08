@@ -305,7 +305,7 @@ describe('Employer progress', () => {
     assert.deepEqual(
       report.stages.map((s) => [s.label, s.count]),
       [
-        ['Employers Onboarded', 0],
+        ['Employer Onboarded', 0],
         ['Requirements Posted', 0],
         ['Interview Happened', 0],
         ['Selection Done', 0],

@@ -205,7 +205,7 @@ export async function buildEmployerProgress(prisma: ProgressPrisma, now = new Da
     generatedAt: now.toISOString(),
     registered,
     stages: [
-      stage('ONBOARDED', 'Employers Onboarded', onboarded, 'Completed company KYC (required before posting jobs).'),
+      stage('ONBOARDED', 'Employer Onboarded', onboarded, 'Completed company KYC (required before posting jobs).'),
       stage(
         'REQUIREMENTS_POSTED',
         'Requirements Posted',

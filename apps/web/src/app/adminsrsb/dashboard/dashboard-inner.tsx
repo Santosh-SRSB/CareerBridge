@@ -34,7 +34,7 @@ import { PlatformCatalogSettings } from '@/components/super-admin/PlatformCatalo
 import { AdminChangePasswordForm } from '@/components/super-admin/AdminChangePasswordForm';
 import { ReportExportPanel } from '@/components/super-admin/ReportExportPanel';
 import { EmployerJobReportPanel } from '@/components/super-admin/EmployerJobReportPanel';
-import { CandidateProgressPanel, EmployerProgressPanel } from '@/components/super-admin/ProgressFunnelPanel';
+import { CandidateProgressPanel, EmployerProgressPanel } from '@/components/super-admin/ProgressPiePanel';
 import { AccountDeleteDialog } from '@/components/super-admin/AccountDeleteDialog';
 import { type AdminDeletableKind, canOfferAccountDeletion } from '@/lib/admin-account-deletion';
 import {
@@ -989,8 +989,10 @@ export default function SuperAdminDashboardInner() {
             ) : (
               <>
               <FunnelConversionPanel funnel={reportFunnel} />
-              <CandidateProgressPanel />
-              <EmployerProgressPanel />
+              <div className="grid gap-4 lg:grid-cols-2" data-testid="progress-charts">
+                <CandidateProgressPanel />
+                <EmployerProgressPanel />
+              </div>
               <RevenuePanel />
               <EmployerJobReportPanel />
               <div className="grid gap-4 md:grid-cols-2">
