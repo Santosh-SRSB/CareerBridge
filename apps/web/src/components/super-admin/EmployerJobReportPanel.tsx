@@ -56,7 +56,12 @@ export function EmployerJobReportPanel() {
               {data.rows.map((row) => (
                 <tr key={row.jobId} className="border-t border-[#f3e7d6] align-top">
                   {EMPLOYER_REPORT_COLUMNS.map((col) => (
-                    <td key={col.label} className={`px-3 py-2.5 ${col.numeric ? 'text-right tabular-nums' : ''}`}>
+                    <td
+                      key={col.label}
+                      className={`px-3 py-2.5 ${col.numeric ? 'text-right tabular-nums' : ''} ${
+                        col.label === 'Job Posted Date' || col.label === 'Closed Date' ? 'whitespace-nowrap' : ''
+                      }`}
+                    >
                       {col.label === 'Interview Status' ? (
                         <ul className="space-y-0.5">
                           {interviewStatusLines(row.interviewStatus).map((line) => (
