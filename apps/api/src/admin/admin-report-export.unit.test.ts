@@ -278,7 +278,7 @@ describe('report export endpoints — response', () => {
   ] as const) {
     it(`${method}: xlsx content type, attachment filename, no-store, valid workbook`, async () => {
       const { service } = harness();
-      const controller = new AdminController(service);
+      const controller = new AdminController(service, {} as never);
       const res = fakeResponse();
       await (controller as any)[method]({ id: 'admin-1' }, res);
       assert.equal(res.statusCode, 200);

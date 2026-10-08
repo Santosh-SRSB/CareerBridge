@@ -102,7 +102,30 @@ export function RevenuePanel() {
             <Tile label="New employers this month" value={data.newEmployersThisMonth} />
             <Tile label="Candidate views used this month" value={data.creditsConsumedThisMonth} />
           </div>
-          {!data.paymentGatewayConfigured && <p className="px-4 py-3 text-xs text-[#555]">{data.note}</p>}
+          {data.bySource ? (
+            <div className="border-t border-[#eee]" data-testid="revenue-by-source">
+              <p className="px-4 pt-3 text-[10px] font-bold uppercase tracking-wide text-[#6b2080]">
+                Paid revenue by source
+              </p>
+              <div className="mt-2 grid gap-px bg-[#eee] sm:grid-cols-3">
+                <Tile label="Job posting fees" value={inr(data.bySource.jobPostingFeesInr)} tone="#6b2080" />
+                <Tile label="Hiring fees" value={inr(data.bySource.hiringFeesInr)} tone="#6b2080" />
+                <Tile label="Other paid revenue" value={inr(data.bySource.otherInr)} tone="#6b2080" />
+              </div>
+            </div>
+          ) : null}
+          <div className="space-y-1 px-4 py-3 text-xs text-[#555]">
+            {data.definition ? <p>{data.definition}</p> : null}
+            {data.excluded ? (
+              <p data-testid="revenue-excluded">
+                Not counted: pending {inr(data.excluded.pending.amountInr)} ({data.excluded.pending.count}) · failed{' '}
+                {inr(data.excluded.failed.amountInr)} ({data.excluded.failed.count}) · refunded{' '}
+                {inr(data.excluded.refunded.amountInr)} ({data.excluded.refunded.count})
+                {data.freePaidPayments ? ` · ${data.freePaidPayments} free (₹0) paid records` : ''}.
+              </p>
+            ) : null}
+            {!data.paymentGatewayConfigured && <p>{data.note}</p>}
+          </div>
         </>
       ) : null}
     </section>

@@ -53,6 +53,15 @@ import {
   SHORTLIST_REACHED_APPLICATION_STATUSES,
   summariseJobInterviews,
 } from './employer-job-report';
+import { buildCandidateProgress, buildEmployerProgress } from './admin-progress-report';
+import {
+  bucketFor,
+  JOB_POSTING_PROVIDER_REF_PREFIX,
+  type PaymentStatusGroup,
+  paiseToInr,
+  REVENUE_DEFINITION,
+  revenueBySource,
+} from './admin-revenue';
 
 /** Rows the Reports page table shows; the Excel export includes every row. */
 const EMPLOYER_REPORT_VIEW_LIMIT = 500;
@@ -1942,39 +1951,81 @@ export class AdminService {
   }
 
   /**
-   * Employer revenue from recorded payments. No payment gateway is live yet, so figures only reflect
-   * payments stored with status PAID; the response says so instead of estimating.
+   * Employer revenue from recorded payments (see admin-revenue.ts for the definition). No payment
+   * gateway is live yet, so figures only reflect payments stored with status PAID; the response
+   * says so instead of estimating.
    */
   async revenue(now = new Date()) {
     const period = usagePeriod(now);
     const [year, month] = period.split('-').map(Number);
     const monthStart = new Date(Date.UTC(year, month - 1, 1) - IST_OFFSET_MS);
-    const [paidAll, paidMonth, payingEmployers, newEmployers, creditsConsumed, pendingPayments] = await Promise.all([
-      this.prisma.employerPayment.aggregate({ where: { status: 'PAID' }, _sum: { amountPaise: true }, _count: { _all: true } }),
-      this.prisma.employerPayment.aggregate({
-        where: { status: 'PAID', paidAt: { gte: monthStart } },
-        _sum: { amountPaise: true },
-      }),
-      this.prisma.employerPayment
-        .findMany({ where: { status: 'PAID' }, distinct: ['employerId'], select: { employerId: true } })
-        .then((rows) => rows.length),
-      this.prisma.employer.count({ where: { createdAt: { gte: monthStart } } }),
-      this.prisma.employerCandidateView.count({ where: { period } }),
-      this.prisma.employerPayment.count({ where: { status: 'PENDING' } }),
-    ]);
+    const paid = { status: 'PAID' as const };
+    const [byStatus, paidMonth, payingEmployers, newEmployers, creditsConsumed, jobPosting, hiringFees, freePaid] =
+      await Promise.all([
+        this.prisma.employerPayment
+          .groupBy({ by: ['status'], _sum: { amountPaise: true }, _count: { _all: true } })
+          .then((rows) => rows as unknown as PaymentStatusGroup[]),
+        this.prisma.employerPayment.aggregate({
+          where: { ...paid, paidAt: { gte: monthStart } },
+          _sum: { amountPaise: true },
+        }),
+        this.prisma.employerPayment
+          .findMany({
+            where: { ...paid, amountPaise: { gt: 0 } },
+            distinct: ['employerId'],
+            select: { employerId: true },
+          })
+          .then((rows) => rows.length),
+        this.prisma.employer.count({ where: { createdAt: { gte: monthStart } } }),
+        this.prisma.employerCandidateView.count({ where: { period } }),
+        this.prisma.employerPayment.aggregate({
+          where: { ...paid, providerRef: { startsWith: JOB_POSTING_PROVIDER_REF_PREFIX } },
+          _sum: { amountPaise: true },
+        }),
+        this.prisma.employerPayment.aggregate({
+          where: { ...paid, hiringOutcomeId: { not: null } },
+          _sum: { amountPaise: true },
+        }),
+        this.prisma.employerPayment.count({ where: { ...paid, amountPaise: 0 } }),
+      ]);
+    const paidTotals = bucketFor(byStatus, 'PAID');
+    const paidPaise = byStatus.find((g) => g.status === 'PAID')?._sum.amountPaise ?? 0;
+    const pending = bucketFor(byStatus, 'PENDING');
     return {
       period,
       currency: 'INR',
-      totalRevenueInr: (paidAll._sum.amountPaise ?? 0) / 100,
-      revenueThisMonthInr: (paidMonth._sum.amountPaise ?? 0) / 100,
-      paidPayments: paidAll._count._all,
-      pendingPayments,
+      totalRevenueInr: paidTotals.amountInr,
+      revenueThisMonthInr: paiseToInr(paidMonth._sum.amountPaise),
+      paidPayments: paidTotals.count,
+      freePaidPayments: freePaid,
+      pendingPayments: pending.count,
       payingEmployers,
       newEmployersThisMonth: newEmployers,
       creditsConsumedThisMonth: creditsConsumed,
+      bySource: revenueBySource({
+        totalPaise: paidPaise,
+        jobPostingPaise: jobPosting._sum.amountPaise ?? 0,
+        hiringFeePaise: hiringFees._sum.amountPaise ?? 0,
+      }),
+      excluded: {
+        pending,
+        failed: bucketFor(byStatus, 'FAILED'),
+        refunded: bucketFor(byStatus, 'REFUNDED'),
+      },
+      definition: REVENUE_DEFINITION,
       paymentGatewayConfigured: false,
       note: 'Online payments are not live yet; revenue counts only payments recorded as PAID.',
     };
+  }
+
+  /** Reports → Candidate progress (distinct candidates per stage). */
+  candidateProgress(now = new Date()) {
+    return buildCandidateProgress(this.prisma as never, now);
+  }
+
+  /** Reports → Employer progress (distinct employers per stage). */
+  employerProgress(now = new Date()) {
+    return buildEmployerProgress(this.prisma as never, now);
   }
 
   async listAdmins() {

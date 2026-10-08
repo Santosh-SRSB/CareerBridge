@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -15,6 +16,7 @@ import { UserType } from '../prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { AdminService } from './admin.service';
+import { AdminAccountDeletionService } from './admin-account-deletion.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -139,7 +141,10 @@ class ChangeOwnPasswordDto {
 @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly accountDeletion: AdminAccountDeletionService,
+  ) {}
 
   @Get('dashboard')
   dashboard() {
@@ -161,6 +166,19 @@ export class AdminController {
   @Get('candidates/:id')
   candidateDetails(@Param('id') id: string) {
     return this.admin.candidateDetails(id);
+  }
+
+  @Get('candidates/:id/deletion')
+  @Roles(UserType.SUPER_ADMIN)
+  candidateDeletionPreview(@Param('id') id: string) {
+    return this.accountDeletion.candidatePreview(id);
+  }
+
+  @Delete('candidates/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  deleteCandidate(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.accountDeletion.deleteCandidate(user.id, id);
   }
 
   @Post('candidates/:id/status')
@@ -189,6 +207,19 @@ export class AdminController {
   @Get('employers/:id')
   employerDetails(@Param('id') id: string) {
     return this.admin.employerDetails(id);
+  }
+
+  @Get('employers/:id/deletion')
+  @Roles(UserType.SUPER_ADMIN)
+  employerDeletionPreview(@Param('id') id: string) {
+    return this.accountDeletion.employerPreview(id);
+  }
+
+  @Delete('employers/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  deleteEmployer(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.accountDeletion.deleteEmployer(user.id, id);
   }
 
   @Post('employers/:id/status')
@@ -312,6 +343,18 @@ export class AdminController {
     return this.admin.reports();
   }
 
+  @Get('reports/candidate-progress')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  candidateProgress() {
+    return this.admin.candidateProgress();
+  }
+
+  @Get('reports/employer-progress')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  employerProgress() {
+    return this.admin.employerProgress();
+  }
+
   @Get('reports/employers')
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
   employerReport(@Query('query') query?: string, @Query('status') status?: string) {
@@ -368,6 +411,19 @@ export class AdminController {
   @Roles(UserType.SUPER_ADMIN)
   createAdmin(@CurrentUser() user: { id: string }, @Body() dto: CreateAdminDto) {
     return this.admin.createAdmin(user.id, dto);
+  }
+
+  @Get('admins/:id/deletion')
+  @Roles(UserType.SUPER_ADMIN)
+  adminDeletionPreview(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.accountDeletion.adminPreview(user.id, id);
+  }
+
+  @Delete('admins/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  deleteAdmin(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.accountDeletion.deleteAdmin(user.id, id);
   }
 
   @Post('admins/:id/suspend')

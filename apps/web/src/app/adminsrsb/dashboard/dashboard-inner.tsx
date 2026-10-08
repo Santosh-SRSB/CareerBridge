@@ -34,6 +34,9 @@ import { PlatformCatalogSettings } from '@/components/super-admin/PlatformCatalo
 import { AdminChangePasswordForm } from '@/components/super-admin/AdminChangePasswordForm';
 import { ReportExportPanel } from '@/components/super-admin/ReportExportPanel';
 import { EmployerJobReportPanel } from '@/components/super-admin/EmployerJobReportPanel';
+import { CandidateProgressPanel, EmployerProgressPanel } from '@/components/super-admin/ProgressFunnelPanel';
+import { AccountDeleteDialog } from '@/components/super-admin/AccountDeleteDialog';
+import { type AdminDeletableKind, canOfferAccountDeletion } from '@/lib/admin-account-deletion';
 import {
   ActionBtn,
   DetailPanel,
@@ -242,6 +245,9 @@ export default function SuperAdminDashboardInner() {
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: AdminDeletableKind; id: string; name: string } | null>(
+    null,
+  );
 
   const [notifications, setNotifications] = useState<{
     summary: Record<string, number>;
@@ -480,6 +486,15 @@ export default function SuperAdminDashboardInner() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  function onAccountDeleted(result: { kind: AdminDeletableKind; id: string; displayName: string }) {
+    setDeleteTarget(null);
+    setError('');
+    setRows((prev) => prev.filter((row) => String(row.id ?? '') !== result.id));
+    setDetail((prev) => (prev && String(prev.id ?? '') === result.id ? null : prev));
+    setOk(`${result.displayName} was permanently deleted.`);
+    void reloadList(appliedSearch);
   }
 
   async function openEmployerWorkspace(
@@ -974,6 +989,8 @@ export default function SuperAdminDashboardInner() {
             ) : (
               <>
               <FunnelConversionPanel funnel={reportFunnel} />
+              <CandidateProgressPanel />
+              <EmployerProgressPanel />
               <RevenuePanel />
               <EmployerJobReportPanel />
               <div className="grid gap-4 md:grid-cols-2">
@@ -1389,6 +1406,15 @@ export default function SuperAdminDashboardInner() {
                           >
                             Suspend
                           </ActionBtn>
+                          {canOfferAccountDeletion({ viewerRole: staffRole, kind: 'candidates', status }) ? (
+                            <ActionBtn
+                              accent="#8a1c0f"
+                              disabled={!id || busyId === id}
+                              onClick={() => setDeleteTarget({ kind: 'candidates', id, name })}
+                            >
+                              Delete
+                            </ActionBtn>
+                          ) : null}
                         </div>
                       </div>
                     </article>
@@ -1455,6 +1481,17 @@ export default function SuperAdminDashboardInner() {
                           >
                             Suspend
                           </ActionBtn>
+                          {canOfferAccountDeletion({ viewerRole: staffRole, kind: 'employers', status }) ? (
+                            <ActionBtn
+                              accent="#8a1c0f"
+                              disabled={!id || busyId === id}
+                              onClick={() =>
+                                setDeleteTarget({ kind: 'employers', id, name: String(row.companyName ?? 'Employer') })
+                              }
+                            >
+                              Delete
+                            </ActionBtn>
+                          ) : null}
                         </div>
                       </div>
                     </article>
@@ -1842,6 +1879,17 @@ export default function SuperAdminDashboardInner() {
                           >
                             Set password
                           </ActionBtn>
+                          {canOfferAccountDeletion({ viewerRole: staffRole, kind: 'admins', status, targetRole: role }) ? (
+                            <ActionBtn
+                              accent="#8a1c0f"
+                              disabled={!id || busyId === id}
+                              onClick={() =>
+                                setDeleteTarget({ kind: 'admins', id, name: String(row.fullName || row.email || 'Admin') })
+                              }
+                            >
+                              Delete
+                            </ActionBtn>
+                          ) : null}
                         </div>
                       ) : null}
                     </article>
@@ -1853,6 +1901,7 @@ export default function SuperAdminDashboardInner() {
         )}
         </ModuleCanvas>
       </div>
+      <AccountDeleteDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={onAccountDeleted} />
     </SuperAdminShell>
   );
 }

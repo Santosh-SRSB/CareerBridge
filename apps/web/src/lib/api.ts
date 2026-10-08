@@ -47,6 +47,8 @@ import type {
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './session';
 import { type AdminReportKind, fetchAdminReport, saveBlobFile } from './admin-report-export';
 import type { AdminEmployerReport } from './admin-employer-report';
+import type { AdminProgressReport } from './admin-progress';
+import type { AdminAccountDeletionPreview, AdminDeletableKind } from './admin-account-deletion';
 import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE } from './client-errors';
 import { fitAvoidList, fitExperienceBullets } from './improve-payload';
 
@@ -1868,6 +1870,25 @@ export async function getAdminReports() {
   return request<Record<string, unknown>>('/admin/reports');
 }
 
+export async function getAdminCandidateProgress() {
+  return request<AdminProgressReport>('/admin/reports/candidate-progress');
+}
+
+export async function getAdminEmployerProgress() {
+  return request<AdminProgressReport>('/admin/reports/employer-progress');
+}
+
+export async function getAdminAccountDeletionPreview(kind: AdminDeletableKind, id: string) {
+  return request<AdminAccountDeletionPreview>(`/admin/${kind}/${encodeURIComponent(id)}/deletion`);
+}
+
+export async function deleteAdminAccount(kind: AdminDeletableKind, id: string) {
+  return request<{ deleted: boolean; kind: string; id: string; displayName: string }>(
+    `/admin/${kind}/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+  );
+}
+
 export type AdminApplicationPipeline = {
   total: number;
   byStatus: Record<string, number>;
@@ -1884,10 +1905,14 @@ export type AdminRevenue = {
   totalRevenueInr: number;
   revenueThisMonthInr: number;
   paidPayments: number;
+  freePaidPayments: number;
   pendingPayments: number;
   payingEmployers: number;
   newEmployersThisMonth: number;
   creditsConsumedThisMonth: number;
+  bySource: { jobPostingFeesInr: number; hiringFeesInr: number; otherInr: number };
+  excluded: Record<'pending' | 'failed' | 'refunded', { count: number; amountInr: number }>;
+  definition: string;
   paymentGatewayConfigured: boolean;
   note: string;
 };

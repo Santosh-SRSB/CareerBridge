@@ -658,7 +658,7 @@ describe('Employer Report routes — authorization', () => {
 
   it('the Reports endpoint passes the employer filters through to the service', async () => {
     const seen: unknown[] = [];
-    const controller = new AdminController({ employerReport: async (...args: unknown[]) => (seen.push(args), { rows: [] }) } as never);
+    const controller = new AdminController({ employerReport: async (...args: unknown[]) => (seen.push(args), { rows: [] }) } as never, {} as never);
     await controller.employerReport('acme', 'ACTIVE');
     assert.deepEqual(seen, [['acme', 'ACTIVE']]);
   });
