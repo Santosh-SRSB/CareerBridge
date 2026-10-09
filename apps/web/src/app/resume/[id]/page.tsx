@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { ScoreRing } from '@/components/ScoreRing';
 import { ResumePaper } from '@/components/ResumePaper';
-import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
+import { syncResumeToProfile } from '@/features/resume/resume-profile-sync';
 import { patchStoredUser } from '@/lib/session';
 
 type StepId = 'personal' | 'education' | 'experience' | 'skills' | 'summary' | 'ai-polish' | 'finalize';
@@ -248,8 +248,7 @@ export default function ResumeEditorPage() {
   /** Path A step 12: create / refresh Career Passport from finalized resume data. */
   async function applyResumeToProfile() {
     if (!content) return false;
-    const payload = mapResumeContentToPassportPayload(content);
-    const profile = await savePassport(payload);
+    const { profile } = await syncResumeToProfile(content, { getCandidateMe, savePassport });
     const preferredLanguage = content.languages?.[0]?.trim();
     if (preferredLanguage) {
       await updateCandidateMe({ preferredLanguage }).catch(() => undefined);

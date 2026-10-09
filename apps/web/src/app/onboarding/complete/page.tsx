@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { OB, OnboardingFrame, onboardingPrimaryButtonClass } from '@/components/OnboardingFrame';
+import {
+  OnboardingFrame,
+  OnboardingIcon,
+  OnboardingLoading,
+  obxGhostButtonClass,
+  obxPrimaryButtonClass,
+} from '@/components/OnboardingFrame';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { getCandidateMe, getResumeProcessingStatus, retryResumeProcessing, uploadResumeFile } from '@/lib/api';
 import {
@@ -206,16 +212,7 @@ export default function OnboardingCompletePage() {
     }
   }
 
-  if (!ready) {
-    return (
-      <main
-        className="flex h-dvh items-center justify-center text-sm"
-        style={{ background: OB.bg, color: OB.muted }}
-      >
-        Loading…
-      </main>
-    );
-  }
+  if (!ready) return <OnboardingLoading step={4} showProgress={false} />;
 
   return (
     <>
@@ -235,81 +232,28 @@ export default function OnboardingCompletePage() {
         }}
       />
 
-      <OnboardingFrame
-        step={4}
-        showProgress={false}
-        showBack
-        hideHeader
-        backHref="/onboarding/dossier"
-      >
-        <div className="cb-ob-complete cb-ob-hide-scrollbar flex min-h-0 flex-1 flex-col justify-center py-2">
-          <h2
-            className="cb-ob-complete-fx cb-ob-complete-title m-0 text-[1.5rem] leading-[1.28] tracking-[-0.2px] sm:text-[1.7rem]"
-            style={{
-              fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
-              fontWeight: 600,
-              color: OB.ink,
-            }}
-          >
-            Your profile looks incomplete
-          </h2>
+      <OnboardingFrame step={4} showProgress={false}>
+        <div className="obx-center obx-choice">
+          <div className="obx-big">
+            <OnboardingIcon name="sparkle" size={34} />
+          </div>
+          <h1>Your profile looks incomplete</h1>
+          <p className="obx-lead">Complete it to get noticed.</p>
 
-          <p className="cb-ob-complete-fx cb-ob-complete-sub !mb-0 mt-2 text-[15px] sm:text-base">
-            <span className="cb-ob-complete-hl">Complete it to get noticed.</span>
-          </p>
-
-          <div className="mt-5 grid grid-cols-2 gap-2.5 sm:mt-6 sm:gap-3">
-            <div
-              className="cb-ob-complete-stat rounded-2xl px-4 py-4 sm:px-5 sm:py-5"
-              style={{ background: '#f5f7ff' }}
-            >
-              <p
-                className="m-0 mb-1 tabular-nums text-[1.45rem] font-semibold sm:text-[1.6rem]"
-                style={{
-                  fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
-                  color: OB.moss,
-                }}
-              >
+          <div className="obx-stats">
+            <div className="obx-stat">
+              <strong>
                 {statViews}
-                <span className="cb-ob-complete-trend" aria-hidden>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <polyline
-                      points="3 17 10 10 14 14 21 5"
-                      stroke={OB.moss}
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <polyline
-                      points="21 11 21 5 15 5"
-                      stroke={OB.moss}
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </p>
-              <p className="m-0 text-[12px] leading-snug sm:text-[13px]" style={{ color: '#4b4f8f' }}>
-                more recruiter views on complete profiles
-              </p>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <polyline points="3 17 10 10 14 14 21 5" />
+                  <polyline points="21 11 21 5 15 5" />
+                </svg>
+              </strong>
+              <span>more recruiter views on complete profiles</span>
             </div>
-            <div
-              className="cb-ob-complete-stat rounded-2xl px-4 py-4 sm:px-5 sm:py-5"
-              style={{ background: '#f5f7ff' }}
-            >
-              <p
-                className="m-0 mb-1 tabular-nums text-[1.45rem] font-semibold sm:text-[1.6rem]"
-                style={{
-                  fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
-                  color: OB.moss,
-                }}
-              >
-                {statResponse}
-              </p>
-              <p className="m-0 text-[12px] leading-snug sm:text-[13px]" style={{ color: '#4b4f8f' }}>
-                faster response from employers
-              </p>
+            <div className="obx-stat">
+              <strong>{statResponse}</strong>
+              <span>faster response from employers</span>
             </div>
           </div>
 
@@ -317,18 +261,13 @@ export default function OnboardingCompletePage() {
             type="button"
             disabled={busy}
             onClick={openFilePicker}
-            className={`cb-ob-complete-primary ${onboardingPrimaryButtonClass} mt-8 w-full py-3.5 text-[15px] hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(26,31,196,0.28)] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:mt-10 sm:py-4 sm:text-base`}
-            style={{ background: OB.moss }}
+            className={`${obxPrimaryButtonClass} obx-wide`}
           >
             Upload resume
           </button>
+          <p className="obx-muted">PDF, DOC, DOCX, PNG or JPG</p>
 
-          <p
-            className="cb-ob-complete-link mt-10 mb-3 text-center text-[15px] font-semibold sm:text-base"
-            style={{ color: OB.ink }}
-          >
-            Don&apos;t have a resume?
-          </p>
+          <p className="obx-or">Don&apos;t have a resume?</p>
 
           <button
             type="button"
@@ -338,35 +277,16 @@ export default function OnboardingCompletePage() {
               rememberReturnTo('/onboarding/complete');
               router.push('/resume?from=build');
             }}
-            className="cb-ob-complete-secondary flex w-full items-center justify-center gap-2 rounded-full border-[1.5px] bg-white py-3.5 text-[15px] font-semibold transition hover:-translate-y-px hover:bg-[#f5f7ff] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:py-4 sm:text-base"
-            style={{ borderColor: OB.moss, color: OB.ink }}
+            className={`${obxGhostButtonClass} obx-wide`}
           >
-            <span>Build ATS resume</span>
-            <span className="cb-ob-complete-arrow" aria-hidden>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <line
-                  x1="5"
-                  y1="12"
-                  x2="19"
-                  y2="12"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
-                <polyline
-                  points="12 5 19 12 12 19"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
+            Build ATS resume
+            <OnboardingIcon name="arrow" size={18} />
           </button>
 
           {error && !file ? (
-            <p className="mt-3 text-center text-sm text-red-600">{error}</p>
+            <p role="alert" className="obx-error" style={{ justifyContent: 'center' }}>
+              {error}
+            </p>
           ) : null}
         </div>
       </OnboardingFrame>
@@ -395,85 +315,40 @@ export default function OnboardingCompletePage() {
       ) : null}
 
       {file && uploadCelebration === 'idle' ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: 'rgba(36,28,21,0.45)' }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-upload-title"
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl sm:p-6"
-            style={{ boxShadow: '0 12px 32px rgba(63,91,58,0.12)' }}
-          >
-            <h2
-              id="confirm-upload-title"
-              className="text-lg font-semibold"
-              style={{
-                fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
-                color: OB.ink,
-              }}
-            >
-              Confirm upload
-            </h2>
-            <p className="mt-1 text-sm" style={{ color: OB.muted }}>
-              We&apos;ll extract details and open the resume wizard.
-            </p>
-            <p
-              className="mt-4 rounded-lg border px-3 py-2 text-sm font-medium"
-              style={{ borderColor: OB.lineSoft, background: OB.bg, color: OB.ink }}
-            >
-              {file.name}{' '}
-              <span style={{ color: OB.muted }}>({Math.round(file.size / 1024)} KB)</span>
+        <div className="obx-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-upload-title">
+          <div className="obx-modal-card">
+            <h2 id="confirm-upload-title">Confirm upload</h2>
+            <p className="obx-muted">We&apos;ll extract details and open the resume wizard.</p>
+            <p className="obx-file">
+              {file.name} <span>({Math.round(file.size / 1024)} KB)</span>
             </p>
 
-            {status ? (
-              <p className="mt-3 text-sm font-medium" style={{ color: OB.moss }}>
-                {status}
-              </p>
-            ) : null}
+            {status ? <p className="obx-cnt">{status}</p> : null}
             {error ? (
-              <div className="mt-2">
-                <p className="text-sm text-red-600">{error}</p>
+              <div role="alert">
+                <p className="obx-error">{error}</p>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void onRetryProcessing()}
-                  className="mt-3 w-full rounded-full border py-2.5 text-sm font-semibold transition hover:bg-[#f5f7ff] disabled:opacity-60"
-                  style={{ borderColor: OB.moss, color: OB.ink }}
+                  className={`${obxGhostButtonClass} obx-wide`}
+                  style={{ marginTop: 12 }}
                 >
                   Retry
                 </button>
               </div>
             ) : null}
 
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={clearSelectedFile}
-                className="flex-1 rounded-full border bg-white py-2.5 text-sm font-medium transition hover:border-[#1A1FC4] disabled:opacity-60"
-                style={{ borderColor: '#d1d5e5', color: OB.muted }}
-              >
+            <div className="obx-modal-actions">
+              <button type="button" disabled={busy} onClick={clearSelectedFile} className={obxGhostButtonClass}>
                 Cancel
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onAddResume()}
-                className={onboardingPrimaryButtonClass + ' flex-1'}
-                style={{ background: OB.moss }}
-              >
+              <button type="button" disabled={busy} onClick={() => void onAddResume()} className={obxPrimaryButtonClass}>
                 {busy ? 'Working…' : 'Add'}
               </button>
             </div>
             {!busy ? (
-              <button
-                type="button"
-                onClick={openFilePicker}
-                className="mt-3 w-full text-center text-sm font-medium hover:opacity-80"
-                style={{ color: OB.moss }}
-              >
+              <button type="button" onClick={openFilePicker} className="obx-link obx-wide">
                 Choose a different file
               </button>
             ) : null}

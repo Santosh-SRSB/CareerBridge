@@ -34,6 +34,10 @@ export interface MasterEducation {
   endYear: string;
   grade: string;
   gradeType: string;
+  /** Storage-form dates (YYYY-MM when the month is known); the year fields above drive display. */
+  startDate?: string;
+  endDate?: string;
+  isCurrent?: boolean;
 }
 
 export interface MasterProject {

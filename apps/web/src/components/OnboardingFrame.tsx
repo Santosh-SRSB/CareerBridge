@@ -2,8 +2,12 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import type { OnboardingIconName } from '@/lib/onboarding-category-icon';
+import './onboarding-shell.css';
 
 export const ONBOARDING_TOTAL_STEPS = 4;
+
+export const ONBOARDING_STEP_LABELS = ['Location', 'Work status', 'Job preferences', 'Skills'] as const;
 
 /** Onboarding card palette — matches Profile Builder reference */
 export const OB = {
@@ -66,86 +70,90 @@ export const onboardingInputClass =
 export const onboardingLabelClass =
   'mb-1.5 block text-[13px] font-medium text-[#4b4f8f]';
 
+/** Primary / secondary button classes for the onboarding shell footer and status screens. */
+export const obxPrimaryButtonClass = 'obx-btn obx-btn--primary';
+export const obxGhostButtonClass = 'obx-btn obx-btn--ghost';
+
+function BrandMark() {
+  return (
+    <i aria-hidden>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 17c4-9 14-9 18 0M7 17v3M17 17v3" />
+      </svg>
+    </i>
+  );
+}
+
+function OnboardingSteps({ step }: { step: number }) {
+  const current = Math.min(Math.max(step, 1), ONBOARDING_TOTAL_STEPS);
+  const percent = Math.round((current / ONBOARDING_TOTAL_STEPS) * 100);
+  return (
+    <>
+      <ol className="obx-steps" aria-label="Onboarding progress">
+        {ONBOARDING_STEP_LABELS.map((label, i) => {
+          const n = i + 1;
+          const state = n < current ? 'is-done' : n === current ? 'is-cur' : '';
+          return (
+            <li key={label} className={state} aria-current={n === current ? 'step' : undefined}>
+              <span className="n">{n < current ? '✓' : n}</span>
+              <span className="l">{label}</span>
+            </li>
+          );
+        })}
+      </ol>
+      <div
+        className="obx-mprog"
+        role="progressbar"
+        aria-label="Onboarding progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        aria-valuetext={`Step ${current} of ${ONBOARDING_TOTAL_STEPS}, ${percent}% complete`}
+        data-testid="onboarding-progress"
+      >
+        {ONBOARDING_STEP_LABELS.map((label, i) => (
+          <span key={label} className={i < current ? 'on' : ''} />
+        ))}
+      </div>
+      <p className="obx-stp">
+        Step {current} of {ONBOARDING_TOTAL_STEPS} · {ONBOARDING_STEP_LABELS[current - 1]}
+      </p>
+    </>
+  );
+}
+
 export function OnboardingFrame({
   step,
   children,
-  title,
-  subtitle,
   showProgress = true,
-  showBack = true,
-  hideHeader = false,
-  backHref: backHrefOverride,
+  onSkip,
+  skipLabel = 'Skip for now',
+  skipDisabled = false,
 }: {
   step: number;
   children: ReactNode;
-  title?: string;
-  subtitle?: string;
-  /** Hide progress dots (e.g. post-onboarding choice screen). */
+  /** Hide the step indicator (e.g. profile setup and resume choice screens). */
   showProgress?: boolean;
-  showBack?: boolean;
-  /** Render children only — useful for custom complete screens. */
-  hideHeader?: boolean;
-  backHref?: string;
+  onSkip?: () => void;
+  skipLabel?: string;
+  skipDisabled?: boolean;
 }) {
-  const backHref = backHrefOverride ?? BACK_HREF[step];
-  const canGoBack = showBack && Boolean(backHref);
-
   return (
-    <main
-      className="box-border flex h-dvh max-h-dvh w-full items-center justify-center overflow-hidden px-4 py-6 sm:px-6 sm:py-8"
-      style={{
-        background: OB.bg,
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-        color: OB.ink,
-      }}
-    >
-      <div
-        className={`relative flex max-h-[min(94dvh,720px)] w-full max-w-[360px] flex-col overflow-hidden rounded-[20px] border bg-white px-5 py-5 ${
-          hideHeader
-            ? 'h-[min(90dvh,680px)] sm:h-[620px] sm:py-8'
-            : 'h-[min(88dvh,640px)] sm:h-[580px]'
-        }`}
-        style={{
-          borderColor: OB.border,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-        }}
-      >
-        {canGoBack ? (
-          <div className="mb-2 shrink-0">
-            <Link
-              href={backHref!}
-              className="inline-flex items-center gap-1 text-sm font-semibold transition hover:opacity-80"
-              style={{ color: OB.moss }}
-            >
-              ← Back
-            </Link>
-          </div>
-        ) : null}
-
-        {!hideHeader && (title || subtitle) ? (
-          <div className="mb-3 shrink-0">
-            {title ? (
-              <h1 className="m-0 text-lg font-semibold leading-tight" style={{ color: OB.ink }}>
-                {title}
-              </h1>
-            ) : null}
-            {subtitle ? (
-              <p className="mt-1 text-sm leading-snug" style={{ color: OB.muted }}>
-                {subtitle}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div
-          className={`flex min-h-0 flex-1 flex-col overflow-hidden [&>*]:flex [&>*]:min-h-0 [&>*]:flex-1 [&>*]:flex-col ${
-            hideHeader ? '' : 'cb-ob-panel-in'
-          }`}
-          data-ob-progress={showProgress ? '1' : '0'}
-        >
-          {children}
-        </div>
+    <main className="obx-page">
+      <div className="obx-shell">
+        <header className="obx-top">
+          <span className="obx-brand">
+            <BrandMark />
+            CareerBridge
+          </span>
+          {onSkip ? (
+            <button type="button" className="obx-skip" onClick={onSkip} disabled={skipDisabled}>
+              {skipLabel}
+            </button>
+          ) : null}
+        </header>
+        {showProgress ? <OnboardingSteps step={step} /> : null}
+        {children}
       </div>
     </main>
   );
@@ -218,23 +226,111 @@ export function OnboardingHero({
   );
 }
 
+const ONBOARDING_ICONS: Record<OnboardingIconName, ReactNode> = {
+  pin: (
+    <>
+      <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </>
+  ),
+  briefcase: (
+    <>
+      <rect x="3" y="7" width="18" height="12" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2" />
+    </>
+  ),
+  sparkle: (
+    <>
+      <path d="m12 2 1.4 5.6L19 9l-5.6 1.4L12 16l-1.4-5.6L5 9l5.6-1.4L12 2Z" />
+      <path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4-4" />
+    </>
+  ),
+  check: <path d="m5 12 4 4L19 6" />,
+  code: <path d="m8 9-3 3 3 3M16 9l3 3-3 3M14 5l-4 14" />,
+  data: <path d="M5 20V10M10 20V4M15 20v-7M20 20V7" />,
+  headset: (
+    <>
+      <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+      <path d="M18 19c0 1.7-1.3 3-3 3h-3" />
+      <rect x="3" y="13" width="4" height="6" rx="2" />
+      <rect x="17" y="13" width="4" height="6" rx="2" />
+    </>
+  ),
+  design: (
+    <>
+      <path d="M12 22a10 10 0 1 0 0-20 8 8 0 0 0-8 8c0 4 3 4 5 4h1a2 2 0 0 1 2 2v1a3 3 0 0 0 3 3" />
+      <circle cx="7.5" cy="9" r=".5" />
+      <circle cx="10" cy="5.5" r=".5" />
+      <circle cx="15" cy="6.5" r=".5" />
+    </>
+  ),
+  engineering: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
+    </>
+  ),
+  shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />,
+  test: (
+    <>
+      <path d="M9 3h6M10 3v5l-5 9a2.5 2.5 0 0 0 2.2 4h9.6a2.5 2.5 0 0 0 2.2-4l-5-9V3" />
+      <path d="M8 14h8" />
+    </>
+  ),
+  marketing: (
+    <>
+      <path d="m3 11 15-6v14L3 13v-2Z" />
+      <path d="m7 14 1.5 5h4" />
+    </>
+  ),
+  people: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
+    </>
+  ),
+  arrow: (
+    <>
+      <path d="M5 12h14" />
+      <path d="m14 7 5 5-5 5" />
+    </>
+  ),
+};
+
+export function OnboardingIcon({ name, size = 22 }: { name: OnboardingIconName; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {ONBOARDING_ICONS[name]}
+    </svg>
+  );
+}
+
 export function OnboardingStepHeader({
   title,
   subtitle,
+  icon,
 }: {
   title: string;
   subtitle?: string;
+  icon?: OnboardingIconName;
 }) {
   return (
-    <div className="mb-[18px]">
-      <h3 className="m-0 text-lg font-semibold leading-tight" style={{ color: OB.ink }}>
-        {title}
-      </h3>
-      {subtitle ? (
-        <p className="mt-1 mb-0 text-sm leading-relaxed" style={{ color: OB.muted }}>
-          {subtitle}
-        </p>
+    <div className="obx-hd">
+      {icon ? (
+        <span className="obx-hi">
+          <OnboardingIcon name={icon} />
+        </span>
       ) : null}
+      <div>
+        <h1>{title}</h1>
+        {subtitle ? <p>{subtitle}</p> : null}
+      </div>
     </div>
   );
 }
@@ -243,49 +339,20 @@ export function OnboardingQuestion({
   title,
   children,
   hint,
+  htmlFor,
 }: {
   title: string;
   children: ReactNode;
   hint?: string;
+  htmlFor?: string;
 }) {
   return (
-    <div className="space-y-1.5">
-      <div>
-        <label className={onboardingLabelClass}>{title}</label>
-        {hint ? (
-          <p className="-mt-0.5 mb-1.5 text-xs" style={{ color: OB.textMuted }}>
-            {hint}
-          </p>
-        ) : null}
-      </div>
+    <div>
+      <label className="obx-label" htmlFor={htmlFor}>
+        {title}
+        {hint ? <em>{hint}</em> : null}
+      </label>
       {children}
-    </div>
-  );
-}
-
-function OnboardingDots({ step }: { step: number }) {
-  const percent = Math.round((Math.min(step, ONBOARDING_TOTAL_STEPS) / ONBOARDING_TOTAL_STEPS) * 100);
-  return (
-    <div className="mb-3.5 mt-4">
-      <div
-        role="progressbar"
-        aria-label="Onboarding progress"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        aria-valuetext={`Step ${step} of ${ONBOARDING_TOTAL_STEPS}, ${percent}% complete`}
-        data-testid="onboarding-progress"
-        className="h-1.5 w-full overflow-hidden rounded-full"
-        style={{ background: OB.border }}
-      >
-        <div
-          className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${percent}%`, background: OB.accent }}
-        />
-      </div>
-      <p className="mt-1.5 text-center text-[11px] font-medium" style={{ color: OB.muted }}>
-        Step {step} of {ONBOARDING_TOTAL_STEPS} · {percent}%
-      </p>
     </div>
   );
 }
@@ -294,14 +361,10 @@ function OnboardingDots({ step }: { step: number }) {
 export function OnboardingError({ message, onRetry }: { message: string; onRetry?: () => void }) {
   if (!message) return null;
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-2 text-xs font-semibold text-red-700">
+    <div role="alert" className="obx-error">
       <span>{message}</span>
       {onRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="min-h-12 rounded-[8px] border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-50"
-        >
+        <button type="button" onClick={onRetry} className="obx-link">
           Retry
         </button>
       ) : null}
@@ -309,64 +372,47 @@ export function OnboardingError({ message, onRetry }: { message: string; onRetry
   );
 }
 
+/** Sticky footer: Back link (when the step has one) and the primary action. */
 export function OnboardingActions({
   children,
   step,
   backHref,
-  onSkip,
-  skipLabel = 'Skip for now',
-  skipDisabled = false,
 }: {
   children: ReactNode;
-  /** When set, renders the progress bar above the nav row. */
   step?: number;
   backHref?: string;
-  onSkip?: () => void;
-  skipLabel?: string;
-  skipDisabled?: boolean;
-  /** @deprecated Top back is handled by nav row */
-  onBack?: () => void;
 }) {
   const resolvedBack = backHref ?? (step != null ? BACK_HREF[step] : undefined);
 
   return (
-    <div className="mt-auto shrink-0 pt-2">
-      {step != null ? <OnboardingDots step={step} /> : null}
-      <div className="flex gap-2.5">
-        {resolvedBack ? (
-          <Link
-            href={resolvedBack}
-            className="inline-flex h-11 flex-1 items-center justify-center rounded-[10px] border bg-white text-sm font-medium transition hover:-translate-y-px"
-            style={{ borderColor: OB.borderStrong, color: OB.ink }}
-          >
-            Back
-          </Link>
-        ) : null}
-        <div className={resolvedBack ? 'flex-[2]' : 'w-full'}>{children}</div>
-      </div>
-      {onSkip ? (
-        <div className="mt-1.5 flex justify-end">
-          <button
-            type="button"
-            onClick={onSkip}
-            disabled={skipDisabled}
-            className={`${onboardingSkipButtonClass} min-h-12 px-2 disabled:opacity-50`}
-          >
-            {skipLabel} <span aria-hidden>→</span>
-          </button>
-        </div>
+    <div className="obx-foot">
+      {resolvedBack ? (
+        <Link href={resolvedBack} className={obxGhostButtonClass}>
+          Back
+        </Link>
       ) : null}
+      {children}
     </div>
+  );
+}
+
+/** Shell placeholder while the onboarding gate and profile load. */
+export function OnboardingLoading({ step, showProgress = true }: { step: number; showProgress?: boolean }) {
+  return (
+    <OnboardingFrame step={step} showProgress={showProgress}>
+      <div className="obx-body" role="status" aria-live="polite">
+        <span className="sr-only">Loading...</span>
+        <div className="obx-skel" style={{ height: 56, marginBottom: 24 }} />
+        <div className="obx-skel" style={{ height: 46, marginBottom: 14 }} />
+        <div className="obx-skel" style={{ height: 46 }} />
+      </div>
+    </OnboardingFrame>
   );
 }
 
 export function OnboardingFieldIcon({ children }: { children: ReactNode }) {
   return (
-    <span
-      className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"
-      style={{ color: OB.textMuted }}
-      aria-hidden
-    >
+    <span className="flex shrink-0 items-center" aria-hidden>
       {children}
     </span>
   );

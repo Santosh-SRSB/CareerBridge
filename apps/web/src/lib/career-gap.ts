@@ -98,6 +98,53 @@ export {
   formatCareerGapLabel,
 } from '@careerbridge/shared';
 
+type WizardGapEducation = { degree: string; startDate: string; endDate: string; isCurrent: boolean };
+type WizardGapExperience = { startDate: string; endDate: string; isCurrent: boolean };
+
+export type CareerGapAnalyzeInput = {
+  education: { qualification: string; startDate: string; endDate: string; isCurrent: boolean }[];
+  experience: { startDate: string; endDate: string; stillInCompany: boolean; isCurrent: boolean }[];
+};
+
+/** Rows sent to POST /candidates/me/career-gap/analyze; also fed to the local computation so both agree. */
+export function careerGapAnalyzeInput(
+  education: WizardGapEducation[],
+  experience: WizardGapExperience[],
+): CareerGapAnalyzeInput {
+  return {
+    education: education.map((edu) => ({
+      qualification: edu.degree,
+      startDate: edu.startDate,
+      endDate: edu.endDate,
+      isCurrent: edu.isCurrent,
+    })),
+    experience: experience.map((exp) => ({
+      startDate: exp.startDate,
+      endDate: exp.endDate,
+      stillInCompany: exp.isCurrent,
+      isCurrent: exp.isCurrent,
+    })),
+  };
+}
+
+/** Limits enforced by AnalyzeCareerGapDto; one violating row makes the API reject the whole request with 400. */
+export const CAREER_GAP_ANALYZE_LIMITS = { qualificationMin: 1, qualificationMax: 120, dateMax: 20 } as const;
+
+export function fitsCareerGapAnalyzeContract(input: CareerGapAnalyzeInput) {
+  const { qualificationMin, qualificationMax, dateMax } = CAREER_GAP_ANALYZE_LIMITS;
+  const dateOk = (value: string | undefined) => !value || value.length <= dateMax;
+  return (
+    input.education.every(
+      (row) =>
+        typeof row.qualification === 'string' &&
+        row.qualification.length >= qualificationMin &&
+        row.qualification.length <= qualificationMax &&
+        dateOk(row.startDate) &&
+        dateOk(row.endDate),
+    ) && input.experience.every((row) => dateOk(row.startDate) && dateOk(row.endDate))
+  );
+}
+
 function daysBetween(from: Date, to: Date) {
   const ms = startOfDay(to).getTime() - startOfDay(from).getTime();
   return Math.max(0, Math.floor(ms / 86400000));

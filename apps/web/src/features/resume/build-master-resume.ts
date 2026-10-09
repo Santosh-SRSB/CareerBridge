@@ -1,3 +1,4 @@
+import { normalizeResumeDateForStorage } from '@careerbridge/shared';
 import type { MasterResumeDocument } from './master-resume.types';
 import { formatDateForResume, formatEducationYearRange } from '@/lib/resume-dates';
 import { isValidEmail, isValidPhone } from './resume-wizard-validation';
@@ -118,6 +119,9 @@ export function buildMasterResume(input: BuildMasterResumeInput): MasterResumeDo
         endYear: parts[1] || '',
         grade: (edu.grade || '').trim(),
         gradeType: (edu.gradeType || '').trim(),
+        startDate: normalizeResumeDateForStorage(edu.startDate) || '',
+        endDate: edu.isCurrent ? '' : normalizeResumeDateForStorage(edu.endDate) || '',
+        isCurrent: Boolean(edu.isCurrent),
       };
     }),
     projects: input.projectList.map((proj) => {

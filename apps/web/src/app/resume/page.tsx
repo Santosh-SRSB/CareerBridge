@@ -43,13 +43,23 @@ import {
   mapAtsSectionToWizardStep,
 } from '@/features/resume/resume-update-mode';
 import { validateWizardStep } from '@/features/resume/resume-wizard-validation';
+import {
+  LAST_WIZARD_GROUP,
+  WIZARD_GROUPS,
+  profileCompletionPercent,
+  wizardGroupFirstStep,
+  wizardGroupFormSteps,
+  wizardGroupIndex,
+} from '@/features/resume/wizard-groups';
+import { parseCityState } from '@/data/india-locations';
+import './resume-wizard.css';
 import { RESUME_SUMMARY_MAX } from '@/features/resume/resume-entry-validation';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SummaryAiAssist } from '@/components/resume/SummaryAiAssist';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { OB } from '@/components/OnboardingFrame';
-import { goToReturnTo, peekReturnTo, clearReturnStack } from '@/lib/nav-return';
+import { goToReturnTo, clearReturnStack } from '@/lib/nav-return';
 import {
   getCandidateMe,
   getResume,
@@ -62,9 +72,11 @@ import {
   updateCandidateMe,
   analyzeCareerGap,
 } from '@/lib/api';
+import { careerGapAnalyzeInput, fitsCareerGapAnalyzeContract } from '@/lib/career-gap';
 import { mapResumeRecordToWizardSeed } from '@/features/resume/resume-record-to-wizard';
 import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
 import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
+import { mergeResumeLinksIntoProfile, syncResumeToProfile } from '@/features/resume/resume-profile-sync';
 import { fitResumeSummary, type CandidateProfile } from '@careerbridge/shared';
 import {
   parseLanguageSkills,
@@ -319,6 +331,8 @@ function ResumePageInner() {
   const [gapReason, setGapReason] = useState('');
   const [gapMonths, setGapMonths] = useState(0);
   const [gapLabel, setGapLabel] = useState('');
+  const [backendGapOnly, setBackendGapOnly] = useState(false);
+  const [extraLinkSlots, setExtraLinkSlots] = useState(0);
   const [activeForm, setActiveForm] = useState<ActiveForm>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [entrySubmitSignal, setEntrySubmitSignal] = useState(0);
@@ -778,24 +792,11 @@ function ResumePageInner() {
     ],
   );
 
-  const localGap = useMemo(
-    () =>
-      computeCareerGapAfterHighestEducation({
-        education: educationList.map((edu) => ({
-          qualification: edu.degree,
-          startDate: edu.startDate,
-          endDate: edu.endDate,
-          isCurrent: edu.isCurrent,
-        })),
-        experience: experienceList.map((exp) => ({
-          startDate: exp.startDate,
-          endDate: exp.endDate,
-          stillInCompany: exp.isCurrent,
-          isCurrent: exp.isCurrent,
-        })),
-      }),
+  const gapInput = useMemo(
+    () => careerGapAnalyzeInput(educationList, experienceList),
     [educationList, experienceList],
   );
+  const localGap = useMemo(() => computeCareerGapAfterHighestEducation(gapInput), [gapInput]);
 
   useEffect(() => {
     setGapMonths(localGap.gapMonths);
@@ -807,6 +808,19 @@ function ResumePageInner() {
 
   const currentStep = WIZARD_STEPS[wizardIndex];
   const isReviewStep = wizardIndex === REVIEW_INDEX;
+  const groupIndex = wizardGroupIndex(currentStep);
+  const showGapCard = localGap.hasGap || backendGapOnly || currentStep === 'Career Gap';
+  const groupFormSteps = wizardGroupFormSteps(groupIndex, showGapCard);
+  /** ATS section edits keep the single-step view; the normal flow renders a whole section. */
+  const showStep = (step: string) => (atsEditStep ? currentStep === step : groupFormSteps.includes(step));
+  const showLegacyReview = isReviewStep && Boolean(atsEditStep);
+  const showReviewSummary = !atsEditStep && groupIndex === LAST_WIZARD_GROUP;
+
+  function goToGroup(index: number) {
+    setValidationErrors([]);
+    setWizardIndex(WIZARD_STEPS.indexOf(wizardGroupFirstStep(index)));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   function addSkill(s: string) {
     const trimmed = s.trim();
@@ -842,6 +856,16 @@ function ResumePageInner() {
     }
   }
 
+  /** Sync the finished resume into the profile; returns the saved profile and the links held before the save. */
+  async function savePassportFromResume() {
+    const { profile, existing } = await syncResumeToProfile(
+      masterResumeToResumeContent(masterResume),
+      { getCandidateMe, savePassport },
+      { hasGap: localGap.hasGap, gapMonths: localGap.gapMonths, gapReason },
+    );
+    return { profile, existingLinks: existing?.links ?? null };
+  }
+
   async function handleFinishWizard() {
     const errors = validateMasterResume(masterResume);
     if (errors.length) {
@@ -853,8 +877,17 @@ function ResumePageInner() {
     try {
       await ensureResumeSaved();
       try {
-        const content = masterResumeToResumeContent(masterResume);
-        const profile = await savePassport(mapResumeContentToPassportPayload(content));
+        const { profile, existingLinks } = await savePassportFromResume();
+        const links = existingLinks
+          ? mergeResumeLinksIntoProfile(existingLinks, {
+              linkedin: masterResume.personalInfo.linkedin,
+              github: masterResume.personalInfo.github,
+              portfolio: masterResume.personalInfo.portfolio,
+            })
+          : null;
+        if (links) {
+          await updateCandidateMe({ links }).catch(() => undefined);
+        }
         const preferredLanguage = serializeLanguageSkills(
           languages
             .map((entry) => parseLanguageSkills(entry)[0] || { name: entry, level: '' })
@@ -975,31 +1008,11 @@ function ResumePageInner() {
     return Math.min(from + 1, REVIEW_INDEX);
   }
 
-  function previousWizardIndex(from: number) {
-    const step = WIZARD_STEPS[from];
-    if (step === 'Review') {
-      if (localGap.hasGap) return WIZARD_STEPS.indexOf('Career Gap');
-      return WIZARD_STEPS.indexOf('Links');
-    }
-    if (step === 'Career Gap') return WIZARD_STEPS.indexOf('Links');
-    return Math.max(0, from - 1);
-  }
-
   async function refreshGapFromBackend(persist = false) {
+    if (!fitsCareerGapAnalyzeContract(gapInput)) return localGap;
     try {
       const result = await analyzeCareerGap({
-        education: educationList.map((edu) => ({
-          qualification: edu.degree,
-          startDate: edu.startDate,
-          endDate: edu.endDate,
-          isCurrent: edu.isCurrent,
-        })),
-        experience: experienceList.map((exp) => ({
-          startDate: exp.startDate,
-          endDate: exp.endDate,
-          stillInCompany: exp.isCurrent,
-          isCurrent: exp.isCurrent,
-        })),
+        ...gapInput,
         gapReason: gapReason.trim() || undefined,
         persist,
       });
@@ -1015,9 +1028,10 @@ function ResumePageInner() {
   }
 
   function handleWizardNext() {
+    const stepsInView = atsEditStep ? [currentStep] : groupFormSteps;
     const openEntryOnStep =
-      (activeForm === 'education' && currentStep === 'Education') ||
-      (activeForm === 'experience' && currentStep === 'Experience');
+      (activeForm === 'education' && stepsInView.includes('Education')) ||
+      (activeForm === 'experience' && stepsInView.includes('Experience'));
     if (openEntryOnStep) {
       setContinueAfterEntrySave(true);
       setEntrySubmitSignal((n) => n + 1);
@@ -1028,30 +1042,33 @@ function ResumePageInner() {
       void handleAtsEditSaveAndReturn();
       return;
     }
-    const errors = validateWizardStep(currentStep, wizardValidationInput());
+    const input = wizardValidationInput();
+    const errors = stepsInView.flatMap((step) =>
+      validateWizardStep(step, { ...input, hasCareerGap: localGap.hasGap || backendGapOnly }),
+    );
     if (errors.length) {
       setValidationErrors(errors);
       return;
     }
     setValidationErrors([]);
-    if (currentStep === 'Links' || currentStep === 'Career Gap') {
+    if (stepsInView.includes('Links')) {
+      if (saving) return;
       void (async () => {
-        const result = await refreshGapFromBackend(currentStep === 'Career Gap');
-        if (currentStep === 'Links') {
-          setWizardIndex(
-            result.hasGap
-              ? WIZARD_STEPS.indexOf('Career Gap')
-              : WIZARD_STEPS.indexOf('Review'),
-          );
+        setSaving(true);
+        const result = await refreshGapFromBackend(showGapCard);
+        setSaving(false);
+        if (result.hasGap && !showGapCard) {
+          setBackendGapOnly(true);
+          setValidationErrors(['Please explain why this career gap is OK.']);
           return;
         }
-        setWizardIndex(WIZARD_STEPS.indexOf('Review'));
+        await handleFinishWizard();
       })();
       return;
     }
-    if (wizardIndex < REVIEW_INDEX) {
-      setWizardIndex((prev) => nextWizardIndex(prev));
-    }
+    const lastStep = stepsInView[stepsInView.length - 1] ?? currentStep;
+    setWizardIndex(nextWizardIndex(WIZARD_STEPS.indexOf(lastStep)));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function handleAtsEditSaveAndReturn() {
@@ -1259,8 +1276,7 @@ function ResumePageInner() {
     clearResumeUpdateMode();
     clearReturnStack();
     try {
-      const content = masterResumeToResumeContent(masterResume);
-      await savePassport(mapResumeContentToPassportPayload(content));
+      await savePassportFromResume();
     } catch {
       /* still mark dashboard reached */
     }
@@ -1309,20 +1325,9 @@ function ResumePageInner() {
         },
       }).catch(() => undefined);
     }
-    if (localGap.hasGap) {
+    if (localGap.hasGap && fitsCareerGapAnalyzeContract(gapInput)) {
       await analyzeCareerGap({
-        education: educationList.map((edu) => ({
-          qualification: edu.degree,
-          startDate: edu.startDate,
-          endDate: edu.endDate,
-          isCurrent: edu.isCurrent,
-        })),
-        experience: experienceList.map((exp) => ({
-          startDate: exp.startDate,
-          endDate: exp.endDate,
-          stillInCompany: exp.isCurrent,
-          isCurrent: exp.isCurrent,
-        })),
+        ...gapInput,
         gapReason: gapReason.trim(),
         persist: true,
       }).catch(() => undefined);
@@ -1382,8 +1387,8 @@ function ResumePageInner() {
       setWizardIndex(REVIEW_INDEX);
       return;
     }
-    if (wizardIndex > 0) {
-      setWizardIndex((prev) => previousWizardIndex(prev));
+    if (groupIndex > 0) {
+      goToGroup(groupIndex - 1);
       return;
     }
     if (highlightMissingPersonal) {
@@ -1899,7 +1904,42 @@ function ResumePageInner() {
             onApplySuggestion={handleApplyAiSuggestion}
           />
       ) : (
-      <div className="cb-wizard-shell">
+      <div className="cbw-app">
+        <aside className="cbw-side">
+          <div className="cbw-brand">CareerBridge</div>
+          {!atsEditStep ? (
+            <nav className="cbw-nav" aria-label="Profile sections">
+              {WIZARD_GROUPS.map((group, i) => (
+                <button
+                  key={group.label}
+                  type="button"
+                  className={i === groupIndex ? 'is-active' : i < groupIndex ? 'is-done' : ''}
+                  aria-current={i === groupIndex ? 'step' : undefined}
+                  onClick={() => goToGroup(i)}
+                >
+                  <span className="n" aria-hidden>
+                    {i < groupIndex ? '✓' : i + 1}
+                  </span>
+                  <span>{group.label}</span>
+                  {i < groupIndex ? <span className="sr-only"> (visited)</span> : null}
+                </button>
+              ))}
+            </nav>
+          ) : null}
+        </aside>
+        {!atsEditStep ? (
+          <div className="cbw-mtop">
+            <span>
+              Step {groupIndex + 1} of {WIZARD_GROUPS.length}
+            </span>
+            <b>{WIZARD_GROUPS[groupIndex].label}</b>
+            <i aria-hidden>
+              <span style={{ width: `${((groupIndex + 1) / WIZARD_GROUPS.length) * 100}%` }} />
+            </i>
+          </div>
+        ) : null}
+        <main className="cbw-main">
+      <div className="cb-wizard-shell cbw-inner">
         {(parseBusy || parseError) ? (
           <div
             className="mb-4 rounded-2xl border px-4 py-3"
@@ -1967,15 +2007,11 @@ function ResumePageInner() {
                   ? 'Complete your Profile'
                   : 'Build your resume'}
             </h1>
-            <button type="button" className="cb-flow-back-btn" onClick={handleBack}>
-              {atsEditStep
-                ? atsEditReturnTo === 'ats'
-                  ? '← Back to ATS'
-                  : '← Back'
-                : getResumeUpdateReturnTo() || peekReturnTo()
-                  ? '← Back'
-                  : 'Back ←'}
-            </button>
+            {atsEditStep ? (
+              <button type="button" className="cb-flow-back-btn" onClick={handleBack}>
+                {atsEditReturnTo === 'ats' ? '← Back to ATS' : '← Back'}
+              </button>
+            ) : null}
           </div>
           <div className="desc">
             {atsEditStep
@@ -1988,46 +2024,21 @@ function ResumePageInner() {
           </div>
         </div>
 
-        {!isReviewStep && !atsEditStep && (
-          <div className="cb-stepper-wrap cb-stepper-desktop">
-            <div className="cb-stepper-row">
-              {WIZARD_STEPS.filter((label) => label !== 'Career Gap' || localGap.hasGap).map((label) => {
-                const i = WIZARD_STEPS.indexOf(label);
-                return (
-                <div
-                  key={label}
-                  className="cb-step-h"
-                  onClick={() => {
-                    setValidationErrors([]);
-                    setWizardIndex(i);
-                  }}
-                >
-                  <div
-                    className={`track ${
-                      i < wizardIndex ? 'done' : i === wizardIndex ? 'current' : ''
-                    }`}
-                  />
-                  <div className={`lab ${i === wizardIndex ? 'current' : ''}`}>{label}</div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* WIZARD STEPS (before Review) */}
-        {!isReviewStep && (
+        {/* WIZARD SECTIONS */}
+        {!showLegacyReview && (
           <>
-            <h2 className="cb-section-head">{getStepSectionLabel(currentStep)}</h2>
-            {validationErrors.length > 0 && (
-              <div className="cb-validation-errors">
+            <h2 className="cbw-sec">
+              {atsEditStep ? getStepSectionLabel(currentStep) : WIZARD_GROUPS[groupIndex].label}
+            </h2>
+            {validationErrors.length > 0 && !showReviewSummary && (
+              <div className="cb-validation-errors" role="alert">
                 {validationErrors.map((err) => (
                   <div key={err}>{err}</div>
                 ))}
               </div>
             )}
-            <div className="cb-card">
-              {currentStep === 'Personal' && (
+              {showStep('Personal') && (
+              <section className="cb-card cbw-card" aria-label="Personal details">
                 <div className="cb-field-grid">
                   {highlightMissingPersonal ? (
                     <p className="cb-field full" style={{ margin: 0, fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>
@@ -2035,17 +2046,8 @@ function ResumePageInner() {
                     </p>
                   ) : null}
                   <div className={`cb-field${highlightMissingPersonal && !fullName.trim() ? ' cb-field-missing' : ''}`}>
-                    <label htmlFor="cb-resume-full-name">Full name</label>
+                    <label htmlFor="cb-resume-full-name">Full Name</label>
                     <input id="cb-resume-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                  </div>
-                  <div className="cb-field full cb-location-pair">
-                    <StateCitySelect
-                      location={location}
-                      onChange={setLocation}
-                      stateLabel="State"
-                      cityLabel="City"
-                      highlightMissing={highlightMissingPersonal}
-                    />
                   </div>
                   <div className={`cb-field${highlightMissingPersonal && !email.trim() ? ' cb-field-missing' : ''}`}>
                     <label htmlFor="cb-resume-email">Email</label>
@@ -2067,8 +2069,17 @@ function ResumePageInner() {
                       placeholder="+91 98765 43210"
                     />
                   </div>
+                  <div className="cb-field full cb-location-pair">
+                    <StateCitySelect
+                      location={location}
+                      onChange={setLocation}
+                      stateLabel="State"
+                      cityLabel="City"
+                      highlightMissing={highlightMissingPersonal}
+                    />
+                  </div>
                   <div className={`cb-field full${highlightMissingPersonal && !summary.trim() ? ' cb-field-missing' : ''}`}>
-                    <label htmlFor="cb-resume-summary">Professional summary</label>
+                    <label htmlFor="cb-resume-summary">Professional Summary</label>
                     <textarea
                       id="cb-resume-summary"
                       value={summary}
@@ -2088,9 +2099,13 @@ function ResumePageInner() {
                     />
                   </div>
                 </div>
+              </section>
               )}
 
-              {currentStep === 'Education' && (
+              {showStep('Education') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-education">
+                <h3 id="cbw-education">Education</h3>
+                <p className="cbw-hint">Add at least one education record.</p>
                 <div>
                   {educationList.map((edu) => (
                     <div key={edu.id} className="cb-entry-card">
@@ -2128,7 +2143,7 @@ function ResumePageInner() {
                   ))}
                   {educationList.length === 0 && activeForm !== 'education' ? (
                     <p className="cb-entry-empty" role="status">
-                      No education added yet. Click + Add Education to begin.
+                      No education records yet.
                     </p>
                   ) : null}
                   {activeForm === 'education' ? (
@@ -2191,13 +2206,17 @@ function ResumePageInner() {
                         setActiveForm('education');
                       }}
                     >
-                      + Add education
+                      + Add Education
                     </button>
                   )}
                 </div>
+              </section>
               )}
 
-              {currentStep === 'Experience' && (
+              {showStep('Experience') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-experience">
+                <h3 id="cbw-experience">Experience</h3>
+                <p className="cbw-hint">Freshers can skip this.</p>
                 <div>
                   {experienceList.map((exp) => (
                     <div key={exp.id} className="cb-entry-card">
@@ -2233,7 +2252,7 @@ function ResumePageInner() {
                   ))}
                   {experienceList.length === 0 && activeForm !== 'experience' ? (
                     <p className="cb-entry-empty" role="status">
-                      No experience added yet. Click + Add Experience to begin, or continue if you are a fresher.
+                      No experience records yet.
                     </p>
                   ) : null}
                   {activeForm === 'experience' ? (
@@ -2293,17 +2312,72 @@ function ResumePageInner() {
                         setActiveForm('experience');
                       }}
                     >
-                      + Add experience
+                      + Add Experience
                     </button>
                   )}
                 </div>
+              </section>
               )}
 
-              {currentStep === 'Credentials' && (
+              {showStep('Skills') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-skills">
+                <h3 id="cbw-skills">Skills &amp; Languages</h3>
+                <p className="cbw-hint">Search and add your skills. Press Enter to add a custom skill.</p>
                 <div>
-                  <p className="cb-section-label" style={{ marginTop: 0 }}>
-                    Projects
+                  <SkillSearchCombobox
+                    label="Skills"
+                    selected={skills}
+                    onAdd={addSkill}
+                    onRemove={removeSkill}
+                    placeholder="Search skills..."
+                  />
+                </div>
+                <div>
+                  <p className="cb-section-label">Languages</p>
+                  <p className="cbw-hint">
+                    Tap a language to select it; tap again to remove. Proficiency from your profile (if any) is kept
+                    and shown on the resume.
                   </p>
+                  <div className="cb-chip-wrap">
+                    {Array.from(
+                      new Set(
+                        [
+                          ...LANGUAGE_POOL,
+                          ...languages.map((entry) => languageName(entry)),
+                          ...availableLanguages,
+                        ].filter(Boolean),
+                      ),
+                    ).map((l) => {
+                      const selectedEntry = languages.find((entry) => languageName(entry) === l);
+                      const selected = Boolean(selectedEntry);
+                      const label = selectedEntry || l;
+                      return (
+                        <button
+                          key={l}
+                          type="button"
+                          className={`cb-chip${selected ? ' selected' : ''}`}
+                          aria-pressed={selected}
+                          onClick={() => (selected ? removeLanguage(l) : addLanguage(l))}
+                        >
+                          {selected ? <span aria-hidden>✓</span> : null}
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+              )}
+
+              {showStep('Credentials') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-projects">
+                <h3 id="cbw-projects">Projects</h3>
+                <div>
+                  {projectList.length === 0 && activeForm !== 'project' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No project records yet.
+                    </p>
+                  ) : null}
                   {projectList.map((proj) => (
                     <div key={proj.id} className="cb-entry-card">
                       <div>
@@ -2382,20 +2456,23 @@ function ResumePageInner() {
                         setActiveForm('project');
                       }}
                     >
-                      + Add project
+                      + Add Project
                     </button>
                   )}
                 </div>
+              </section>
               )}
 
-              {currentStep === 'Credentials' && (
+              {showStep('Credentials') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-certifications">
+                <h3 id="cbw-certifications">Certifications</h3>
+                <p className="cbw-hint">Optional for many roles — add any certificates that strengthen your profile.</p>
                 <div>
-                  <p className="cb-section-label" style={{ marginTop: 0 }}>
-                    Certifications
-                  </p>
-                  <p className="mb-3 text-sm text-[#5b6b7c]">
-                    Optional for many roles — add any certificates that strengthen your profile.
-                  </p>
+                  {certificationList.length === 0 && activeForm !== 'certification' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No certification records yet.
+                    </p>
+                  ) : null}
                   {certificationList.map((cert) => (
                     <div key={cert.id} className="cb-entry-card">
                       <div>
@@ -2462,20 +2539,23 @@ function ResumePageInner() {
                         setActiveForm('certification');
                       }}
                     >
-                      + Add certification
+                      + Add Certification
                     </button>
                   )}
                 </div>
+              </section>
               )}
 
-              {currentStep === 'Credentials' && (
+              {showStep('Credentials') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-achievements">
+                <h3 id="cbw-achievements">Achievements</h3>
+                <p className="cbw-hint">Awards, hackathons, publications, or other highlights (optional).</p>
                 <div>
-                  <p className="cb-section-label" style={{ marginTop: 0 }}>
-                    Achievements
-                  </p>
-                  <p className="mb-3 text-sm text-[#5b6b7c]">
-                    Awards, hackathons, publications, or other highlights (optional).
-                  </p>
+                  {achievementList.length === 0 && activeForm !== 'achievement' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No achievement records yet.
+                    </p>
+                  ) : null}
                   {achievementList.map((ach) => (
                     <div key={ach.id} className="cb-entry-card">
                       <div>
@@ -2556,150 +2636,70 @@ function ResumePageInner() {
                         setActiveForm('achievement');
                       }}
                     >
-                      + Add achievement
+                      + Add Achievement
                     </button>
                   )}
                 </div>
+              </section>
               )}
 
-              {currentStep === 'Links' && (
+              {showStep('Links') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-links">
+                <h3 id="cbw-links">Profile Links</h3>
+                <p className="cbw-hint">Optional. Use full links starting with https://</p>
                 <div className="cb-field-grid">
-                  <p className="cb-section-label" style={{ marginTop: 0, gridColumn: '1 / -1' }}>
-                    Profile links
-                  </p>
-                  <p className="mb-1 text-sm text-[#5b6b7c]" style={{ gridColumn: '1 / -1' }}>
-                    Add a LinkedIn, GitHub, or portfolio URL so ATS and employers can verify your work.
-                  </p>
                   <div className="cb-field full">
-                    <label>LinkedIn</label>
+                    <label htmlFor="cbw-linkedin">LinkedIn</label>
                     <input
+                      id="cbw-linkedin"
                       value={linkedin}
                       onChange={(e) => setLinkedin(e.target.value)}
-                      placeholder="https://linkedin.com/in/your-profile"
+                      placeholder="https://linkedin.com/in/..."
                     />
+                    <small className="cbw-hint">Optional — you can add this later.</small>
                   </div>
-                  <div className="cb-field full">
-                    <label>GitHub</label>
-                    <input
-                      value={github}
-                      onChange={(e) => setGithub(e.target.value)}
-                      placeholder="https://github.com/your-username"
-                    />
-                  </div>
-                  <div className="cb-field full">
-                    <label>Portfolio / website</label>
-                    <input
-                      value={portfolio}
-                      onChange={(e) => setPortfolio(e.target.value)}
-                      placeholder="https://your-portfolio.com"
-                    />
-                  </div>
+                  {github || extraLinkSlots >= 1 ? (
+                    <div className="cb-field full">
+                      <label htmlFor="cbw-github">GitHub</label>
+                      <input
+                        id="cbw-github"
+                        value={github}
+                        onChange={(e) => setGithub(e.target.value)}
+                        placeholder="https://github.com/your-username"
+                      />
+                    </div>
+                  ) : null}
+                  {portfolio || extraLinkSlots >= 2 ? (
+                    <div className="cb-field full">
+                      <label htmlFor="cbw-portfolio">Portfolio / website</label>
+                      <input
+                        id="cbw-portfolio"
+                        value={portfolio}
+                        onChange={(e) => setPortfolio(e.target.value)}
+                        placeholder="https://your-portfolio.com"
+                      />
+                    </div>
+                  ) : null}
                 </div>
-              )}
-
-              {currentStep === 'Career Gap' && (
-                <div>
-                  <p className="cb-section-label" style={{ marginTop: 0 }}>
-                    Career gap
-                  </p>
-                  <div
-                    className="rounded-2xl border border-[#e1e5f2] bg-[#f8f9fc] px-4 py-4"
-                    style={{ marginBottom: 16 }}
+                {!(github || extraLinkSlots >= 1) || !(portfolio || extraLinkSlots >= 2) ? (
+                  <button
+                    type="button"
+                    className="cb-add-row"
+                    onClick={() => setExtraLinkSlots((n) => (github || n >= 1 ? 2 : 1))}
                   >
-                    <p className="text-base font-bold text-[#142a4f]">
-                      You have a gap of {gapLabel || localGap.gapLabel}.
-                    </p>
-                    <p className="mt-2 text-sm text-[#43526b]">
-                      Please explain why this gap is OK. A clear reason helps employers and your career
-                      story.
-                    </p>
-                    {localGap.highestEducation ? (
-                      <p className="mt-2 text-xs text-[#6b7789]">
-                        Calculated after your highest education
-                        {localGap.highestEducation.qualification
-                          ? ` (${localGap.highestEducation.qualification})`
-                          : ''}
-                        {localGap.highestEducation.endDate
-                          ? ` ending ${localGap.highestEducation.endDate}`
-                          : ''}
-                        . Only gaps longer than 30 days are shown. Gaps between school and college are
-                        not counted.
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="cb-field full">
-                    <label>Why is this gap OK?</label>
-                    <textarea
-                      rows={4}
-                      value={gapReason}
-                      onChange={(e) => setGapReason(e.target.value)}
-                      placeholder="e.g. Prepared for competitive exams, caregiving, health recovery, full-time upskilling…"
-                      style={{
-                        width: '100%',
-                        borderRadius: 12,
-                        border: '1px solid #c9cfc0',
-                        padding: '12px 14px',
-                        fontSize: 14,
-                      }}
-                    />
-                  </div>
-                </div>
+                    + Add link
+                  </button>
+                ) : null}
+              </section>
               )}
 
-              {currentStep === 'Skills' && (
-                <div>
-                  <SkillSearchCombobox
-                    label="Search and add your skills"
-                    selected={skills}
-                    onAdd={addSkill}
-                    onRemove={removeSkill}
-                    placeholder="Search technologies (e.g. React, Python) or type your own"
-                  />
-                </div>
-              )}
-
-              {currentStep === 'Skills' && (
-                <div>
-                  <p className="cb-section-label" style={{ marginTop: 0 }}>
-                    Languages you speak
-                  </p>
-                  <p className="mb-3 text-sm text-[#5b6b7c]">
-                    Tap a language to select it. Selected languages appear dark — tap again to remove.
-                    Proficiency from your profile (if any) is kept and shown on the resume.
-                  </p>
-                  <div className="cb-chip-wrap">
-                    {Array.from(
-                      new Set(
-                        [
-                          ...LANGUAGE_POOL,
-                          ...languages.map((entry) => languageName(entry)),
-                          ...availableLanguages,
-                        ].filter(Boolean),
-                      ),
-                    ).map((l) => {
-                      const selectedEntry = languages.find((entry) => languageName(entry) === l);
-                      const selected = Boolean(selectedEntry);
-                      const label = selectedEntry || l;
-                      return (
-                        <button
-                          key={l}
-                          type="button"
-                          className={`cb-chip${selected ? ' selected' : ''}`}
-                          onClick={() => (selected ? removeLanguage(l) : addLanguage(l))}
-                        >
-                          {label}{' '}
-                          <span className={selected ? undefined : 'plus'}>{selected ? '×' : '+'}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {currentStep === 'Links' && (
+              {showStep('Links') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-preferences">
+                <h3 id="cbw-preferences">Preferences</h3>
+                <p className="cbw-hint">Helps us match you with the right roles.</p>
                 <div className="cb-field-grid">
                   <div className="cb-field">
-                    <label>Preferred role</label>
+                    <label htmlFor="cbw-preferred-role">Preferred Role</label>
                     {(() => {
                       const roleInList = (PREFERRED_JOB_ROLES as readonly string[]).includes(
                         preferredRole,
@@ -2709,6 +2709,7 @@ function ResumePageInner() {
                       return (
                         <>
                           <select
+                            id="cbw-preferred-role"
                             value={selectValue}
                             onChange={(e) => {
                               const next = e.target.value;
@@ -2729,6 +2730,7 @@ function ResumePageInner() {
                           {showCustom ? (
                             <input
                               className="mt-2"
+                              aria-label="Type your preferred role"
                               value={roleInList ? '' : preferredRole}
                               onChange={(e) => setPreferredRole(e.target.value)}
                               placeholder="Type your preferred role"
@@ -2739,43 +2741,316 @@ function ResumePageInner() {
                     })()}
                   </div>
                   <div className="cb-field">
-                    <label>Preferred location</label>
+                    <label htmlFor="cbw-preferred-location">Preferred Location</label>
                     <input
+                      id="cbw-preferred-location"
                       value={preferredLocation}
                       onChange={(e) => setPreferredLocation(e.target.value)}
                     />
+                    <small className="cbw-hint">Optional — you can add this later.</small>
                   </div>
                   <div className="cb-field full">
-                    <label>Expected monthly salary</label>
+                    <label htmlFor="cbw-expected-salary">Expected Monthly Salary</label>
                     <input
+                      id="cbw-expected-salary"
                       inputMode="numeric"
                       placeholder="50,000"
                       value={expectedSalary}
                       onChange={(e) => setExpectedSalary(formatSalaryDisplay(e.target.value))}
                     />
+                    <small className="cbw-hint">Optional — you can add this later.</small>
                   </div>
                 </div>
+              </section>
               )}
-            </div>
 
-            <div className="cb-btn-row">
+              {showStep('Career Gap') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-gap">
+                <span className="cbw-badge">✨ Detected automatically</span>
+                <h3 id="cbw-gap">Career gap</h3>
+                <p className="cbw-hint">
+                  We found a gap in your education and work dates. A short explanation helps employers understand
+                  your journey.
+                </p>
+                <fieldset className="cbw-gap">
+                  <legend>{gapLabel || localGap.gapLabel}</legend>
+                  <div className="cb-field full">
+                    <label htmlFor="cbw-gap-reason">Why is this gap OK?</label>
+                    <textarea
+                      id="cbw-gap-reason"
+                      rows={4}
+                      value={gapReason}
+                      onChange={(e) => setGapReason(e.target.value)}
+                      placeholder="For example: prepared for exams, cared for a family member, built a side project…"
+                    />
+                  </div>
+                  {localGap.highestEducation ? (
+                    <p className="cbw-hint" style={{ margin: 0 }}>
+                      Calculated after your highest education
+                      {localGap.highestEducation.qualification
+                        ? ` (${localGap.highestEducation.qualification})`
+                        : ''}
+                      {localGap.highestEducation.endDate ? ` ending ${localGap.highestEducation.endDate}` : ''}. Only
+                      gaps longer than 30 days are shown. Gaps between school and college are not counted.
+                    </p>
+                  ) : null}
+                </fieldset>
+              </section>
+              )}
+
+            {showReviewSummary ? (
+              <section className="cbw-review" aria-labelledby="cbw-review-title">
+                <h2 id="cbw-review-title" className="cbw-sec">
+                  Profile Review
+                </h2>
+                <p className="cbw-hint">Review all your information before completing your profile.</p>
+                {(() => {
+                  const { city, state } = parseCityState(location);
+                  const percent = profileCompletionPercent({
+                    fullName,
+                    email,
+                    phone,
+                    state: state || '',
+                    city: city || '',
+                    summary,
+                    linkedin,
+                    github,
+                    portfolio,
+                    preferredRole,
+                    preferredLocation,
+                    expectedSalary,
+                    education: educationList,
+                    experience: experienceList,
+                    projects: projectList,
+                    certifications: certificationList,
+                    achievements: achievementList,
+                    skills,
+                    languages,
+                  });
+                  const none = <p className="cbw-none">No information added yet.</p>;
+                  const value = (text: string) => (text.trim() ? text : <span className="cbw-none">Not added</span>);
+                  const head = (title: string, group: number) => (
+                    <div className="cbw-rh">
+                      <h3>{title}</h3>
+                      <button type="button" className="cbw-edit" onClick={() => goToGroup(group)}>
+                        Edit<span className="sr-only"> {title}</span>
+                      </button>
+                    </div>
+                  );
+                  return (
+                    <>
+                      <div className="cb-card cbw-card cbw-prog">
+                        <div className="cbw-rh">
+                          <h3>Profile Completion</h3>
+                          <b>{percent}%</b>
+                        </div>
+                        <div
+                          className="cbw-bar"
+                          role="progressbar"
+                          aria-label="Profile completion"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={percent}
+                        >
+                          <span style={{ width: `${percent}%` }} />
+                        </div>
+                      </div>
+                      <div className="cbw-rg">
+                        <div className="cb-card cbw-card">
+                          {head('Personal Information', 0)}
+                          <dl>
+                            <dt>Full Name</dt>
+                            <dd>{value(fullName)}</dd>
+                            <dt>Email</dt>
+                            <dd>{value(email)}</dd>
+                            <dt>Phone</dt>
+                            <dd>{value(phone)}</dd>
+                            <dt>State</dt>
+                            <dd>{value(state || '')}</dd>
+                            <dt>City</dt>
+                            <dd>{value(city || '')}</dd>
+                            <dt>Summary</dt>
+                            <dd>{value(summary)}</dd>
+                          </dl>
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Education', 1)}
+                          {educationList.length
+                            ? educationList.map((edu) => (
+                                <div key={edu.id} className="cbw-rec">
+                                  <b>
+                                    {edu.degree}
+                                    {edu.field ? ` — ${edu.field}` : ''}
+                                  </b>
+                                  <span>{edu.institution}</span>
+                                  <span>{formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)}</span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Experience', 1)}
+                          {experienceList.length
+                            ? experienceList.map((exp) => (
+                                <div key={exp.id} className="cbw-rec">
+                                  <b>
+                                    {exp.role}
+                                    {exp.company ? ` — ${exp.company}` : ''}
+                                  </b>
+                                  <span>
+                                    {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Skills & Languages', 2)}
+                          {skills.length ? (
+                            <div className="cb-chip-wrap">
+                              {skills.map((s) => (
+                                <span key={s} className="cbw-tag">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            none
+                          )}
+                          <h4>Languages</h4>
+                          {languages.length ? (
+                            <div className="cb-chip-wrap">
+                              {languages.map((l) => (
+                                <span key={l} className="cbw-tag">
+                                  {l}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            none
+                          )}
+                        </div>
+                        <div className="cb-card cbw-card cbw-full">
+                          {head('Projects', 2)}
+                          {projectList.length
+                            ? projectList.map((proj) => (
+                                <div key={proj.id} className="cbw-rec">
+                                  <b>{proj.name}</b>
+                                  <span>{[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}</span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Certifications', 2)}
+                          {certificationList.length
+                            ? certificationList.map((cert) => (
+                                <div key={cert.id} className="cbw-rec">
+                                  <b>{cert.name}</b>
+                                  <span>{[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}</span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Achievements', 2)}
+                          {achievementList.length
+                            ? achievementList.map((ach) => (
+                                <div key={ach.id} className="cbw-rec">
+                                  <b>{ach.title}</b>
+                                  <span>
+                                    {[ach.organization, formatDateForResume(ach.date)].filter(Boolean).join(' · ')}
+                                  </span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        {showGapCard ? (
+                          <div className="cb-card cbw-card cbw-full">
+                            {head('Career Gap', LAST_WIZARD_GROUP)}
+                            <div className="cbw-rec">
+                              <b>{gapLabel || localGap.gapLabel}</b>
+                              <span>{gapReason.trim() || 'No explanation added yet.'}</span>
+                            </div>
+                          </div>
+                        ) : null}
+                        <div className="cb-card cbw-card cbw-full">
+                          {head('Links & Preferences', LAST_WIZARD_GROUP)}
+                          <div className="cbw-tri">
+                            <div>
+                              <span>LinkedIn</span>
+                              {value(linkedin)}
+                            </div>
+                            <div>
+                              <span>GitHub</span>
+                              {value(github)}
+                            </div>
+                            <div>
+                              <span>Portfolio</span>
+                              {value(portfolio)}
+                            </div>
+                            <div>
+                              <span>Preferred Role</span>
+                              {value(preferredRole)}
+                            </div>
+                            <div>
+                              <span>Preferred Location</span>
+                              {value(preferredLocation)}
+                            </div>
+                            <div>
+                              <span>Expected Monthly Salary</span>
+                              {value(expectedSalary)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </section>
+            ) : null}
+
+            {showReviewSummary && validationErrors.length > 0 ? (
+              <div className="cb-validation-errors" role="alert">
+                {validationErrors.map((err) => (
+                  <div key={err}>{err}</div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="cbw-actions">
+              {!atsEditStep ? (
+                <button type="button" className="cb-btn cbw-btn-ghost" onClick={handleBack} disabled={saving}>
+                  Back
+                </button>
+              ) : (
+                <span />
+              )}
               <button
+                type="button"
                 className="cb-btn cb-btn-primary"
                 onClick={handleWizardNext}
                 disabled={saving}
+                aria-busy={saving || undefined}
               >
                 {atsEditStep
                   ? saving
                     ? 'Saving…'
                     : 'Save & recheck ATS'
-                  : 'Save & continue'}
+                  : showReviewSummary
+                    ? saving
+                      ? 'Saving…'
+                      : 'Complete Profile'
+                    : 'Save & Continue'}
               </button>
             </div>
           </>
         )}
 
-        {/* REVIEW SCREEN — opens after wizard when user reaches Review step */}
-        {isReviewStep && (
+        {/* ATS "Fix formatting" edit keeps the editable combined review */}
+        {showLegacyReview && (
           <>
             <h2 className="cb-section-head">{getStepSectionLabel(currentStep)}</h2>
             <div className="cb-review-shell">
@@ -3293,6 +3568,8 @@ function ResumePageInner() {
           </div>
           </>
         )}
+      </div>
+        </main>
       </div>
       )}
       <ConfirmDialog

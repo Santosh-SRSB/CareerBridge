@@ -66,14 +66,24 @@ export function buildResumeFromResumeContent(
     }),
     educationList: (content.education || []).map((item) => {
       const parsed = splitDegreeAndField(item.qualification || '');
+      const fieldOfStudy = item.fieldOfStudy?.trim() || '';
+      const degreeSuffix = fieldOfStudy ? ` in ${fieldOfStudy}` : '';
+      const qualification = (item.qualification || '').trim();
+      const degree =
+        degreeSuffix && qualification.toLowerCase().endsWith(degreeSuffix.toLowerCase())
+          ? qualification.slice(0, -degreeSuffix.length).trim()
+          : fieldOfStudy
+            ? qualification
+            : parsed.degree;
+      const isCurrent = Boolean(item.isCurrent);
       return {
-        degree: parsed.degree,
-        field: parsed.field,
+        degree,
+        field: fieldOfStudy || parsed.field,
         institution: item.institution || '',
         location: '',
-        startDate: '',
-        endDate: item.yearCompleted ? `${item.yearCompleted}-06` : '',
-        isCurrent: false,
+        startDate: item.startDate || '',
+        endDate: isCurrent ? '' : item.endDate || (item.yearCompleted ? `${item.yearCompleted}-06` : ''),
+        isCurrent,
       };
     }),
     projectList: (content.projects || []).map((item, index) => {

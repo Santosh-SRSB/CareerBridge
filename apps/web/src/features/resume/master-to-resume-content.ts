@@ -30,11 +30,20 @@ export function masterResumeToResumeContent(doc: MasterResumeDocument): ResumeCo
     email: doc.personalInfo.email || null,
     summary: doc.summary,
     skills: [...new Set(skills)],
-    education: doc.education.map((item) => ({
-      qualification: [item.degree, item.field].filter(Boolean).join(' in ') || item.degree,
-      institution: item.institution || null,
-      yearCompleted: parseYear(item.endYear),
-    })),
+    education: doc.education.map((item) => {
+      const field = item.field?.trim();
+      const startDate = item.startDate?.trim();
+      const endDate = item.isCurrent ? '' : item.endDate?.trim();
+      return {
+        qualification: [item.degree, item.field].filter(Boolean).join(' in ') || item.degree,
+        institution: item.institution || null,
+        yearCompleted: parseYear(item.endYear),
+        ...(field ? { fieldOfStudy: field } : {}),
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+        ...(item.isCurrent ? { isCurrent: true } : {}),
+      };
+    }),
     experiences: doc.experience.map((item) => ({
       company: item.company,
       jobTitle: item.jobTitle,

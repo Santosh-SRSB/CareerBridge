@@ -4,14 +4,15 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CANDIDATE_MAX_SKILLS, CANDIDATE_MAX_SKILLS_MESSAGE } from '@careerbridge/shared';
 import {
-  OB,
   OnboardingActions,
   OnboardingError,
+  OnboardingFieldIcon,
   OnboardingFrame,
+  OnboardingIcon,
+  OnboardingLoading,
   OnboardingQuestion,
   OnboardingStepHeader,
-  onboardingInputClass,
-  onboardingPrimaryButtonClass,
+  obxPrimaryButtonClass,
 } from '@/components/OnboardingFrame';
 import { Button } from '@/components/ui/Button';
 import {
@@ -29,6 +30,18 @@ import { ONBOARDING_SAVE_ERROR, useOnboardingSkip } from '@/hooks/useOnboardingS
 
 const NO_SKILLS_FOUND = 'No skills found. Try a different search term.';
 const SEARCH_DEBOUNCE_MS = 250;
+/** Quick-add suggestions shown before the candidate searches; nothing is added until tapped. */
+const POPULAR_SKILLS = [
+  'Communication',
+  'Excel',
+  'React',
+  'Python',
+  'Project Management',
+  'SQL',
+  'JavaScript',
+  'Leadership',
+  'Data Analysis',
+];
 
 type SearchState =
   | { status: 'idle' }
@@ -135,112 +148,103 @@ export default function OnboardingSkillsPage() {
     void complete();
   }
 
-  if (!gateReady || !profileReady) {
-    return (
-      <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
-        Loading...
-      </main>
-    );
-  }
+  if (!gateReady || !profileReady) return <OnboardingLoading step={4} />;
 
   const results = search.status === 'done' ? search.results.filter((item) => !isSelected(item.name)) : [];
+  const quickAdd = POPULAR_SKILLS.filter((name) => !isSelected(name));
 
   return (
-    <OnboardingFrame step={4}>
-      <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
-        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden pb-1">
-          <OnboardingStepHeader title="Your skills" subtitle="Add the skills employers should see." />
+    <OnboardingFrame step={4} onSkip={() => void skip()} skipDisabled={skipping || loading}>
+      <form onSubmit={onSubmit} noValidate className="obx-form">
+        <div className="obx-body">
+          <OnboardingStepHeader icon="sparkle" title="Your skills" subtitle="Add the skills employers should see." />
 
-          <OnboardingQuestion
-            title="Search skills"
-            hint={`${selected.length}/${CANDIDATE_MAX_SKILLS} skills added`}
-          >
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  if (results[0]) addToSelection(results[0].name);
-                }
-              }}
-              aria-label="Search skills"
-              aria-controls="skill-suggestions"
-              placeholder="e.g. Communication, Excel, React"
-              className={onboardingInputClass}
-              autoComplete="off"
-            />
-            <div id="skill-suggestions" aria-live="polite" className="mt-2">
-              {search.status === 'loading' ? (
-                <div role="status" data-testid="skill-search-loading" className="space-y-1.5">
-                  {Array.from({ length: 3 }, (_, i) => (
-                    <div key={i} className="h-8 animate-pulse rounded-[8px] bg-[#e9e8e3]" />
-                  ))}
-                  <span className="sr-only">Searching skills…</span>
-                </div>
-              ) : search.status === 'error' ? (
-                <OnboardingError
-                  message="We couldn't load skills right now."
-                  onRetry={() => runSearch(query)}
-                />
-              ) : search.status === 'done' && results.length === 0 ? (
-                <div className="space-y-1.5">
-                  <p className="text-[13px]" style={{ color: OB.muted }}>
-                    {NO_SKILLS_FOUND}
-                  </p>
-                  {query.trim().length >= 2 && !isSelected(query) ? (
-                    <button
-                      type="button"
-                      onClick={() => addToSelection(query)}
-                      className="min-h-12 text-xs font-semibold"
-                      style={{ color: OB.accent }}
-                    >
-                      Add “{query.trim()}” as a skill
-                    </button>
-                  ) : null}
-                </div>
-              ) : results.length ? (
-                <ul className="flex flex-wrap gap-2" aria-label="Skill suggestions">
-                  {results.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => addToSelection(item.name)}
-                        className="min-h-12 rounded-full border px-3.5 text-[13px] transition hover:border-[#10137C]"
-                        style={{ borderColor: OB.borderStrong, color: OB.ink, background: OB.surface }}
-                      >
-                        + {item.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+          <OnboardingQuestion title="Search skills" htmlFor="skill-search">
+            <div className="obx-field">
+              <OnboardingFieldIcon>
+                <OnboardingIcon name="search" size={18} />
+              </OnboardingFieldIcon>
+              <input
+                id="skill-search"
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (results[0]) addToSelection(results[0].name);
+                  }
+                }}
+                aria-label="Search skills"
+                aria-controls="skill-suggestions"
+                placeholder="e.g. Communication, Excel, React"
+                autoComplete="off"
+              />
             </div>
-            <OnboardingError message={limitError} />
           </OnboardingQuestion>
+          <p className="obx-cnt" aria-live="polite">
+            {selected.length} added
+            <span className="sr-only"> of {CANDIDATE_MAX_SKILLS} allowed</span>
+          </p>
 
           {selected.length ? (
-            <ul className="flex flex-wrap gap-2" aria-label="Selected skills">
+            <ul className="obx-chips" aria-label="Selected skills">
               {selected.map((name) => (
                 <li key={name}>
                   <button
                     type="button"
                     onClick={() => removeFromSelection(name)}
                     aria-label={`Remove ${name}`}
-                    className="inline-flex min-h-12 items-center gap-1.5 rounded-full px-3 text-[13px] text-white"
-                    style={{ background: OB.accent }}
+                    className="obx-opt obx-chip is-on"
                   >
-                    {name} <span aria-hidden>×</span>
+                    <OnboardingIcon name="check" size={14} />
+                    {name}
+                    <b aria-hidden>×</b>
                   </button>
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="text-[13px]" style={{ color: OB.muted }}>
-              No skills added yet.
-            </p>
-          )}
+          ) : null}
+
+          <div id="skill-suggestions" aria-live="polite">
+            {search.status === 'loading' ? (
+              <div role="status" data-testid="skill-search-loading" className="obx-chips">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="obx-skel" style={{ height: 40, width: 110 }} />
+                ))}
+                <span className="sr-only">Searching skills…</span>
+              </div>
+            ) : search.status === 'error' ? (
+              <OnboardingError
+                message="We couldn't load skills right now."
+                onRetry={() => runSearch(query)}
+              />
+            ) : search.status === 'done' && results.length === 0 ? (
+              <div>
+                <p className="obx-muted">{NO_SKILLS_FOUND}</p>
+                {query.trim().length >= 2 && !isSelected(query) ? (
+                  <button type="button" onClick={() => addToSelection(query)} className="obx-link">
+                    Add “{query.trim()}” as a skill
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <ul
+                className="obx-chips"
+                aria-label={search.status === 'done' ? 'Skill suggestions' : 'Popular skills'}
+              >
+                {(search.status === 'done' ? results.map((item) => item.name) : quickAdd).map((name) => (
+                  <li key={name}>
+                    <button type="button" onClick={() => addToSelection(name)} className="obx-opt obx-chip">
+                      <b aria-hidden>+</b>
+                      {name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <OnboardingError message={limitError} />
 
           <OnboardingError
             message={error || skipError}
@@ -248,17 +252,15 @@ export default function OnboardingSkillsPage() {
           />
         </div>
 
-        <OnboardingActions step={4} onSkip={() => void skip()} skipDisabled={skipping || loading}>
+        <OnboardingActions step={4}>
           <Button
             type="submit"
-            size="sm"
-            block
+            block={false}
             loading={loading}
             loadingLabel="Saving..."
-            className={onboardingPrimaryButtonClass}
-            style={{ background: OB.accent }}
+            className={obxPrimaryButtonClass}
           >
-            Complete Profile
+            Complete profile
           </Button>
         </OnboardingActions>
       </form>

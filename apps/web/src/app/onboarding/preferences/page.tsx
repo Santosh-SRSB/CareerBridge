@@ -10,15 +10,16 @@ import {
   validateExpectedSalaryRange,
 } from '@careerbridge/shared';
 import {
-  OB,
   OnboardingActions,
   OnboardingError,
   OnboardingFrame,
+  OnboardingIcon,
+  OnboardingLoading,
   OnboardingQuestion,
   OnboardingStepHeader,
-  onboardingInputClass,
-  onboardingPrimaryButtonClass,
+  obxPrimaryButtonClass,
 } from '@/components/OnboardingFrame';
+import { categoryIconName } from '@/lib/onboarding-category-icon';
 import { Button } from '@/components/ui/Button';
 import { getCandidateMe, getCatalog, updateCandidateMe } from '@/lib/api';
 import { nextOnboardingStepPath, withSkippedStep } from '@/lib/onboarding-flow';
@@ -121,61 +122,58 @@ export default function OnboardingPreferencesPage() {
     void save();
   }
 
-  if (!gateReady || !profileReady) {
-    return (
-      <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
-        Loading...
-      </main>
-    );
-  }
+  if (!gateReady || !profileReady) return <OnboardingLoading step={3} />;
 
   const salaryInvalid = error === SALARY_RANGE_INVALID_MESSAGE;
+  const categoriesFull = selected.length >= ONBOARDING_MAX_JOB_CATEGORIES;
 
   return (
-    <OnboardingFrame step={3}>
-      <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
-        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pb-1">
-          <OnboardingStepHeader title="Job preferences" subtitle="All optional. Tell us what you are looking for." />
+    <OnboardingFrame step={3} onSkip={() => void skip()} skipDisabled={skipping || loading}>
+      <form onSubmit={onSubmit} noValidate className="obx-form">
+        <div className="obx-body">
+          <OnboardingStepHeader
+            icon="briefcase"
+            title="Job preferences"
+            subtitle={`All optional. Choose up to ${ONBOARDING_MAX_JOB_CATEGORIES} categories.`}
+          />
 
-          <OnboardingQuestion
-            title="Preferred job categories (optional)"
-            hint={`Choose up to ${ONBOARDING_MAX_JOB_CATEGORIES} · ${selected.length}/${ONBOARDING_MAX_JOB_CATEGORIES} selected`}
-          >
-            {categories === null ? (
-              <div role="status" className="grid grid-cols-2 gap-2">
-                {Array.from({ length: 6 }, (_, i) => (
-                  <div key={i} className="h-9 animate-pulse rounded-full bg-[#e9e8e3]" />
-                ))}
-                <span className="sr-only">Loading job categories…</span>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2" data-testid="job-categories">
-                {categoryOptions.map((name) => {
-                  const active = selected.includes(name);
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => toggleCategory(name)}
-                      aria-pressed={active}
-                      className="min-h-12 rounded-full border px-3.5 text-[13px] transition active:scale-95"
-                      style={
-                        active
-                          ? { background: OB.accent, color: '#fff', borderColor: OB.accent }
-                          : { background: OB.surface, color: OB.ink, borderColor: OB.borderStrong }
-                      }
-                    >
-                      {name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <OnboardingError message={categoryError} />
-          </OnboardingQuestion>
+          <p className="obx-cnt" aria-live="polite">
+            {selected.length} of {ONBOARDING_MAX_JOB_CATEGORIES} selected
+          </p>
+          {categories === null ? (
+            <div role="status" className="obx-grid">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="obx-skel" style={{ height: 52 }} />
+              ))}
+              <span className="sr-only">Loading job categories…</span>
+            </div>
+          ) : (
+            <div className="obx-grid" data-testid="job-categories">
+              {categoryOptions.map((name) => {
+                const active = selected.includes(name);
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => toggleCategory(name)}
+                    aria-pressed={active}
+                    aria-disabled={!active && categoriesFull ? true : undefined}
+                    className={`obx-opt obx-tile${active ? ' is-on' : ''}`}
+                    style={!active && categoriesFull ? { opacity: 0.45 } : undefined}
+                  >
+                    <span className="obx-ti">
+                      <OnboardingIcon name={active ? 'check' : categoryIconName(name)} size={16} />
+                    </span>
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <OnboardingError message={categoryError} />
 
-          <OnboardingQuestion title="Expected monthly salary in ₹ (optional)">
-            <div className="grid grid-cols-2 gap-2.5">
+          <OnboardingQuestion title="Expected monthly salary in ₹" hint="Optional">
+            <div className="obx-grid">
               <input
                 type="number"
                 inputMode="numeric"
@@ -187,7 +185,7 @@ export default function OnboardingPreferencesPage() {
                   if (salaryInvalid) setError('');
                 }}
                 placeholder="Min e.g. 20000"
-                className={onboardingInputClass}
+                className="obx-input"
               />
               <input
                 type="number"
@@ -200,31 +198,25 @@ export default function OnboardingPreferencesPage() {
                   if (salaryInvalid) setError('');
                 }}
                 placeholder="Max e.g. 30000"
-                className={onboardingInputClass}
+                className="obx-input"
               />
             </div>
           </OnboardingQuestion>
 
           <fieldset>
-            <legend className="mb-2 text-[13px] font-medium" style={{ color: OB.muted }}>
-              Job type (optional)
+            <legend className="obx-label">
+              Job type<em>Optional</em>
             </legend>
-            <div className="grid grid-cols-2 gap-2">
-              {JOB_TYPE_OPTIONS.map((option) => (
-                <label
-                  key={option.value}
-                  className="flex min-h-12 cursor-pointer items-center gap-2 rounded-[10px] border px-3 text-sm"
-                  style={{ borderColor: OB.borderStrong, color: OB.ink }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={jobTypes.includes(option.value)}
-                    onChange={() => toggleJobType(option.value)}
-                    className="h-4 w-4 accent-[#10137C]"
-                  />
-                  {option.label}
-                </label>
-              ))}
+            <div className="obx-grid">
+              {JOB_TYPE_OPTIONS.map((option) => {
+                const active = jobTypes.includes(option.value);
+                return (
+                  <label key={option.value} className={`obx-opt obx-check${active ? ' is-on' : ''}`}>
+                    <input type="checkbox" checked={active} onChange={() => toggleJobType(option.value)} />
+                    {option.label}
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
 
@@ -234,15 +226,13 @@ export default function OnboardingPreferencesPage() {
           />
         </div>
 
-        <OnboardingActions step={3} onSkip={() => void skip()} skipDisabled={skipping || loading}>
+        <OnboardingActions step={3}>
           <Button
             type="submit"
-            size="sm"
-            block
+            block={false}
             loading={loading}
             loadingLabel="Saving..."
-            className={onboardingPrimaryButtonClass}
-            style={{ background: OB.accent }}
+            className={obxPrimaryButtonClass}
           >
             Continue
           </Button>

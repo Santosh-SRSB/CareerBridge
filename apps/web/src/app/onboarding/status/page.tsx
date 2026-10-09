@@ -9,14 +9,13 @@ import {
   type CatalogItem,
 } from '@careerbridge/shared';
 import {
-  OB,
   OnboardingActions,
   OnboardingError,
   OnboardingFrame,
+  OnboardingLoading,
   OnboardingQuestion,
   OnboardingStepHeader,
-  onboardingInputClass,
-  onboardingPrimaryButtonClass,
+  obxPrimaryButtonClass,
 } from '@/components/OnboardingFrame';
 import { Button } from '@/components/ui/Button';
 import { addExperience, getCandidateMe, getCatalog, updateCandidateMe } from '@/lib/api';
@@ -111,48 +110,36 @@ export default function OnboardingStatusPage() {
     void save();
   }
 
-  if (!gateReady || !profileReady) {
-    return (
-      <main className="flex min-h-screen items-center justify-center text-sm" style={{ background: OB.bg, color: OB.muted }}>
-        Loading...
-      </main>
-    );
-  }
+  if (!gateReady || !profileReady) return <OnboardingLoading step={2} />;
 
   return (
-    <OnboardingFrame step={2}>
-      <form onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
-        <div className="cb-ob-hide-scrollbar min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden pb-1">
+    <OnboardingFrame step={2} onSkip={() => void skip()} skipDisabled={skipping || loading}>
+      <form onSubmit={onSubmit} noValidate className="obx-form">
+        <div className="obx-body">
           <OnboardingStepHeader
-            title="Your work status"
+            icon="briefcase"
+            title="What’s your work status?"
             subtitle="This helps employers understand where you are in your career."
           />
 
-          <fieldset aria-describedby={error === STATUS_ERROR ? 'status-error' : undefined}>
-            <legend className="mb-2 text-[13px] font-medium" style={{ color: OB.muted }}>
-              Employment status
-            </legend>
-            <div className="grid grid-cols-1 gap-2">
+          <fieldset aria-describedby={error === STATUS_ERROR ? 'status-error' : undefined} style={{ marginTop: 16 }}>
+            <legend className="sr-only">Employment status</legend>
+            <div className="obx-list">
               {EMPLOYMENT_STATUSES.map((option) => {
                 const active = status === option.value;
                 return (
-                  <label
-                    key={option.value}
-                    className="flex min-h-12 cursor-pointer items-center gap-3 rounded-[10px] border px-3 text-sm font-medium transition"
-                    style={
-                      active
-                        ? { borderColor: OB.accent, background: OB.accentTint, color: OB.accent }
-                        : { borderColor: OB.borderStrong, background: OB.surface, color: OB.ink }
-                    }
-                  >
+                  <label key={option.value} className={`obx-opt obx-row${active ? ' is-on' : ''}`}>
                     <input
                       type="radio"
                       name="employmentStatus"
                       value={option.value}
                       checked={active}
                       onChange={() => selectStatus(option.value)}
-                      className="h-4 w-4 accent-[#10137C]"
+                      className="sr-only"
                     />
+                    <span className="obx-dot" aria-hidden>
+                      {active ? <i /> : null}
+                    </span>
                     {option.label}
                   </label>
                 );
@@ -161,72 +148,81 @@ export default function OnboardingStatusPage() {
           </fieldset>
 
           {needsExperience ? (
-            <div className="space-y-3.5">
-              <OnboardingQuestion title="Years of experience">
+            <div>
+              <OnboardingQuestion title="Years of experience" htmlFor="experience-range">
                 {levels === null ? (
-                  <div role="status" className="h-10 w-full animate-pulse rounded-[10px] bg-[#e9e8e3]">
+                  <div role="status" className="obx-skel" style={{ height: 46 }}>
                     <span className="sr-only">Loading experience options…</span>
                   </div>
                 ) : (
-                  <select
-                    id="experience-range"
-                    aria-label="Years of experience"
-                    aria-invalid={error === EXPERIENCE_ERROR || undefined}
-                    value={experienceRange}
-                    onChange={(event) => {
-                      setExperienceRange(event.target.value);
-                      if (event.target.value) setError('');
-                    }}
-                    className={onboardingInputClass}
-                  >
-                    <option value="">Select years of experience</option>
-                    {levels.map((level) => (
-                      <option key={level.value} value={level.value}>
-                        {level.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="obx-field is-select">
+                    <select
+                      id="experience-range"
+                      aria-label="Years of experience"
+                      aria-invalid={error === EXPERIENCE_ERROR || undefined}
+                      value={experienceRange}
+                      onChange={(event) => {
+                        setExperienceRange(event.target.value);
+                        if (event.target.value) setError('');
+                      }}
+                    >
+                      <option value="">Select years of experience</option>
+                      {levels.map((level) => (
+                        <option key={level.value} value={level.value}>
+                          {level.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
               </OnboardingQuestion>
               {!hasExperienceRecords ? (
                 <>
-                  <OnboardingQuestion title={status === 'EMPLOYED' ? 'Current role (optional)' : 'Most recent role (optional)'}>
+                  <OnboardingQuestion
+                    title={status === 'EMPLOYED' ? 'Current role' : 'Most recent role'}
+                    hint="Optional"
+                    htmlFor="experience-role"
+                  >
                     <input
+                      id="experience-role"
                       value={jobTitle}
                       onChange={(event) => setJobTitle(event.target.value)}
                       placeholder="e.g. Sales executive"
                       aria-label="Role"
-                      className={onboardingInputClass}
+                      className="obx-input"
                     />
                   </OnboardingQuestion>
-                  <OnboardingQuestion title="Company (optional)">
+                  <OnboardingQuestion title="Company" hint="Optional" htmlFor="experience-company">
                     <input
+                      id="experience-company"
                       value={company}
                       onChange={(event) => setCompany(event.target.value)}
                       placeholder="Company name"
                       aria-label="Company"
-                      className={onboardingInputClass}
+                      className="obx-input"
                     />
                   </OnboardingQuestion>
                 </>
               ) : null}
               {status === 'EMPLOYED' ? (
-                <OnboardingQuestion title="Notice period (optional)">
-                  <select
-                    aria-label="Notice period"
-                    value={noticePeriod}
-                    onChange={(event) => setNoticePeriod(event.target.value)}
-                    className={onboardingInputClass}
-                  >
-                    <option value="">Select notice period</option>
-                    {(NOTICE_OPTIONS.includes(noticePeriod) || !noticePeriod ? NOTICE_OPTIONS : [noticePeriod, ...NOTICE_OPTIONS]).map(
-                      (item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ),
-                    )}
-                  </select>
+                <OnboardingQuestion title="Notice period" hint="Optional" htmlFor="notice-period">
+                  <div className="obx-field is-select">
+                    <select
+                      id="notice-period"
+                      aria-label="Notice period"
+                      value={noticePeriod}
+                      onChange={(event) => setNoticePeriod(event.target.value)}
+                    >
+                      <option value="">Select notice period</option>
+                      {(NOTICE_OPTIONS.includes(noticePeriod) || !noticePeriod ? NOTICE_OPTIONS : [noticePeriod, ...NOTICE_OPTIONS]).map(
+                        (item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </div>
                 </OnboardingQuestion>
               ) : null}
             </div>
@@ -240,15 +236,13 @@ export default function OnboardingStatusPage() {
           </div>
         </div>
 
-        <OnboardingActions step={2} onSkip={() => void skip()} skipDisabled={skipping || loading}>
+        <OnboardingActions step={2}>
           <Button
             type="submit"
-            size="sm"
-            block
+            block={false}
             loading={loading}
             loadingLabel="Saving..."
-            className={onboardingPrimaryButtonClass}
-            style={{ background: OB.accent }}
+            className={obxPrimaryButtonClass}
           >
             Continue
           </Button>

@@ -1,4 +1,9 @@
 import type { ResumeContent, SavePassportPayload } from '@careerbridge/shared';
+import { normalizeResumeDateForStorage } from '@careerbridge/shared';
+
+function storageDate(raw: string | null | undefined) {
+  return normalizeResumeDateForStorage(raw) || undefined;
+}
 
 /** Map finalized resume content into Career Passport / profile payload (Path A step 12). */
 export function mapResumeContentToPassportPayload(content: ResumeContent): SavePassportPayload {
@@ -25,15 +30,26 @@ export function mapResumeContentToPassportPayload(content: ResumeContent): SaveP
     skills: (content.skills || []).map((s) => s.trim()).filter(Boolean),
     education: (content.education || [])
       .filter((row) => row.qualification?.trim())
-      .map((row) => ({
-        qualification: row.qualification.trim(),
-        institution: row.institution?.trim() || undefined,
-        yearCompleted: row.yearCompleted ? String(row.yearCompleted) : undefined,
-        endDate: row.yearCompleted ? `${row.yearCompleted}-06` : undefined,
-      })),
+      .map((row) => {
+        const endDate = row.isCurrent ? undefined : storageDate(row.endDate);
+        const yearCompleted = row.yearCompleted
+          ? String(row.yearCompleted)
+          : endDate?.match(/^\d{4}/)?.[0];
+        return {
+          qualification: row.qualification.trim(),
+          institution: row.institution?.trim() || undefined,
+          fieldOfStudy: row.fieldOfStudy?.trim() || undefined,
+          yearCompleted,
+          startDate: storageDate(row.startDate),
+          endDate: endDate || (row.yearCompleted && !row.isCurrent ? `${row.yearCompleted}-06` : undefined),
+        };
+      }),
     experience: [...paidJobs, ...internships].map((row) => ({
       company: row.company?.trim() || undefined,
       jobTitle: row.jobTitle?.trim() || undefined,
+      startDate: storageDate(row.startDate),
+      endDate: row.isCurrent ? undefined : storageDate(row.endDate),
+      stillInCompany: Boolean(row.isCurrent),
       description: row.description?.trim() || undefined,
       isInternship: Boolean(row.isInternship),
     })),
