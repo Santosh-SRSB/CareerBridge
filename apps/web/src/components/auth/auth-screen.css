@@ -700,6 +700,82 @@
   text-decoration: underline;
 }
 
+.au-signup + .au-signup {
+  margin-top: 6px;
+}
+
+/* Forgot password */
+.au-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.au-card .cb-otp {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 8px;
+}
+
+.au-card .cb-otp__digit {
+  width: 100%;
+  height: 48px;
+  border: 1px solid var(--au-field-line);
+  border-radius: 8px;
+  background: var(--au-field);
+  color: var(--color-text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background-color 0.15s;
+}
+
+.au-card .cb-otp__digit:focus {
+  border-color: var(--color-primary);
+  background: var(--color-white);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.au-card .cb-otp__digit[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+.au-alt {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 20px;
+}
+
+.au-link {
+  min-height: 36px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.au-link:hover:not(:disabled) {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+.au-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* ---------- Motion ---------- */
 @keyframes au-rise {
   from {
@@ -838,6 +914,7 @@
   .au-back,
   .au-switch,
   .au-seg__btn,
+  .au-link,
   .au-card .cb-auth-field__action,
   .au-card .cb-auth-otp__btn {
     min-height: 48px;

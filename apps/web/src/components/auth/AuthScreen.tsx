@@ -5,7 +5,7 @@ import '@/components/landing/home/home-landing.css';
 import '@/components/auth/auth-screen.css';
 
 type AuthRole = 'candidate' | 'employer';
-type AuthVariant = 'login' | 'register';
+type AuthVariant = 'login' | 'register' | 'forgot';
 
 const LEDE: Record<AuthVariant, Record<AuthRole, string>> = {
   login: {
@@ -16,6 +16,10 @@ const LEDE: Record<AuthVariant, Record<AuthRole, string>> = {
     candidate: 'Register as a candidate to build your profile, apply to roles, and track every application.',
     employer: 'Register your company to post roles, review candidates, and hire with a verified work email.',
   },
+  forgot: {
+    candidate: 'Sign in to continue your applications, saved roles, and messages.',
+    employer: 'Sign in to manage your openings and connect with the right talent.',
+  },
 };
 
 const PORTRAIT: Record<AuthRole, { src: string; width: number; height: number }> = {
@@ -24,8 +28,8 @@ const PORTRAIT: Record<AuthRole, { src: string; width: number; height: number }>
 };
 
 /**
- * Split layout for the login and registration screens: welcome panel on the left,
- * form panel on the right. Form behaviour lives entirely in the children.
+ * Split layout for the login, registration and forgot-password screens: welcome panel on
+ * the left, form panel on the right. Form behaviour lives entirely in the children.
  */
 export function AuthScreen({
   variant,
