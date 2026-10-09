@@ -138,6 +138,15 @@
   min-width: 0;
 }
 
+.cd-pp-top > .cd-pp-status {
+  flex: none;
+}
+
+.cd-pp-status .cd-big {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
 .cd-big {
   font: var(--type-h3);
   font-weight: 700;
@@ -182,6 +191,10 @@
   text-align: right;
 }
 
+.cd-pp-right-t .cd-big {
+  overflow-wrap: break-word;
+}
+
 .cd-level {
   margin-top: 20px;
 }
@@ -212,7 +225,7 @@
 
 .cd-info {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-top: 20px;
 }
@@ -222,7 +235,8 @@
   font-size: 16px;
   font-weight: 700;
   line-height: 1.35;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .cd-prog {
@@ -445,12 +459,13 @@
   font-size: 18px;
   font-weight: 700;
   line-height: 1.25;
+  color: #fff;
   overflow-wrap: anywhere;
 }
 
 .cd-who-loc {
   font: var(--type-body-sm);
-  color: #c4c8f7;
+  color: #fff;
 }
 
 .cd-photo-err {
@@ -887,6 +902,10 @@
   .cd-info,
   .cd-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cd-info-company {
+    grid-column: 1 / -1;
   }
 
   .cd-jobs,

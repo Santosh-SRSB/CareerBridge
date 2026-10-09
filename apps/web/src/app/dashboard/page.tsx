@@ -555,7 +555,7 @@ export default function DashboardPage() {
         <section className="cd-passport" aria-label="Career passport">
           <div className="cd-pp-left">
             <div className="cd-pp-top">
-              <div>
+              <div className="cd-pp-status">
                 <div className="cd-big">{statusLabel(profile)}</div>
                 <div className="cd-lbl">Status</div>
               </div>
@@ -585,16 +585,12 @@ export default function DashboardPage() {
                 <div className="cd-info-val">{fullName}</div>
               </div>
               <div>
-                <div className="cd-lbl cd-lbl--flush">From</div>
-                <div className="cd-info-val">{city || '—'}</div>
+                <div className="cd-lbl cd-lbl--flush">Experienced</div>
+                <div className="cd-info-val">{formatExperienceField(profile)}</div>
               </div>
-              <div>
+              <div className="cd-info-company">
                 <div className="cd-lbl cd-lbl--flush">Company</div>
                 <div className="cd-info-val">{currentCompany(profile)}</div>
-              </div>
-              <div>
-                <div className="cd-lbl cd-lbl--flush">Experience</div>
-                <div className="cd-info-val">{formatExperienceField(profile)}</div>
               </div>
             </div>
 
