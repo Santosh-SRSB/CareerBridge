@@ -20900,17 +20900,15 @@ a.ep-stat:hover {
 
 /* ========== Job detail (mock layout) ========== */
 .cb-job-detail {
-  --jd-dark: #0c2822;
-  --jd-orange: #f5821f;
-  --jd-hair: #e7e9e0;
-  --jd-ink: #16211d;
-  --jd-ink-soft: #4a534d;
-  --jd-muted: #5e665f;
-  --jd-mint: #e7f1ea;
-  --jd-mint-2: #dcece1;
-  --jd-good: #2f6b4f;
-  --jd-good-soft: #e6f0e9;
-  --jd-warn: #b45a1f;
+  --jd-dark: var(--color-primary-dark);
+  --jd-accent: var(--color-primary);
+  --jd-hair: var(--color-border);
+  --jd-ink: var(--color-text-primary);
+  --jd-ink-soft: var(--color-text-secondary);
+  --jd-muted: var(--color-text-secondary);
+  --jd-tint: var(--color-primary-light);
+  --jd-good: var(--color-success-dark);
+  --jd-warn: var(--color-warning-dark);
   color: var(--jd-ink);
   font-family: var(--font-inter), system-ui, sans-serif;
   padding-bottom: 2.5rem;
@@ -20963,7 +20961,8 @@ a.ep-stat:hover {
   margin-bottom: 22px;
   padding: 32px 36px;
   border-radius: 20px;
-  background: linear-gradient(135deg, var(--jd-mint) 0%, var(--jd-mint-2) 100%);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--jd-hair);
 }
 
 .cb-job-detail__about {
@@ -21000,8 +20999,7 @@ a.ep-stat:hover {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 1px;
-  color: var(--jd-dark);
-  opacity: 0.7;
+  color: var(--jd-ink-soft);
 }
 
 .cb-job-detail__hero h1 {
@@ -21050,8 +21048,10 @@ a.ep-stat:hover {
   height: 40px;
   border: none;
   border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 4px 10px rgba(20, 20, 10, 0.08);
+  background: var(--color-surface);
+  box-shadow:
+    0 4px 10px rgba(16, 19, 124, 0.08),
+    inset 0 0 0 1px var(--jd-hair);
   cursor: pointer;
   transition: transform 0.18s ease;
 }
@@ -21075,7 +21075,7 @@ a.ep-stat:hover {
 .cb-job-detail__tags span {
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--jd-tint);
   font-size: 11.5px;
   font-weight: 700;
   color: var(--jd-dark);
@@ -21085,10 +21085,10 @@ a.ep-stat:hover {
   margin-bottom: 20px;
   padding: 26px 30px;
   border-radius: 18px;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow:
-    0 1px 2px rgba(20, 20, 10, 0.04),
-    0 10px 22px rgba(20, 20, 10, 0.06);
+    0 1px 2px rgba(16, 19, 124, 0.04),
+    0 10px 22px rgba(16, 19, 124, 0.06);
 }
 
 .cb-job-detail__panel h3 {
@@ -21118,8 +21118,8 @@ a.ep-stat:hover {
   gap: 8px;
   padding: 11px 14px;
   border-radius: 10px;
-  background: var(--jd-good-soft);
-  color: var(--jd-good);
+  background: var(--jd-tint);
+  color: var(--jd-dark);
   font-size: 13.5px;
   font-weight: 700;
   opacity: 0;
@@ -21150,8 +21150,8 @@ a.ep-stat:hover {
   padding: 14px 28px;
   border: none;
   border-radius: 10px;
-  background: var(--jd-orange);
-  color: #fff;
+  background: var(--color-surface);
+  color: var(--jd-dark);
   font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
@@ -21162,9 +21162,9 @@ a.ep-stat:hover {
 }
 
 .cb-job-detail__btn-apply:hover:not(:disabled) {
-  background: #e2731a;
+  background: var(--jd-tint);
   transform: translateY(-2px);
-  box-shadow: 0 10px 22px rgba(245, 130, 31, 0.32);
+  box-shadow: 0 10px 22px rgba(6, 8, 60, 0.32);
 }
 
 .cb-job-detail__btn-apply:disabled {
@@ -21173,13 +21173,14 @@ a.ep-stat:hover {
 }
 
 .cb-job-detail__btn-apply.is-applied {
-  background: #0a2e2c;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--color-text-white);
   cursor: default;
   pointer-events: auto;
 }
 
 .cb-job-detail__btn-apply.is-applied:hover {
-  background: #0a2e2c;
+  background: rgba(255, 255, 255, 0.12);
   transform: none;
   box-shadow: none;
 }
@@ -21188,10 +21189,10 @@ a.ep-stat:hover {
   margin-bottom: 20px;
   overflow: hidden;
   border-radius: 18px;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow:
-    0 1px 2px rgba(20, 20, 10, 0.04),
-    0 10px 22px rgba(20, 20, 10, 0.06);
+    0 1px 2px rgba(16, 19, 124, 0.04),
+    0 10px 22px rgba(16, 19, 124, 0.06);
 }
 
 .cb-job-detail__match {
@@ -21237,7 +21238,7 @@ a.ep-stat:hover {
   margin: 4px 0 0;
   font-size: 13px;
   font-weight: 700;
-  color: #c45f0c;
+  color: var(--jd-accent);
 }
 
 .cb-job-detail__ats-breakdown {
@@ -21268,13 +21269,13 @@ a.ep-stat:hover {
   height: 7px;
   overflow: hidden;
   border-radius: 999px;
-  background: #eef0e8;
+  background: var(--color-border-light);
 }
 
 .cb-job-detail__ats-bar {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #0c2822, #2f6b4f);
+  background: linear-gradient(90deg, var(--jd-dark), var(--jd-accent));
   transition: width 0.8s cubic-bezier(.22,.61,.36,1);
 }
 
@@ -21303,11 +21304,11 @@ a.ep-stat:hover {
   font-size: 13px;
   line-height: 1.4;
   font-weight: 600;
-  color: #2a352f;
+  color: var(--jd-ink);
 }
 
 .cb-job-detail__ats-improve li span {
-  color: #f5821f;
+  color: var(--jd-accent);
   font-weight: 800;
   flex-shrink: 0;
 }
@@ -21323,26 +21324,26 @@ a.ep-stat:hover {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1px solid #cfd5c8;
-  background: #fff;
+  border: 1px solid var(--color-border-dark);
+  background: var(--color-surface);
   padding: 7px 12px;
   font-size: 12px;
   font-weight: 700;
-  color: #0c2822;
+  color: var(--jd-dark);
   text-decoration: none;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .cb-job-detail__ats-link:hover {
-  background: #f4f6ef;
-  border-color: #0c2822;
+  background: var(--color-surface-hover);
+  border-color: var(--jd-dark);
 }
 
 .cb-job-detail__ats-strengths {
   margin: 14px 0 0;
   font-size: 11.5px;
   line-height: 1.45;
-  color: #2f6b4f;
+  color: var(--jd-good);
   font-weight: 600;
 }
 
@@ -21358,6 +21359,14 @@ a.ep-stat:hover {
   flex: 0 0 70px;
   width: 70px;
   height: 70px;
+}
+
+.cb-job-detail__ring-track {
+  stroke: var(--color-border-light);
+}
+
+.cb-job-detail__ring-value {
+  stroke: var(--jd-accent);
 }
 
 .cb-job-detail__ring-txt {

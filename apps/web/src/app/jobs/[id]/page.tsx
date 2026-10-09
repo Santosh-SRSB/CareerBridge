@@ -231,13 +231,20 @@ export default function JobDetailPage() {
                   <div className="cb-job-detail__ats-score">
                     <div className="cb-job-detail__ring" aria-hidden>
                       <svg width="78" height="78" viewBox="0 0 70 70">
-                        <circle cx="35" cy="35" r="30" fill="none" stroke="#e7e9e0" strokeWidth="8" />
                         <circle
                           cx="35"
                           cy="35"
                           r="30"
                           fill="none"
-                          stroke="#f5821f"
+                          className="cb-job-detail__ring-track"
+                          strokeWidth="8"
+                        />
+                        <circle
+                          cx="35"
+                          cy="35"
+                          r="30"
+                          fill="none"
+                          className="cb-job-detail__ring-value"
                           strokeWidth="8"
                           strokeLinecap="round"
                           strokeDasharray={RING_C}
@@ -299,8 +306,8 @@ export default function JobDetailPage() {
                   className="cb-job-detail__side-card cb-job-detail__match cb-job-detail__fx"
                   style={{ animationDelay: '0.12s' }}
                 >
-                  <h4 className="m-0 text-[14px] font-extrabold text-[#10137c]">Your Match</h4>
-                  <p className="mt-2 text-[13px] leading-relaxed text-[#4a534d]">
+                  <h4 className="m-0 text-[14px] font-extrabold text-[var(--color-text-primary)]">Your Match</h4>
+                  <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
                     Sign in with a complete profile to see your ATS match for this role — score
                     breakdown and tips to improve.
                   </p>
