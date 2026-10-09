@@ -1,11 +1,13 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AuthShell } from '@/components/AuthShell';
+import { AuthRoleSwitch } from '@/components/auth/AuthRoleSwitch';
+import { AuthScreen } from '@/components/auth/AuthScreen';
 import { PasswordLoginForm } from '@/components/PasswordLoginForm';
 import { RegisteredNotice } from '@/components/RegisteredNotice';
-import { parseLoginAccountType, RoleToggle } from '@/components/RoleToggle';
+import { parseLoginAccountType } from '@/components/RoleToggle';
 import type { LoginAccountType } from '@careerbridge/shared';
 
 function LoginBody() {
@@ -21,20 +23,26 @@ function LoginBody() {
   }
 
   return (
-    <AuthShell
-      title="USER LOGIN"
-      subtitle=""
-      scene={mode === 'EMPLOYER' ? 'employer' : 'candidate'}
-      mode="signin"
-      signInHref={`/login?role=${mode.toLowerCase()}`}
-      registerHref={registerHref}
+    <AuthScreen
+      variant="login"
+      role={mode === 'EMPLOYER' ? 'employer' : 'candidate'}
+      switchHref={registerHref}
     >
-      <RoleToggle value={mode} onChange={selectMode} />
-      <div className="mt-3">
+      <h1 className="au-title">Sign in</h1>
+      <p className="au-sub">
+        {mode === 'EMPLOYER'
+          ? 'Employer login. Use your work email.'
+          : 'Candidate login. Use your email to continue.'}
+      </p>
+      <AuthRoleSwitch value={mode} onChange={selectMode} label="Log in as" />
+      <div className="au-notice">
         <RegisteredNotice />
-        <PasswordLoginForm key={mode} accountType={mode} />
       </div>
-    </AuthShell>
+      <PasswordLoginForm key={mode} accountType={mode} />
+      <p className="au-signup">
+        Don&apos;t have an account? <Link href={registerHref}>Sign up</Link>
+      </p>
+    </AuthScreen>
   );
 }
 

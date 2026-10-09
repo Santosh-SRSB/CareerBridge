@@ -434,7 +434,7 @@ export default function OnboardingLocationPage() {
                     <li key={city}>
                       <button
                         type="button"
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-[#E3F2ED]"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-[#E3E4F2]"
                         style={{ color: OB.ink }}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {

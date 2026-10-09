@@ -2,7 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
-import { WelcomeFoot, WelcomeRoleNav } from '@/components/landing/WelcomeChrome';
+import { WelcomeRoleNav } from '@/components/landing/WelcomeChrome';
+import { HomeFooter } from '@/components/landing/home/HomeFooter';
+import { ArrowRightIcon, PassportIcon, UserIcon } from '@/components/landing/home/icons';
+import { useWelcomeReveal } from '@/components/landing/useWelcomeReveal';
+import '@/components/landing/home/home-landing.css';
 import '@/components/landing/welcome-landings.css';
 
 const HERO_SLIDES = [
@@ -52,6 +56,7 @@ const CHAPTERS = [
 
 export function CandidateWelcomeLanding() {
   const slideRefs = useRef<(HTMLImageElement | null)[]>([]);
+  useWelcomeReveal();
 
   useEffect(() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -61,81 +66,124 @@ export function CandidateWelcomeLanding() {
     const id = window.setInterval(() => {
       const pics = slideRefs.current.filter(Boolean) as HTMLImageElement[];
       if (pics.length < 2) return;
-      pics[n]?.classList.remove('on');
+      pics[n]?.classList.remove('is-on');
       n = (n + 1) % pics.length;
-      pics[n]?.classList.add('on');
+      pics[n]?.classList.add('is-on');
     }, 4500);
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    const els = document.querySelectorAll('.cw-item, .cw-cta');
-    const io = new IntersectionObserver(
-      (ents) => {
-        ents.forEach((e) => {
-          if (e.isIntersecting) e.target.classList.add('in');
-        });
-      },
-      { threshold: 0.2 },
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, []);
-
   return (
-    <div className="cw-page">
+    <div className="hl-page wl-page">
       <WelcomeRoleNav role="candidate" />
-      <header className="cw-hero">
-        <div className="cw-hero-slides" aria-hidden="true">
-          {HERO_SLIDES.map((src, i) => (
-            <img
-              key={src}
-              ref={(node) => {
-                slideRefs.current[i] = node;
-              }}
-              className={i === 0 ? 'on' : undefined}
-              src={src}
-              alt=""
-            />
-          ))}
-        </div>
-        <div className="cw-hero__inner">
-          <p className="cw-kicker">For candidates</p>
-          <h1>Your career is bigger than your resume.</h1>
-          <p>
-            Build a Career Passport, practise with AI, and let the right work find you — free, in
-            one quiet place.
-          </p>
-          <Link className="cw-go" href="/register?role=candidate">
-            Start as candidate
-          </Link>
-        </div>
-      </header>
 
-      <div id="features">
-        {CHAPTERS.map((ch) => (
-          <section key={ch.num} className="cw-chap">
-            <div className="cw-item">
-              <div className="cw-item__txt">
-                <div className="cw-num">{ch.num}</div>
-                <h2>{ch.title}</h2>
-                <p>{ch.body}</p>
+      <main>
+        <section className="wl-hero wl-hero--candidate">
+          <div className="wl-wrap wl-hero__grid">
+            <div className="wl-hero__copy">
+              <p className="hl-cap">
+                <UserIcon size={16} />
+                For candidates
+              </p>
+              <h1 className="wl-hero__title">
+                Your career is bigger than your <em>resume.</em>
+              </h1>
+              <p className="wl-hero__lede">
+                Build a Career Passport, practise with AI, and let the right work find you — free, in
+                one quiet place.
+              </p>
+              <div className="wl-hero__ctas">
+                <Link className="hl-btn hl-btn--primary hl-btn--lg" href="/register?role=candidate">
+                  Start as candidate
+                  <ArrowRightIcon size={18} />
+                </Link>
+                <a className="hl-btn hl-btn--ghost hl-btn--on-white hl-btn--lg" href="#features">
+                  See features
+                </a>
               </div>
-              <figure className="cw-item__pic">
-                <img src={ch.img} alt="" />
-              </figure>
             </div>
-          </section>
-        ))}
-      </div>
 
-      <section className="cw-cta" id="start">
-        <h2>Ready to start your journey?</h2>
-        <p>Create your free candidate account and build your Career Passport.</p>
-        <Link href="/register?role=candidate">Signup as candidate</Link>
-      </section>
+            <div className="wl-hero__media" aria-hidden="true">
+              <div className="wl-slides">
+                {HERO_SLIDES.map((src, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element -- remote decorative slide
+                  <img
+                    key={src}
+                    ref={(node) => {
+                      slideRefs.current[i] = node;
+                    }}
+                    className={i === 0 ? 'is-on' : undefined}
+                    src={src}
+                    alt=""
+                  />
+                ))}
+              </div>
+              <div className="wl-float">
+                <span className="wl-float__icon">
+                  <PassportIcon size={20} />
+                </span>
+                <span>
+                  <strong>Career Passport</strong>
+                  <small>Build yours for free</small>
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <WelcomeFoot role="candidate" />
+        <section className="wl-section" id="features" aria-labelledby="wl-features-title">
+          <div className="wl-wrap">
+            <div className="wl-head wl-observe">
+              <p className="hl-eyebrow hl-reveal">Candidate features</p>
+              <h2 className="wl-head__title hl-reveal" id="wl-features-title">
+                Everything you need to get <em>hired.</em>
+              </h2>
+            </div>
+
+            <div className="wl-rows">
+              {CHAPTERS.map((ch, i) => (
+                <article key={ch.num} className={`wl-row wl-observe${i % 2 ? ' wl-row--flip' : ''}`}>
+                  <figure className="wl-row__media hl-reveal">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- remote decorative image */}
+                    <img src={ch.img} alt="" loading="lazy" />
+                  </figure>
+                  <div className="wl-row__copy hl-reveal">
+                    <span className="wl-num" aria-hidden="true">
+                      {ch.num}
+                    </span>
+                    <h3 className="wl-row__title">{ch.title}</h3>
+                    <p className="wl-row__body">{ch.body}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="wl-cta" id="start">
+          <div className="wl-cta__card wl-observe">
+            <svg className="wl-cta__deco" viewBox="0 0 520 520" fill="none" stroke="currentColor" aria-hidden="true" focusable="false">
+              <circle cx="260" cy="260" r="80" strokeWidth="2" />
+              <circle cx="260" cy="260" r="140" strokeWidth="2" strokeDasharray="4 10" />
+              <circle cx="260" cy="260" r="200" strokeWidth="2" />
+            </svg>
+            <h2 className="wl-cta__title hl-reveal">Ready to start your journey?</h2>
+            <p className="wl-cta__text hl-reveal">
+              Create your free candidate account and build your Career Passport.
+            </p>
+            <div className="wl-cta__actions hl-reveal">
+              <Link className="hl-pill wl-pill--light" href="/register?role=candidate">
+                Signup as candidate
+                <span className="hl-pill__arrow">
+                  <ArrowRightIcon size={18} />
+                </span>
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <HomeFooter welcome="candidate" />
     </div>
   );
 }

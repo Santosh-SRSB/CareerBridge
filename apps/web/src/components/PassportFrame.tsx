@@ -40,7 +40,7 @@ export function PassportFrame({
 }
 
 export const passportPrimaryButtonClass =
-  'w-full sm:w-auto px-8 py-3 text-sm font-bold bg-[#0a2e2c] hover:bg-[#072422] text-white rounded-xl shadow-sm';
+  'w-full sm:w-auto px-8 py-3 text-sm font-bold bg-[#1a1fc4] hover:bg-[#10137c] text-white rounded-xl shadow-sm';
 
 export const passportSecondaryButtonClass =
   'w-full sm:w-auto px-6 py-3 text-sm font-bold rounded-xl border-slate-200 text-slate-800';

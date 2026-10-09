@@ -8,7 +8,6 @@ import { ApplicationProgressTrack } from '@/components/marketplace/ApplicationPr
 import { EmptyState, ErrorState, SkeletonList } from '@/components/ui/StateViews';
 import { fetchApplications } from '@/lib/candidate-marketplace-api';
 import { isUnauthorizedError } from '@/lib/client-errors';
-
 function formatAppliedDate(value: string) {
   return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
@@ -70,7 +69,7 @@ export default function ApplicationsPage() {
                 <Link
                   key={item.id}
                   href={`/applications/${item.id}`}
-                  className={`relative block overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-[#0a2e2c]/30 ${
+                  className={`relative block overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-[#1A1FC4]/30 ${
                     inactive ? 'pointer-events-auto' : ''
                   }`}
                 >

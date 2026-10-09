@@ -98,7 +98,7 @@ export default function LiveInterviewer({
       // Glow only around the ball — no square fill
       if (talk || listen) {
         const glow = ctx.createRadialGradient(cx, cy, radius * 0.5, cx, cy, radius * 1.35);
-        glow.addColorStop(0, talk ? 'rgba(45, 212, 191, 0.35)' : 'rgba(129, 140, 248, 0.22)');
+        glow.addColorStop(0, talk ? 'rgba(45, 62, 212, 0.35)' : 'rgba(129, 140, 248, 0.22)');
         glow.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = glow;
         ctx.beginPath();
@@ -120,15 +120,15 @@ export default function LiveInterviewer({
       }
 
       const amp = radius * (0.08 + energy * 0.24);
-      drawWave(cx, cy - radius * 0.08, radius, t, amp, `rgba(34, 211, 238, ${0.5 + energy * 0.4})`, 0, talk ? 3 : 2);
+      drawWave(cx, cy - radius * 0.08, radius, t, amp, `rgba(35, 55, 237, ${0.5 + energy * 0.4})`, 0, talk ? 3 : 2);
       drawWave(cx, cy, radius, t * 1.1, amp * 0.85, `rgba(232, 121, 249, ${0.4 + energy * 0.35})`, 1.2, talk ? 2.5 : 1.6);
-      drawWave(cx, cy + radius * 0.08, radius, t * 0.95, amp * 0.7, `rgba(165, 243, 252, ${0.35 + energy * 0.3})`, 2, talk ? 2 : 1.4);
+      drawWave(cx, cy + radius * 0.08, radius, t * 0.95, amp * 0.7, `rgba(169, 177, 248, ${0.35 + energy * 0.3})`, 2, talk ? 2 : 1.4);
 
       if (talk) {
         for (let i = 0; i < 16; i += 1) {
           const a = (i / 16) * Math.PI * 2 + t * 2.8;
           const r = radius * (0.2 + ((Math.sin(t * 7 + i) + 1) / 2) * 0.4);
-          ctx.fillStyle = i % 2 === 0 ? 'rgba(34,211,238,0.6)' : 'rgba(232,121,249,0.5)';
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(35,55,237,0.6)' : 'rgba(232,121,249,0.5)';
           ctx.beginPath();
           ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.5, 2, 0, Math.PI * 2);
           ctx.fill();
@@ -140,7 +140,7 @@ export default function LiveInterviewer({
       if (talk || listen) {
         ctx.beginPath();
         ctx.arc(cx, cy, radius * (1.02 + Math.sin(t * 7) * 0.015), 0, Math.PI * 2);
-        ctx.strokeStyle = talk ? 'rgba(94, 234, 211, 0.6)' : 'rgba(129, 140, 248, 0.4)';
+        ctx.strokeStyle = talk ? 'rgba(94, 108, 234, 0.6)' : 'rgba(129, 140, 248, 0.4)';
         ctx.lineWidth = talk ? 2.5 : 1.5;
         ctx.stroke();
       }

@@ -12,9 +12,9 @@ const styles = `
     min-height: 48px;
     padding: 8px 14px;
     border-radius: 999px;
-    border: 1.5px solid #0A2E2C;
+    border: 1.5px solid #1A1FC4;
     background: #fff;
-    color: #0A2E2C;
+    color: #1A1FC4;
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
@@ -26,7 +26,7 @@ const styles = `
     border-radius: 10px;
     padding: 12px;
     font-size: 13.5px;
-    color: #1f2a24;
+    color: #10137c;
   }
   .cb-ai-assist-card p { margin: 0 0 10px; line-height: 1.5; }
   .cb-ai-assist-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -39,8 +39,8 @@ const styles = `
     font-weight: 700;
     cursor: pointer;
   }
-  .cb-ai-assist-use { background: #0A2E2C; color: #fff; border: none; }
-  .cb-ai-assist-dismiss { background: transparent; color: #0A2E2C; border: 1.5px solid #c9d0c2; }
+  .cb-ai-assist-use { background: #1A1FC4; color: #fff; border: none; }
+  .cb-ai-assist-dismiss { background: transparent; color: #1A1FC4; border: 1.5px solid #c9d0c2; }
   .cb-ai-assist-note { margin: 0; font-size: 12.5px; color: #7a3b00; }
 `;
 

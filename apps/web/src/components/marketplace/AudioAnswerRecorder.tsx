@@ -435,9 +435,9 @@ export const AudioAnswerRecorder = forwardRef<
         >
           <InterviewBotFace size="md" speaking={countdown === 'speak'} />
           {countdown === 'speak' ? (
-            <p className="text-center text-base font-extrabold text-[#0a2e2c] sm:text-2xl">Start speaking</p>
+            <p className="text-center text-base font-extrabold text-[#10137c] sm:text-2xl">Start speaking</p>
           ) : (
-            <span className="text-4xl font-black tabular-nums text-[#0a2e2c] sm:text-5xl">{countdown}</span>
+            <span className="text-4xl font-black tabular-nums text-[#10137c] sm:text-5xl">{countdown}</span>
           )}
         </div>
       ) : null}
@@ -512,9 +512,9 @@ export const AudioAnswerRecorder = forwardRef<
       <style jsx>{`
         .cb-audio-recorder-box {
           width: 100%;
-          border: 2px solid #0a2e2c;
+          border: 2px solid #1a1fc4;
           border-radius: 12px;
-          background: linear-gradient(180deg, #f8faf9 0%, #ffffff 100%);
+          background: linear-gradient(180deg, #f8f8fa 0%, #ffffff 100%);
           padding: 8px;
           box-sizing: border-box;
         }
@@ -567,7 +567,7 @@ export const AudioAnswerRecorder = forwardRef<
         .cb-audio-recorder-box__time {
           font-size: 11px;
           font-weight: 800;
-          color: #0a2e2c;
+          color: #1a1fc4;
         }
         @media (min-width: 640px) {
           .cb-audio-recorder-box__time {
@@ -582,7 +582,7 @@ export const AudioAnswerRecorder = forwardRef<
           height: 40px;
           padding: 4px 4px;
           border-radius: 10px;
-          border: 1.5px solid #dde0d3;
+          border: 1.5px solid #e1e5f2;
           background: #fff;
           overflow: hidden;
         }
@@ -594,14 +594,14 @@ export const AudioAnswerRecorder = forwardRef<
           }
         }
         .cb-audio-recorder-box__wave.is-static {
-          background: #f8faf9;
+          background: #f8f8fa;
         }
         .cb-audio-recorder-box__bar {
           flex: 1 1 0;
           min-width: 2.5px;
           max-width: 7px;
           border-radius: 999px;
-          background: linear-gradient(180deg, #14b8a6 0%, #0a2e2c 100%);
+          background: linear-gradient(180deg, #1424b8 0%, #1a1fc4 100%);
           transform-origin: bottom center;
           transition: height 70ms linear;
         }
@@ -666,8 +666,8 @@ export const AudioAnswerRecorder = forwardRef<
         }
         .cb-audio-recorder-box__clear {
           background: #fff;
-          color: #0a2e2c;
-          border: 1.5px solid #dde0d3;
+          color: #1a1fc4;
+          border: 1.5px solid #e1e5f2;
         }
         @keyframes cb-audio-pulse {
           0%,

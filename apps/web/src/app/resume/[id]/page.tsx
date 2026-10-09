@@ -736,13 +736,13 @@ export default function ResumeEditorPage() {
                   {content.skills.map((skill, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-teal/10 px-3 py-1 text-xs font-semibold text-teal-900"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-teal/10 px-3 py-1 text-xs font-semibold text-indigo-900"
                     >
                       {skill}
                       <button
                         type="button"
                         onClick={() => removeSkill(idx)}
-                        className="text-teal-900 hover:text-red-600"
+                        className="text-indigo-900 hover:text-red-600"
                         title="Remove skill"
                       >
                         ×
@@ -851,7 +851,7 @@ export default function ResumeEditorPage() {
                     {/* Missing Skills Recommendations */}
                     {aiReview.missingSkills?.length ? (
                       <div className="rounded-xl border border-teal/20 bg-teal/5 p-4 space-y-2">
-                        <p className="text-xs font-bold text-teal-900">⚡ Missing Keywords for Target Role:</p>
+                        <p className="text-xs font-bold text-indigo-900">⚡ Missing Keywords for Target Role:</p>
                         <p className="text-xs text-muted">Click any skill to instantly add it to your resume:</p>
                         <div className="flex flex-wrap gap-1.5 pt-1">
                           {aiReview.missingSkills.map((sk) => (
@@ -890,7 +890,7 @@ export default function ResumeEditorPage() {
                                     setApprovedSuggestions((prev) => ({ ...prev, [sec]: true }));
                                     setSaveMessage(`Applied AI suggestion for ${sec}!`);
                                   }}
-                                  className="rounded bg-teal px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-teal-700"
+                                  className="rounded bg-teal px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-indigo-700"
                                 >
                                   Approve & Apply
                                 </button>

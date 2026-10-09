@@ -75,14 +75,15 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={`border text-sm font-semibold transition ${
         square
-          ? 'min-w-[3rem] rounded-lg px-3 py-2.5'
-          : 'rounded-lg px-3.5 py-2.5'
+          ? 'min-w-[3rem] rounded-full px-3.5 py-2.5'
+          : 'rounded-full px-4 py-2.5'
       } ${
         active
-          ? 'border-[#0a2e2c] bg-[#0a2e2c] text-white'
-          : 'border-slate-300 bg-white text-slate-800 hover:border-slate-400'
+          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+          : 'border-[#d7e1fa] bg-white text-[var(--color-primary-dark)] hover:border-[#9db2f2] hover:bg-[#f0f4ff]'
       }`}
     >
       {label}
@@ -91,7 +92,7 @@ function Chip({
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h3 className="mb-3 text-base font-bold text-slate-700">{children}</h3>;
+  return <h3 className="mb-3 text-base font-bold text-[var(--color-primary-dark)]">{children}</h3>;
 }
 
 function SalaryRangeSlider({
@@ -143,7 +144,7 @@ function SalaryRangeSlider({
     <div>
       <div className="mb-3 flex items-center justify-between gap-2">
         <SectionTitle>Salary</SectionTitle>
-        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+        <div className="inline-flex rounded-full border border-[#d7e1fa] bg-[#f0f4ff] p-0.5">
           {(
             [
               { value: 'monthly', label: 'Monthly' },
@@ -153,11 +154,12 @@ function SalaryRangeSlider({
             <button
               key={option.value}
               type="button"
+              aria-pressed={period === option.value}
               onClick={() => switchPeriod(option.value)}
-              className={`rounded-md px-2.5 py-1 text-xs font-bold transition ${
+              className={`rounded-full px-3 py-1 text-xs font-bold transition ${
                 period === option.value
-                  ? 'bg-[#0a2e2c] text-white'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'text-[#53689f] hover:text-[var(--color-primary-dark)]'
               }`}
             >
               {option.label}
@@ -174,7 +176,7 @@ function SalaryRangeSlider({
             <div
               key={index}
               className={`flex-1 rounded-t-sm transition-colors ${
-                inRange ? 'bg-[#0a2e2c]/35' : 'bg-slate-200'
+                inRange ? 'bg-[rgba(26,31,196,0.35)]' : 'bg-[#e6ecff]'
               }`}
               style={{ height: `${height}%` }}
             />
@@ -183,9 +185,9 @@ function SalaryRangeSlider({
       </div>
 
       <div className="relative h-8">
-        <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-slate-200" />
+        <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[#e6ecff]" />
         <div
-          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[#0a2e2c]"
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[var(--color-primary)]"
           style={{ left: `${leftPct}%`, right: `${100 - rightPct}%` }}
         />
         <input
@@ -210,7 +212,7 @@ function SalaryRangeSlider({
         />
       </div>
 
-      <div className="mt-1 flex justify-between text-xs font-semibold text-slate-500">
+      <div className="mt-1 flex justify-between text-xs font-semibold text-[#53689f]">
         <span>{formatSalaryLabel(lo, period)}</span>
         <span>{formatSalaryLabel(hi, period)}</span>
       </div>
@@ -287,12 +289,12 @@ export function JobsOlxFilters({
   return (
     <div className="space-y-8">
       <div>
-        <label className="mb-2 block text-base font-bold text-slate-800" htmlFor="jobs-q">
+        <label className="mb-2 block text-base font-bold text-[var(--color-primary-dark)]" htmlFor="jobs-q">
           Job title / skill
         </label>
         <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth="2" aria-hidden>
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#53689f]">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -306,16 +308,16 @@ export function JobsOlxFilters({
             value={filters.q}
             onChange={(event) => onChange({ q: event.target.value })}
             placeholder="e.g. Sales, React, Fresher"
-            className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-3 text-sm font-medium text-slate-900 outline-none focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/15"
+            className="w-full rounded-xl border border-[#d7e1fa] bg-white py-3 pl-11 pr-3 text-sm font-medium text-[var(--color-primary-dark)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[#c7d2ff]"
           />
         </div>
       </div>
 
       <div>
-        <h3 className="mb-3 text-lg font-extrabold text-slate-900">Select Location</h3>
+        <h3 className="mb-3 text-lg font-extrabold text-[var(--color-primary-dark)]">Select Location</h3>
         <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth="2" aria-hidden>
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#53689f]">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -327,32 +329,32 @@ export function JobsOlxFilters({
             value={locationQuery}
             onChange={(event) => setLocationQuery(event.target.value)}
             placeholder="City or state"
-            className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-10 text-sm font-medium text-slate-900 outline-none focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/15"
+            className="w-full rounded-xl border border-[#d7e1fa] bg-white py-3 pl-11 pr-10 text-sm font-medium text-[var(--color-primary-dark)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[#c7d2ff]"
             aria-label="Search location"
           />
           {locationQuery ? (
             <button
               type="button"
               onClick={clearLocation}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-sm font-bold text-slate-500 hover:bg-slate-100"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-sm font-bold text-[#53689f] hover:bg-[#f0f4ff]"
               aria-label="Clear location"
             >
               ×
             </button>
           ) : null}
         </div>
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-[#53689f]">
           Select cities or states across India to find nearby jobs.
         </p>
 
         {filters.state || filters.city ? (
-          <p className="mt-2 text-sm font-semibold text-[#0a2e2c]">
+          <p className="mt-2 text-sm font-semibold text-[var(--color-primary)]">
             {[filters.city, filters.state].filter(Boolean).join(', ')}
           </p>
         ) : null}
 
         {locationSuggestions.length > 0 ? (
-          <ul className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+          <ul className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-[#d7e1fa] bg-white">
             {locationSuggestions.map((item) => {
               const key = `${item.state}-${item.city || 'all'}`;
               const label = item.city ? `${item.city}, ${item.state}` : item.state;
@@ -361,7 +363,7 @@ export function JobsOlxFilters({
                   <button
                     type="button"
                     onClick={() => selectLocation(item.city, item.state)}
-                    className="w-full px-3 py-2.5 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
+                    className="w-full px-3 py-2.5 text-left text-sm font-medium text-[var(--color-primary-dark)] hover:bg-[#f0f4ff]"
                   >
                     {label}
                   </button>
@@ -440,12 +442,12 @@ export function JobsOlxFilters({
               }
             }}
             placeholder="Add a skill"
-            className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/15"
+            className="min-w-0 flex-1 rounded-xl border border-[#d7e1fa] bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[#c7d2ff]"
           />
           <button
             type="button"
             onClick={addSkillFromQuery}
-            className="shrink-0 rounded-xl border border-[#0a2e2c]/25 bg-white px-4 py-2.5 text-sm font-bold text-[#0a2e2c] hover:bg-slate-50"
+            className="shrink-0 rounded-full border-[1.5px] border-[var(--color-primary)] bg-white px-5 py-2.5 text-sm font-bold text-[var(--color-primary)] hover:bg-[#f0f4ff]"
           >
             Add
           </button>
@@ -468,12 +470,12 @@ export function JobsOlxFilters({
       </div>
 
       {onViewJobs ? (
-        <div className="sticky bottom-0 -mx-3 mt-6 border-t border-slate-100 bg-white px-3 pb-2 pt-3">
+        <div className="sticky bottom-0 -mx-3 mt-6 border-t border-[#d7e1fa] bg-white px-3 pb-2 pt-3">
           <button
             type="button"
             onClick={onViewJobs}
             disabled={loading}
-            className="w-full rounded-xl bg-[#0a2e2c] px-4 py-3.5 text-sm font-extrabold text-white disabled:opacity-60"
+            className="w-full rounded-full bg-[var(--color-primary)] px-4 py-3.5 text-sm font-bold text-white hover:bg-[var(--color-primary-dark)] disabled:opacity-60"
           >
             {loading ? 'Loading…' : 'View jobs'}
           </button>

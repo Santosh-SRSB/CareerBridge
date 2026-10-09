@@ -24,7 +24,7 @@ export function ErrorState({
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#0a2e2c] px-6 text-sm font-bold text-white hover:bg-[#12433f]"
+          className="inline-flex min-h-12 items-center justify-center rounded-full bg-navy px-6 text-sm font-bold text-white hover:bg-navy-deep"
         >
           Try Again
         </button>
@@ -49,14 +49,14 @@ export function EmptyState({
   className?: string;
 }) {
   const actionClass =
-    'inline-flex min-h-12 items-center justify-center rounded-full bg-[#0a2e2c] px-6 text-sm font-bold text-white hover:bg-[#12433f]';
+    'inline-flex min-h-12 items-center justify-center rounded-full bg-navy px-6 text-sm font-bold text-white hover:bg-navy-deep';
   return (
     <div
       data-state="empty"
       className={`flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center ${className}`}
     >
-      <p className="text-base font-bold text-[#0a2e2c]">{title}</p>
-      {message ? <p className="max-w-md text-sm text-[#4a5f57]">{message}</p> : null}
+      <p className="text-base font-bold text-ink">{title}</p>
+      {message ? <p className="max-w-md text-sm text-muted">{message}</p> : null}
       {actionLabel && actionHref ? (
         <Link href={actionHref} className={`${actionClass} mt-2`}>
           {actionLabel}

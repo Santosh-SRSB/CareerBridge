@@ -124,7 +124,7 @@ export default function InterviewFeedbackPage() {
       </div>
       <Link
         href="/interviews"
-        className="inline-flex h-8 items-center rounded-full bg-[#14b8a6] px-3.5 text-xs font-extrabold text-[#0a2e2c]"
+        className="inline-flex h-8 items-center rounded-full bg-[#1424b8] px-3.5 text-xs font-extrabold text-[#10137c]"
       >
         Practice Again
       </Link>

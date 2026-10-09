@@ -278,7 +278,7 @@ export default function ResumePage() {
   return (
     <Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center bg-[#faf8f4] text-sm text-slate-500">
+        <main className="flex min-h-screen items-center justify-center bg-[#f8f9fc] text-sm text-slate-500">
           Loading…
         </main>
       }
@@ -1397,7 +1397,7 @@ function ResumePageInner() {
 
   if (!draftReady) {
     return (
-      <div className="cb-resume-flow-root flex min-h-screen items-center justify-center bg-[#f3f4ee]">
+      <div className="cb-resume-flow-root flex min-h-screen items-center justify-center bg-[#f8f9fc]">
         <p className="text-sm font-medium text-[#43526b]">Loading your resume…</p>
       </div>
     );
@@ -1409,15 +1409,15 @@ function ResumePageInner() {
         dangerouslySetInnerHTML={{
           __html: `
         :root {
-          --ink: #142a4f;
-          --ink-70: #43526b;
-          --ink-50: #6b7789;
-          --paper: #f3f4ee;
+          --ink: #10137c;
+          --ink-70: #3b4c85;
+          --ink-50: #5b6488;
+          --paper: #f8f9fc;
           --card: #ffffff;
-          --line: #dde0d3;
-          --marigold: #e29a34;
-          --marigold-dark: #b67a22;
-          --teal: #2e7d63;
+          --line: #e1e5f2;
+          --marigold: #1a1fc4;
+          --marigold-dark: #10137c;
+          --teal: #10137c;
           --radius-m: 10px;
           --radius-l: 16px;
         }
@@ -1659,11 +1659,11 @@ function ResumePageInner() {
           font-weight: 600;
           padding: 9px 15px;
           cursor: pointer;
-          border: 1.5px solid #0d9488;
-          background: #f0fdfa;
-          color: #0f766e;
+          border: 1.5px solid #0d1a94;
+          background: #f0f1fd;
+          color: #0f1976;
         }
-        .cb-chip .plus { color: #0d9488; font-weight: 800; }
+        .cb-chip .plus { color: #0d1a94; font-weight: 800; }
         .cb-chip.selected {
           background: var(--ink);
           border-color: var(--ink);
@@ -1765,7 +1765,7 @@ function ResumePageInner() {
           flex-shrink: 0;
         }
         .cb-entry-actions .edit {
-          border: 1.5px solid #dde0d3;
+          border: 1.5px solid #e1e5f2;
           background: #fff;
           color: #142a4f;
           border-radius: 8px;
@@ -1793,8 +1793,8 @@ function ResumePageInner() {
               <button
                 type="button"
                 onClick={handleBack}
-                className="absolute right-3 top-3 z-10 inline-flex items-center gap-0.5 rounded-full border bg-white px-2 py-0.5 text-[11px] font-medium shadow-sm transition hover:border-[#0A2E2C] hover:text-[#0A2E2C] sm:right-4 sm:top-4"
-                style={{ borderColor: '#7A8270', color: '#5C5546' }}
+                className="absolute right-3 top-3 z-10 inline-flex items-center gap-0.5 rounded-full border bg-white px-2 py-0.5 text-[11px] font-medium shadow-sm transition hover:border-[#1A1FC4] hover:text-[#10137C] sm:right-4 sm:top-4"
+                style={{ borderColor: '#d1d5e5', color: '#4b4f8f' }}
                 aria-label="Go back"
               >
                 ← Back
@@ -1904,8 +1904,8 @@ function ResumePageInner() {
           <div
             className="mb-4 rounded-2xl border px-4 py-3"
             style={{
-              borderColor: parseError ? '#f3c2c2' : '#cfe3dc',
-              background: parseError ? '#fff5f5' : '#f3faf7',
+              borderColor: parseError ? '#f3c2c2' : '#cfd1e3',
+              background: parseError ? '#fff5f5' : '#f3f4fa',
             }}
           >
             {parseBusy ? (
@@ -1917,7 +1917,7 @@ function ResumePageInner() {
                   <span />
                 </div>
                 <div>
-                  <p className="m-0 text-sm font-semibold" style={{ color: '#0a2e2c' }}>
+                  <p className="m-0 text-sm font-semibold" style={{ color: '#10137c' }}>
                     Reading your resume
                   </p>
                   <p className="m-0 mt-0.5 text-xs" style={{ color: '#6b7789' }}>
@@ -1931,7 +1931,7 @@ function ResumePageInner() {
                 {pendingParseId ? (
                   <button
                     type="button"
-                    className="rounded-full border border-[#0a2e2c] px-3 py-1.5 text-xs font-semibold text-[#0a2e2c]"
+                    className="rounded-full border border-[#1a1fc4] px-3 py-1.5 text-xs font-semibold text-[#10137c]"
                     onClick={() => {
                       void (async () => {
                         setParseError('');
@@ -2035,8 +2035,8 @@ function ResumePageInner() {
                     </p>
                   ) : null}
                   <div className={`cb-field${highlightMissingPersonal && !fullName.trim() ? ' cb-field-missing' : ''}`}>
-                    <label>Full name</label>
-                    <input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                    <label htmlFor="cb-resume-full-name">Full name</label>
+                    <input id="cb-resume-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
                   </div>
                   <div className="cb-field full cb-location-pair">
                     <StateCitySelect
@@ -2048,8 +2048,9 @@ function ResumePageInner() {
                     />
                   </div>
                   <div className={`cb-field${highlightMissingPersonal && !email.trim() ? ' cb-field-missing' : ''}`}>
-                    <label>Email</label>
+                    <label htmlFor="cb-resume-email">Email</label>
                     <input
+                      id="cb-resume-email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -2057,8 +2058,9 @@ function ResumePageInner() {
                     />
                   </div>
                   <div className={`cb-field${highlightMissingPersonal && !phone.trim() ? ' cb-field-missing' : ''}`}>
-                    <label>Phone</label>
+                    <label htmlFor="cb-resume-phone">Phone</label>
                     <input
+                      id="cb-resume-phone"
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
@@ -2601,7 +2603,7 @@ function ResumePageInner() {
                     Career gap
                   </p>
                   <div
-                    className="rounded-2xl border border-[#dde0d3] bg-[#faf8f4] px-4 py-4"
+                    className="rounded-2xl border border-[#e1e5f2] bg-[#f8f9fc] px-4 py-4"
                     style={{ marginBottom: 16 }}
                   >
                     <p className="text-base font-bold text-[#142a4f]">
@@ -2799,7 +2801,7 @@ function ResumePageInner() {
                   <p className="text-sm text-[#43526b]">{location}</p>
                   <button
                     type="button"
-                    className="mt-1 text-xs font-semibold text-[#2e7d63] underline"
+                    className="mt-1 text-xs font-semibold text-[#2e367d] underline"
                     onClick={() => setWizardIndex(0)}
                   >
                     Edit in Personal details

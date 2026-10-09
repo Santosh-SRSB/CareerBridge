@@ -40,7 +40,7 @@ export const toast = {
 const STYLES: Record<ToastKind, string> = {
   success: 'bg-[#047857] text-white',
   error: 'bg-[#b91c1c] text-white',
-  info: 'bg-[#0a2e2c] text-white',
+  info: 'bg-navy text-white',
 };
 
 export function Toaster() {

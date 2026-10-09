@@ -16,8 +16,8 @@ export function ResumeAtsTopSwitcher({ active }: { active: 'resumes' | 'ats' }) 
         aria-selected={active === 'resumes'}
         className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition sm:px-4 sm:text-sm ${
           active === 'resumes'
-            ? 'bg-[#0a2e2c] text-white shadow-sm'
-            : 'text-slate-600 hover:text-[#0a2e2c]'
+            ? 'bg-[#1a1fc4] text-white shadow-sm'
+            : 'text-slate-600 hover:text-[#10137c]'
         }`}
       >
         View Resume
@@ -28,8 +28,8 @@ export function ResumeAtsTopSwitcher({ active }: { active: 'resumes' | 'ats' }) 
         aria-selected={active === 'ats'}
         className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition sm:px-4 sm:text-sm ${
           active === 'ats'
-            ? 'bg-[#0a2e2c] text-white shadow-sm'
-            : 'text-slate-600 hover:text-[#0a2e2c]'
+            ? 'bg-[#1a1fc4] text-white shadow-sm'
+            : 'text-slate-600 hover:text-[#10137c]'
         }`}
       >
         ATS Checker

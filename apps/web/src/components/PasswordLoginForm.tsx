@@ -103,7 +103,7 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
     <form onSubmit={onSubmit} className="cb-auth-form-stack" noValidate>
       <div className="cb-auth-field">
         <label className="cb-auth-field__label" htmlFor="email-input">
-          Email
+          {accountType === 'EMPLOYER' ? 'Work Email' : 'Email'}
         </label>
         <div className={`cb-auth-field__control ${identifierError ? 'is-error' : ''}`}>
           <span className="cb-auth-field__icon">
@@ -115,7 +115,7 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
             type="email"
             required
             autoComplete="username"
-            placeholder="Username"
+            placeholder="you@example.com"
             value={identifier}
             onChange={(event) => {
               setIdentifier(event.target.value);
@@ -170,7 +170,7 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
           />
-          <span>Remember</span>
+          <span>Remember me</span>
         </label>
         <button
           type="button"
@@ -187,10 +187,14 @@ export function PasswordLoginForm({ accountType }: { accountType: LoginAccountTy
         </button>
       </div>
 
-      {error ? <div className="cb-auth-alert">{error}</div> : null}
+      {error ? (
+        <div className="cb-auth-alert" role="alert">
+          {error}
+        </div>
+      ) : null}
 
       <Button type="submit" loading={loading} loadingLabel="Signing in..." className="w-full">
-        LOGIN
+        Login
       </Button>
     </form>
   );

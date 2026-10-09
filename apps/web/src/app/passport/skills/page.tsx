@@ -120,7 +120,7 @@ export default function PassportSkillsPage() {
           loading={loading}
           loadingLabel="Saving..."
           onClick={() => void onSave()}
-          className="min-h-12 rounded-xl bg-[#0a2e2c] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#072422]"
+          className="min-h-12 rounded-xl bg-[#1a1fc4] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#10137c]"
         >
           Save
         </Button>

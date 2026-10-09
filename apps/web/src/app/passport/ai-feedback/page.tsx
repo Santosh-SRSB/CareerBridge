@@ -84,7 +84,7 @@ export default function AiFeedbackHistoryPage() {
                     {formatDate(item.at)}
                     {item.action ? ` · Action taken: ${item.action}` : ''}
                   </span>
-                  <Link href={item.href} className="inline-flex min-h-12 items-center font-bold text-[#0a2e2c] underline">
+                  <Link href={item.href} className="inline-flex min-h-12 items-center font-bold text-[#10137c] underline">
                     Open
                   </Link>
                 </div>

@@ -42,7 +42,7 @@ const MORE_SECTIONS = [
 
 const BAND_TONE: Record<EmployabilityScore['band'], string> = {
   Strong: 'text-emerald-800 bg-emerald-100',
-  Good: 'text-teal-800 bg-teal-100',
+  Good: 'text-indigo-800 bg-indigo-100',
   Developing: 'text-amber-900 bg-amber-100',
   Low: 'text-red-800 bg-red-100',
 };
@@ -119,7 +119,7 @@ function EmployabilityCard() {
                   <span className="font-bold text-slate-900">{part.score}/100</span>
                 </div>
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200" aria-hidden>
-                  <div className="h-full rounded-full bg-[#0a2e2c]" style={{ width: `${part.score}%` }} />
+                  <div className="h-full rounded-full bg-[#1a1fc4]" style={{ width: `${part.score}%` }} />
                 </div>
                 {part.tip ? <p className="mt-1 text-xs text-slate-600">{part.tip}</p> : null}
               </li>
@@ -231,7 +231,7 @@ function PassportOverviewPage() {
           }}
           className={
             allSectionsComplete
-              ? 'w-full rounded-xl bg-[#0a2e2c] py-3.5 text-sm font-bold text-white shadow-sm hover:bg-[#072422]'
+              ? 'w-full rounded-xl bg-[#1a1fc4] py-3.5 text-sm font-bold text-white shadow-sm hover:bg-[#10137c]'
               : 'w-full rounded-xl bg-[#2f5ed4] py-3.5 text-sm font-bold text-white shadow-sm hover:bg-[#274fb3]'
           }
         >

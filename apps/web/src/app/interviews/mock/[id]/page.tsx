@@ -12,7 +12,6 @@ import {
   AudioAnswerRecorder,
   type AudioAnswerRecorderHandle,
 } from '@/components/marketplace/AudioAnswerRecorder';
-import { Button } from '@/components/ui/Button';
 import {
   buildAnalyzingLine,
   buildGreetingLine,
@@ -40,6 +39,8 @@ import {
   startLiveInterview,
 } from '@/lib/api';
 import { subscribeAiSpeech } from '@/features/interview/ai-speech';
+import '../../candidate-interviews.css';
+import './mock-session.css';
 
 const ANSWER_MAX = 1000;
 const ANSWER_MIN = 20;
@@ -515,9 +516,9 @@ export default function MockInterviewQuestionPage() {
   if (phase === 'BOOTING' || (!session && phase !== 'ERROR')) {
     return (
       <CandidateAppShell activeTab="interviews">
-        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-2">
+        <div className="iv ms-boot" role="status">
           <InterviewBotFace size="lg" speaking />
-          <p className="text-sm font-semibold text-slate-500">Loading interview…</p>
+          <p className="iv-meta">Loading interview…</p>
         </div>
       </CandidateAppShell>
     );
@@ -526,7 +527,11 @@ export default function MockInterviewQuestionPage() {
   if (!session) {
     return (
       <CandidateAppShell activeTab="interviews">
-        <p className="p-6 text-sm text-red-600">{error || 'Interview unavailable.'}</p>
+        <div className="iv">
+          <p className="iv-err" role="alert">
+            {error || 'Interview unavailable.'}
+          </p>
+        </div>
       </CandidateAppShell>
     );
   }
@@ -557,41 +562,23 @@ export default function MockInterviewQuestionPage() {
 
   return (
     <CandidateAppShell activeTab="interviews" maxWidth="max-w-3xl">
-      <style dangerouslySetInnerHTML={{ __html: guidedStyles }} />
-      <div
-        className="-mx-3 overflow-hidden rounded-[28px] px-3 py-5 sm:-mx-4 sm:px-5 sm:py-6"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 55% at 15% 0%, rgba(159, 217, 236, 0.5), transparent 55%), radial-gradient(ellipse 60% 45% at 95% 8%, rgba(200, 236, 246, 0.65), transparent 50%), linear-gradient(180deg, #e8f6fb 0%, #f5fbfc 50%, #eef8fb 100%)',
-        }}
-      >
-      <div className="mx-auto w-full max-w-2xl space-y-4 pb-24 sm:pb-8">
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            href="/interviews/mock"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0a2e2c] sm:text-sm"
-          >
+      <div className="iv ms">
+        <div className="ms-top">
+          <Link href="/interviews/mock" className="iv-back">
             <span aria-hidden>←</span>
             <span>Setup</span>
           </Link>
-          <p className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#0a2e2c] shadow-sm sm:text-xs">
-            {GUIDED_PHASE_LABELS[phase]}
-          </p>
+          <p className="ms-phase">{GUIDED_PHASE_LABELS[phase]}</p>
         </div>
 
         {/* Pipeline indicator */}
-        <nav aria-label="Interview progress" className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <ol className="flex w-max min-w-full items-center gap-1.5 sm:gap-2">
+        <nav aria-label="Interview progress" className="ms-steps-wrap">
+          <ol className="ms-steps">
             {steps.map((step) => (
               <li
                 key={step.id}
-                className={`rounded-full px-2.5 py-1.5 text-[10px] font-bold shadow-sm sm:text-xs ${
-                  step.active
-                    ? 'bg-[#0a2e2c] text-white shadow-[0_6px_14px_rgba(10,46,44,0.25)]'
-                    : step.done
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-white/70 text-slate-400'
-                }`}
+                aria-current={step.active ? 'step' : undefined}
+                className={`ms-step${step.active ? ' ms-step--active' : step.done ? ' ms-step--done' : ''}`}
               >
                 {step.label}
               </li>
@@ -600,50 +587,43 @@ export default function MockInterviewQuestionPage() {
         </nav>
 
         {/* Question counter */}
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#d7eef6] bg-white/85 px-4 py-3 shadow-[0_8px_22px_rgba(47,143,173,0.08)] backdrop-blur-sm">
+        <div className="ms-card ms-counter">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#5a7a82]">AI Mock Interview</p>
-            <h1 className="truncate text-sm font-extrabold text-[#0a2e2c] sm:text-lg">{session.jobRole}</h1>
-            <p className="text-[11px] text-[#5a7a82] sm:text-sm">
+            <p className="ms-eyebrow">AI Mock Interview</p>
+            <h1 className="ms-role">{session.jobRole}</h1>
+            <p className="iv-meta">
               {interviewTypeLabel(session.interviewType)} · Question {questionNumber} of {totalQuestions}
             </p>
           </div>
-          <div className="flex items-center gap-1.5" aria-label={`Question ${questionNumber} of ${totalQuestions}`}>
+          <div className="ms-dots" role="img" aria-label={`Question ${questionNumber} of ${totalQuestions}`}>
             {Array.from({ length: totalQuestions }, (_, i) => (
               <span
                 key={i}
-                className={`h-2.5 w-2.5 rounded-full sm:h-3 sm:w-3 ${
-                  i < questionNumber - 1
-                    ? 'bg-emerald-500'
-                    : i === questionNumber - 1
-                      ? 'bg-[#0a2e2c] ring-2 ring-[#0a2e2c]/25'
-                      : 'bg-slate-200'
+                className={`ms-dot${
+                  i < questionNumber - 1 ? ' ms-dot--done' : i === questionNumber - 1 ? ' ms-dot--now' : ''
                 }`}
               />
             ))}
           </div>
         </div>
 
-        {/* Immersive light-green AI panels */}
+        {/* Immersive AI panels */}
         {immersive ? (
-          <section
-            className="cb-guided-panel relative overflow-hidden rounded-[1.5rem] border border-[rgba(10,46,44,0.1)] px-5 py-10 text-center sm:px-8 sm:py-14"
-            aria-live="polite"
-          >
-            <div className="relative z-[1] mx-auto flex max-w-lg flex-col items-center gap-5">
+          <section className="ms-stage" aria-live="polite">
+            <div className="ms-stage-in">
               <InterviewBotFace size="xl" speaking={aiSpeaking || phase === 'FINAL_PROCESSING'} />
               {aiSpeaking ? <VoiceWave /> : null}
 
               {phase === 'QUESTION_COMPLETED' || phase === 'FINAL_PROCESSING' ? (
-                <div className="cb-guided-check" aria-hidden>
+                <div className="ms-check" aria-hidden>
                   ✓
                 </div>
               ) : null}
 
-              <p className="text-lg font-bold leading-snug text-[#0a2e2c] sm:text-xl">{caption}</p>
+              <p className="ms-caption">{caption}</p>
 
               {phase === 'FINAL_PROCESSING' ? (
-                <div className="cb-guided-spinner" role="status" aria-label="Analyzing your interview" />
+                <div className="ms-spinner" role="status" aria-label="Analyzing your interview" />
               ) : null}
             </div>
           </section>
@@ -651,65 +631,50 @@ export default function MockInterviewQuestionPage() {
 
         {/* Question + think + record workspace */}
         {showQuestionWorkspace ? (
-          <article className="overflow-hidden rounded-[22px] border border-[#d7eef6] bg-white/95 shadow-[0_12px_32px_rgba(47,143,173,0.12)] backdrop-blur-sm">
-            <div className="border-b border-[#e5f4f8] bg-gradient-to-br from-[#f3fbfe] via-white to-[#eef8fb] px-4 py-4 sm:px-5">
-              <div className="flex items-start gap-3 sm:gap-4">
-                <InterviewBotFace
-                  size="md"
-                  speaking={
-                    phase === 'QUESTION_THINKING' ||
-                    (phase === 'QUESTION_DISPLAY' && aiSpeaking)
-                  }
-                  className="mt-0.5 shrink-0"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0a2e2c]/70">
-                    Question {questionNumber}
+          <article className="ms-card ms-work">
+            <div className="ms-q-head">
+              <InterviewBotFace
+                size="md"
+                speaking={
+                  phase === 'QUESTION_THINKING' ||
+                  (phase === 'QUESTION_DISPLAY' && aiSpeaking)
+                }
+                className="mt-0.5 shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="ms-eyebrow">Question {questionNumber}</p>
+                <blockquote className="ms-question">{questionText}</blockquote>
+                {session.currentQuestion?.aiFallback ? (
+                  <p role="status" data-testid="ai-unavailable" className="ms-fallback">
+                    {AI_INTERVIEW_QUESTION_FALLBACK_MESSAGE}
                   </p>
-                  <blockquote className="mt-2 text-[15px] font-bold leading-snug text-[#0a2e2c] sm:text-lg">
-                    {questionText}
-                  </blockquote>
-                  {session.currentQuestion?.aiFallback ? (
-                    <p
-                      role="status"
-                      data-testid="ai-unavailable"
-                      className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900"
-                    >
-                      {AI_INTERVIEW_QUESTION_FALLBACK_MESSAGE}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-xs font-semibold text-[#35565f]" data-testid="question-tip">
-                    <span aria-hidden>💡 </span>Tip:{' '}
-                    {(!session.currentQuestion?.aiFallback && session.currentQuestion?.snippet?.trim()) || DEFAULT_TIP}
-                  </p>
-                  {phase === 'QUESTION_DISPLAY' && aiSpeaking ? (
-                    <div className="mt-3 flex items-center gap-2">
-                      <VoiceWave />
-                      <span className="text-xs font-semibold text-[#5a7a82]">AI is reading the question…</span>
-                    </div>
-                  ) : null}
-                </div>
+                ) : null}
+                <p className="ms-tip" data-testid="question-tip">
+                  <span aria-hidden>💡 </span>Tip:{' '}
+                  {(!session.currentQuestion?.aiFallback && session.currentQuestion?.snippet?.trim()) || DEFAULT_TIP}
+                </p>
+                {phase === 'QUESTION_DISPLAY' && aiSpeaking ? (
+                  <div className="ms-reading">
+                    <VoiceWave />
+                    <span>AI is reading the question…</span>
+                  </div>
+                ) : null}
               </div>
             </div>
 
-            <div className="space-y-4 p-4 sm:p-5">
+            <div className="ms-body">
               {phase === 'QUESTION_THINKING' ? (
-                <div className="relative space-y-4">
-                  <img
-                    src="/think-brain.png"
-                    alt=""
-                    aria-hidden
-                    className="cb-think-brain pointer-events-none absolute -right-1 -top-3 z-10 h-14 w-14 select-none sm:h-16 sm:w-16"
-                  />
+                <div className="ms-think">
+                  <img src="/think-brain.png" alt="" aria-hidden className="ms-brain" />
 
                   <div
-                    className="flex items-center gap-4 rounded-xl border border-[#e3e6ea] bg-[#fafbfb] px-4 py-3.5"
+                    className="ms-timer"
                     role="timer"
                     aria-label={`${thinkRemaining} seconds of think time remaining`}
                   >
-                    <div className="relative h-14 w-14 shrink-0">
-                      <svg className="h-full w-full -rotate-90" viewBox="0 0 56 56" aria-hidden>
-                        <circle cx="28" cy="28" r="23" fill="none" stroke="#e4e8ea" strokeWidth="6" />
+                    <div className="ms-ring">
+                      <svg viewBox="0 0 56 56" aria-hidden>
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="#e3ebff" strokeWidth="6" />
                         <circle
                           cx="28"
                           cy="28"
@@ -723,33 +688,29 @@ export default function MockInterviewQuestionPage() {
                           style={{ transition: 'stroke 0.3s ease' }}
                         />
                       </svg>
-                      <div className="absolute inset-0 flex items-center justify-center text-lg font-extrabold tabular-nums text-[#1c2530]">
-                        {thinkRemaining}
-                      </div>
+                      <div className="ms-ring-n">{thinkRemaining}</div>
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-[13px] font-bold text-[#1c2530]">
+                      <div className="ms-timer-t">
                         <span>
                           {thinkRemaining > 0
                             ? 'Thinking time — get ready'
                             : 'Choose how you want to answer'}
                         </span>
                         {thinkRemaining > 0 ? (
-                          <span className="cb-think-dots inline-flex gap-[3px]" aria-hidden>
+                          <span className="ms-think-dots" aria-hidden>
                             <span />
                             <span />
                             <span />
                           </span>
                         ) : null}
                       </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-[5px] bg-[#e4e8ea]">
+                      <div className="ms-bar">
                         <div
-                          className="h-full rounded-[5px]"
                           style={{
                             width: `${thinkPct}%`,
                             backgroundColor: thinkColor,
-                            transition: 'background-color 0.3s ease',
                           }}
                         />
                       </div>
@@ -757,39 +718,35 @@ export default function MockInterviewQuestionPage() {
                   </div>
 
                   <div>
-                    <p className="mb-2.5 text-xs font-bold uppercase tracking-[0.06em] text-[#6b7684]">
-                      Choose way of answering
-                    </p>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <p className="iv-sec-t ms-method-t">Choose way of answering</p>
+                    <div className="ms-methods">
                       <button
                         type="button"
                         onClick={() => chooseAnswerMethod('typing')}
-                        className="relative flex items-center gap-2.5 rounded-xl border-2 border-[#0f8b8d] bg-[#eefaf9] px-3.5 py-3 text-left transition hover:border-[#0b6668]"
+                        className="ms-method ms-method--default"
                       >
-                        <span className="absolute -top-2 right-2.5 rounded-lg bg-[#0b6668] px-2 py-0.5 text-[9.5px] font-bold tracking-wide text-white">
-                          Default
-                        </span>
-                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[#123c34] text-white">
+                        <span className="ms-method-badge">Default</span>
+                        <span className="ms-method-ic">
                           <KeyboardIcon className="h-4 w-4" />
                         </span>
-                        <span className="text-sm font-bold text-[#0b6668]">Typing</span>
+                        <span className="ms-method-l">Typing</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => chooseAnswerMethod('recording')}
-                        className="flex items-center gap-2.5 rounded-xl border-2 border-[#e3e6ea] bg-white px-3.5 py-3 text-left transition hover:border-[#bcd8d6]"
+                        className="ms-method"
                       >
-                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[#d7ebe9] text-[#0b6668]">
+                        <span className="ms-method-ic">
                           <MicIcon className="h-4 w-4" />
                         </span>
-                        <span className="text-sm font-bold text-[#1c2530]">Recording</span>
+                        <span className="ms-method-l">Recording</span>
                       </button>
                     </div>
                     <button
                       type="button"
                       onClick={skipQuestion}
                       disabled={loading}
-                      className="mt-3 w-full rounded-xl border border-[#cfd8dc] bg-white px-3.5 py-2.5 text-sm font-bold text-[#35565f] transition hover:bg-slate-50 disabled:opacity-60"
+                      className="iv-btn iv-btn--ghost iv-btn--full ms-skip"
                     >
                       Skip Question
                     </button>
@@ -800,16 +757,11 @@ export default function MockInterviewQuestionPage() {
               {phase === 'TYPING_ACTIVE' ? (
                 <>
                   {/* Big reflection box */}
-                  <div
-                    className="min-h-[140px] rounded-2xl border border-[#d8eef0] bg-[#f4faf9] px-4 py-4 sm:min-h-[180px]"
-                    aria-live="polite"
-                  >
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#0a2e2c]/70">
-                      Your answer
-                    </p>
-                    <p className="mt-2 whitespace-pre-wrap text-base font-semibold leading-relaxed text-slate-900 sm:text-lg">
+                  <div className="ms-preview" aria-live="polite">
+                    <p className="ms-eyebrow">Your answer</p>
+                    <p className="ms-preview-t">
                       {answer.trim() ? answer : (
-                        <span className="font-medium text-slate-400">Your answer will appear here as you type…</span>
+                        <span className="ms-preview-ph">Your answer will appear here as you type…</span>
                       )}
                     </p>
                   </div>
@@ -818,7 +770,7 @@ export default function MockInterviewQuestionPage() {
                   <label htmlFor="mock-answer-type" className="sr-only">
                     Your answer
                   </label>
-                  <div className="flex items-stretch gap-2">
+                  <div className="ms-type">
                     <textarea
                       id="mock-answer-type"
                       value={answer}
@@ -835,103 +787,56 @@ export default function MockInterviewQuestionPage() {
                       spellCheck
                       placeholder="Type your answer here… (paste is disabled)"
                       rows={3}
-                      disabled={loading || isRecording}
-                      className="min-h-[88px] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-800 outline-none transition focus:ring-2 focus:ring-[#0a2e2c]/30 disabled:opacity-60"
+                      disabled={loading}
+                      className="ms-textarea"
                     />
                     <button
                       type="button"
-                      title={isRecording ? 'Stop recording' : 'Record with microphone'}
-                      aria-label={isRecording ? 'Stop recording' : 'Record with microphone'}
+                      title="Switch to recording"
+                      aria-label="Switch to recording"
                       disabled={loading}
-                      onClick={() => {
-                        if (isRecording) {
-                          recorderRef.current?.stop();
-                          return;
-                        }
-                        void recorderRef.current?.startImmediate().then((ok) => {
-                          if (!ok) {
-                            setError('Microphone access is needed to record. You can keep typing.');
-                          }
-                        });
-                      }}
-                      className={`inline-flex w-14 shrink-0 items-center justify-center rounded-xl border transition sm:w-16 ${
-                        isRecording
-                          ? 'border-red-300 bg-red-50 text-red-600'
-                          : 'border-slate-200 bg-white text-[#0a2e2c] hover:border-slate-300 hover:bg-slate-50'
-                      }`}
+                      onClick={() => chooseAnswerMethod('recording')}
+                      className="ms-mic"
                     >
-                      {isRecording ? <StopIcon className="h-5 w-5" /> : <MicIcon className="h-5 w-5" />}
+                      <MicIcon className="h-5 w-5" />
                     </button>
                   </div>
                   <p
                     id="mock-answer-count"
-                    className={`-mt-2 text-right text-xs font-semibold ${
-                      answer.length >= ANSWER_MAX ? 'text-red-700' : 'text-[#4a6b72]'
-                    }`}
+                    className={`ms-count${answer.length >= ANSWER_MAX ? ' ms-count--max' : ''}`}
                   >
                     Characters: {answer.length} / {ANSWER_MAX}
                   </p>
 
-                  {/* Mic-backed recorder (wave shows while recording / after save) */}
-                  <div className={isRecording || hasAudio ? 'block' : 'sr-only'}>
-                    <AudioAnswerRecorder
-                      key={`recorder-type-q-${session.questionIndex}`}
-                      ref={recorderRef}
-                      disabled={loading}
-                      hideIdleButton
-                      hideInternalCountdown
-                      onRecordingChange={setIsRecording}
-                      onRecorded={({ durationSec, transcript }) => {
-                        setHasAudio(true);
-                        hasAudioRef.current = true;
-                        setAudioDurationSec(durationSec);
-                        audioDurationRef.current = durationSec;
-                        if (transcript?.trim()) {
-                          const text = transcript.trim().slice(0, ANSWER_MAX);
-                          setAnswer(text);
-                          answerRef.current = text;
-                        }
-                      }}
-                      onClear={() => {
-                        setHasAudio(false);
-                        hasAudioRef.current = false;
-                        setAudioDurationSec(undefined);
-                        audioDurationRef.current = undefined;
-                      }}
-                      onLiveTranscript={(text) => {
-                        if (text.trim()) {
-                          const capped = text.slice(0, ANSWER_MAX);
-                          setAnswer(capped);
-                          answerRef.current = capped;
-                        }
-                      }}
-                    />
-                  </div>
-
                   {error ? (
-                    <p className="rounded-xl bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-600 sm:text-sm">
+                    <p className="ms-error" role="alert">
                       {error}
                     </p>
                   ) : null}
 
-                  <Button
+                  <button
                     type="button"
-                    loading={loading}
-                    loadingLabel="Saving…"
+                    disabled={loading}
+                    aria-busy={loading || undefined}
                     onClick={() => void submitAnswer()}
-                    className="w-full !rounded-full"
+                    className="iv-btn iv-btn--full"
                   >
-                    {(() => {
-                      const isLast = questionNumber >= totalQuestions;
-                      if (isRecording) return isLast ? 'Stop & Finish' : 'Stop & Next';
-                      return isLast ? 'Finish' : 'Next';
-                    })()}
-                  </Button>
+                    {loading ? (
+                      <>
+                        <span aria-hidden data-testid="button-spinner" className="iv-spin" />
+                        Saving…
+                      </>
+                    ) : questionNumber >= totalQuestions ? (
+                      'Finish'
+                    ) : (
+                      'Next'
+                    )}
+                  </button>
                   <button
                     type="button"
                     onClick={skipQuestion}
                     disabled={loading}
-                    className="w-full rounded-full border border-[#cfd8dc] bg-white px-4 py-2.5 text-sm font-bold text-[#35565f] transition hover:bg-slate-50 disabled:opacity-60"
+                    className="iv-btn iv-btn--ghost iv-btn--full"
                   >
                     Skip Question
                   </button>
@@ -940,7 +845,6 @@ export default function MockInterviewQuestionPage() {
             </div>
           </article>
         ) : null}
-      </div>
       </div>
 
       {darkRecording ? (
@@ -959,6 +863,11 @@ export default function MockInterviewQuestionPage() {
             isLast={questionNumber >= totalQuestions}
             onIntroComplete={finishRecordingIntro}
             onStopAndSubmit={() => void submitAnswer()}
+            onSwitchToTyping={() => {
+              recordingArmedForIndex.current = null;
+              setError('');
+              chooseAnswerMethod('typing');
+            }}
           />
           <AudioAnswerRecorder
             key={`recorder-q-${session.questionIndex}`}
@@ -1001,7 +910,7 @@ export default function MockInterviewQuestionPage() {
 
 function VoiceWave() {
   return (
-    <div className="cb-voice-wave" aria-hidden>
+    <div className="ms-wave" aria-hidden>
       {Array.from({ length: 5 }, (_, i) => (
         <span key={i} style={{ animationDelay: `${i * 0.12}s` }} />
       ))}
@@ -1050,102 +959,3 @@ function KeyboardIcon({ className = 'h-5 w-5' }: { className?: string }) {
     </svg>
   );
 }
-
-function StopIcon({ className = 'h-5 w-5' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
-    </svg>
-  );
-}
-
-const guidedStyles = `
-  .cb-guided-panel {
-    background:
-      radial-gradient(90% 80% at 10% 0%, rgba(20, 184, 166, 0.12) 0%, transparent 50%),
-      radial-gradient(70% 60% at 100% 100%, rgba(234, 179, 8, 0.1) 0%, transparent 45%),
-      linear-gradient(160deg, #e8f5f2 0%, #f4faf9 45%, #eef7f4 100%);
-    animation: cb-guided-fade 0.55s ease;
-  }
-  .cb-guided-count {
-    animation: cb-guided-pop 0.55s ease;
-  }
-  .cb-guided-check {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 56px;
-    height: 56px;
-    border-radius: 999px;
-    background: #0a2e2c;
-    color: #fff;
-    font-size: 1.6rem;
-    font-weight: 800;
-    animation: cb-guided-pop 0.5s ease;
-  }
-  .cb-guided-spinner {
-    width: 36px;
-    height: 36px;
-    border-radius: 999px;
-    border: 3px solid rgba(10, 46, 44, 0.15);
-    border-top-color: #0a2e2c;
-    animation: cb-guided-spin 0.85s linear infinite;
-  }
-  .cb-voice-wave {
-    display: inline-flex;
-    align-items: flex-end;
-    gap: 4px;
-    height: 22px;
-  }
-  .cb-voice-wave span {
-    width: 4px;
-    height: 8px;
-    border-radius: 999px;
-    background: #0a2e2c;
-    animation: cb-voice-bar 0.9s ease-in-out infinite;
-  }
-  .cb-think-brain {
-    animation: cb-think-brain-float 2.2s ease-in-out infinite;
-    filter: drop-shadow(0 4px 10px rgba(15, 139, 141, 0.22));
-  }
-  .cb-think-dots span {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #0f8b8d;
-    animation: cb-think-bounce 1.2s ease-in-out infinite;
-  }
-  .cb-think-dots span:nth-child(2) { animation-delay: 0.15s; }
-  .cb-think-dots span:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes cb-think-brain-float {
-    0%, 100% { transform: translateY(0) rotate(-4deg) scale(1); }
-    40% { transform: translateY(-7px) rotate(3deg) scale(1.05); }
-    70% { transform: translateY(-3px) rotate(-2deg) scale(1.02); }
-  }
-  @keyframes cb-think-bounce {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-    30% { transform: translateY(-4px); opacity: 1; }
-  }
-  @keyframes cb-guided-fade {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: none; }
-  }
-  @keyframes cb-guided-pop {
-    0% { opacity: 0; transform: scale(0.6); }
-    70% { transform: scale(1.08); }
-    100% { opacity: 1; transform: scale(1); }
-  }
-  @keyframes cb-guided-spin {
-    to { transform: rotate(360deg); }
-  }
-  @keyframes cb-voice-bar {
-    0%, 100% { height: 6px; opacity: 0.55; }
-    50% { height: 20px; opacity: 1; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .cb-guided-panel, .cb-guided-count, .cb-guided-check, .cb-voice-wave span, .cb-guided-spinner,
-    .cb-think-brain, .cb-think-dots span {
-      animation: none;
-    }
-  }
-`;

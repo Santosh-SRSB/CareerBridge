@@ -176,6 +176,7 @@ export default function PassportPhotoPage() {
             ref={inputRef}
             type="file"
             accept={ACCEPT}
+            aria-label="Upload profile photo"
             className="sr-only"
             tabIndex={-1}
             disabled={uploading}
@@ -224,7 +225,7 @@ export default function PassportPhotoPage() {
           padding: 0;
           overflow: hidden;
           cursor: pointer;
-          box-shadow: 0 0 0 4px #e8ece6, 0 10px 24px rgba(12, 40, 34, 0.08);
+          box-shadow: 0 0 0 4px #e8ece6, 0 10px 24px rgba(16, 19, 124, 0.08);
           background: #d7dbd4;
         }
         .cb-photo-ring:disabled {
@@ -287,14 +288,14 @@ export default function PassportPhotoPage() {
           z-index: 2;
           overflow: hidden;
           border-radius: 999px;
-          background: rgba(12, 40, 34, 0.28);
+          background: rgba(16, 19, 124, 0.28);
         }
         .cb-photo-ring__water {
           position: absolute;
           left: 0;
           right: 0;
           bottom: 0;
-          background: linear-gradient(180deg, rgba(56, 189, 148, 0.55), rgba(12, 40, 34, 0.92));
+          background: linear-gradient(180deg, rgba(56, 69, 189, 0.55), rgba(16, 19, 124, 0.92));
           transition: height 0.2s ease;
         }
         .cb-photo-ring__water::before {

@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-const ACCENT = '#0a2e2c';
-const MUTED = '#8a8780';
-const BG = '#f7f6f2';
+const ACCENT = '#1a1fc4';
+const MUTED = '#5b6488';
+const BG = '#f8f9fc';
 
 const SLIDES = [
   {
@@ -40,15 +40,15 @@ function SlideArt({ kind }: { kind: (typeof SLIDES)[number]['art'] }) {
   if (kind === 'dossier') {
     return (
       <div className="relative mx-auto flex h-36 w-36 items-center justify-center">
-        <span className="absolute left-4 top-10 h-2 w-2 rounded-full bg-[#0a2e2c]" />
-        <div className="relative h-28 w-20 rounded-md border border-[#1c1c1a] bg-[#f0e8d8] shadow-sm">
-          <div className="absolute right-[-4px] top-3 h-2 w-2 rounded-full bg-[#0a2e2c]" />
+        <span className="absolute left-4 top-10 h-2 w-2 rounded-full bg-[#1a1fc4]" />
+        <div className="relative h-28 w-20 rounded-md border border-[#10137c] bg-[#f0e8d8] shadow-sm">
+          <div className="absolute right-[-4px] top-3 h-2 w-2 rounded-full bg-[#1a1fc4]" />
           <div className="mt-6 space-y-2 px-3">
-            <div className="h-1 w-10 rounded bg-[#1c1c1a]/70" />
-            <div className="h-1 w-8 rounded bg-[#1c1c1a]/50" />
-            <div className="h-1 w-11 rounded bg-[#1c1c1a]/40" />
+            <div className="h-1 w-10 rounded bg-[#10137c]/70" />
+            <div className="h-1 w-8 rounded bg-[#10137c]/50" />
+            <div className="h-1 w-11 rounded bg-[#10137c]/40" />
           </div>
-          <div className="absolute bottom-3 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-[#1c1c1a] bg-white">
+          <div className="absolute bottom-3 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-[#10137c] bg-white">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="3">
               <polyline points="20 6 9 17 4 12" />
             </svg>
@@ -62,11 +62,11 @@ function SlideArt({ kind }: { kind: (typeof SLIDES)[number]['art'] }) {
       <div className="relative mx-auto flex h-36 w-40 items-center justify-center">
         <div className="absolute left-2 top-8 h-20 w-14 rotate-[-8deg] rounded-md border border-[#c4b8a0] bg-[#f5efe4]" />
         <div className="absolute right-3 top-6 h-22 w-16 rotate-[6deg] rounded-md border border-[#d4c4a8] bg-[#ebe3d4]" />
-        <div className="relative z-10 h-24 w-16 rounded-md border border-[#1c1c1a] bg-white px-2.5 pt-4 shadow-sm">
+        <div className="relative z-10 h-24 w-16 rounded-md border border-[#10137c] bg-white px-2.5 pt-4 shadow-sm">
           <div className="space-y-1.5">
-            <div className="h-1 w-9 rounded bg-[#1c1c1a]/60" />
-            <div className="h-1 w-7 rounded bg-[#1c1c1a]/45" />
-            <div className="h-1 w-8 rounded bg-[#1c1c1a]/35" />
+            <div className="h-1 w-9 rounded bg-[#10137c]/60" />
+            <div className="h-1 w-7 rounded bg-[#10137c]/45" />
+            <div className="h-1 w-8 rounded bg-[#10137c]/35" />
           </div>
         </div>
       </div>
@@ -82,10 +82,10 @@ function SlideArt({ kind }: { kind: (typeof SLIDES)[number]['art'] }) {
             style={{ width: size, height: size }}
           />
         ))}
-        <div className="absolute h-2 w-2 rounded-full bg-[#0a2e2c]" />
-        <div className="absolute left-[28%] top-[30%] h-1.5 w-1.5 rounded-full bg-[#0a2e2c]" />
-        <div className="absolute right-[26%] top-[38%] h-1.5 w-1.5 rounded-full bg-[#8a8780]" />
-        <div className="absolute bottom-[28%] left-[40%] h-1.5 w-1.5 rounded-full bg-[#0a2e2c]" />
+        <div className="absolute h-2 w-2 rounded-full bg-[#1a1fc4]" />
+        <div className="absolute left-[28%] top-[30%] h-1.5 w-1.5 rounded-full bg-[#1a1fc4]" />
+        <div className="absolute right-[26%] top-[38%] h-1.5 w-1.5 rounded-full bg-[#7b7fa8]" />
+        <div className="absolute bottom-[28%] left-[40%] h-1.5 w-1.5 rounded-full bg-[#1a1fc4]" />
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 144 144" aria-hidden>
           <line x1="72" y1="72" x2="48" y2="48" stroke="#c8c5bc" strokeWidth="1" strokeDasharray="3 3" />
           <line x1="72" y1="72" x2="104" y2="58" stroke="#c8c5bc" strokeWidth="1" strokeDasharray="3 3" />
@@ -96,10 +96,10 @@ function SlideArt({ kind }: { kind: (typeof SLIDES)[number]['art'] }) {
   }
   return (
     <div className="relative mx-auto flex h-36 w-36 items-center justify-center">
-      <span className="absolute left-8 top-8 h-2 w-2 rounded-full bg-[#0a2e2c]" />
-      <span className="absolute right-10 top-12 h-1.5 w-1.5 rounded-full bg-[#8a8780]" />
-      <span className="absolute bottom-10 right-8 h-2 w-2 rounded-full bg-[#0a2e2c]" />
-      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[#1c1c1a] bg-[#efe7d8]">
+      <span className="absolute left-8 top-8 h-2 w-2 rounded-full bg-[#1a1fc4]" />
+      <span className="absolute right-10 top-12 h-1.5 w-1.5 rounded-full bg-[#7b7fa8]" />
+      <span className="absolute bottom-10 right-8 h-2 w-2 rounded-full bg-[#1a1fc4]" />
+      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[#10137c] bg-[#efe7d8]">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5">
           <polyline points="20 6 9 17 4 12" />
         </svg>
@@ -145,7 +145,7 @@ export default function DossierIntroPage() {
         <div className="flex items-center justify-between text-sm" style={{ color: MUTED }}>
           <button
             type="button"
-            className="inline-flex items-center gap-1 font-medium text-[#0a2e2c]"
+            className="inline-flex items-center gap-1 font-medium text-[#10137c]"
             onClick={() => {
               if (index > 0) {
                 setPaused(true);

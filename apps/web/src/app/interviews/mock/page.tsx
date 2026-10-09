@@ -9,47 +9,26 @@ import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import { JobRoleCombobox } from '@/components/marketplace/JobRoleCombobox';
 import { createLiveInterview, getCandidateMe, getJobRoles, startLiveInterview } from '@/lib/api';
 import { detectRoleCategory, uniqueRoles } from '@careerbridge/shared';
+import '../candidate-interviews.css';
 
 const QUESTION_COUNTS = [5, 10, 15];
 const DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'] as const;
 type Difficulty = (typeof DIFFICULTIES)[number];
 const ROLES_ERROR = 'Unable to load job roles. Please try again.';
 
-function PushPinIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="6.5" r="3.2" fill="#5bb8d4" stroke="#2f8fad" strokeWidth="1.2" />
-      <path d="M12 9.5v8.5" stroke="#2f8fad" strokeWidth="2" strokeLinecap="round" />
-      <path
-        d="M9.2 12.2h5.6l-.7 3.6H9.9l-.7-3.6Z"
-        fill="#7ec8e3"
-        stroke="#2f8fad"
-        strokeWidth="1.1"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function PulseBackdrop() {
   return (
-    <svg
-      className="pointer-events-none absolute inset-x-0 top-1/2 h-16 w-full -translate-y-1/2 opacity-70"
-      viewBox="0 0 320 64"
-      fill="none"
-      aria-hidden
-      preserveAspectRatio="none"
-    >
+    <svg className="iv-art-pulse" viewBox="0 0 320 64" fill="none" aria-hidden preserveAspectRatio="none">
       <path
         d="M0 32h48l10-14 12 28 14-36 16 40 12-22 10 14H320"
-        stroke="#9fd9ec"
+        stroke="#b9c6ff"
         strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M0 36h56l8-10 10 20 12-26 14 28 10-16 8 10H320"
-        stroke="#c5eaf5"
+        stroke="#d5ddff"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -137,193 +116,151 @@ export default function MockInterviewSetupPage() {
 
   return (
     <CandidateAppShell activeTab="interviews" maxWidth="max-w-5xl">
-      <div
-        className="-mx-3 overflow-hidden rounded-[28px] px-4 py-6 sm:-mx-4 sm:px-6 sm:py-8 md:px-8"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 60% at 20% 20%, rgba(159, 217, 236, 0.55), transparent 55%), radial-gradient(ellipse 70% 50% at 90% 10%, rgba(200, 236, 246, 0.7), transparent 50%), linear-gradient(180deg, #e8f6fb 0%, #f3fafc 48%, #eef8fb 100%)',
-        }}
-      >
-        <div className="relative mb-6 sm:mb-8">
-          <Link
-            href="/interviews"
-            className="absolute left-0 top-0 z-[1] inline-flex items-center gap-1.5 text-sm font-bold text-[#0a2e2c] transition hover:opacity-80"
-          >
-            <span aria-hidden className="text-base leading-none">
-              ←
-            </span>
+      <div className="iv">
+        <div className="iv-panel">
+          <Link href="/interviews" className="iv-back">
+            <span aria-hidden>←</span>
             My Interviews
           </Link>
 
-          <div className="mx-auto max-w-xl pt-8 text-center sm:pt-0">
-            <h1 className="text-[1.65rem] font-extrabold tracking-tight text-[#0a2e2c] sm:text-3xl">
-              AI Mock Interview
-            </h1>
-            <p className="mt-1.5 text-sm text-[#4a6b72] sm:text-[15px]">
+          <div className="iv-head">
+            <h1 className="iv-h1">AI Mock Interview</h1>
+            <p className="iv-sub">
               {roleFromUrl ? (
                 <>
-                  Practising for <span className="font-bold text-[#0a2e2c]">{roleFromUrl}</span>.
+                  Practising for <b>{roleFromUrl}</b>.
                 </>
               ) : (
                 'Practise with your AI Interviewer before the real thing.'
               )}
             </p>
           </div>
-        </div>
 
-        <div className="grid items-start gap-6 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)] md:gap-8 lg:gap-10">
-          <aside className="flex flex-col items-center gap-5 md:pt-2">
-            <div className="relative flex w-full max-w-[280px] items-center justify-center py-4">
-              <PulseBackdrop />
-              <div className="relative z-[1]">
+          <div className="iv-setup">
+            <aside className="iv-left">
+              <div className="iv-art">
+                <PulseBackdrop />
                 <InterviewBotFace size="xl" />
               </div>
-            </div>
 
-            <div className="relative w-full max-w-sm rounded-2xl border border-[#d7eef6] bg-white px-5 pb-5 pt-7 shadow-[0_10px_28px_rgba(47,143,173,0.12)]">
-              <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 drop-shadow-sm">
-                <PushPinIcon />
-              </span>
-              <p className="text-[13px] leading-relaxed text-[#35565f] sm:text-sm">
-                <span className="font-extrabold text-[#0a2e2c]">Note:</span> This interview is for your
-                betterment. Scores are not linked to any job application — please don’t cheat. Answer
-                honestly so you can improve.
-              </p>
-            </div>
-          </aside>
-
-          <form
-            onSubmit={(event) => void onSubmit(event)}
-            className="space-y-5 rounded-[22px] border border-[#d7eef6] bg-white p-5 shadow-[0_12px_32px_rgba(47,143,173,0.12)] sm:p-6"
-          >
-            <div>
-              <JobRoleCombobox
-                value={jobRole}
-                options={roleOptions}
-                onChange={(next) => {
-                  setJobRole(next);
-                  if (next.trim().length >= 2) setRoleError('');
-                }}
-                showHint={false}
-                required
-                loading={rolesLoading}
-                invalid={Boolean(roleError)}
-                describedBy={roleError ? 'mock-role-error' : rolesError ? 'mock-roles-load-error' : undefined}
-              />
-              {roleError ? (
-                <p id="mock-role-error" role="alert" className="mt-2 text-sm font-semibold text-red-700">
-                  {roleError}
+              <div className="iv-card">
+                <p className="iv-note">
+                  <b>Note:</b> This interview is for your betterment. Scores are not linked to any job
+                  application — please don’t cheat. Answer honestly so you can improve.
                 </p>
-              ) : null}
-              {rolesError ? (
-                <p id="mock-roles-load-error" role="alert" className="mt-2 text-sm text-red-700">
-                  {rolesError}{' '}
-                  <button
-                    type="button"
-                    className="font-bold underline"
-                    onClick={() => setRolesAttempt((n) => n + 1)}
-                  >
-                    Retry
-                  </button>
-                  <span className="block text-xs text-[#4a6b72]">You can still type your job role.</span>
-                </p>
-              ) : null}
-            </div>
+              </div>
+            </aside>
 
-            <fieldset>
-              <legend className="mb-2.5 text-sm font-bold text-[#0a2e2c]">Interview Type</legend>
-              <div className="space-y-3">
-                <label className="flex cursor-pointer items-start gap-2.5">
+            <form onSubmit={(event) => void onSubmit(event)} className="iv-card iv-form">
+              <div>
+                <JobRoleCombobox
+                  value={jobRole}
+                  options={roleOptions}
+                  onChange={(next) => {
+                    setJobRole(next);
+                    if (next.trim().length >= 2) setRoleError('');
+                  }}
+                  showHint={false}
+                  required
+                  loading={rolesLoading}
+                  invalid={Boolean(roleError)}
+                  describedBy={roleError ? 'mock-role-error' : rolesError ? 'mock-roles-load-error' : undefined}
+                />
+                {roleError ? (
+                  <p id="mock-role-error" role="alert" className="iv-err">
+                    {roleError}
+                  </p>
+                ) : null}
+                {rolesError ? (
+                  <p id="mock-roles-load-error" role="alert" className="iv-err">
+                    {rolesError}{' '}
+                    <button type="button" onClick={() => setRolesAttempt((n) => n + 1)}>
+                      Retry
+                    </button>
+                    <small>You can still type your job role.</small>
+                  </p>
+                ) : null}
+              </div>
+
+              <fieldset className="m-0 border-0 p-0">
+                <legend className="iv-lbl">Interview Type</legend>
+                <label className="iv-opt">
                   <input
                     type="radio"
                     name="interviewType"
                     checked={interviewType === 'ROLE'}
                     onChange={() => setInterviewType('ROLE')}
-                    className="mt-1 h-4 w-4 accent-[#0a2e2c]"
                   />
                   <span>
-                    <span className="block text-sm font-semibold text-[#0a2e2c]">Role Specific</span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-[#4a6b72]">
+                    <span className="iv-opt-title">Role Specific</span>
+                    <span className="iv-opt-text">
                       Uses your resume, profile, skills, projects, and selected job role automatically.
                     </span>
                   </span>
                 </label>
-                <label className="flex cursor-pointer items-start gap-2.5">
+                <label className="iv-opt">
                   <input
                     type="radio"
                     name="interviewType"
                     checked={interviewType === 'GENERIC'}
                     onChange={() => setInterviewType('GENERIC')}
-                    className="mt-1 h-4 w-4 accent-[#0a2e2c]"
                   />
                   <span>
-                    <span className="block text-sm font-semibold text-[#0a2e2c]">Generic</span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-[#4a6b72]">
+                    <span className="iv-opt-title">Generic</span>
+                    <span className="iv-opt-text">
                       Communication, behavioural, and professional readiness — not purely technical.
                     </span>
                   </span>
                 </label>
+              </fieldset>
+
+              <fieldset className="m-0 border-0 p-0">
+                <legend className="iv-lbl">Difficulty Level</legend>
+                <div className="iv-seg">
+                  {DIFFICULTIES.map((level) => (
+                    <label key={level}>
+                      <input
+                        type="radio"
+                        name="difficulty"
+                        value={level}
+                        checked={difficulty === level}
+                        onChange={() => setDifficulty(level)}
+                      />
+                      {level}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div>
+                <label htmlFor="questionCount" className="iv-lbl">
+                  Number of Questions
+                </label>
+                <select
+                  id="questionCount"
+                  value={questionCount}
+                  onChange={(event) => setQuestionCount(Number(event.target.value))}
+                  className="iv-field"
+                >
+                  {QUESTION_COUNTS.map((count) => (
+                    <option key={count} value={count}>
+                      {count}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </fieldset>
 
-            <fieldset>
-              <legend className="mb-2.5 text-sm font-bold text-[#0a2e2c]">Difficulty Level</legend>
-              <div className="grid grid-cols-3 gap-2">
-                {DIFFICULTIES.map((level) => (
-                  <label
-                    key={level}
-                    className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-2 py-2.5 text-sm font-semibold ${
-                      difficulty === level
-                        ? 'border-[#0a2e2c] bg-[#e8f6fb] text-[#0a2e2c]'
-                        : 'border-[#cfe6ee] bg-[#f7fcfe] text-[#35565f]'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="difficulty"
-                      value={level}
-                      checked={difficulty === level}
-                      onChange={() => setDifficulty(level)}
-                      className="h-4 w-4 accent-[#0a2e2c]"
-                    />
-                    {level}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+              {error ? (
+                <p role="alert" className="iv-err">
+                  {error}
+                </p>
+              ) : null}
 
-            <div>
-              <label htmlFor="questionCount" className="mb-2 block text-sm font-bold text-[#0a2e2c]">
-                Number of Questions
-              </label>
-              <select
-                id="questionCount"
-                value={questionCount}
-                onChange={(event) => setQuestionCount(Number(event.target.value))}
-                className="w-full rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm font-semibold text-[#0a2e2c] outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/20"
-              >
-                {QUESTION_COUNTS.map((count) => (
-                  <option key={count} value={count}>
-                    {count}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {error ? (
-              <p role="alert" className="text-sm font-semibold text-red-700">
-                {error}
-              </p>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex w-full items-center justify-center rounded-2xl bg-[#0a2e2c] px-4 py-3.5 text-[15px] font-extrabold text-white shadow-[0_8px_18px_rgba(10,46,44,0.28)] transition hover:bg-[#072422] hover:shadow-[0_10px_22px_rgba(10,46,44,0.34)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? 'Starting...' : 'Start Mock Interview'}
-            </button>
-          </form>
+              <button type="submit" disabled={loading} className="iv-btn iv-btn--full">
+                {loading ? 'Starting...' : 'Start Mock Interview'}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </CandidateAppShell>

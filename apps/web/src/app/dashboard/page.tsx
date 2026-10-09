@@ -27,6 +27,7 @@ import {
   uploadCandidatePhoto,
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
+import { browserReadablePhotoUrl } from '@/lib/photo-url';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { TestimonialPromptCard } from '@/components/TestimonialPromptCard';
 import { formatCandidateExperienceLine, resolveTotalExperienceYears } from '@/lib/format-candidate-experience';
@@ -39,6 +40,7 @@ import {
 } from '@/lib/candidate-marketplace-api';
 import { mockInterviewSetupUrl } from '@/lib/mock-interview-url';
 import { compressImageBlob } from '@/lib/image';
+import './candidate-dashboard.css';
 
 const PHOTO_ACCEPT = 'image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png';
 
@@ -210,53 +212,6 @@ const APPLICATION_STATUS_LABELS: Record<string, string> = {
   HIRED: 'Hired',
 };
 
-function TypingHello({ name }: { name: string }) {
-  const fullText = `Hello, ${name}`;
-  const [displayed, setDisplayed] = useState('');
-  const [phase, setPhase] = useState<'typing' | 'pause' | 'deleting'>('typing');
-
-  useEffect(() => {
-    setDisplayed('');
-    setPhase('typing');
-  }, [fullText]);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-
-    if (phase === 'typing') {
-      if (displayed.length < fullText.length) {
-        timer = setTimeout(() => {
-          setDisplayed(fullText.slice(0, displayed.length + 1));
-        }, 95);
-      } else {
-        timer = setTimeout(() => setPhase('pause'), 1400);
-      }
-    } else if (phase === 'pause') {
-      timer = setTimeout(() => setPhase('deleting'), 400);
-    } else if (displayed.length > 0) {
-      timer = setTimeout(() => {
-        setDisplayed(fullText.slice(0, displayed.length - 1));
-      }, 45);
-    } else {
-      timer = setTimeout(() => setPhase('typing'), 350);
-    }
-
-    return () => clearTimeout(timer);
-  }, [displayed, phase, fullText]);
-
-  return (
-    <h1 className="cb-boarding__hello" aria-label={fullText}>
-      <span className="cb-boarding__hello-ghost" aria-hidden>
-        {fullText}
-      </span>
-      <span className="cb-boarding__hello-live">
-        <span className="cb-boarding__hello-typed">{displayed}</span>
-        <span className="cb-boarding__hello-caret" aria-hidden />
-      </span>
-    </h1>
-  );
-}
-
 function ProfileCompletedRing({ value }: { value: number }) {
   const safe = Math.min(100, Math.max(0, Math.round(value)));
   const radius = 24;
@@ -264,23 +219,31 @@ function ProfileCompletedRing({ value }: { value: number }) {
   const offset = circumference - (safe / 100) * circumference;
 
   return (
-    <div className="cb-boarding__ring" title={`${safe}% profile completed`}>
-      <div className="cb-boarding__ring-visual">
-        <svg className="cb-boarding__ring-svg" viewBox="0 0 64 64" aria-hidden>
-          <circle cx="32" cy="32" r={radius} className="cb-boarding__ring-track" />
+    <div className="cd-ring" title={`${safe}% profile completed`}>
+      <div className="cd-ring-visual">
+        <svg className="cd-ring-svg" viewBox="0 0 64 64" aria-hidden>
+          <circle cx="32" cy="32" r={radius} className="cd-ring-track" />
           <circle
             cx="32"
             cy="32"
             r={radius}
-            className="cb-boarding__ring-fill"
+            className="cd-ring-fill"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
           />
         </svg>
-        <span className="cb-boarding__ring-num">{safe}%</span>
+        <span className="cd-ring-num">{safe}%</span>
       </div>
-      <span className="cb-boarding__ring-lbl">Profile Completed</span>
+      <span className="cd-ring-lbl">Profile Completed</span>
     </div>
+  );
+}
+
+function PlaneGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M21 4 3 11l7 3 3 7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -496,7 +459,7 @@ export default function DashboardPage() {
     window.dispatchEvent(new CustomEvent('cb-photo-updated', { detail: { photoUrl } }));
   }
 
-  const displayPhotoUrl = photoPreviewUrl || profile?.photoUrl || null;
+  const displayPhotoUrl = photoPreviewUrl || browserReadablePhotoUrl(profile?.photoUrl);
   // Keep preview visible during upload — hiding it caused a flash of the blue circle.
   const showPhoto = Boolean(displayPhotoUrl) && !photoBroken;
 
@@ -576,97 +539,82 @@ export default function DashboardPage() {
 
   return (
     <CandidateAppShell activeTab="home" maxWidth="max-w-[1180px]" avatarUrl={profile?.photoUrl}>
-      <div className="cb-boarding">
-        <div className="cb-boarding__greet">
-          <p className="cb-boarding__eyebrow">BOARDING · CAREER JOURNEY</p>
-          <TypingHello name={name} />
-          <p className="cb-boarding__sub">
+      <div className="cd">
+        <div className="cd-greet">
+          <p className="cd-crumb">Boarding · Career Journey</p>
+          <h1 className="cd-hello">Hello, {name}</h1>
+          <p className="cd-sub">
             {isProfileComplete
               ? 'Welcome back. Your check-in is complete — explore stronger job matches below.'
               : 'Welcome back. Finish check-in on your profile to board better job matches.'}
           </p>
         </div>
 
-        <div className="mb-5">
-          <TestimonialPromptCard audience="CANDIDATE" />
-        </div>
+        <TestimonialPromptCard audience="CANDIDATE" />
 
-        <div className="cb-boarding__ticket">
-          <div className="cb-boarding__ticket-main">
-            <div className="cb-boarding__route">
+        <section className="cd-passport" aria-label="Career passport">
+          <div className="cd-pp-left">
+            <div className="cd-pp-top">
               <div>
-                <div className="cb-boarding__city">{statusLabel(profile)}</div>
-                <div className="cb-boarding__code">STATUS</div>
+                <div className="cd-big">{statusLabel(profile)}</div>
+                <div className="cd-lbl">Status</div>
               </div>
-              <div className="cb-boarding__plane" aria-hidden>
-                <p className="cb-boarding__plane-title">Career Passport</p>
-                <div className="cb-boarding__plane-line">
-                  <span className="cb-boarding__plane-icon">✈</span>
-                </div>
-              </div>
-              <div>
-                <div className="cb-boarding__city cb-boarding__city--target">{targetRole(profile)}</div>
-                <div className="cb-boarding__code">TARGET ROLE</div>
+              <p className="cd-pp-mid" aria-hidden>
+                Career Passport <PlaneGlyph />
+              </p>
+              <div className="cd-pp-right-t">
+                <div className="cd-big">{targetRole(profile)}</div>
+                <div className="cd-lbl">Target Role</div>
               </div>
             </div>
 
-            <div className="cb-boarding__level-row">
-              <div className="cb-boarding__field-label">LEVEL</div>
-              <div className="cb-boarding__chips">
+            <div className="cd-level">
+              <div className="cd-lbl cd-lbl--flush">Level</div>
+              <div className="cd-pills">
                 {EXPERIENCE_LEVEL_CHIPS.map((chip) => (
-                  <span
-                    key={chip.key}
-                    className={`cb-boarding__chip${experienceChip === chip.key ? ' is-active' : ''}`}
-                  >
+                  <span key={chip.key} className={`cd-pill${experienceChip === chip.key ? ' is-active' : ''}`}>
                     {chip.label}
                   </span>
                 ))}
               </div>
             </div>
 
-            <div className="cb-boarding__fields">
+            <div className="cd-info">
               <div>
-                <div className="cb-boarding__field-label">PASSENGER</div>
-                <div className="cb-boarding__field-val">{fullName}</div>
+                <div className="cd-lbl cd-lbl--flush">Passenger</div>
+                <div className="cd-info-val">{fullName}</div>
               </div>
               <div>
-                <div className="cb-boarding__field-label">FROM</div>
-                <div className="cb-boarding__field-val">{city || '—'}</div>
+                <div className="cd-lbl cd-lbl--flush">From</div>
+                <div className="cd-info-val">{city || '—'}</div>
               </div>
               <div>
-                <div className="cb-boarding__field-label">COMPANY</div>
-                <div className="cb-boarding__field-val">{currentCompany(profile)}</div>
+                <div className="cd-lbl cd-lbl--flush">Company</div>
+                <div className="cd-info-val">{currentCompany(profile)}</div>
               </div>
               <div>
-                <div className="cb-boarding__field-label">EXPERIENCE</div>
-                <div className="cb-boarding__field-val">{formatExperienceField(profile)}</div>
+                <div className="cd-lbl cd-lbl--flush">Experience</div>
+                <div className="cd-info-val">{formatExperienceField(profile)}</div>
               </div>
             </div>
 
-            <div className="cb-boarding__progress">
-              <div className="cb-boarding__progress-label">
+            <div className="cd-prog">
+              <div className="cd-prog-h">
                 <span>Check-in progress</span>
                 <span>{completionPercent}%</span>
               </div>
-              <div className="cb-boarding__progress-track">
-                <div
-                  className="cb-boarding__progress-fill"
-                  style={{ width: `${Math.min(100, Math.max(0, completionPercent))}%` }}
-                />
+              <div className="cd-bar">
+                <span style={{ width: `${Math.min(100, Math.max(0, completionPercent))}%` }} />
               </div>
             </div>
 
             {profile?.onboardingSkippedSteps?.length ? (
-              <div
-                role="note"
-                data-testid="skipped-sections"
-                className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
-              >
-                <p className="font-semibold">Skipped during setup:</p>
-                <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+              <div role="note" data-testid="skipped-sections" className="cd-skipped">
+                <p>Skipped during setup:</p>
+                <ul>
                   {profile.onboardingSkippedSteps.map((step) => (
                     <li key={step}>
-                      <Link href={SKIPPED_STEP_LINKS[step] ?? '/profile'} className="font-semibold underline">
+                      <Link href={SKIPPED_STEP_LINKS[step] ?? '/profile'}>
                         {ONBOARDING_STEP_LABELS[step] ?? `Step ${step}`}
                       </Link>
                     </li>
@@ -676,34 +624,26 @@ export default function DashboardPage() {
             ) : null}
 
             {!isProfileComplete ? (
-              <button
-                type="button"
-                className="cb-boarding__btn"
-                onClick={() => router.push('/profile')}
-              >
+              <button type="button" className="cd-btn cd-btn--dark" onClick={() => router.push('/profile')}>
                 Complete Profile
               </button>
             ) : (
-              <button
-                type="button"
-                className="cb-boarding__btn"
-                onClick={() => router.push('/jobs')}
-              >
+              <button type="button" className="cd-btn cd-btn--dark" onClick={() => router.push('/jobs')}>
                 Browse Jobs
               </button>
             )}
           </div>
 
-          <div className="cb-boarding__stub">
-            <div className="cb-boarding__stub-top">
-              <span>CAREER PASSPORT</span>
-              <span className="cb-boarding__tag">FREE</span>
+          <aside className="cd-pp-right">
+            <div className="cd-pr-head">
+              <span>Career Passport</span>
+              <b>FREE</b>
             </div>
-            <div className="cb-boarding__id-row">
-              <div className="cb-boarding__id-photo-wrap">
+            <div className="cd-pr-main">
+              <div className="cd-photo-wrap">
                 <button
                   type="button"
-                  className={`cb-boarding__id-photo ${showPhoto ? '' : 'cb-boarding__id-photo--empty'}`}
+                  className="cd-photo"
                   onClick={() => photoInputRef.current?.click()}
                   disabled={photoUploading}
                   aria-label={showPhoto ? 'Change profile photo' : 'Add profile photo'}
@@ -741,9 +681,9 @@ export default function DashboardPage() {
                       }}
                     />
                   ) : (
-                    <span className="cb-boarding__id-photo-empty">
-                      <span className="cb-boarding__id-photo-cam" aria-hidden>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <span className="cd-photo-empty">
+                      <span aria-hidden>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                           <path
                             d="M4 8.5A2.5 2.5 0 016.5 6h2.1l1.2-1.8A1.5 1.5 0 0111 3.5h2a1.5 1.5 0 011.2.7L15.4 6h2.1A2.5 2.5 0 0120 8.5v9A2.5 2.5 0 0117.5 20h-11A2.5 2.5 0 014 17.5v-9z"
                             stroke="currentColor"
@@ -752,16 +692,13 @@ export default function DashboardPage() {
                           <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.8" />
                         </svg>
                       </span>
-                      <span className="cb-boarding__id-photo-stripe">Add Photo</span>
+                      <span className="cd-photo-stripe">Add Photo</span>
                     </span>
                   )}
                   {photoUploading ? (
-                    <span className="cb-boarding__id-photo-upload" aria-live="polite">
-                      <span
-                        className="cb-boarding__id-photo-water"
-                        style={{ height: `${Math.max(12, photoPct)}%` }}
-                      />
-                      <span className="cb-boarding__id-photo-upload-txt">
+                    <span className="cd-photo-upload" aria-live="polite">
+                      <span className="cd-photo-water" style={{ height: `${Math.max(12, photoPct)}%` }} />
+                      <span className="cd-photo-upload-txt">
                         {photoPct < 100 ? `${photoPct}%` : '✓'}
                       </span>
                     </span>
@@ -770,7 +707,7 @@ export default function DashboardPage() {
                 {showPhoto ? (
                   <button
                     type="button"
-                    className="cb-boarding__id-photo-edit"
+                    className="cd-photo-edit"
                     onClick={() => photoInputRef.current?.click()}
                     disabled={photoUploading}
                     aria-label="Edit profile photo"
@@ -798,62 +735,50 @@ export default function DashboardPage() {
                 disabled={photoUploading}
                 onChange={(event) => void onPickDashboardPhoto(event.target.files?.[0])}
               />
-              <div className="cb-boarding__id-meta">
-                <div className="cb-boarding__id-name">{fullName}</div>
-                <div className="cb-boarding__id-loc">{city || 'India'}</div>
-                {photoError ? (
-                  <div className="cb-boarding__id-photo-err">{photoError}</div>
-                ) : null}
+              <div className="cd-who">
+                <div className="cd-who-name">{fullName}</div>
+                <div className="cd-who-loc">{city || 'India'}</div>
+                {photoError ? <div className="cd-photo-err">{photoError}</div> : null}
               </div>
               <ProfileCompletedRing value={completionPercent} />
             </div>
 
-            <div className="cb-boarding__summary">
-              <div className="cb-boarding__summary-label">SUMMARY</div>
-              <p className="cb-boarding__bio">
-                {bio || 'Complete your profile to unlock a stronger career summary.'}
-              </p>
+            <div className="cd-sum">
+              <div className="cd-sum-lbl">Summary</div>
+              <p>{bio || 'Complete your profile to unlock a stronger career summary.'}</p>
             </div>
 
-            <button
-              type="button"
-              className="cb-boarding__stub-btn"
-              onClick={() => router.push('/profile/details')}
-            >
+            <button type="button" className="cd-btn cd-btn--orange" onClick={() => router.push('/profile/details')}>
               View Profile
             </button>
             {employability ? (
-              <Link
-                href="/passport#employability"
-                className="mt-2 inline-flex min-h-12 items-center text-sm font-bold text-[#0a2e2c] underline"
-                data-testid="dashboard-employability"
-              >
+              <Link href="/passport#employability" className="cd-employability" data-testid="dashboard-employability">
                 Employability score: {employability.score}/100 ({employability.band})
               </Link>
             ) : null}
-          </div>
-        </div>
+          </aside>
+        </section>
 
-        <div className="cb-boarding__stats">
-          <div className="cb-boarding__stat">
-            <div className="cb-boarding__stat-num">{completionPercent}%</div>
-            <div className="cb-boarding__stat-lbl">STRENGTH</div>
+        <section className="cd-stats" aria-label="Profile stats">
+          <div className="cd-stat">
+            <div className="cd-stat-num">{completionPercent}%</div>
+            <div className="cd-stat-lbl">Strength</div>
           </div>
-          <div className="cb-boarding__stat">
-            <div className="cb-boarding__stat-num">{skillsCount}</div>
-            <div className="cb-boarding__stat-lbl">SKILLS</div>
+          <div className="cd-stat">
+            <div className="cd-stat-num">{skillsCount}</div>
+            <div className="cd-stat-lbl">Skills</div>
           </div>
-          <div className="cb-boarding__stat">
-            <div className="cb-boarding__stat-num">{scheduledInterviews.length}</div>
-            <div className="cb-boarding__stat-lbl">INTERVIEWS</div>
+          <div className="cd-stat">
+            <div className="cd-stat-num">{scheduledInterviews.length}</div>
+            <div className="cd-stat-lbl">Interviews</div>
           </div>
-          <div className="cb-boarding__stat">
-            <div className="cb-boarding__stat-num">{applicationCount}</div>
-            <div className="cb-boarding__stat-lbl">APPLICATIONS</div>
+          <div className="cd-stat">
+            <div className="cd-stat-num">{applicationCount}</div>
+            <div className="cd-stat-lbl">Applications</div>
           </div>
-        </div>
+        </section>
 
-        <div className="cb-boarding__section-title">
+        <div className="cd-sec-h">
           <h2>Recommended Jobs</h2>
           <button type="button" onClick={() => router.push('/jobs')}>
             View all jobs →
@@ -863,17 +788,17 @@ export default function DashboardPage() {
         {widgetsLoading ? (
           <SkeletonList rows={3} label="Loading recommended jobs…" />
         ) : jobs.length === 0 ? (
-          <div className="cb-boarding__empty">
+          <div className="cd-empty">
             <p>
               Currently no match found with your profile. We will notify you when a suitable role
               opens up.
             </p>
-            <button type="button" className="cb-boarding__btn" onClick={() => router.push('/jobs')}>
+            <button type="button" className="cd-btn cd-btn--dark" onClick={() => router.push('/jobs')}>
               Browse all jobs
             </button>
           </div>
         ) : (
-          <div className="cb-rec-jobs">
+          <div className="cd-jobs">
             {jobs.map((job) => {
               const skills = jobSkillPills(job);
               const matchScore =
@@ -881,76 +806,70 @@ export default function DashboardPage() {
               const experienceLabel = job.experience?.trim() || null;
               const salaryLabel = formatAnnualSalaryLpa(job.salaryMin, job.salaryMax);
               return (
-                <article key={job.id} className="cb-rec-job">
-                  <div className="cb-rec-job__head">
-                    <div className="cb-rec-job__brand">
-                      <span className="cb-rec-job__logo" aria-hidden>
-                        {companyInitials(job.companyName)}
-                      </span>
-                      <span className="cb-rec-job__company">{job.companyName}</span>
-                    </div>
-                    <span className="cb-rec-job__match">
+                <article key={job.id} className="cd-job">
+                  <div className="cd-job-top">
+                    <span className="cd-job-logo" aria-hidden>
+                      {companyInitials(job.companyName)}
+                    </span>
+                    <span className="cd-job-co">{job.companyName}</span>
+                    <span className="cd-job-match">
                       {matchScore != null ? `${matchScore}% match` : 'Recommended'}
                     </span>
                   </div>
 
-                  <div className="cb-rec-job__body">
-                    <h3 className="cb-rec-job__title">{job.title}</h3>
-                    <p className="cb-rec-job__meta">
-                      <span className="cb-rec-job__meta-icon" aria-hidden>
-                        <PinGlyph />
-                      </span>
+                  <div className="cd-job-body">
+                    <h3 className="cd-job-title">{job.title}</h3>
+                    <p className="cd-meta">
+                      <PinGlyph />
                       {formatLocationLabel(job.city, (job as { state?: string | null }).state) ||
                         job.city ||
                         city ||
                         'India'}
                     </p>
-                    <p className="cb-rec-job__meta" data-testid="rec-job-salary">
-                      <span className="cb-rec-job__meta-icon" aria-hidden>
-                        <WalletGlyph />
-                      </span>
+                    <p className="cd-meta" data-testid="rec-job-salary">
+                      <WalletGlyph />
                       {salaryLabel || 'Salary not disclosed'}
                     </p>
                     {experienceLabel ? (
-                      <p className="cb-rec-job__meta">
-                        <span className="cb-rec-job__meta-icon" aria-hidden>
-                          <BriefcaseGlyph />
+                      <p className="cd-meta">
+                        <BriefcaseGlyph />
+                        <span>
+                          Experience required: <strong>{experienceLabel}</strong>
                         </span>
-                        Experience required: <strong>{experienceLabel}</strong>
                       </p>
                     ) : null}
                     {skills.length > 0 ? (
-                      <div className="cb-rec-job__skills">
+                      <div className="cd-tags">
                         {skills.map((skill) => (
-                          <span key={skill} className="cb-rec-job__skill">
+                          <span key={skill} className="cd-tag">
                             {skill}
                           </span>
                         ))}
                       </div>
                     ) : null}
-                  </div>
 
-                  <div className="cb-rec-job__actions">
-                    <button
-                      type="button"
-                      className="cb-rec-job__view"
-                      onClick={() => router.push(`/jobs/${job.id}`)}
-                    >
-                      View
-                    </button>
-                    {job.applied ? (
-                      <button type="button" className="cb-rec-job__apply is-applied" disabled>
-                        Applied
-                      </button>
-                    ) : (
+                    <div className="cd-job-act">
                       <button
                         type="button"
-                        className="cb-rec-job__apply"
-                        onClick={() => router.push(`/jobs/${job.id}/apply`)}
+                        className="cd-btn cd-btn--mint"
+                        onClick={() => router.push(`/jobs/${job.id}`)}
                       >
-                        Apply
+                        View
                       </button>
-                    )}
+                      {job.applied ? (
+                        <button type="button" className="cd-btn cd-btn--applied" disabled>
+                          Applied
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="cd-btn cd-btn--dark"
+                          onClick={() => router.push(`/jobs/${job.id}/apply`)}
+                        >
+                          Apply
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </article>
               );
@@ -958,7 +877,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="cb-boarding__section-title cb-boarding__section-title--spaced">
+        <div className="cd-sec-h">
           <h2>Scheduled Interviews</h2>
           <button type="button" onClick={() => router.push('/interviews')}>
             View all interviews →
@@ -968,36 +887,28 @@ export default function DashboardPage() {
         {widgetsLoading ? (
           <SkeletonList rows={2} label="Loading interviews…" />
         ) : displayInterviews.length === 0 ? (
-          <div className="cb-boarding__empty">
+          <div className="cd-empty">
             <p>No interviews scheduled yet. Practice a mock interview while you wait.</p>
-            <div className="cb-boarding__empty-actions">
-              <button
-                type="button"
-                className="cb-boarding__job-view"
-                onClick={() => router.push('/applications')}
-              >
+            <div className="cd-empty-row">
+              <button type="button" className="cd-btn cd-btn--mint" onClick={() => router.push('/applications')}>
                 Track applications
               </button>
-              <button
-                type="button"
-                className="cb-boarding__job-apply"
-                onClick={() => router.push('/interviews/mock')}
-              >
+              <button type="button" className="cd-btn cd-btn--dark" onClick={() => router.push('/interviews/mock')}>
                 Practice mock interview
               </button>
             </div>
           </div>
         ) : (
-          <div className="cb-boarding__jobs">
+          <div className="cd-items">
             {displayInterviews.map((interview) => (
-              <article key={interview.id} className="cb-boarding__job">
+              <article key={interview.id} className="cd-item">
                 <h3>{interview.jobTitle}</h3>
-                <div className="cb-boarding__job-co">{interview.companyName}</div>
-                <div className="cb-boarding__job-pay">
+                <div className="cd-item-co">{interview.companyName}</div>
+                <div className="cd-item-when">
                   {formatInterviewDate(interview.scheduledDate)}
                   {formatInterviewTime(interview) ? ` · ${formatInterviewTime(interview)}` : ''}
                 </div>
-                <div className="cb-boarding__job-co">
+                <div className="cd-item-co">
                   {[
                     interviewTypeLabel(interview.mode),
                     interview.durationMin ? `${interview.durationMin} min` : null,
@@ -1005,18 +916,18 @@ export default function DashboardPage() {
                     .filter(Boolean)
                     .join(' · ')}
                 </div>
-                <div className="cb-boarding__job-match">{interviewStatusLabel(interview.status).toUpperCase()}</div>
-                <div className="cb-boarding__job-actions">
+                <div className="cd-item-status">{interviewStatusLabel(interview.status).toUpperCase()}</div>
+                <div className="cd-item-act">
                   <button
                     type="button"
-                    className="cb-boarding__job-view"
+                    className="cd-btn cd-btn--mint"
                     onClick={() => router.push(`/interviews/scheduled/${interview.id}`)}
                   >
                     View
                   </button>
                   <button
                     type="button"
-                    className="cb-boarding__job-apply"
+                    className="cd-btn cd-btn--dark"
                     onClick={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}
                   >
                     Prepare
@@ -1027,7 +938,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="cb-boarding__section-title cb-boarding__section-title--spaced">
+        <div className="cd-sec-h">
           <h2>Application Status</h2>
           <button type="button" onClick={() => router.push('/applications')}>
             View all applications →
@@ -1037,28 +948,26 @@ export default function DashboardPage() {
         {widgetsLoading ? (
           <SkeletonList rows={2} label="Loading applications…" />
         ) : recentApplications.length === 0 ? (
-          <div className="cb-boarding__empty" data-state="empty">
+          <div className="cd-empty" data-state="empty">
             <p>You haven&apos;t applied for any jobs yet.</p>
-            <button type="button" className="cb-boarding__btn" onClick={() => router.push('/jobs')}>
+            <button type="button" className="cd-btn cd-btn--dark" onClick={() => router.push('/jobs')}>
               Find Jobs
             </button>
           </div>
         ) : (
-          <div className="cb-boarding__jobs" data-testid="dashboard-applications">
+          <div className="cd-items" data-testid="dashboard-applications">
             {recentApplications.map((application) => (
-              <article key={application.id} className="cb-boarding__job">
+              <article key={application.id} className="cd-item">
                 <h3>{application.job.title}</h3>
-                <div className="cb-boarding__job-co">{application.job.companyName}</div>
-                <div className="cb-boarding__job-pay">
-                  Applied {formatInterviewDate(application.createdAt)}
-                </div>
-                <div className="cb-boarding__job-match">
+                <div className="cd-item-co">{application.job.companyName}</div>
+                <div className="cd-item-when">Applied {formatInterviewDate(application.createdAt)}</div>
+                <div className="cd-item-status">
                   {(APPLICATION_STATUS_LABELS[application.status] || application.status).toUpperCase()}
                 </div>
-                <div className="cb-boarding__job-actions">
+                <div className="cd-item-act">
                   <button
                     type="button"
-                    className="cb-boarding__job-view"
+                    className="cd-btn cd-btn--mint"
                     onClick={() => router.push(`/applications/${application.id}`)}
                   >
                     View

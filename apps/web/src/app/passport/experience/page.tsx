@@ -209,7 +209,7 @@ export default function PassportExperiencePage() {
             <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
               <input
                 type="checkbox"
-                className="size-4 shrink-0 rounded border-slate-300 text-[#0a2e2c] focus:ring-[#0a2e2c]/20"
+                className="size-4 shrink-0 rounded border-slate-300 text-[#10137c] focus:ring-[#1a1fc4]/20"
                 checked={currentRole}
                 onChange={(event) => setCurrentRole(event.target.checked)}
               />

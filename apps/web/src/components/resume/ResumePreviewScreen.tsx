@@ -664,7 +664,7 @@ export function ResumePreviewScreen({
       <p className="mt-2 text-2xl font-extrabold text-slate-900">{value}%</p>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
         <div
-          className={`h-full rounded-full ${warn ? 'bg-[#e68a39]' : 'bg-[#0a2e2c]'}`}
+          className={`h-full rounded-full ${warn ? 'bg-[#e68a39]' : 'bg-[#1a1fc4]'}`}
           style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
         />
       </div>
@@ -694,7 +694,7 @@ export function ResumePreviewScreen({
       {phase === 'ready' ? (
         <div className="mx-auto max-w-xl">
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#0a2e2c]">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#10137c]">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M7 4h7l4 4v12a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1z"
@@ -711,7 +711,7 @@ export function ResumePreviewScreen({
             <button
               type="button"
               onClick={onEdit}
-              className="text-sm font-bold text-[#0a2e2c] hover:underline"
+              className="text-sm font-bold text-[#10137c] hover:underline"
             >
               Replace
             </button>
@@ -722,7 +722,7 @@ export function ResumePreviewScreen({
           <button
             type="button"
             onClick={() => void runAtsAnalysis()}
-            className="mt-5 w-full rounded-xl bg-[#0a2e2c] py-3.5 text-sm font-bold text-white transition hover:bg-[#072422]"
+            className="mt-5 w-full rounded-full bg-[#1a1fc4] py-3.5 text-sm font-bold text-white transition hover:bg-[#10137c]"
           >
             Check ATS score
           </button>
@@ -734,7 +734,7 @@ export function ResumePreviewScreen({
 
       {phase === 'analyzing' ? (
         <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white px-6 py-8 text-center shadow-sm">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-[#0a2e2c]" />
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-[#1a1fc4]" />
           <h2 className="mt-5 text-xl font-extrabold text-slate-900">Analyzing your resume</h2>
           <p className="mt-1 text-sm text-slate-500">This usually takes about 15 seconds</p>
           <ol className="mt-6 space-y-3 text-left">
@@ -746,7 +746,7 @@ export function ResumePreviewScreen({
                   <span
                     className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
                       done || active
-                        ? 'bg-[#0a2e2c] text-white'
+                        ? 'bg-[#1a1fc4] text-white'
                         : 'border border-slate-300 text-slate-400'
                     }`}
                   >
@@ -787,7 +787,7 @@ export function ResumePreviewScreen({
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
                   className={`h-full rounded-full ${
-                    report.overallScore < 70 ? 'bg-[#e68a39]' : 'bg-[#0a2e2c]'
+                    report.overallScore < 70 ? 'bg-[#e68a39]' : 'bg-[#1a1fc4]'
                   }`}
                   style={{ width: `${Math.min(100, Math.max(0, report.overallScore))}%` }}
                 />
@@ -856,7 +856,7 @@ export function ResumePreviewScreen({
                   <button
                     type="button"
                     onClick={() => onAddSection?.(section.label, section.key)}
-                    className="mt-3 rounded-lg bg-[#0a2e2c] px-3 py-2 text-xs font-bold text-white hover:bg-[#072422]"
+                    className="mt-3 rounded-lg bg-[#1a1fc4] px-3 py-2 text-xs font-bold text-white hover:bg-[#10137c]"
                   >
                     {atsEditActionLabel(section.key, section.label)}
                   </button>
@@ -868,7 +868,7 @@ export function ResumePreviewScreen({
           <button
             type="button"
             onClick={() => void startImproveWithAi()}
-            className="w-full rounded-xl bg-[#e68a39] py-3.5 text-sm font-bold text-[#0a2e2c] transition hover:bg-[#f0a04e]"
+            className="w-full rounded-xl bg-[#e68a39] py-3.5 text-sm font-bold text-[#10137c] transition hover:bg-[#f0a04e]"
           >
             Improve with AI
           </button>
@@ -887,7 +887,7 @@ export function ResumePreviewScreen({
               untouched.
             </p>
             {aiLoading ? (
-              <p className="mt-4 text-sm font-semibold text-[#0a2e2c]">Building improvements…</p>
+              <p className="mt-4 text-sm font-semibold text-[#10137c]">Building improvements…</p>
             ) : null}
             {aiError ? <p className="mt-3 text-sm font-semibold text-red-600">{aiError}</p> : null}
             {!aiLoading && aiNotice ? (
@@ -956,7 +956,7 @@ export function ResumePreviewScreen({
                     <button
                       type="button"
                       onClick={() => handleAccept(suggestion)}
-                      className="rounded-lg bg-[#0a2e2c] px-3 py-2 text-xs font-bold text-white"
+                      className="rounded-lg bg-[#1a1fc4] px-3 py-2 text-xs font-bold text-white"
                     >
                       Accept
                     </button>
@@ -973,7 +973,7 @@ export function ResumePreviewScreen({
                         onClick={() => void handleTryAgain(suggestion)}
                         disabled={regeneratingId === suggestion.id}
                         aria-busy={regeneratingId === suggestion.id || undefined}
-                        className="rounded-lg border border-[#0a2e2c] px-3 py-2 text-xs font-bold text-[#0a2e2c] disabled:opacity-60"
+                        className="rounded-lg border border-[#1a1fc4] px-3 py-2 text-xs font-bold text-[#10137c] disabled:opacity-60"
                       >
                         {regeneratingId === suggestion.id ? 'Regenerating…' : 'Try again'}
                       </button>
@@ -1016,7 +1016,7 @@ export function ResumePreviewScreen({
                 setSaveError('');
                 setShowSaveDialog(true);
               }}
-              className="flex-1 rounded-xl bg-[#0a2e2c] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+              className="flex-1 rounded-full bg-[#1a1fc4] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
             >
               Save
             </button>
@@ -1035,14 +1035,14 @@ export function ResumePreviewScreen({
               type="button"
               disabled={downloading || downloadSuccess}
               onClick={() => void handleDownload()}
-              className="flex-1 rounded-xl bg-[#0a2e2c] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+              className="flex-1 rounded-full bg-[#1a1fc4] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
             >
               {downloading ? 'Generating…' : downloadSuccess ? 'Downloaded' : 'Download (optional)'}
             </button>
             <button
               type="button"
               onClick={() => void goToDashboard()}
-              className="flex-1 rounded-xl bg-[#e68a39] px-4 py-3 text-sm font-bold text-[#0a2e2c]"
+              className="flex-1 rounded-xl bg-[#e68a39] px-4 py-3 text-sm font-bold text-[#10137c]"
             >
               Candidate Dashboard
             </button>
@@ -1063,7 +1063,7 @@ export function ResumePreviewScreen({
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
               placeholder="ImprovedResume or Mern resume"
-              className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-[#0a2e2c]"
+              className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-[#1a1fc4]"
             />
             {saveError ? <p className="mt-2 text-sm font-semibold text-red-600">{saveError}</p> : null}
             <div className="mt-4 flex gap-2">
@@ -1079,7 +1079,7 @@ export function ResumePreviewScreen({
                 type="button"
                 disabled={savingVersion || !fileName.trim()}
                 onClick={() => void confirmSaveVersion()}
-                className="flex-1 rounded-xl bg-[#0a2e2c] py-2.5 text-sm font-bold text-white disabled:opacity-60"
+                className="flex-1 rounded-full bg-[#1a1fc4] py-2.5 text-sm font-bold text-white disabled:opacity-60"
               >
                 {savingVersion ? 'Saving…' : 'Save'}
               </button>

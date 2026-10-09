@@ -37,15 +37,15 @@ export default function TestimonialsPage() {
   }, [filter, rows]);
 
   return (
-    <div className="min-h-screen bg-[#f3f8f6]">
+    <div className="min-h-screen bg-[#f3f3f8]">
       <Navbar />
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
         <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5a7a82]">Testimonials</p>
-          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#0a2e2c] sm:text-4xl">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5a5e82]">Testimonials</p>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#10137c] sm:text-4xl">
             What our community says
           </h1>
-          <p className="mt-3 text-sm leading-relaxed text-[#5a7a82] sm:text-base">
+          <p className="mt-3 text-sm leading-relaxed text-[#5a5e82] sm:text-base">
             Real notes from candidates and employers on CareerBridge — reviewed by our team before
             they appear here.
           </p>
@@ -65,8 +65,8 @@ export default function TestimonialsPage() {
               onClick={() => setFilter(item.id)}
               className={`rounded-full px-4 py-2 text-sm font-bold transition ${
                 filter === item.id
-                  ? 'bg-[#0a2e2c] text-white'
-                  : 'border border-[#d7eef6] bg-white text-[#0a2e2c] hover:border-[#0a2e2c]'
+                  ? 'bg-[#1a1fc4] text-white'
+                  : 'border border-[#d7daf6] bg-white text-[#10137c] hover:border-[#1a1fc4]'
               }`}
             >
               {item.label}
@@ -74,17 +74,17 @@ export default function TestimonialsPage() {
           ))}
         </div>
 
-        {loading ? <p className="mt-8 text-sm text-[#5a7a82]">Loading stories…</p> : null}
+        {loading ? <p className="mt-8 text-sm text-[#5a5e82]">Loading stories…</p> : null}
         {error ? <p className="mt-8 text-sm font-semibold text-red-600">{error}</p> : null}
 
         {!loading && !error && visible.length === 0 ? (
-          <div className="mt-8 rounded-2xl border border-dashed border-[#cfe5dc] bg-white p-8 text-center">
-            <p className="text-sm text-[#5a7a82]">
+          <div className="mt-8 rounded-2xl border border-dashed border-[#cfd1e5] bg-white p-8 text-center">
+            <p className="text-sm text-[#5a5e82]">
               Approved testimonials will show up here. Have a story to share?
             </p>
             <Link
               href="/feedback"
-              className="mt-4 inline-flex rounded-full bg-[#0a2e2c] px-5 py-2.5 text-sm font-bold text-white"
+              className="mt-4 inline-flex rounded-full bg-[#1a1fc4] px-5 py-2.5 text-sm font-bold text-white"
             >
               Leave feedback
             </Link>
@@ -95,10 +95,10 @@ export default function TestimonialsPage() {
           {visible.map((row) => (
             <article
               key={row.id}
-              className="rounded-[20px] border border-[#d7eef6] bg-white p-5 shadow-[0_10px_24px_rgba(10,46,44,0.06)]"
+              className="rounded-[20px] border border-[#d7daf6] bg-white p-5 shadow-[0_10px_24px_rgba(26,31,196,0.06)]"
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="rounded-full bg-[#e7f3ef] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#0a2e2c]">
+                <span className="rounded-full bg-[#e7e8f3] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#10137c]">
                   {row.audience === 'CANDIDATE' ? 'Candidate' : 'Employer'}
                 </span>
                 <span
@@ -116,12 +116,12 @@ export default function TestimonialsPage() {
                   ))}
                 </span>
               </div>
-              <p className="mt-4 text-[15px] font-semibold leading-relaxed text-[#0a2e2c]">
+              <p className="mt-4 text-[15px] font-semibold leading-relaxed text-[#10137c]">
                 “{row.quote}”
               </p>
-              <div className="mt-5 border-t border-[#e8f1ee] pt-4">
-                <p className="text-sm font-extrabold text-[#0a2e2c]">{row.displayName}</p>
-                {row.headline ? <p className="mt-0.5 text-xs font-semibold text-[#5a7a82]">{row.headline}</p> : null}
+              <div className="mt-5 border-t border-[#e8e9f1] pt-4">
+                <p className="text-sm font-extrabold text-[#10137c]">{row.displayName}</p>
+                {row.headline ? <p className="mt-0.5 text-xs font-semibold text-[#5a5e82]">{row.headline}</p> : null}
               </div>
             </article>
           ))}

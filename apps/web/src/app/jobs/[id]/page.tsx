@@ -158,7 +158,7 @@ export default function JobDetailPage() {
                 title={job.saved ? 'Saved' : 'Save job'}
               >
                 {job.saved ? (
-                  <svg width="17" height="17" viewBox="0 0 24 24" className="fill-[#0c2822]" aria-hidden>
+                  <svg width="17" height="17" viewBox="0 0 24 24" className="fill-[#10137c]" aria-hidden>
                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                   </svg>
                 ) : (
@@ -167,7 +167,7 @@ export default function JobDetailPage() {
                     height="17"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#0c2822"
+                    stroke="#10137c"
                     strokeWidth="2"
                     aria-hidden
                   >
@@ -299,7 +299,7 @@ export default function JobDetailPage() {
                   className="cb-job-detail__side-card cb-job-detail__match cb-job-detail__fx"
                   style={{ animationDelay: '0.12s' }}
                 >
-                  <h4 className="m-0 text-[14px] font-extrabold text-[#16211d]">Your Match</h4>
+                  <h4 className="m-0 text-[14px] font-extrabold text-[#10137c]">Your Match</h4>
                   <p className="mt-2 text-[13px] leading-relaxed text-[#4a534d]">
                     Sign in with a complete profile to see your ATS match for this role — score
                     breakdown and tips to improve.

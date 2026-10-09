@@ -46,7 +46,7 @@ export default function ApplicationDetailPage() {
   return (
     <CandidateAppShell activeTab="applications" maxWidth="max-w-3xl">
       <div className="mx-auto w-full max-w-2xl space-y-5">
-        <Link href="/applications" className="text-sm font-bold text-[#0a2e2c] hover:underline">
+        <Link href="/applications" className="text-sm font-bold text-[#1A1FC4] hover:underline">
           ← My Applications
         </Link>
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{application.job.title}</h1>
@@ -71,7 +71,7 @@ export default function ApplicationDetailPage() {
                     item.done ? 'bg-emerald-500' : 'bg-slate-200'
                   }`}
                 />
-                <p className={`font-bold ${item.done ? 'text-slate-900' : 'text-slate-400'}`}>
+                <p className={`font-bold ${item.done ? 'text-slate-900' : 'text-slate-500'}`}>
                   {item.status.replaceAll('_', ' ')}
                 </p>
                 {item.at ? (
@@ -86,7 +86,7 @@ export default function ApplicationDetailPage() {
           </ol>
         </section>
 
-        <Link href="/jobs" className="inline-flex text-sm font-bold text-[#0a2e2c] hover:underline">
+        <Link href="/jobs" className="inline-flex text-sm font-bold text-[#1A1FC4] hover:underline">
           Find more jobs
         </Link>
       </div>

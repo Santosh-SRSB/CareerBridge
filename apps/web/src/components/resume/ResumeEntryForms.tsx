@@ -43,7 +43,7 @@ function InlineFieldError({ id, message }: { id: string; message?: string }) {
 
 const formStyles = `
   .cb-inline-form {
-    border: 1.5px solid var(--line, #dde0d3);
+    border: 1.5px solid var(--line, #e1e5f2);
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 12px;
@@ -74,7 +74,7 @@ const formStyles = `
   .cb-inline-form input:not([type="month"]):not([type="checkbox"]),
   .cb-inline-form select,
   .cb-inline-form textarea {
-    border: 1.5px solid var(--line, #dde0d3);
+    border: 1.5px solid var(--line, #e1e5f2);
     border-radius: 8px;
     padding: 9px 11px;
     font-size: 13px;
@@ -104,7 +104,7 @@ const formStyles = `
   .cb-inline-form-btn-cancel {
     background: transparent;
     color: #142a4f;
-    border: 1.5px solid #dde0d3;
+    border: 1.5px solid #e1e5f2;
   }
   .cb-bullet-row {
     display: flex;

@@ -139,7 +139,7 @@ export function SearchableCreatableSelect({
                   <button
                     type="button"
                     className={`flex w-full px-3 py-2 text-left text-sm ${
-                      index === highlight ? 'bg-[#e8fbfa] font-semibold text-primary' : 'text-primary hover:bg-[#f6fbf7]'
+                      index === highlight ? 'bg-[color-mix(in_srgb,var(--teal)_10%,white)] font-semibold text-primary' : 'text-primary hover:bg-fog'
                     } ${isAdd ? 'border-t border-primary/10 font-bold text-teal' : ''}`}
                     onMouseEnter={() => setHighlight(index)}
                     onMouseDown={(event) => {

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { listApplications, logout, getCandidateMe } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
+import { browserReadablePhotoUrl } from '@/lib/photo-url';
 import { NotificationBell } from '@/components/NotificationBell';
 
 export type CandidateTab =
@@ -179,8 +180,8 @@ function DesktopNavLink({
       ref={itemRef}
       onClick={onClick}
       onMouseEnter={onMouseEnter}
-      className={`cb-desk-nav__link relative z-[1] inline-flex h-full items-center px-5 text-base font-semibold transition-colors ${
-        lit ? 'cb-desk-nav__link--on font-bold text-[#0a2e2c]' : 'text-white hover:text-white'
+      className={`relative z-[1] inline-flex h-full items-center px-3 text-[15px] text-white transition-colors hover:bg-white/10 lg:px-5 lg:text-base ${
+        lit ? 'font-bold' : 'font-semibold'
       }`}
       aria-current={active ? 'page' : undefined}
     >
@@ -204,6 +205,17 @@ export const CANDIDATE_NAV_ITEMS: NavItem[] = [
   NAV_ATS,
   NAV_PROFILE,
 ];
+
+const ACCOUNT_MENU_LINKS = [
+  { href: '/profile', label: 'Profile' },
+  { href: '/jobs/saved', label: 'Saved jobs' },
+  { href: '/resumes', label: 'View Resume' },
+  { href: '/ats', label: 'ATS Score' },
+  { href: '/notifications', label: 'Notifications' },
+];
+
+const ACCOUNT_MENU_ITEM =
+  'block rounded-lg px-3 py-2.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]';
 
 const DESKTOP_NAV_CORE: NavItem[] = [
   NAV_HOME,
@@ -253,9 +265,11 @@ export function CandidateAppShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const [appsCount, setAppsCount] = useState(0);
   const [navPhoto, setNavPhoto] = useState<string | null>(avatarUrl || null);
+  const navPhotoSrc = browserReadablePhotoUrl(navPhoto);
   /** Auto-swiping Resume ⇄ ATS in the mobile last slot */
   const [mobileCarousel, setMobileCarousel] = useState<'resumes' | 'ats'>('resumes');
   const [carouselTick, setCarouselTick] = useState(0);
+  const deskItemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
 
   useEffect(() => {
     const user = getStoredUser();
@@ -313,13 +327,17 @@ export function CandidateAppShell({
     if (stored === 'ats' || stored === 'resumes') setMobileCarousel(stored);
   }, []);
 
-  /** Automatic swipe: Resume → ATS → Resume … every ~2.8s */
+  /**
+   * One automatic Resume ⇄ ATS swap per page. The motion must end within 5s and must not
+   * change the link target while it is hovered or focused (WCAG 2.2.2).
+   */
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) return;
 
-    const id = window.setInterval(() => {
+    const id = window.setTimeout(() => {
+      if (deskItemRefs.current.carousel?.matches(':hover, :focus')) return;
       setMobileCarousel((prev) => {
         const next = prev === 'resumes' ? 'ats' : 'resumes';
         window.localStorage.setItem(MOBILE_SWITCH_KEY, next);
@@ -328,7 +346,7 @@ export function CandidateAppShell({
       setCarouselTick((t) => t + 1);
     }, 2800);
 
-    return () => window.clearInterval(id);
+    return () => window.clearTimeout(id);
   }, []);
 
   const currentTab = resolveTab(pathname, activeTab);
@@ -346,7 +364,6 @@ export function CandidateAppShell({
 
   const [hoverKey, setHoverKey] = useState(defaultHoverKey);
   const deskNavRef = useRef<HTMLDivElement>(null);
-  const deskItemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const [pill, setPill] = useState({ left: 0, width: 0, ready: false });
 
   useEffect(() => {
@@ -389,6 +406,15 @@ export function CandidateAppShell({
     }
   }
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   async function onLogout() {
     setMenuOpen(false);
     try {
@@ -399,8 +425,8 @@ export function CandidateAppShell({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f7f8f7] font-sans text-[#0a2e2c]">
-      <header className="sticky top-0 z-40 w-full rounded-none bg-[#0a2e2c] shadow-[0_8px_24px_rgba(10,46,44,0.22)]">
+    <div className="flex min-h-screen flex-col bg-[var(--color-background)] font-sans text-[var(--color-text-primary)]">
+      <header className="sticky top-0 z-40 w-full rounded-none bg-[var(--color-primary-dark)] shadow-[0_8px_24px_rgba(16,19,124,0.22)]">
         {/* Mobile: compact full-width row */}
         <div className="relative flex h-14 w-full items-center justify-between gap-3 px-3 md:hidden">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -436,17 +462,18 @@ export function CandidateAppShell({
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#c2410c] text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(240,128,60,0.35)] ring-2 ring-white/15"
+              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-sm font-extrabold text-[var(--color-primary-dark)] ring-2 ring-white/25"
               aria-label="Account menu"
               aria-expanded={menuOpen}
+              aria-controls="cb-account-menu"
             >
-              {navPhoto ? (
+              {navPhotoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={
-                    navPhoto.startsWith('data:')
-                      ? navPhoto
-                      : `${navPhoto}${navPhoto.includes('?') ? '&' : '?'}v=${encodeURIComponent(navPhoto.slice(-24))}`
+                    navPhotoSrc.startsWith('data:')
+                      ? navPhotoSrc
+                      : `${navPhotoSrc}${navPhotoSrc.includes('?') ? '&' : '?'}v=${encodeURIComponent(navPhotoSrc.slice(-24))}`
                   }
                   alt=""
                   className="h-full w-full object-cover"
@@ -459,8 +486,8 @@ export function CandidateAppShell({
         </div>
 
         {/* Desktop: single full-width rectangle — logo | text links | utilities */}
-        <div className="relative mx-auto hidden h-[84px] w-full items-center justify-between gap-6 pl-6 pr-0 md:flex lg:pl-10">
-          <div className="ml-[150px] flex min-w-0 shrink-0 items-center gap-3">
+        <div className="relative mx-auto hidden h-[68px] w-full max-w-[1200px] items-center justify-between gap-6 px-6 md:flex lg:px-8">
+          <div className="flex min-w-0 shrink-0 items-center gap-3">
             {showBack ? (
               <button
                 type="button"
@@ -477,9 +504,9 @@ export function CandidateAppShell({
               <Image
                 src="/srsb-mark.png"
                 alt="SRSB"
-                width={80}
-                height={80}
-                className="h-20 w-20 object-contain"
+                width={84}
+                height={56}
+                className="h-14 w-[84px] object-contain"
                 unoptimized
                 priority
               />
@@ -488,7 +515,7 @@ export function CandidateAppShell({
 
           <nav
             ref={deskNavRef}
-            className="cb-desk-nav absolute inset-y-0 left-1/2 flex h-full -translate-x-1/2 items-stretch gap-2 lg:gap-3"
+            className="cb-desk-nav absolute inset-y-0 left-1/2 flex h-full -translate-x-1/2 items-stretch gap-1 lg:gap-2"
             onMouseLeave={() => setHoverKey(defaultHoverKey)}
           >
             <span
@@ -530,10 +557,8 @@ export function CandidateAppShell({
                   }}
                   onClick={onMobileResumeAtsClick}
                   onMouseEnter={() => setHoverKey('carousel')}
-                  className={`cb-desk-nav__link relative z-[1] inline-flex h-full items-center px-5 text-base font-semibold transition-colors ${
-                    carouselLit
-                      ? 'cb-desk-nav__link--on font-bold text-[#0a2e2c]'
-                      : 'text-white hover:text-white'
+                  className={`relative z-[1] inline-flex h-full items-center px-3 text-[15px] text-white transition-colors hover:bg-white/10 lg:px-5 lg:text-base ${
+                    carouselLit ? 'font-bold' : 'font-semibold'
                   }`}
                   aria-current={carouselActive ? 'page' : undefined}
                   aria-label={
@@ -550,22 +575,23 @@ export function CandidateAppShell({
             })()}
           </nav>
 
-          <div className="relative mr-[150px] flex shrink-0 items-center gap-3">
-            <NotificationBell variant="candidate-pill" className="!h-8 !w-8" />
+          <div className="relative flex shrink-0 items-center gap-3">
+            <NotificationBell variant="candidate-pill" className="!h-10 !w-10" />
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#c2410c] text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(240,128,60,0.35)] ring-2 ring-white/15"
+              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white text-sm font-extrabold text-[var(--color-primary-dark)] ring-2 ring-white/25"
               aria-label="Account menu"
               aria-expanded={menuOpen}
+              aria-controls="cb-account-menu"
             >
-              {navPhoto ? (
+              {navPhotoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={
-                    navPhoto.startsWith('data:')
-                      ? navPhoto
-                      : `${navPhoto}${navPhoto.includes('?') ? '&' : '?'}v=${encodeURIComponent(navPhoto.slice(-24))}`
+                    navPhotoSrc.startsWith('data:')
+                      ? navPhotoSrc
+                      : `${navPhotoSrc}${navPhotoSrc.includes('?') ? '&' : '?'}v=${encodeURIComponent(navPhotoSrc.slice(-24))}`
                   }
                   alt=""
                   className="h-full w-full object-cover"
@@ -585,40 +611,21 @@ export function CandidateAppShell({
               aria-label="Close menu"
               onClick={() => setMenuOpen(false)}
             />
-            <div className="absolute right-3 top-[60px] z-50 min-w-[160px] rounded-2xl border border-slate-200 bg-white p-2 shadow-lg md:right-[150px] md:top-[84px]">
-              <Link
-                href="/profile"
-                className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                Profile
-              </Link>
-              <Link
-                href="/resumes"
-                className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                View Resume
-              </Link>
-              <Link
-                href="/ats"
-                className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                ATS Score
-              </Link>
-              <Link
-                href="/notifications"
-                className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                Notifications
-              </Link>
-              <button
-                type="button"
-                onClick={() => void onLogout()}
-                className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
+            <div
+              id="cb-account-menu"
+              className="absolute right-3 top-[60px] z-50 min-w-[190px] rounded-xl border border-[var(--color-border)] bg-white p-1.5 shadow-[0_12px_32px_rgba(16,19,124,0.18)] md:right-[max(1.5rem,calc((100%_-_1200px)/2_+_2rem))] md:top-[72px]"
+            >
+              {ACCOUNT_MENU_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={ACCOUNT_MENU_ITEM}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+              <button type="button" onClick={() => void onLogout()} className={`${ACCOUNT_MENU_ITEM} w-full text-left`}>
                 Logout
               </button>
             </div>
@@ -630,7 +637,7 @@ export function CandidateAppShell({
         <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${maxWidth}`}>{children}</div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 w-full border-t border-white/10 bg-[#0a2e2c] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 w-full border-t border-white/10 bg-[var(--color-primary-dark)] md:hidden">
         <div className="flex w-full items-end justify-between px-0.5 pb-[max(0.2rem,env(safe-area-inset-bottom))] pt-0.5">
           {mobileNavItems.map((item) => {
             const isActive = currentTab === item.id;
@@ -646,7 +653,7 @@ export function CandidateAppShell({
                     className="flex w-full flex-col items-center gap-0 py-0.5 text-[9px] font-semibold leading-tight text-white"
                     aria-label="Open filters"
                   >
-                    <span className="flex h-[5vw] w-[5vw] max-h-[22px] max-w-[22px] min-h-[16px] min-w-[16px] items-center justify-center rounded-full bg-white text-[#0a2e2c] shadow-sm">
+                    <span className="flex h-[5vw] w-[5vw] max-h-[22px] max-w-[22px] min-h-[16px] min-w-[16px] items-center justify-center rounded-full bg-white text-[var(--color-primary-dark)] shadow-sm">
                       <svg
                         className="h-[55%] w-[55%]"
                         viewBox="0 0 24 24"
@@ -674,8 +681,8 @@ export function CandidateAppShell({
                   <span
                     className={`flex items-center justify-center rounded-full ${
                       isJobsCenter
-                        ? `h-[5vw] w-[5vw] max-h-[22px] max-w-[22px] min-h-[16px] min-w-[16px] shadow-sm ${isActive ? 'bg-white text-[#0a2e2c]' : 'bg-white/15 text-white ring-1 ring-white/35'}`
-                        : `h-[5vw] w-[5vw] max-h-[18px] max-w-[18px] min-h-[14px] min-w-[14px] ${isActive ? 'bg-white text-[#0a2e2c]' : ''}`
+                        ? `h-[5vw] w-[5vw] max-h-[22px] max-w-[22px] min-h-[16px] min-w-[16px] shadow-sm ${isActive ? 'bg-white text-[var(--color-primary-dark)]' : 'bg-white/15 text-white ring-1 ring-white/35'}`
+                        : `h-[5vw] w-[5vw] max-h-[18px] max-w-[18px] min-h-[14px] min-w-[14px] ${isActive ? 'bg-white text-[var(--color-primary-dark)]' : ''}`
                     }`}
                   >
                     {item.icon(isActive)}

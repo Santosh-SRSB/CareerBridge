@@ -1,0 +1,122 @@
+/* Candidate routes: the legacy green design tokens resolve to the navy/blue candidate palette.
+   Set on <html> so body, portals and fixed overlays follow too. */
+html:has(.cb-cand) {
+  --navbar-bg-1: #10137c;
+  --navbar-bg-2: #0b0e5e;
+  --navy: #1a1fc4;
+  --navy-deep: #10137c;
+  --navy-mid: #1a1fc4;
+  --navbar: #10137c;
+  --logo-green: #10137c;
+  --teal: #3b5bdb;
+  --teal-deep: #1a1fc4;
+  --fog: #f8f9fc;
+  --ink: #10137c;
+  --muted: #4b4f8f;
+  --line: rgba(16, 19, 124, 0.12);
+}
+
+.cb-cand {
+  display: contents;
+}
+
+html:has(.cb-cand) .cb-portal-page {
+  background:
+    radial-gradient(900px 420px at 10% -10%, rgba(26, 31, 196, 0.1), transparent 55%),
+    radial-gradient(700px 360px at 100% 0%, rgba(16, 19, 124, 0.06), transparent 50%),
+    var(--color-background);
+}
+
+html:has(.cb-cand) .app-loader {
+  background: linear-gradient(135deg, #1a1fc4, #10137c);
+}
+
+html:has(.cb-cand) .app-loader-shine {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 32%,
+    rgba(255, 255, 255, 0.18) 42%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0.18) 58%,
+    transparent 68%,
+    transparent 100%
+  );
+}
+
+html:has(.cb-cand) .app-loader-ring {
+  border-color: rgba(255, 255, 255, 0.25);
+  border-top-color: #ffffff;
+  border-right-color: #c9d3ff;
+}
+
+html:has(.cb-cand) .app-loader-text {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+html:has(.cb-cand) .date-picker-trigger {
+  min-height: 48px;
+}
+
+html:has(.cb-cand) .date-picker-trigger.is-empty {
+  color: var(--color-text-secondary);
+}
+
+html:has(.cb-cand) .date-picker-trigger.is-open {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+html:has(.cb-cand) .date-picker-trigger svg {
+  color: var(--color-primary);
+}
+
+html:has(.cb-cand) .date-picker-day.is-selected,
+html:has(.cb-cand) .date-picker-month-cell.is-selected,
+html:has(.cb-cand) .date-picker-btn--primary {
+  background: var(--color-primary);
+}
+
+html:has(.cb-cand) .cb-course-grid-body h2,
+html:has(.cb-cand) .cb-course-grid-meta strong {
+  color: var(--color-text-primary);
+}
+
+html:has(.cb-cand) .cb-course-grid-body > p,
+html:has(.cb-cand) .cb-course-grid-meta {
+  color: var(--color-text-secondary);
+}
+
+html:has(.cb-cand) .cb-course-grid .cb-course-stack-tag {
+  color: var(--color-primary);
+}
+
+html:has(.cb-cand) .cb-course-grid-cta {
+  min-height: 48px;
+  background: var(--color-primary);
+}
+
+html:has(.cb-cand) .cb-course-grid-cta:hover {
+  background: var(--color-primary-dark);
+}
+
+html:has(.cb-cand) .cb-ob-complete-sub {
+  color: var(--color-text-primary);
+}
+
+html:has(.cb-cand) .cb-ob-complete-hl::before {
+  background: var(--color-primary-soft);
+}
+
+html:has(.cb-cand) .cb-skill-combo-dropdown {
+  border-color: #e1e5f2;
+}
+
+html:has(.cb-cand) .cb-skill-combo-option:hover,
+html:has(.cb-cand) .cb-skill-combo-option.highlighted {
+  background: #f8f9fc;
+}
+
+html:has(.cb-cand) .cb-skill-combo-option.add-custom {
+  color: #2e367d;
+}

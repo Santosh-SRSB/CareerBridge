@@ -50,14 +50,14 @@ export function SkillsConfirmStep({ skills, onConfirm, onBack }: SkillsConfirmSt
             list.map((skill, index) => (
               <span
                 key={`${skill}-${index}`}
-                className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 text-sm font-semibold text-teal-900"
+                className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-900"
               >
                 {skill}
                 {editing ? (
                   <button
                     type="button"
                     aria-label={`Remove ${skill}`}
-                    className="ml-0.5 text-teal-700 hover:text-red-600"
+                    className="ml-0.5 text-indigo-700 hover:text-red-600"
                     onClick={() => removeSkill(index)}
                   >
                     ×
@@ -97,7 +97,7 @@ export function SkillsConfirmStep({ skills, onConfirm, onBack }: SkillsConfirmSt
             <>
               <button
                 type="button"
-                className="rounded-xl bg-[#0a2e2c] px-4 py-3 text-sm font-bold text-white hover:bg-[#072422]"
+                className="rounded-xl bg-[#1a1fc4] px-4 py-3 text-sm font-bold text-white hover:bg-[#10137c]"
                 onClick={() => onConfirm(list)}
               >
                 Keep these
@@ -113,7 +113,7 @@ export function SkillsConfirmStep({ skills, onConfirm, onBack }: SkillsConfirmSt
           ) : (
             <button
               type="button"
-              className="rounded-xl bg-[#0a2e2c] px-4 py-3 text-sm font-bold text-white hover:bg-[#072422]"
+              className="rounded-xl bg-[#1a1fc4] px-4 py-3 text-sm font-bold text-white hover:bg-[#10137c]"
               onClick={() => onConfirm(list)}
             >
               Save skills &amp; continue

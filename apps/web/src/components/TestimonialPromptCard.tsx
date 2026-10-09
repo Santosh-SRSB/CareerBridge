@@ -77,14 +77,14 @@ export function TestimonialPromptCard({ audience }: { audience: 'CANDIDATE' | 'E
       aria-modal="true"
       aria-labelledby="cb-feedback-title"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-[24px] border border-[#d7eef6] bg-white shadow-[0_24px_60px_rgba(10,46,44,0.28)]">
+      <div className="w-full max-w-md overflow-hidden rounded-[24px] border border-[#d7eef6] bg-white shadow-[0_24px_60px_color-mix(in_srgb,var(--navy)_28%,transparent)]">
         <div className="bg-gradient-to-br from-[#fff8e8] via-white to-[#eef8fb] px-5 pb-4 pt-5 sm:px-6 sm:pt-6">
           <p className="text-center text-[10px] font-bold uppercase tracking-[0.16em] text-[#b45309]">
             Quick feedback
           </p>
           <h3
             id="cb-feedback-title"
-            className="mt-1.5 text-center text-lg font-extrabold leading-snug text-[#0a2e2c] sm:text-xl"
+            className="mt-1.5 text-center text-lg font-extrabold leading-snug text-ink sm:text-xl"
           >
             {prompt.title}
           </h3>
@@ -93,13 +93,13 @@ export function TestimonialPromptCard({ audience }: { audience: 'CANDIDATE' | 'E
 
         {done ? (
           <div className="px-5 py-8 text-center sm:px-6">
-            <p className="text-base font-extrabold text-[#0a2e2c]">Thank you!</p>
+            <p className="text-base font-extrabold text-ink">Thank you!</p>
             <p className="mt-1 text-sm text-[#5a7a82]">Your feedback helps other youth on CareerBridge.</p>
           </div>
         ) : (
           <form onSubmit={(e) => void onSubmit(e)} className="space-y-4 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
             <div>
-              <p className="mb-2 text-center text-sm font-bold text-[#0a2e2c]">How would you rate us?</p>
+              <p className="mb-2 text-center text-sm font-bold text-ink">How would you rate us?</p>
               <StarRating value={rating} onChange={setRating} size="lg" />
               {rating > 0 ? (
                 <p className="mt-1.5 text-center text-xs font-semibold text-amber-700">
@@ -109,7 +109,7 @@ export function TestimonialPromptCard({ audience }: { audience: 'CANDIDATE' | 'E
             </div>
 
             <div>
-              <label htmlFor="cb-feedback-quote" className="mb-1.5 block text-sm font-bold text-[#0a2e2c]">
+              <label htmlFor="cb-feedback-quote" className="mb-1.5 block text-sm font-bold text-ink">
                 A short note
               </label>
               <textarea
@@ -119,7 +119,7 @@ export function TestimonialPromptCard({ audience }: { audience: 'CANDIDATE' | 'E
                 rows={3}
                 maxLength={600}
                 placeholder="What worked well for you?"
-                className="w-full resize-none rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm leading-relaxed text-[#0a2e2c] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-400/25"
+                className="w-full resize-none rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm leading-relaxed text-ink outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-400/25"
               />
               <p className="mt-1 text-xs text-[#52707a]">{quote.length}/600 · min 20 characters</p>
             </div>
@@ -137,7 +137,7 @@ export function TestimonialPromptCard({ audience }: { audience: 'CANDIDATE' | 'E
               <button
                 type="button"
                 onClick={() => void onSkip()}
-                className="inline-flex items-center justify-center rounded-full border border-[#d7eef6] bg-white px-4 py-2.5 text-sm font-bold text-[#0a2e2c]"
+                className="inline-flex items-center justify-center rounded-full border border-[#d7eef6] bg-white px-4 py-2.5 text-sm font-bold text-ink"
               >
                 Not now
               </button>

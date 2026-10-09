@@ -223,6 +223,7 @@ export default function OnboardingCompletePage() {
         ref={fileRef}
         type="file"
         accept={ACCEPT}
+        aria-label="Upload your resume file"
         className="sr-only"
         tabIndex={-1}
         disabled={busy}
@@ -260,7 +261,7 @@ export default function OnboardingCompletePage() {
           <div className="mt-5 grid grid-cols-2 gap-2.5 sm:mt-6 sm:gap-3">
             <div
               className="cb-ob-complete-stat rounded-2xl px-4 py-4 sm:px-5 sm:py-5"
-              style={{ background: '#f6f5ee' }}
+              style={{ background: '#f5f7ff' }}
             >
               <p
                 className="m-0 mb-1 tabular-nums text-[1.45rem] font-semibold sm:text-[1.6rem]"
@@ -289,13 +290,13 @@ export default function OnboardingCompletePage() {
                   </svg>
                 </span>
               </p>
-              <p className="m-0 text-[12px] leading-snug sm:text-[13px]" style={{ color: '#7d7d73' }}>
+              <p className="m-0 text-[12px] leading-snug sm:text-[13px]" style={{ color: '#4b4f8f' }}>
                 more recruiter views on complete profiles
               </p>
             </div>
             <div
               className="cb-ob-complete-stat rounded-2xl px-4 py-4 sm:px-5 sm:py-5"
-              style={{ background: '#f6f5ee' }}
+              style={{ background: '#f5f7ff' }}
             >
               <p
                 className="m-0 mb-1 tabular-nums text-[1.45rem] font-semibold sm:text-[1.6rem]"
@@ -306,7 +307,7 @@ export default function OnboardingCompletePage() {
               >
                 {statResponse}
               </p>
-              <p className="m-0 text-[12px] leading-snug sm:text-[13px]" style={{ color: '#7d7d73' }}>
+              <p className="m-0 text-[12px] leading-snug sm:text-[13px]" style={{ color: '#4b4f8f' }}>
                 faster response from employers
               </p>
             </div>
@@ -316,7 +317,7 @@ export default function OnboardingCompletePage() {
             type="button"
             disabled={busy}
             onClick={openFilePicker}
-            className={`cb-ob-complete-primary ${onboardingPrimaryButtonClass} mt-8 w-full py-3.5 text-[15px] hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(10,46,44,0.28)] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:mt-10 sm:py-4 sm:text-base`}
+            className={`cb-ob-complete-primary ${onboardingPrimaryButtonClass} mt-8 w-full py-3.5 text-[15px] hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(26,31,196,0.28)] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:mt-10 sm:py-4 sm:text-base`}
             style={{ background: OB.moss }}
           >
             Upload resume
@@ -337,7 +338,7 @@ export default function OnboardingCompletePage() {
               rememberReturnTo('/onboarding/complete');
               router.push('/resume?from=build');
             }}
-            className="cb-ob-complete-secondary flex w-full items-center justify-center gap-2 rounded-full border-[1.5px] bg-white py-3.5 text-[15px] font-semibold transition hover:-translate-y-px hover:bg-[#f6f5ee] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:py-4 sm:text-base"
+            className="cb-ob-complete-secondary flex w-full items-center justify-center gap-2 rounded-full border-[1.5px] bg-white py-3.5 text-[15px] font-semibold transition hover:-translate-y-px hover:bg-[#f5f7ff] active:translate-y-0 active:scale-[0.98] disabled:opacity-60 sm:py-4 sm:text-base"
             style={{ borderColor: OB.moss, color: OB.ink }}
           >
             <span>Build ATS resume</span>
@@ -438,7 +439,7 @@ export default function OnboardingCompletePage() {
                   type="button"
                   disabled={busy}
                   onClick={() => void onRetryProcessing()}
-                  className="mt-3 w-full rounded-full border py-2.5 text-sm font-semibold transition hover:bg-[#f6f5ee] disabled:opacity-60"
+                  className="mt-3 w-full rounded-full border py-2.5 text-sm font-semibold transition hover:bg-[#f5f7ff] disabled:opacity-60"
                   style={{ borderColor: OB.moss, color: OB.ink }}
                 >
                   Retry
@@ -451,8 +452,8 @@ export default function OnboardingCompletePage() {
                 type="button"
                 disabled={busy}
                 onClick={clearSelectedFile}
-                className="flex-1 rounded-full border bg-white py-2.5 text-sm font-medium transition hover:border-[#0A2E2C] disabled:opacity-60"
-                style={{ borderColor: '#7A8270', color: OB.muted }}
+                className="flex-1 rounded-full border bg-white py-2.5 text-sm font-medium transition hover:border-[#1A1FC4] disabled:opacity-60"
+                style={{ borderColor: '#d1d5e5', color: OB.muted }}
               >
                 Cancel
               </button>

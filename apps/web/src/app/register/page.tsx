@@ -2,10 +2,11 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AuthShell } from '@/components/AuthShell';
+import { AuthRoleSwitch } from '@/components/auth/AuthRoleSwitch';
+import { AuthScreen } from '@/components/auth/AuthScreen';
 import { EmployerRegisterForm } from '@/components/EmployerRegisterForm';
 import { RegistrationForm } from '@/components/RegistrationForm';
-import { parseLoginAccountType, RoleToggle } from '@/components/RoleToggle';
+import { parseLoginAccountType } from '@/components/RoleToggle';
 import type { LoginAccountType } from '@careerbridge/shared';
 
 function RegisterBody() {
@@ -19,20 +20,20 @@ function RegisterBody() {
   }
 
   return (
-    <AuthShell
-      title="USER REGISTER"
-      subtitle=""
-      maxWidthClass="max-w-[520px]"
-      scene={role === 'EMPLOYER' ? 'employer' : 'candidate'}
-      mode="register"
-      signInHref={`/login?role=${role.toLowerCase()}`}
-      registerHref={`/register?role=${role.toLowerCase()}`}
+    <AuthScreen
+      variant="register"
+      role={role === 'EMPLOYER' ? 'employer' : 'candidate'}
+      switchHref={`/login?role=${role.toLowerCase()}`}
     >
-      <RoleToggle value={role} onChange={selectRole} />
-      <div className="mt-3">
-        {role === 'EMPLOYER' ? <EmployerRegisterForm /> : <RegistrationForm />}
-      </div>
-    </AuthShell>
+      <h1 className="au-title">Create account</h1>
+      <p className="au-sub">
+        {role === 'EMPLOYER'
+          ? 'Employer registration. Use a valid work email.'
+          : 'Candidate registration. Tell us how to reach you.'}
+      </p>
+      <AuthRoleSwitch value={role} onChange={selectRole} label="Register as" />
+      {role === 'EMPLOYER' ? <EmployerRegisterForm /> : <RegistrationForm />}
+    </AuthScreen>
   );
 }
 

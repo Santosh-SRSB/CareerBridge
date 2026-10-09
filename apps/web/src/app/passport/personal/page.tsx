@@ -107,7 +107,7 @@ export default function PassportPersonalPage() {
             id="gender"
             value={gender}
             onChange={(event) => setGender(event.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/10"
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-[#1a1fc4] focus:ring-2 focus:ring-[#1a1fc4]/10"
           >
             <option value="">Prefer not to say</option>
             <option value="FEMALE">Female</option>

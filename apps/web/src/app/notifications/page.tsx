@@ -76,7 +76,7 @@ function NotificationsList({
                 <div className="min-w-0">
                   <p className="text-sm font-extrabold text-slate-900">{item.title}</p>
                   <p className="mt-1 text-sm text-slate-600">{item.body}</p>
-                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     {formatWhen(item.createdAt)}
                   </p>
                 </div>
@@ -88,7 +88,7 @@ function NotificationsList({
           ))}
         </div>
 
-        <Link href={homeHref} className="inline-block text-sm font-bold text-[#0a2e2c] hover:underline">
+        <Link href={homeHref} className="inline-block text-sm font-bold text-[#10137c] hover:underline">
           ← Back to dashboard
         </Link>
       </div>
@@ -130,7 +130,7 @@ function NotificationsList({
                 </p>
               </div>
               {!item.read ? (
-                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#1f9d8a]" />
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#1f2c9d]" />
               ) : null}
             </div>
           </button>

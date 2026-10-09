@@ -151,7 +151,7 @@ export default function OnboardingStatusPage() {
                       value={option.value}
                       checked={active}
                       onChange={() => selectStatus(option.value)}
-                      className="h-4 w-4 accent-[#0B3D33]"
+                      className="h-4 w-4 accent-[#10137C]"
                     />
                     {option.label}
                   </label>

@@ -1,15 +1,28 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { CandidateTopBar } from '@/components/CandidatePortal';
 import { getStoredUser } from '@/lib/session';
 import { logout, recommendedCourses, type RecommendedCourse } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 
+function subscribeToStorage(onChange: () => void) {
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
+
+function readStoredFirstName() {
+  return getStoredUser()?.firstName || null;
+}
+
+function readServerFirstName() {
+  return null;
+}
+
 export default function CoursePoolPage() {
   const router = useRouter();
-  const user = getStoredUser();
+  const firstName = useSyncExternalStore(subscribeToStorage, readStoredFirstName, readServerFirstName);
   const [query, setQuery] = useState('');
   const [courses, setCourses] = useState<RecommendedCourse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +64,7 @@ export default function CoursePoolPage() {
 
   return (
     <div className="cb-portal-page">
-      <CandidateTopBar name={user?.firstName || 'Candidate'} onSignOut={signOut} />
+      <CandidateTopBar name={firstName || 'Candidate'} onSignOut={signOut} />
       <div className="cb-portal-wrap space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

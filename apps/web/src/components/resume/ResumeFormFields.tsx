@@ -6,7 +6,7 @@ import { formatMonthRange, formatEducationYearRange } from '@/lib/resume-dates';
 
 const fieldStyles = `
   .cb-date-field .date-picker-trigger {
-    border: 2px solid #7A8270;
+    border: 2px solid #d1d5e5;
     border-radius: 0.5rem;
     min-height: 44px;
     padding: 10px 12px;
@@ -14,8 +14,8 @@ const fieldStyles = `
     font-family: var(--font-inter), Inter, sans-serif;
   }
   .cb-date-field .date-picker-trigger.is-open {
-    border-color: #0A2E2C;
-    box-shadow: 0 0 0 3px rgba(10, 46, 44, 0.25);
+    border-color: #1A1FC4;
+    box-shadow: 0 0 0 3px rgba(26, 31, 196, 0.25);
   }
   .cb-date-field .date-picker-trigger.is-invalid { border-color: #b42318; }
   .cb-date-error { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #b42318; }

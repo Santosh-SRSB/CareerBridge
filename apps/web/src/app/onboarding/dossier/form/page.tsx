@@ -34,11 +34,11 @@ import { DatePicker } from '@/features/candidate/passport/DatePicker';
 import { SkillSearchCombobox } from '@/components/resume/SkillSearchCombobox';
 import { skillsForDomain } from '@/data/technology-skills';
 
-const ACCENT = '#0a2e2c';
-const MUTED = '#6b6a63';
-const BG = '#f7f6f2';
-const LINE = '#e4e3de';
-const TINT = '#E3F2ED';
+const ACCENT = '#1a1fc4';
+const MUTED = '#4b4f8f';
+const BG = '#f8f9fc';
+const LINE = '#e5e7f2';
+const TINT = '#E3E4F2';
 
 const STEPS = [
   { key: 'basics', label: 'Profile' },
@@ -77,7 +77,7 @@ const EXTRA_LINK_OPTIONS = [
 ];
 
 const inputClass =
-  'h-11 w-full rounded-xl border bg-white px-3.5 text-sm outline-none transition focus:border-[#0a2e2c] focus:shadow-[0_0_0_3px_#E3F2ED]';
+  'h-11 w-full rounded-xl border bg-white px-3.5 text-sm outline-none transition focus:border-[#1a1fc4] focus:shadow-[0_0_0_3px_#E3E4F2]';
 const labelClass = 'mb-1.5 block text-[13px] font-medium';
 const sectionTitleClass = 'text-xl font-semibold leading-tight';
 
@@ -686,10 +686,11 @@ export default function DossierFormPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelClass} style={{ color: MUTED }}>
+                  <label htmlFor="dossier-state" className={labelClass} style={{ color: MUTED }}>
                     State
                   </label>
                   <select
+                    id="dossier-state"
                     className={inputClass}
                     style={{ borderColor: LINE }}
                     value={state}
@@ -721,7 +722,7 @@ export default function DossierFormPage() {
                   Short summary (optional)
                 </label>
                 <textarea
-                  className="min-h-[72px] w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#0a2e2c] focus:shadow-[0_0_0_3px_#E3F2ED]"
+                  className="min-h-[72px] w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#1a1fc4] focus:shadow-[0_0_0_3px_#E3E4F2]"
                   style={{ borderColor: LINE }}
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
@@ -733,10 +734,11 @@ export default function DossierFormPage() {
                 <p className="mb-3 text-sm font-semibold">Education</p>
                 <div className="space-y-3">
                   <div>
-                    <label className={labelClass} style={{ color: MUTED }}>
+                    <label htmlFor="dossier-qualification" className={labelClass} style={{ color: MUTED }}>
                       Highest qualification
                     </label>
                     <select
+                      id="dossier-qualification"
                       className={inputClass}
                       style={{ borderColor: LINE }}
                       value={edu.qualification}
@@ -753,10 +755,11 @@ export default function DossierFormPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass} style={{ color: MUTED }}>
+                    <label htmlFor="dossier-field-of-study" className={labelClass} style={{ color: MUTED }}>
                       Field of study
                     </label>
                     <select
+                      id="dossier-field-of-study"
                       className={inputClass}
                       style={{ borderColor: LINE }}
                       value={edu.fieldOfStudy}
@@ -1041,7 +1044,7 @@ export default function DossierFormPage() {
                     placeholder="Project title"
                   />
                   <textarea
-                    className="min-h-[64px] w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#0a2e2c]"
+                    className="min-h-[64px] w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#1a1fc4]"
                     style={{ borderColor: LINE }}
                     value={draftProject.description}
                     onChange={(e) => setDraftProject((d) => ({ ...d, description: e.target.value }))}
@@ -1393,10 +1396,11 @@ export default function DossierFormPage() {
                       One explanation covers all gaps listed above.
                     </p>
                     <div>
-                      <label className={labelClass} style={{ color: MUTED }}>
+                      <label htmlFor="dossier-gap-reason" className={labelClass} style={{ color: MUTED }}>
                         Why was there a career gap during this period?
                       </label>
                       <select
+                        id="dossier-gap-reason"
                         className={inputClass}
                         style={{ borderColor: LINE }}
                         value={gapReason}
@@ -1433,7 +1437,7 @@ export default function DossierFormPage() {
                           Additional details (optional)
                         </label>
                         <textarea
-                          className="min-h-[64px] w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#0a2e2c]"
+                          className="min-h-[64px] w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-[#1a1fc4]"
                           style={{ borderColor: LINE }}
                           value={gapReasonDetails}
                           maxLength={1000}
@@ -1544,23 +1548,23 @@ export default function DossierFormPage() {
               <div className="rounded-2xl border p-4" style={{ borderColor: ACCENT, background: TINT }}>
                 <p className="mb-3 text-sm font-semibold">Quick review</p>
                 <dl className="space-y-2.5 text-sm">
-                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(10,46,44,0.12)' }}>
+                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(26,31,196,0.12)' }}>
                     <dt style={{ color: MUTED }}>Name</dt>
                     <dd className="text-right font-medium">{fullName || '—'}</dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(10,46,44,0.12)' }}>
+                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(26,31,196,0.12)' }}>
                     <dt style={{ color: MUTED }}>Location</dt>
                     <dd className="text-right font-medium">
                       {[city, state].filter(Boolean).join(', ') || '—'}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(10,46,44,0.12)' }}>
+                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(26,31,196,0.12)' }}>
                     <dt style={{ color: MUTED }}>Education</dt>
                     <dd className="text-right font-medium">
                       {[edu.qualification, edu.fieldOfStudy].filter(Boolean).join(' · ') || '—'}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(10,46,44,0.12)' }}>
+                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(26,31,196,0.12)' }}>
                     <dt style={{ color: MUTED }}>Experience</dt>
                     <dd className="text-right font-medium">
                       {expMode === 'none'
@@ -1570,21 +1574,21 @@ export default function DossierFormPage() {
                           : '—'}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(10,46,44,0.12)' }}>
+                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(26,31,196,0.12)' }}>
                     <dt style={{ color: MUTED }}>Skills</dt>
                     <dd className="text-right font-medium">{skills.length || '—'}</dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(10,46,44,0.12)' }}>
+                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(26,31,196,0.12)' }}>
                     <dt style={{ color: MUTED }}>Projects</dt>
                     <dd className="text-right font-medium">{projects.length || '—'}</dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(10,46,44,0.12)' }}>
+                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(26,31,196,0.12)' }}>
                     <dt style={{ color: MUTED }}>Certs / achievements</dt>
                     <dd className="text-right font-medium">
                       {certs.length + achievements.length || '—'}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(10,46,44,0.12)' }}>
+                  <div className="flex justify-between gap-3 border-b pb-2" style={{ borderColor: 'rgba(26,31,196,0.12)' }}>
                     <dt style={{ color: MUTED }}>Career gaps</dt>
                     <dd className="text-right font-medium">
                       {gapAnalysis

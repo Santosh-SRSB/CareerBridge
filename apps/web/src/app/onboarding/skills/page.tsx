@@ -207,7 +207,7 @@ export default function OnboardingSkillsPage() {
                       <button
                         type="button"
                         onClick={() => addToSelection(item.name)}
-                        className="min-h-12 rounded-full border px-3.5 text-[13px] transition hover:border-[#0B3D33]"
+                        className="min-h-12 rounded-full border px-3.5 text-[13px] transition hover:border-[#10137C]"
                         style={{ borderColor: OB.borderStrong, color: OB.ink, background: OB.surface }}
                       >
                         + {item.name}

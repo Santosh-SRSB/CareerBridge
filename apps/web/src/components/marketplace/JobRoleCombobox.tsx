@@ -101,7 +101,7 @@ export function JobRoleCombobox({
   return (
     <div ref={rootRef} className="relative">
       {label ? (
-        <label htmlFor={`${listId}-input`} className="mb-2 block text-sm font-bold text-slate-800">
+        <label htmlFor={`${listId}-input`} className="mb-2 block text-sm font-bold text-[#0b1b5c]">
           {label}
           {required ? (
             <span className="ml-0.5 text-red-700" aria-hidden>
@@ -112,11 +112,11 @@ export function JobRoleCombobox({
       ) : null}
 
       <div
-        className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2.5 focus-within:ring-2 focus-within:ring-[#0a2e2c] ${
-          invalid ? 'border-red-600' : 'border-slate-200'
+        className={`flex min-h-12 items-center gap-2 rounded-xl border bg-white px-3.5 focus-within:border-[var(--color-primary)] focus-within:ring-[3px] focus-within:ring-[#c7d2ff] ${
+          invalid ? 'border-red-600' : 'border-[#d7e1fa]'
         }`}
       >
-        <span className="text-slate-400" aria-hidden>
+        <span className="text-[#53689f]" aria-hidden>
           ⌕
         </span>
         <input
@@ -144,7 +144,7 @@ export function JobRoleCombobox({
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
           aria-busy={loading || undefined}
-          className="w-full border-none bg-transparent text-sm font-semibold text-slate-800 outline-none"
+          className="w-full border-none bg-transparent text-sm font-semibold text-[#0b1b5c] outline-none"
         />
       </div>
 
@@ -152,16 +152,16 @@ export function JobRoleCombobox({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-[#d7e1fa] bg-white py-1 shadow-[0_14px_36px_rgba(16,19,124,0.18)]"
         >
           {loading ? (
             <li className="space-y-2 px-3 py-2" aria-label="Loading job roles">
               {[0, 1, 2].map((i) => (
-                <span key={i} className="block h-4 animate-pulse rounded bg-slate-200" />
+                <span key={i} className="block h-4 animate-pulse rounded bg-[#e9efff]" />
               ))}
             </li>
           ) : dropdownOptions.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-slate-500">Press Enter to use &ldquo;{trimmed}&rdquo;</li>
+            <li className="px-3 py-2 text-sm text-[#53689f]">Press Enter to use &ldquo;{trimmed}&rdquo;</li>
           ) : (
             dropdownOptions.map((option, index) => {
               const isCustom = option.startsWith('__custom__:');
@@ -172,8 +172,8 @@ export function JobRoleCombobox({
                   role="option"
                   aria-selected={index === highlight}
                   className={`cursor-pointer px-3 py-2 text-sm font-semibold ${
-                    index === highlight ? 'bg-slate-100 text-slate-900' : 'text-slate-700'
-                  } ${isCustom ? 'border-t border-slate-100 text-[#0a2e2c]' : ''}`}
+                    index === highlight ? 'bg-[#f0f4ff] text-[var(--color-primary-dark)]' : 'text-[#0b1b5c]'
+                  } ${isCustom ? 'border-t border-[#d7e1fa] text-[var(--color-primary)]' : ''}`}
                   onMouseEnter={() => setHighlight(index)}
                   onMouseDown={(event) => {
                     event.preventDefault();
@@ -189,7 +189,7 @@ export function JobRoleCombobox({
       ) : null}
 
       {showHint ? (
-        <p className="mt-2 text-xs text-slate-500">Search from the list or type any job role.</p>
+        <p className="mt-2 text-xs text-[#53689f]">Search from the list or type any job role.</p>
       ) : null}
     </div>
   );

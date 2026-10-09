@@ -4,7 +4,6 @@ import { FormEvent, Suspense, useCallback, useEffect, useState, type ReactNode }
 import Link from 'next/link';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
-import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { CancelledInterviewCard } from '@/components/marketplace/CancelledInterviewCard';
 import {
@@ -21,6 +20,7 @@ import { mockInterviewSetupUrl } from '@/lib/mock-interview-url';
 import { userFacingError } from '@/lib/client-errors';
 import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
 import type { ScheduledJobInterview } from '@/lib/candidate-marketplace-api';
+import '../../candidate-interviews.css';
 
 export default function ScheduledInterviewDetailPage() {
   return (
@@ -34,7 +34,41 @@ function InterviewDetailsCard({ interview, children }: { interview: ScheduledJob
   if (interview.status === 'CANCELLED') {
     return <CancelledInterviewCard interview={interview}>{children}</CancelledInterviewCard>;
   }
-  return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">{children}</article>;
+  return <article className="iv-card iv-up">{children}</article>;
+}
+
+function statusPillClass(status: ScheduledJobInterview['status']) {
+  if (status === 'CONFIRMED') return 'iv-pill iv-pill--ok';
+  if (status === 'RESCHEDULE_REQUESTED' || status === 'RESCHEDULE_NEEDED') return 'iv-pill iv-pill--warn';
+  if (status === 'CANCELLED') return 'iv-pill iv-pill--bad';
+  if (status === 'COMPLETED') return 'iv-pill';
+  return 'iv-pill iv-pill--muted';
+}
+
+function BackGlyph() {
+  return (
+    <svg className="iv-ic" viewBox="0 0 24 24" aria-hidden>
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function CalendarGlyph() {
+  return (
+    <svg className="iv-ic" viewBox="0 0 24 24" aria-hidden>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M16 3v4M8 3v4M3 10h18" />
+    </svg>
+  );
+}
+
+function ClockGlyph() {
+  return (
+    <svg className="iv-ic" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
 }
 
 function ScheduledInterviewDetail() {
@@ -179,69 +213,75 @@ function ScheduledInterviewDetail() {
 
   return (
     <CandidateAppShell activeTab="interviews" maxWidth="max-w-3xl">
-      <div className="mx-auto w-full max-w-2xl space-y-5">
-        <Link href="/interviews" className="text-sm font-bold text-[#0a2e2c] hover:underline">
-          ← My Interviews
+      <div className="iv iv-detail">
+        <Link href="/interviews" className="iv-back">
+          <BackGlyph />
+          My Interviews
         </Link>
 
         <InterviewDetailsCard interview={interview}>
-          <h1 className="text-xl font-extrabold text-slate-900">{interview.jobTitle}</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-600">{interview.companyName}</p>
-          <p className="mt-4 text-sm text-slate-700">
-            {new Date(interview.scheduledDate).toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            })}
-          </p>
-          <p className="text-sm font-bold text-slate-800">{interview.scheduledTime}</p>
-          <dl className="mt-3 grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-sm">
-            <dt className="font-semibold text-slate-600">Type</dt>
-            <dd className="text-slate-800">{interview.mode === 'VIDEO' ? 'Online (video)' : 'In-person'}</dd>
+          <div className="iv-up-top">
+            <div className="min-w-0">
+              <h1 className="iv-title">{interview.jobTitle}</h1>
+              <p className="iv-co">{interview.companyName}</p>
+            </div>
+            <p className="iv-status">
+              <span className="iv-status-k">Status:</span>{' '}
+              <span className={statusPillClass(interview.status)}>{statusCopy}</span>
+            </p>
+          </div>
+
+          <ul className="iv-facts">
+            <li>
+              <CalendarGlyph />
+              {new Date(interview.scheduledDate).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </li>
+            <li>
+              <ClockGlyph />
+              <b>{interview.scheduledTime}</b>
+            </li>
+          </ul>
+
+          <dl className="iv-dl">
+            <dt>Type</dt>
+            <dd>{interview.mode === 'VIDEO' ? 'Online (video)' : 'In-person'}</dd>
             {interview.durationMin ? (
               <>
-                <dt className="font-semibold text-slate-600">Duration</dt>
-                <dd className="text-slate-800">{interview.durationMin} minutes</dd>
+                <dt>Duration</dt>
+                <dd>{interview.durationMin} minutes</dd>
               </>
             ) : null}
-            <dt className="font-semibold text-slate-600">{interview.mode === 'VIDEO' ? 'Link' : 'Location'}</dt>
-            <dd className="break-words text-slate-800">
+            <dt>{interview.mode === 'VIDEO' ? 'Link' : 'Location'}</dt>
+            <dd>
               {interview.status === 'CANCELLED' && interview.mode === 'VIDEO' ? (
                 '—'
               ) : interview.mode === 'VIDEO' && interview.meetingUrl ? (
-                <a href={interview.meetingUrl} className="font-semibold text-[#0a2e2c] underline">
+                <a href={interview.meetingUrl} className="iv-inline-link">
                   Join interview
                 </a>
               ) : (
                 interview.location
               )}
             </dd>
-            <dt className="font-semibold text-slate-600">Interviewer</dt>
-            <dd className="text-slate-800">{interview.companyName} hiring team</dd>
-            <dt className="font-semibold text-slate-600">Notes</dt>
-            <dd className="whitespace-pre-line break-words text-slate-800">
-              {interview.candidateNotes || 'No notes from the employer.'}
-            </dd>
+            <dt>Interviewer</dt>
+            <dd>{interview.companyName} hiring team</dd>
+            <dt>Notes</dt>
+            <dd className="iv-dl-notes">{interview.candidateNotes || 'No notes from the employer.'}</dd>
           </dl>
-          <p
-            className={`mt-2 text-sm font-semibold ${
-              interview.status === 'CONFIRMED'
-                ? 'text-emerald-700'
-                : interview.status === 'RESCHEDULE_REQUESTED' || interview.status === 'RESCHEDULE_NEEDED'
-                  ? 'text-amber-700'
-                  : interview.status === 'COMPLETED'
-                    ? 'text-slate-700'
-                    : 'text-slate-700'
-            }`}
-          >
-            Status: {statusCopy}
-          </p>
 
           {interview.status !== 'CANCELLED' ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button type="button" onClick={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}>
+            <div className="iv-actions">
+              <button
+                type="button"
+                className="iv-btn"
+                onClick={() => router.push(mockInterviewSetupUrl(interview.jobTitle))}
+              >
                 Prepare for Interview
-              </Button>
+              </button>
             </div>
           ) : null}
         </InterviewDetailsCard>
@@ -256,35 +296,28 @@ function ScheduledInterviewDetail() {
         />
 
         {interview.candidateFeedback ? (
-          <article className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
-            <h2 className="text-base font-extrabold text-slate-900">Your feedback</h2>
-            <p className="mt-2 text-sm font-semibold text-slate-800">
-              Rating: {interview.candidateFeedback.rating}/5
-            </p>
-            <p className="mt-1 text-sm text-slate-700">
-              {interview.candidateFeedback.text || 'No written comments.'}
-            </p>
+          <article className="iv-card iv-fb iv-fb--done">
+            <h2 className="iv-fb-t">Your feedback</h2>
+            <p className="iv-fb-rating">Rating: {interview.candidateFeedback.rating}/5</p>
+            <p className="iv-meta">{interview.candidateFeedback.text || 'No written comments.'}</p>
           </article>
         ) : interview.canSubmitFeedback ? (
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-extrabold text-slate-900">Share feedback</h2>
-            <p className="mt-1 text-sm text-slate-600">
+          <article className="iv-card iv-fb">
+            <h2 className="iv-fb-t">Share feedback</h2>
+            <p className="iv-meta">
               Tell {interview.companyName} how the interview went. This is stored for that employer only.
             </p>
-            <form onSubmit={(event) => void handleFeedback(event)} className="mt-4 space-y-4">
-              <fieldset>
-                <legend className="mb-2 text-sm font-semibold text-slate-800">Rating</legend>
-                <div className="flex flex-wrap gap-2">
+            <form onSubmit={(event) => void handleFeedback(event)} className="iv-fb-form">
+              <fieldset className="iv-rate">
+                <legend className="iv-lbl">Rating</legend>
+                <div className="iv-rate-row">
                   {[1, 2, 3, 4, 5].map((value) => (
                     <button
                       key={value}
                       type="button"
+                      aria-pressed={rating === value}
                       onClick={() => setRating(value)}
-                      className={`rounded-full px-3 py-1.5 text-sm font-bold ${
-                        rating === value
-                          ? 'bg-[#0c332c] text-white'
-                          : 'border border-slate-200 bg-white text-slate-700'
-                      }`}
+                      className="iv-rate-btn"
                     >
                       {value}
                     </button>
@@ -292,22 +325,37 @@ function ScheduledInterviewDetail() {
                 </div>
               </fieldset>
               <Textarea
-                  label="Comments (optional)"
-                  value={feedbackText}
-                  onChange={(event) => setFeedbackText(event.target.value)}
-                  rows={4}
-                  maxLength={2000}
-                  placeholder="What went well? What could improve?"
-                />
-              <Button type="submit" loading={busy} loadingLabel="Sending…">
-                Submit feedback
-              </Button>
+                label="Comments (optional)"
+                value={feedbackText}
+                onChange={(event) => setFeedbackText(event.target.value)}
+                rows={4}
+                maxLength={2000}
+                placeholder="What went well? What could improve?"
+              />
+              <button type="submit" className="iv-btn iv-fb-submit" disabled={busy} aria-busy={busy || undefined}>
+                {busy ? (
+                  <>
+                    <span aria-hidden data-testid="button-spinner" className="iv-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  'Submit feedback'
+                )}
+              </button>
             </form>
           </article>
         ) : null}
 
-        {message ? <p className="text-sm font-semibold text-emerald-700">{message}</p> : null}
-        {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}
+        {message ? (
+          <p className="iv-msg" role="status">
+            {message}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="iv-err" role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
     </CandidateAppShell>
   );

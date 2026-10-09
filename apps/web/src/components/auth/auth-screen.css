@@ -1,0 +1,881 @@
+/* Login and registration screens. Colors and type come only from the global tokens in
+   app/globals.css. The shared form components keep their global cb-auth-* rules elsewhere;
+   everything below is scoped to .au-page so other auth screens are untouched. */
+
+.au-page {
+  --au-white-16: color-mix(in srgb, var(--color-white) 16%, transparent);
+  --au-white-28: color-mix(in srgb, var(--color-white) 28%, transparent);
+  --au-white-88: color-mix(in srgb, var(--color-white) 88%, transparent);
+  --au-shadow: color-mix(in srgb, var(--color-primary-dark) 24%, transparent);
+  --au-field: color-mix(in srgb, var(--color-primary) 5%, var(--color-white));
+  --au-field-line: color-mix(in srgb, var(--color-primary) 18%, var(--color-white));
+  --au-control: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-white);
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
+
+.au-page input,
+.au-page select,
+.au-page button {
+  font-family: inherit !important;
+}
+
+/* ---------- Welcome panel ---------- */
+.au-hero {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  height: 100dvh;
+  min-width: 0;
+  overflow: hidden;
+  padding: 32px;
+  border-radius: 0 160px 160px 0;
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-primary) 82%, var(--color-white)) 0%,
+    var(--color-primary) 46%,
+    var(--color-primary-dark) 100%
+  );
+  color: var(--color-text-white);
+}
+
+.au-hero :focus-visible {
+  outline-color: var(--color-white);
+}
+
+.au-hero__copy {
+  width: min(520px, 100%);
+  text-align: center;
+  animation: au-fade 0.45s both;
+}
+
+.au-portrait {
+  position: relative;
+  width: min(460px, 90%);
+  margin: 0 auto 18px;
+}
+
+.au-portrait::after {
+  content: "";
+  position: absolute;
+  right: 8%;
+  bottom: -8px;
+  left: 8%;
+  height: 42px;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--color-primary-dark) 62%, transparent) 0%,
+    color-mix(in srgb, var(--color-primary-dark) 28%, transparent) 40%,
+    transparent 74%
+  );
+  filter: blur(12px);
+  pointer-events: none;
+}
+
+.au-portrait img {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, rgb(0 0 0 / 0.55) 88%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 72%, rgb(0 0 0 / 0.55) 88%, transparent 100%);
+}
+
+.au-logo {
+  width: 108px;
+  height: 108px;
+  margin: 0 auto 16px;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--color-primary-dark) 30%, transparent);
+}
+
+.au-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.au-kicker {
+  display: inline-block;
+  margin-bottom: 16px;
+  padding: 6px 12px;
+  border: 1px solid var(--au-white-28);
+  border-radius: 999px;
+  background: var(--au-white-16);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.au-hero__title {
+  margin: 0 0 8px;
+  font-size: 48px;
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.au-hero__lede {
+  margin: 0;
+  color: var(--au-white-88);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+/* ---------- Form panel ---------- */
+.au-main {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 72px 36px 32px 72px;
+  background: var(--color-white);
+}
+
+.au-page--register .au-main {
+  align-items: flex-start;
+}
+
+.au-back,
+.au-switch {
+  position: fixed;
+  top: 16px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color 0.2s,
+    transform 0.2s;
+}
+
+.au-back {
+  left: 16px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+.au-back:hover {
+  background: var(--color-primary-soft);
+}
+
+.au-switch {
+  right: 18px;
+  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary-dark) 24%, transparent);
+  color: var(--color-text-white);
+}
+
+.au-switch:hover {
+  transform: translateY(-1px);
+}
+
+.au-card {
+  width: min(440px, 100%);
+  animation: au-rise 0.6s 0.1s both;
+}
+
+.au-title {
+  margin: 0 0 2px;
+  color: var(--color-primary-dark);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  text-align: center;
+}
+
+.au-sub {
+  margin: 0 0 12px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Candidate / employer switch */
+.au-seg {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 14px;
+  padding: 4px;
+  border: 1px solid var(--au-field-line);
+  border-radius: 12px;
+  background: var(--au-field);
+}
+
+.au-seg__pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 9px;
+  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--color-primary-dark) 22%, transparent);
+  transition: transform 0.4s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+.au-seg[data-active="employer"] .au-seg__pill {
+  transform: translateX(100%);
+}
+
+.au-seg__btn {
+  position: relative;
+  z-index: 1;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.au-seg__btn:hover {
+  color: var(--color-primary);
+}
+
+.au-seg__btn[aria-pressed="true"] {
+  color: var(--color-text-white);
+}
+
+.au-notice:empty {
+  display: none;
+}
+
+.au-notice p {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ---------- Shared form components, restyled inside the card ---------- */
+.au-card .cb-auth-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.au-card fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.au-card .cb-auth-field__label {
+  margin-bottom: 5px;
+  color: var(--color-primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.au-card .cb-auth-field__label > span:not(.cb-auth-required) {
+  color: var(--color-text-secondary);
+}
+
+.au-card .cb-auth-required {
+  margin-left: 2px;
+  color: var(--color-error);
+}
+
+.au-card .cb-auth-field__control {
+  min-height: var(--au-control);
+  gap: 8px;
+  padding: 0 6px 0 12px;
+  border: 1px solid var(--au-field-line);
+  border-radius: 8px;
+  background: var(--au-field);
+}
+
+.au-card .cb-auth-field__control:focus-within {
+  border-color: var(--color-primary);
+  background: var(--color-white);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+  transform: none;
+}
+
+.au-card .cb-auth-field__control.is-error {
+  border-color: var(--color-error);
+}
+
+.au-card .cb-auth-field__icon {
+  color: var(--color-text-muted);
+}
+
+.au-card .cb-auth-field__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.au-card .cb-auth-field__control:focus-within .cb-auth-field__icon {
+  color: var(--color-primary);
+}
+
+.au-card .cb-auth-field__input {
+  padding: 8px 0 !important;
+  color: var(--color-text-primary) !important;
+  font-size: 14px !important;
+}
+
+.au-card .cb-auth-field__input::placeholder {
+  color: var(--color-text-muted) !important;
+}
+
+.au-card .cb-auth-field__action {
+  display: inline-grid;
+  place-items: center;
+  min-width: 40px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.au-card .cb-auth-field__action:hover {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+.au-card .cb-auth-field__action svg {
+  width: 18px;
+  height: 18px;
+}
+
+.au-card .cb-auth-field__hint {
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.au-card .cb-auth-field__error {
+  margin-top: 4px;
+  color: var(--color-error);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Mobile number: country code and number sit in their own boxes */
+.au-card .cb-auth-field__control--phone,
+.au-card .cb-auth-field__control--phone:focus-within {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.au-card .cb-auth-field__control--phone > .cb-auth-field__icon {
+  display: none;
+}
+
+.au-card .cb-auth-field__phone select,
+.au-card .cb-auth-field__phone input {
+  min-height: var(--au-control);
+  border: 1px solid var(--au-field-line);
+  border-radius: 8px;
+  background: var(--au-field);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background-color 0.15s;
+}
+
+.au-card .cb-auth-field__phone select {
+  flex: none;
+  width: 108px;
+  font-weight: 600;
+}
+
+.au-card .cb-auth-field__phone input {
+  min-width: 0;
+  width: 100%;
+}
+
+.au-card .cb-auth-field__phone select:focus,
+.au-card .cb-auth-field__phone input:focus {
+  border-color: var(--color-primary);
+  background: var(--color-white);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.au-card .cb-auth-field__phone input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.au-card .cb-auth-field__phone input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+.au-card .cb-auth-field__phone p {
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.au-card .cb-auth-field__phone p[role="alert"] {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+/* Remember me, links and terms */
+.au-card .cb-auth-meta {
+  margin-top: 0;
+}
+
+.au-card .cb-auth-meta__check,
+.au-card .cb-auth-check {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.au-card .cb-auth-meta__check input,
+.au-card .cb-auth-check input {
+  width: 16px !important;
+  height: 16px !important;
+  accent-color: var(--color-primary);
+}
+
+.au-card .cb-auth-check {
+  gap: 8px;
+}
+
+/* Links inside a sentence are exempt from the 48px target rule (WCAG 2.5.8). */
+.au-card .cb-auth-check a {
+  display: inline;
+  min-width: 0;
+  min-height: 0;
+}
+
+.au-card .cb-auth-meta__link {
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.au-card .cb-auth-meta__link:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+/* OTP channel choice */
+.au-card .cb-auth-otp {
+  gap: 8px;
+}
+
+.au-card .cb-auth-otp__btn {
+  min-height: 38px;
+  border: 1px solid var(--au-field-line);
+  border-radius: 10px;
+  background: var(--color-white);
+  color: var(--color-primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.au-card .cb-auth-otp__btn:hover {
+  border-color: var(--color-primary);
+}
+
+.au-card .cb-auth-otp__btn.is-active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  color: var(--color-primary-dark);
+}
+
+/* WhatsApp opt-in as a row with an Off / On switch */
+.au-card .cb-auth-wa__btn {
+  position: relative;
+  gap: 8px;
+  padding: 8px 84px 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-white);
+}
+
+.au-card .cb-auth-wa__btn:hover {
+  border-color: var(--au-field-line);
+}
+
+.au-card .cb-auth-wa__btn::before,
+.au-card .cb-auth-wa__btn::after {
+  position: absolute;
+  top: 50%;
+  border-radius: 999px;
+  transition:
+    background-color 0.25s,
+    transform 0.25s;
+}
+
+.au-card .cb-auth-wa__btn::before {
+  content: "Off";
+  content: "Off" / "";
+  right: 10px;
+  box-sizing: border-box;
+  width: 64px;
+  height: 28px;
+  margin-top: -14px;
+  padding-right: 10px;
+  background: var(--color-border-dark);
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 28px;
+  text-align: right;
+}
+
+.au-card .cb-auth-wa__btn::after {
+  content: "";
+  right: 50px;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  background: var(--color-white);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-primary-dark) 25%, transparent);
+}
+
+.au-card .cb-auth-wa__btn.is-on::before {
+  content: "On";
+  content: "On" / "";
+  padding: 0 0 0 10px;
+  background: var(--color-success);
+  color: var(--color-text-white);
+  text-align: left;
+}
+
+.au-card .cb-auth-wa__btn.is-on::after {
+  transform: translateX(36px);
+}
+
+.au-card .cb-auth-wa__icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background: none;
+  color: var(--color-success);
+}
+
+.au-card .cb-auth-wa__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.au-card .cb-auth-wa__copy strong {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.au-card .cb-auth-wa__copy em {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.au-card .cb-auth-wa__ticks,
+.au-card .cb-auth-wa__plus {
+  display: none;
+}
+
+.au-card .cb-auth-wa__success {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-success) 35%, transparent);
+  border-radius: 10px;
+  background: var(--color-success-light);
+}
+
+.au-card .cb-auth-wa__success p,
+.au-card .cb-auth-wa__success strong {
+  color: var(--color-success-dark);
+  font-size: 12px;
+}
+
+.au-card .cb-auth-alert {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  border-radius: 10px;
+  background: var(--color-error-light);
+  color: var(--color-error-dark);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Submit: centered pill */
+.au-card button[type="submit"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(220px, 100%);
+  height: var(--au-control);
+  margin: 8px auto 0;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 80%, var(--color-white)), var(--color-primary));
+  box-shadow: 0 8px 16px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  color: var(--color-text-white);
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: none;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+.au-card button[type="submit"]:hover {
+  box-shadow: 0 12px 22px color-mix(in srgb, var(--color-primary) 32%, transparent);
+  transform: translateY(-1px);
+}
+
+.au-card button[type="submit"]:active {
+  transform: scale(0.98);
+}
+
+.au-card button[type="submit"][aria-disabled="true"] {
+  background: var(--color-primary-soft);
+  box-shadow: none;
+  color: var(--color-primary-dark);
+  transform: none;
+}
+
+.au-page--register .au-card button[type="submit"] {
+  width: min(240px, 100%);
+}
+
+/* Login extras */
+.au-signup {
+  margin: 12px 0 0;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.au-signup a {
+  display: inline;
+  min-width: 0;
+  min-height: 0;
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.au-signup a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Motion ---------- */
+@keyframes au-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes au-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1280px) {
+  .au-hero {
+    border-radius: 0 110px 110px 0;
+  }
+
+  .au-portrait {
+    width: min(340px, 78%);
+  }
+
+  .au-hero__title {
+    font-size: 40px;
+  }
+
+  .au-hero__lede {
+    font-size: 15px;
+  }
+
+  .au-main {
+    padding: 64px 28px 24px 56px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .au-page {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .au-portrait {
+    width: min(280px, 74%);
+    margin-bottom: 10px;
+  }
+
+  .au-logo {
+    width: 84px;
+    height: 84px;
+  }
+
+  .au-hero__title {
+    font-size: 34px;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 901px) {
+  .au-portrait {
+    width: min(240px, 64%);
+    margin-bottom: 8px;
+  }
+
+  .au-logo,
+  .au-kicker {
+    margin-bottom: 8px;
+  }
+
+  .au-hero__title {
+    font-size: 32px;
+  }
+
+  .au-hero__lede {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 900px) {
+  .au-page {
+    display: block;
+  }
+
+  .au-hero {
+    position: relative;
+    height: auto;
+    padding: 64px 20px 28px;
+    border-radius: 0 0 48px 48px;
+  }
+
+  .au-portrait {
+    width: min(240px, 70%);
+    margin-bottom: 4px;
+  }
+
+  .au-logo,
+  .au-hero__lede {
+    display: none;
+  }
+
+  .au-kicker {
+    margin-bottom: 8px;
+  }
+
+  .au-hero__title {
+    font-size: 26px;
+  }
+
+  .au-main,
+  .au-page--register .au-main {
+    align-items: flex-start;
+    min-height: 0;
+    padding: 24px 16px 32px;
+  }
+
+  .au-back,
+  .au-switch {
+    top: 12px;
+  }
+
+  .au-back {
+    left: 12px;
+  }
+
+  .au-switch {
+    right: 12px;
+  }
+}
+
+/* Touch screens: every control meets the 48px target size */
+@media (max-width: 767px) {
+  .au-page {
+    --au-control: 48px;
+  }
+
+  .au-back,
+  .au-switch,
+  .au-seg__btn,
+  .au-card .cb-auth-field__action,
+  .au-card .cb-auth-otp__btn {
+    min-height: 48px;
+  }
+
+  .au-card .cb-auth-field__action {
+    min-width: 48px;
+  }
+}
+
+@media (max-width: 520px) {
+  .au-title {
+    font-size: 20px;
+  }
+
+  .au-sub {
+    font-size: 12px;
+  }
+
+  .au-card button[type="submit"],
+  .au-page--register .au-card button[type="submit"] {
+    width: 100%;
+  }
+
+  .au-card .cb-auth-field__phone select {
+    width: 96px;
+  }
+
+  .au-card .cb-auth-otp {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-page *,
+  .au-page *::before,
+  .au-page *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

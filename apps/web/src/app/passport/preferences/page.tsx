@@ -83,7 +83,7 @@ export default function PassportPreferencesPage() {
         <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
           <input
             type="checkbox"
-            className="size-4 shrink-0 rounded border-slate-300 text-[#0a2e2c] focus:ring-[#0a2e2c]/20"
+            className="size-4 shrink-0 rounded border-slate-300 text-[#10137c] focus:ring-[#1a1fc4]/20"
             checked={openToRelocating}
             onChange={(event) => setOpenToRelocating(event.target.checked)}
           />

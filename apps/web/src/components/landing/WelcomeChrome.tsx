@@ -1,159 +1,83 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import { HomeBrand } from '@/components/landing/home/HomeBrand';
+import { CloseIcon, MenuIcon } from '@/components/landing/home/icons';
 
 type WelcomeRole = 'candidate' | 'employer';
 
-const SOCIAL = {
-  facebook: 'https://www.facebook.com/srsbworkforce',
-  instagram: 'https://www.instagram.com/srsbworkforce/',
-  linkedin: 'https://www.linkedin.com/company/109188021/',
-  email: 'mailto:Srsbhr25@gmail.com',
-} as const;
-
-function IconFacebook() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-      <path d="M14 8h3V4h-3c-2.2 0-4 1.8-4 4v2H8v4h2v8h4v-8h3l1-4h-4V8c0-.6.4-1 1-1z" />
-    </svg>
-  );
-}
-
-function IconInstagram() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <rect x="3" y="3" width="18" height="18" rx="5" />
-      <circle cx="12" cy="12" r="4" />
-      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function IconLinkedIn() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-      <path d="M6.5 9.5H3.7V20h2.8V9.5zM5.1 4A1.65 1.65 0 1 0 5.1 7.3 1.65 1.65 0 0 0 5.1 4zM20.3 20h-2.8v-5.5c0-1.5-.5-2.5-1.8-2.5-1 0-1.5.7-1.7 1.3-.1.2-.1.6-.1.9V20h-2.8s.1-9.3 0-10.5h2.8v1.7c.4-.7 1.2-1.9 3.1-1.9 2.2 0 3.9 1.5 3.9 4.7V20z" />
-    </svg>
-  );
-}
-
-function IconMail() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M3 7l9 7 9-7" />
-    </svg>
-  );
-}
+const MENU_ID = 'wl-nav-menu';
 
 export function WelcomeRoleNav({ role }: { role: WelcomeRole }) {
+  const [open, setOpen] = useState(false);
+  const burgerRef = useRef<HTMLButtonElement>(null);
   const loginHref = role === 'candidate' ? '/login?role=candidate' : '/login?role=employer';
   const signupHref = role === 'candidate' ? '/register?role=candidate' : '/employer/register';
   const brandHref = role === 'candidate' ? '/welcome' : '/employer/welcome';
 
-  return (
-    <nav className="welcome-nav" aria-label="Primary">
-      <div className="welcome-nav__bar">
-        <Link className="welcome-nav__brand" href={brandHref}>
-          <Image
-            src="/srsb-mark.png"
-            alt="SRSB"
-            width={160}
-            height={48}
-            className="welcome-nav__mark"
-            unoptimized
-            priority
-          />
-          <span className="welcome-nav__word">Career Bridge</span>
-        </Link>
+  const links = [
+    { href: '/', label: 'Home', current: false },
+    { href: '/welcome', label: 'Candidates', current: role === 'candidate' },
+    { href: '/employer/welcome', label: 'Employers', current: role === 'employer' },
+  ];
 
-        <div className="welcome-nav__center">
-          <Link className="welcome-nav__home" href="/">
-            Home
-          </Link>
-          <div className="welcome-nav__switch" role="tablist" aria-label="Audience">
-            <Link
-              className={role === 'candidate' ? 'on' : undefined}
-              href="/welcome"
-              role="tab"
-              aria-selected={role === 'candidate'}
-            >
-              Candidates
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      burgerRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const close = () => setOpen(false);
+
+  return (
+    <header className="wl-header">
+      <nav className={`hl-nav${open ? ' is-open' : ''}`} aria-label="Main">
+        <HomeBrand href={brandHref} priority />
+
+        <button
+          ref={burgerRef}
+          type="button"
+          className="hl-nav__burger"
+          aria-label={open ? 'Close menu' : 'Open menu'}
+          aria-expanded={open}
+          aria-controls={MENU_ID}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {open ? <CloseIcon size={22} /> : <MenuIcon size={22} />}
+        </button>
+
+        <div className="hl-nav__menu" id={MENU_ID}>
+          <ul className="hl-nav__links">
+            {links.map((link) => (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  className={`hl-nav__link${link.current ? ' is-active' : ''}`}
+                  aria-current={link.current ? 'page' : undefined}
+                  onClick={close}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hl-nav__actions">
+            <Link href={loginHref} onClick={close} className="hl-btn hl-btn--ghost hl-btn--nav hl-nav__login">
+              Login
             </Link>
-            <Link
-              className={role === 'employer' ? 'on' : undefined}
-              href="/employer/welcome"
-              role="tab"
-              aria-selected={role === 'employer'}
-            >
-              Employers
+            <Link href={signupHref} onClick={close} className="hl-btn hl-btn--primary hl-btn--nav">
+              Sign Up
             </Link>
           </div>
         </div>
-
-        <div className="welcome-nav__auth">
-          <Link href={loginHref}>Login</Link>
-          <i aria-hidden="true" />
-          <Link href={signupHref}>Signup</Link>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
-export function WelcomeFoot({ role }: { role: WelcomeRole }) {
-  return (
-    <footer className="welcome-foot">
-      <div className="welcome-foot__main">
-        <Link href="/" className="welcome-foot__logo" aria-label="SRSB Career Bridge">
-          <Image
-            src="/srsb-mark.png"
-            alt="SRSB Career Bridge"
-            width={200}
-            height={72}
-            className="welcome-foot__logo-img"
-            unoptimized
-          />
-        </Link>
-        <div>
-          <h4>Candidate</h4>
-          <Link href="/login?role=candidate">Candidate Login</Link>
-          <Link href={role === 'candidate' ? '#features' : '/welcome#features'}>
-            Candidate Features
-          </Link>
-        </div>
-        <div>
-          <h4>Employer</h4>
-          <Link href="/login?role=employer">Employer Login</Link>
-          <Link href={role === 'employer' ? '#features' : '/employer/welcome#features'}>
-            Employer Features
-          </Link>
-        </div>
-        <div>
-          <h4>Links</h4>
-          <Link href="/support">Support</Link>
-          <Link href="/privacy">Privacy and Policy</Link>
-          <Link href="/terms">Terms and Conditions</Link>
-        </div>
-      </div>
-      <div className="welcome-foot__socials">
-        <a href={SOCIAL.facebook} target="_blank" rel="noreferrer" aria-label="Facebook">
-          <IconFacebook />
-        </a>
-        <a href={SOCIAL.instagram} target="_blank" rel="noreferrer" aria-label="Instagram">
-          <IconInstagram />
-        </a>
-        <a href={SOCIAL.linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn">
-          <IconLinkedIn />
-        </a>
-        <a href={SOCIAL.email} aria-label="Email SRSB">
-          <IconMail />
-        </a>
-      </div>
-      <p className="welcome-foot__copy">
-        © {new Date().getFullYear()} CareerBridge. All rights reserved.
-      </p>
-    </footer>
+      </nav>
+    </header>
   );
 }

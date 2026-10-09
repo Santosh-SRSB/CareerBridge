@@ -25,7 +25,7 @@ export function Button({
   const styles = {
     primary:
       size === 'lg'
-        ? 'cb-btn-shine relative overflow-hidden bg-primary text-white shadow-[0_12px_28px_rgba(10,46,44,0.28)] transition duration-300 hover:bg-primary-hover hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(10,46,44,0.36)] active:translate-y-0'
+        ? 'cb-btn-shine relative overflow-hidden bg-primary text-white shadow-[0_12px_28px_color-mix(in_srgb,var(--navy)_28%,transparent)] transition duration-300 hover:bg-primary-hover hover:-translate-y-0.5 hover:shadow-[0_18px_36px_color-mix(in_srgb,var(--navy)_36%,transparent)] active:translate-y-0'
         : 'bg-primary text-white hover:bg-primary-hover',
     secondary: 'border border-primary text-primary bg-surface hover:bg-primary-soft',
     outline: 'border border-slate-200 text-slate-800 bg-white hover:bg-slate-50',

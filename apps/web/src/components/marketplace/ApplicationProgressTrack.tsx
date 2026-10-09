@@ -79,7 +79,7 @@ export function ApplicationProgressTrack({ application }: { application: Applica
           font-size: 10px;
         }
         .cb-app-progress__dot.is-done {
-          color: #0a2e2c;
+          color: var(--color-primary);
         }
         .cb-app-progress__dot.is-failed {
           color: #b91c1c;

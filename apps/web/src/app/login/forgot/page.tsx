@@ -177,14 +177,14 @@ function ForgotPasswordBody() {
           <button
             type="button"
             disabled={loading}
-            className="w-full text-center text-xs font-bold text-[#0d9488] hover:underline disabled:opacity-50"
+            className="w-full text-center text-xs font-bold text-[#0f766e] hover:underline disabled:opacity-50"
             onClick={() => void sendCode()}
           >
             Send a new code
           </button>
           <button
             type="button"
-            className="w-full text-center text-xs font-bold text-[#0d9488] hover:underline"
+            className="w-full text-center text-xs font-bold text-[#0f766e] hover:underline"
             onClick={() => {
               setStep('request');
               setOtp('');
@@ -200,7 +200,7 @@ function ForgotPasswordBody() {
       )}
 
       <p className="mt-6 text-center text-xs font-medium text-[#4e6864]">
-        <Link href={`/login?role=${role.toLowerCase()}`} className="font-bold text-[#0d9488] hover:underline">
+        <Link href={`/login?role=${role.toLowerCase()}`} className="font-bold text-[#0f766e] hover:underline">
           ← Back to sign in
         </Link>
       </p>

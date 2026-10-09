@@ -8,6 +8,7 @@ export type JobsSearchOrigin = {
 };
 
 const STORAGE_KEY = 'cb.jobsSearchOrigin';
+const LIST_STORAGE_KEY = 'cb.jobsSearchOrigins';
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -64,6 +65,41 @@ export function readStoredSearchOrigin(): JobsSearchOrigin | null {
 export function storeSearchOrigin(origin: JobsSearchOrigin) {
   if (typeof window === 'undefined') return;
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(origin));
+}
+
+function isOrigin(value: unknown): value is JobsSearchOrigin {
+  const o = value as JobsSearchOrigin | null;
+  return Boolean(o && Number.isFinite(o.latitude) && Number.isFinite(o.longitude) && o.label);
+}
+
+/** Every selected search location; falls back to the single stored origin. */
+export function readStoredSearchOrigins(): JobsSearchOrigin[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.sessionStorage.getItem(LIST_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        const list = parsed.filter(isOrigin);
+        if (list.length) return list;
+      }
+    }
+  } catch {
+    // fall through to the single stored origin
+  }
+  const single = readStoredSearchOrigin();
+  return single ? [single] : [];
+}
+
+export function storeSearchOrigins(origins: JobsSearchOrigin[]) {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.setItem(LIST_STORAGE_KEY, JSON.stringify(origins));
+  if (origins[0]) storeSearchOrigin(origins[0]);
+  else window.sessionStorage.removeItem(STORAGE_KEY);
+}
+
+export function cityDisplayName(name: string) {
+  return titleCity(name);
 }
 
 export function originFromCity(

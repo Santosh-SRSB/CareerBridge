@@ -464,7 +464,7 @@ export default function ProfileDetailsPage() {
                 <div key={row.id} className="cb-cand-details__resume">
                   <div className="resume-left">
                     <div className="file-ic" aria-hidden>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0c2822" strokeWidth="2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10137c" strokeWidth="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                         <polyline points="14 2 14 8 20 8" />
                       </svg>
@@ -548,13 +548,13 @@ export default function ProfileDetailsPage() {
 
       <style jsx global>{`
         .cb-cand-details {
-          --cd-dark: #0c2822;
+          --cd-dark: #10137c;
           --cd-hair: #e7e9e0;
-          --cd-ink: #16211d;
+          --cd-ink: #10137c;
           --cd-ink-soft: #4a534d;
           --cd-muted: #5e665f;
           --cd-mint: #e7f1ea;
-          --cd-good: #2f6b4f;
+          --cd-good: #2f356b;
           --cd-good-soft: #e6f0e9;
           padding-bottom: 2.5rem;
         }
@@ -752,7 +752,7 @@ export default function ProfileDetailsPage() {
           color: #43526b;
         }
         .cb-cand-details__exp-years strong {
-          color: #0c2822;
+          color: #10137c;
           font-weight: 700;
         }
         .cb-cand-details__kv {
@@ -907,7 +907,7 @@ export default function ProfileDetailsPage() {
           position: absolute;
           inset: 0;
           border: none;
-          background: rgba(12, 40, 34, 0.55);
+          background: rgba(16, 19, 124, 0.55);
           cursor: pointer;
         }
         .cb-cand-resume-modal__panel {
@@ -936,7 +936,7 @@ export default function ProfileDetailsPage() {
           font-family: var(--font-lora-details), Georgia, serif;
           font-size: 17px;
           font-weight: 700;
-          color: #0c2822;
+          color: #10137c;
         }
         .cb-cand-resume-modal__body {
           overflow: auto;

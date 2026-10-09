@@ -94,12 +94,12 @@ export function GroupedSelect({
         </span>
       </button>
       {open ? (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-primary/15 bg-white shadow-[0_16px_40px_rgba(10,46,44,0.16)]">
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-primary/15 bg-white shadow-[0_16px_40px_color-mix(in_srgb,var(--navy)_16%,transparent)]">
           <div className="max-h-56 overflow-y-auto" role="listbox">
             {allowAll ? (
               <button
                 type="button"
-                className={`flex w-full px-3 py-2 text-left text-sm ${!value && !otherMode ? 'bg-[#e8fbfa] font-bold text-primary' : 'text-primary hover:bg-[#f6fbf7]'}`}
+                className={`flex w-full px-3 py-2 text-left text-sm ${!value && !otherMode ? 'bg-[color-mix(in_srgb,var(--teal)_10%,white)] font-bold text-primary' : 'text-primary hover:bg-fog'}`}
                 onClick={() => pick('')}
               >
                 {allLabel}
@@ -108,7 +108,7 @@ export function GroupedSelect({
             {groups.map((group) => (
               <div key={group.label || 'options'}>
                 {group.label ? (
-                  <p className="sticky top-0 bg-[#f6fbf7] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-muted">
+                  <p className="sticky top-0 bg-fog px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-muted">
                     {group.label}
                   </p>
                 ) : null}
@@ -116,7 +116,7 @@ export function GroupedSelect({
                   <button
                     key={option}
                     type="button"
-                    className={`flex w-full px-3 py-2 text-left text-sm ${!otherMode && value === option ? 'bg-[#e8fbfa] font-bold text-primary' : 'text-primary hover:bg-[#f6fbf7]'}`}
+                    className={`flex w-full px-3 py-2 text-left text-sm ${!otherMode && value === option ? 'bg-[color-mix(in_srgb,var(--teal)_10%,white)] font-bold text-primary' : 'text-primary hover:bg-fog'}`}
                     onClick={() => pick(option)}
                   >
                     {option}
@@ -127,7 +127,7 @@ export function GroupedSelect({
           </div>
           <button
             type="button"
-            className={`flex w-full border-t border-primary/10 px-3 py-2.5 text-left text-sm font-bold ${otherMode ? 'bg-[#e8fbfa] text-primary' : 'text-primary hover:bg-[#f6fbf7]'}`}
+            className={`flex w-full border-t border-primary/10 px-3 py-2.5 text-left text-sm font-bold ${otherMode ? 'bg-[color-mix(in_srgb,var(--teal)_10%,white)] text-primary' : 'text-primary hover:bg-fog'}`}
             onClick={() => pick('', true)}
           >
             Others

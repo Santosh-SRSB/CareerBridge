@@ -220,7 +220,7 @@ export default function OnboardingPreferencesPage() {
                     type="checkbox"
                     checked={jobTypes.includes(option.value)}
                     onChange={() => toggleJobType(option.value)}
-                    className="h-4 w-4 accent-[#0B3D33]"
+                    className="h-4 w-4 accent-[#10137C]"
                   />
                   {option.label}
                 </label>

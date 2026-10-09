@@ -17,7 +17,7 @@ export function SuccessBoyAnimation({ className = '' }: { className?: string }) 
         <rect className="cb-success-boy__dash cb-success-boy__dash--b" x="130" y="72" width="12" height="2.5" rx="1" fill="#9CA392" />
 
         {/* soft ring */}
-        <circle cx="80" cy="80" r="52" fill="#EEF2E9" />
+        <circle cx="80" cy="80" r="52" fill="#EEF1FF" />
         <circle className="cb-success-boy__ring" cx="80" cy="80" r="44" stroke={OB.moss} strokeWidth="3" fill="none" />
 
         {/* boy */}

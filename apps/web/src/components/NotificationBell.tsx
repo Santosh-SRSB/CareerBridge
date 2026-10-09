@@ -97,7 +97,7 @@ export function NotificationBell({
           />
         </svg>
         <span
-            className={`absolute right-0.5 top-0.5 rounded-full bg-[#c2410c] ring-2 ring-[#0a2e2c] ${
+            className={`absolute right-0.5 top-0.5 rounded-full bg-[#c2410c] ring-2 ring-[var(--color-primary-dark)] ${
             hasUnread
               ? 'flex h-3.5 min-w-3.5 items-center justify-center px-0.5 text-[8px] font-bold leading-none text-white'
               : 'h-2.5 w-2.5'

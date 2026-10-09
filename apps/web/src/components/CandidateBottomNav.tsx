@@ -32,7 +32,7 @@ export function CandidateBottomNav({ activeTab }: { activeTab?: CandidateTab }) 
       href: '/dashboard',
       icon: (active) => (
         <svg
-          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#0a2e2c] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
+          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#1a1fc4] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -46,7 +46,7 @@ export function CandidateBottomNav({ activeTab }: { activeTab?: CandidateTab }) 
       href: '/jobs',
       icon: (active) => (
         <svg
-          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#0a2e2c] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
+          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#1a1fc4] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -60,7 +60,7 @@ export function CandidateBottomNav({ activeTab }: { activeTab?: CandidateTab }) 
       href: '/applications',
       icon: (active) => (
         <svg
-          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#0a2e2c] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
+          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#1a1fc4] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -74,7 +74,7 @@ export function CandidateBottomNav({ activeTab }: { activeTab?: CandidateTab }) 
       href: '/interviews',
       icon: (active) => (
         <svg
-          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#0a2e2c] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
+          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#1a1fc4] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -88,7 +88,7 @@ export function CandidateBottomNav({ activeTab }: { activeTab?: CandidateTab }) 
       href: '/profile',
       icon: (active) => (
         <svg
-          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#0a2e2c] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
+          className={`h-5 w-5 transition-colors ${active ? 'stroke-[#1a1fc4] stroke-2' : 'stroke-slate-400 stroke-[1.75]'}`}
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -108,7 +108,7 @@ export function CandidateBottomNav({ activeTab }: { activeTab?: CandidateTab }) 
               key={item.id}
               href={item.href}
               className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-semibold transition-all ${
-                isActive ? 'text-[#0a2e2c] font-bold scale-105' : 'text-slate-400 hover:text-slate-600'
+                isActive ? 'text-[#10137c] font-bold scale-105' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               {item.icon(isActive)}

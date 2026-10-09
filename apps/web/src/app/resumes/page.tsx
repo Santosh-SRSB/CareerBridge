@@ -60,7 +60,7 @@ function CloudResumePreview({
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg px-2 py-1 text-xs font-bold text-[#0a2e2c] hover:bg-[#0a2e2c]/8"
+            className="rounded-lg px-2 py-1 text-xs font-bold text-[#1A1FC4] hover:bg-[#1A1FC4]/8"
           >
             Open
           </a>
@@ -94,7 +94,7 @@ function CloudResumePreview({
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="mt-3 inline-block rounded-xl bg-[#0a2e2c] px-5 py-2.5 text-sm font-bold text-white"
+            className="mt-3 inline-block rounded-full bg-[#1A1FC4] px-5 py-2.5 text-sm font-bold text-white"
           >
             Open file from Cloud Storage
           </a>
@@ -357,7 +357,7 @@ export default function ViewResumesPage() {
                 type="button"
                 disabled={uploading}
                 onClick={() => void onRetryProcessing(failedResumeId)}
-                className="mt-3 rounded-xl bg-[#0a2e2c] px-4 py-2 text-sm font-bold text-white hover:bg-[#072422] disabled:opacity-60"
+                className="mt-3 rounded-full bg-[#1A1FC4] px-4 py-2 text-sm font-bold text-white hover:bg-[#10137C] disabled:opacity-60"
               >
                 {retryingId === failedResumeId ? 'Retrying…' : 'Retry processing'}
               </button>
@@ -376,7 +376,7 @@ export default function ViewResumesPage() {
                 type="button"
                 disabled={uploading}
                 onClick={onAddNew}
-                className="min-w-[12rem] rounded-xl bg-[#0a2e2c] px-6 py-3 text-sm font-bold text-white hover:bg-[#072422] disabled:opacity-60"
+                className="min-w-[12rem] rounded-full bg-[#1A1FC4] px-6 py-3 text-sm font-bold text-white hover:bg-[#10137C] disabled:opacity-60"
               >
                 Add Resume
               </button>
@@ -397,7 +397,7 @@ export default function ViewResumesPage() {
                       highlightId === row.id
                         ? 'border-emerald-400 ring-2 ring-emerald-200'
                         : isOpen
-                          ? 'border-[#0a2e2c]/40'
+                          ? 'border-[#1A1FC4]/40'
                           : 'border-slate-200'
                     }`}
                   >
@@ -426,7 +426,7 @@ export default function ViewResumesPage() {
                       <button
                         type="button"
                         onClick={() => void onViewResume(row)}
-                        className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold text-[#0a2e2c] transition hover:bg-[#0a2e2c]/8"
+                        className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold text-[#1A1FC4] transition hover:bg-[#1A1FC4]/8"
                       >
                         {isOpen ? 'Hide' : 'View resume'}
                       </button>
@@ -438,7 +438,7 @@ export default function ViewResumesPage() {
                           type="button"
                           disabled={uploading}
                           onClick={() => void onRetryProcessing(row.id)}
-                          className="min-w-[7.5rem] rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-bold text-amber-900 hover:bg-amber-100 sm:min-w-[8.5rem] disabled:opacity-60"
+                          className="min-w-[7.5rem] rounded-full border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-bold text-amber-900 hover:bg-amber-100 sm:min-w-[8.5rem] disabled:opacity-60"
                         >
                           {retryingId === row.id ? 'Retrying…' : 'Retry'}
                         </button>
@@ -446,7 +446,7 @@ export default function ViewResumesPage() {
                       <button
                         type="button"
                         onClick={() => onEdit(row)}
-                        className="min-w-[7.5rem] rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 sm:min-w-[8.5rem]"
+                        className="min-w-[7.5rem] rounded-full border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 sm:min-w-[8.5rem]"
                       >
                         Edit
                       </button>
@@ -461,14 +461,14 @@ export default function ViewResumesPage() {
                               : undefined
                         }
                         onClick={() => onCheckAts(row)}
-                        className="min-w-[7.5rem] rounded-xl bg-[#0a2e2c] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#072422] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#0a2e2c] sm:min-w-[8.5rem]"
+                        className="min-w-[7.5rem] rounded-full bg-[#1A1FC4] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#10137C] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#1A1FC4] sm:min-w-[8.5rem]"
                       >
                         Check ATS
                       </button>
                       <button
                         type="button"
                         onClick={() => setPendingDelete(row)}
-                        className="min-w-[7.5rem] rounded-xl border border-red-200 px-5 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 sm:min-w-[8.5rem]"
+                        className="min-w-[7.5rem] rounded-full border border-red-200 px-5 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 sm:min-w-[8.5rem]"
                       >
                         Delete
                       </button>
@@ -485,7 +485,7 @@ export default function ViewResumesPage() {
                           <button
                             type="button"
                             onClick={() => void loadCloudView(row.id)}
-                            className="mt-3 rounded-xl bg-[#0a2e2c] px-4 py-2 text-sm font-bold text-white"
+                            className="mt-3 rounded-full bg-[#1A1FC4] px-4 py-2 text-sm font-bold text-white"
                           >
                             Retry
                           </button>
@@ -510,7 +510,7 @@ export default function ViewResumesPage() {
                 type="button"
                 disabled={uploading}
                 onClick={onAddNew}
-                className="min-w-[12rem] rounded-xl bg-[#0a2e2c] px-6 py-3 text-sm font-bold text-white hover:bg-[#072422] disabled:opacity-60"
+                className="min-w-[12rem] rounded-full bg-[#1A1FC4] px-6 py-3 text-sm font-bold text-white hover:bg-[#10137C] disabled:opacity-60"
               >
                 Add Resume
               </button>

@@ -16,42 +16,42 @@ const styles = `
   .cb-combo { position: relative; width: 100%; }
   .cb-combo-input-wrap {
     display: flex; align-items: center; gap: 8px;
-    border: 2px solid #7A8270; border-radius: 0.5rem;
+    border: 2px solid #d1d5e5; border-radius: 0.5rem;
     padding: 10px 12px; background: #fff;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .cb-combo-input-wrap:focus-within {
-    border-color: #0A2E2C; box-shadow: 0 0 0 3px rgba(10, 46, 44, 0.25);
+    border-color: #1A1FC4; box-shadow: 0 0 0 3px rgba(26, 31, 196, 0.25);
   }
   .cb-combo-input {
     flex: 1; border: none; outline: none; font-size: 14px;
     font-family: var(--font-inter), Inter, sans-serif;
-    color: #241C15; background: transparent; min-width: 0;
+    color: #10137C; background: transparent; min-width: 0;
   }
   .cb-combo-dropdown {
     position: absolute; top: calc(100% + 4px); left: 0; right: 0;
     max-height: 220px; overflow-y: auto; background: #fff;
-    border: 2px solid #7A8270; border-radius: 0.5rem;
-    box-shadow: 0 8px 24px -8px rgba(10, 46, 44, 0.18);
+    border: 2px solid #d1d5e5; border-radius: 0.5rem;
+    box-shadow: 0 8px 24px -8px rgba(26, 31, 196, 0.18);
     z-index: 50; list-style: none; margin: 0; padding: 6px 0;
   }
   .cb-combo-option {
-    padding: 9px 14px; font-size: 13px; cursor: pointer; color: #241C15;
+    padding: 9px 14px; font-size: 13px; cursor: pointer; color: #10137C;
     font-family: var(--font-inter), Inter, sans-serif;
   }
-  .cb-combo-option:hover, .cb-combo-option.highlighted { background: #EEF2E9; }
-  .cb-combo-option.add-custom { color: #0A2E2C; font-weight: 600; border-top: 1px solid #E4E7DC; }
+  .cb-combo-option:hover, .cb-combo-option.highlighted { background: #EEF1FF; }
+  .cb-combo-option.add-custom { color: #1A1FC4; font-weight: 600; border-top: 1px solid #E5E7F2; }
   .cb-form-select {
-    border: 2px solid #7A8270; border-radius: 0.5rem;
+    border: 2px solid #d1d5e5; border-radius: 0.5rem;
     padding: 10px 12px; font-size: 14px;
     font-family: var(--font-inter), Inter, sans-serif;
-    width: 100%; box-sizing: border-box; background: #fff; color: #241C15;
+    width: 100%; box-sizing: border-box; background: #fff; color: #10137C;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .cb-form-select:focus {
-    outline: none; border-color: #0A2E2C; box-shadow: 0 0 0 3px rgba(10, 46, 44, 0.25);
+    outline: none; border-color: #1A1FC4; box-shadow: 0 0 0 3px rgba(26, 31, 196, 0.25);
   }
-  .cb-form-select:disabled { background: #f5f5f3; color: #9aa3b2; cursor: not-allowed; }
+  .cb-form-select:disabled { background: #f5f7ff; color: #9aa3b2; cursor: not-allowed; }
   .cb-form-select[aria-invalid="true"], .cb-combo-input-wrap.invalid { border-color: #b42318; }
   .cb-field-error { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #b42318; }
   .cb-location-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -285,6 +285,7 @@ interface FieldOfStudySelectProps {
 }
 
 export function FieldOfStudySelect({ value, onChange }: FieldOfStudySelectProps) {
+  const selectId = useId();
   const [selectValue, setSelectValue] = useState('');
   const [customField, setCustomField] = useState('');
 
@@ -316,8 +317,9 @@ export function FieldOfStudySelect({ value, onChange }: FieldOfStudySelectProps)
   return (
     <div className="cb-field">
       <style dangerouslySetInnerHTML={{ __html: styles }} />
-      <label>Field of study</label>
+      <label htmlFor={selectId}>Field of study</label>
       <select
+        id={selectId}
         className="cb-form-select"
         value={selectValue}
         onChange={(e) => handleSelectChange(e.target.value)}
@@ -338,6 +340,7 @@ export function FieldOfStudySelect({ value, onChange }: FieldOfStudySelectProps)
             onChange(e.target.value);
           }}
           placeholder="Enter field of study"
+          aria-label="Field of study name"
         />
       )}
     </div>
@@ -397,6 +400,7 @@ export function StateCitySelect({
   }, [location, onChange]);
 
   const cities = useMemo(() => getCitiesForState(state), [state]);
+  const stateId = useId();
   const stateMissing = highlightMissing && !state.trim();
   const cityMissing = highlightMissing && !city.trim();
 
@@ -441,8 +445,9 @@ export function StateCitySelect({
     <div className="cb-state-city-wrap" style={{ display: 'contents' }}>
       <style dangerouslySetInnerHTML={{ __html: styles }} />
       <div className={`cb-field${stateMissing ? ' cb-field-missing' : ''}`}>
-        <label>{stateLabel}</label>
+        <label htmlFor={stateId}>{stateLabel}</label>
         <select
+          id={stateId}
           className="cb-form-select"
           value={state}
           onChange={(e) => onStatePicked(e.target.value)}

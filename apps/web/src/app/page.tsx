@@ -1,22 +1,25 @@
-import { DayOrbitJourney } from "@/components/landing/DayOrbitJourney";
-import { Footer } from "@/components/landing/Footer";
-import { Hero } from "@/components/landing/Hero";
-import { Navbar } from "@/components/landing/Navbar";
+import { CandidateFeatures } from "@/components/landing/home/CandidateFeatures";
+import { ChoosePath } from "@/components/landing/home/ChoosePath";
+import { EmployerFeatures } from "@/components/landing/home/EmployerFeatures";
+import { HomeFooter } from "@/components/landing/home/HomeFooter";
+import { HomeHero } from "@/components/landing/home/HomeHero";
+import { HomeStats } from "@/components/landing/home/HomeStats";
 import { SignedInHomeRedirect } from "@/components/landing/SignedInHomeRedirect";
-import { SkillMarquee } from "@/components/landing/SkillMarquee";
 import { SupportFab } from "@/components/landing/SupportFab";
+import "@/components/landing/home/home-landing.css";
 
 export default function Home() {
   return (
-    <div id="top" className="min-h-full bg-fog">
+    <div id="top" className="hl-page">
       <SignedInHomeRedirect />
-      <Navbar />
+      <HomeHero />
       <main>
-        <Hero />
-        <SkillMarquee />
-        <DayOrbitJourney />
+        <HomeStats />
+        <ChoosePath />
+        <CandidateFeatures />
+        <EmployerFeatures />
       </main>
-      <Footer />
+      <HomeFooter />
       <SupportFab />
     </div>
   );

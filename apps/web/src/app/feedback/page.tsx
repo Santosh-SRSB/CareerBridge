@@ -74,38 +74,38 @@ export default function FeedbackPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f3f8f6]">
+    <div className="min-h-screen bg-[#f3f3f8]">
       <Navbar landingLinks={false} />
       <main className="mx-auto max-w-xl px-4 py-10 sm:px-6">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#5a7a82]">Feedback</p>
-        <h1 className="mt-2 text-2xl font-extrabold text-[#0a2e2c] sm:text-3xl">{title}</h1>
-        <p className="mt-2 text-sm text-[#5a7a82]">{subtitle}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#5a5e82]">Feedback</p>
+        <h1 className="mt-2 text-2xl font-extrabold text-[#10137c] sm:text-3xl">{title}</h1>
+        <p className="mt-2 text-sm text-[#5a5e82]">{subtitle}</p>
 
         <form
           onSubmit={(event) => void onSubmit(event)}
-          className="mt-6 space-y-4 rounded-[22px] border border-[#d7eef6] bg-white p-5 shadow-[0_12px_28px_rgba(10,46,44,0.08)] sm:p-6"
+          className="mt-6 space-y-4 rounded-[22px] border border-[#d7daf6] bg-white p-5 shadow-[0_12px_28px_rgba(26,31,196,0.08)] sm:p-6"
         >
           <div>
-            <p className="mb-3 text-sm font-bold text-[#0a2e2c]">Your rating</p>
+            <p className="mb-3 text-sm font-bold text-[#10137c]">Your rating</p>
             <StarRating value={rating} onChange={setRating} size="lg" />
             <p className="mt-2 text-xs font-semibold text-amber-700">{rating} / 5 golden stars</p>
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-bold text-[#0a2e2c]" htmlFor="displayName">
+            <label className="mb-1.5 block text-sm font-bold text-[#10137c]" htmlFor="displayName">
               Display name
             </label>
             <input
               id="displayName"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm font-semibold text-[#0a2e2c] outline-none focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/15"
+              className="w-full rounded-xl border border-[#cfd2ee] bg-[#f7f8fe] px-3 py-2.5 text-sm font-semibold text-[#10137c] outline-none focus:border-[#1a1fc4] focus:ring-2 focus:ring-[#1a1fc4]/15"
               placeholder="How should we show your name?"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-bold text-[#0a2e2c]" htmlFor="quote">
+            <label className="mb-1.5 block text-sm font-bold text-[#10137c]" htmlFor="quote">
               Your feedback
             </label>
             <textarea
@@ -116,17 +116,17 @@ export default function FeedbackPage() {
               required
               minLength={20}
               maxLength={600}
-              className="w-full rounded-xl border border-[#cfe6ee] bg-[#f7fcfe] px-3 py-2.5 text-sm leading-relaxed text-[#0a2e2c] outline-none focus:border-[#0a2e2c] focus:ring-2 focus:ring-[#0a2e2c]/15"
+              className="w-full rounded-xl border border-[#cfd2ee] bg-[#f7f8fe] px-3 py-2.5 text-sm leading-relaxed text-[#10137c] outline-none focus:border-[#1a1fc4] focus:ring-2 focus:ring-[#1a1fc4]/15"
               placeholder="What worked well for you on CareerBridge?"
             />
-            <p className="mt-1 text-xs text-[#52707a]">{quote.length}/600</p>
+            <p className="mt-1 text-xs text-[#52567a]">{quote.length}/600</p>
           </div>
 
           {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}
           {message ? <p className="text-sm font-semibold text-emerald-700">{message}</p> : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" loading={loading} block={false} className="!bg-[#0a2e2c] px-5">
+            <Button type="submit" loading={loading} block={false} className="!bg-[#1a1fc4] px-5">
               Submit feedback
             </Button>
             <Button type="button" variant="outline" block={false} onClick={() => void onSkip()}>
@@ -135,9 +135,9 @@ export default function FeedbackPage() {
           </div>
         </form>
 
-        <p className="mt-5 text-center text-sm text-[#5a7a82]">
+        <p className="mt-5 text-center text-sm text-[#5a5e82]">
           See published stories on the{' '}
-          <Link href="/testimonials" className="font-bold text-[#0a2e2c] underline">
+          <Link href="/testimonials" className="font-bold text-[#10137c] underline">
             testimonials page
           </Link>
           .

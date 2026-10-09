@@ -204,7 +204,7 @@ export function WhatsAppInterviewNotice({
             type="submit"
             disabled={busy}
             aria-busy={busy || undefined}
-            className="inline-flex min-h-12 items-center rounded-lg bg-[#0a2e2c] px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+            className="inline-flex min-h-12 items-center rounded-lg bg-[#1a1fc4] px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
           >
             {busy ? 'Sending...' : 'Submit Reschedule Request'}
           </button>
@@ -272,7 +272,7 @@ export function WhatsAppInterviewNotice({
         <div className="mt-4 flex flex-wrap gap-2">
           <a
             href={meetingUrl}
-            className="inline-flex rounded-lg bg-[#0a2e2c] px-4 py-2 text-xs font-bold text-white"
+            className="inline-flex rounded-lg bg-[#1a1fc4] px-4 py-2 text-xs font-bold text-white"
           >
             Start meeting
           </a>
@@ -292,8 +292,8 @@ export function WhatsAppInterviewNotice({
   if (!pendingConfirmation) return null;
 
   return (
-    <div className="rounded-2xl border border-[#dcf8c6] bg-[#e7ffdb] p-4 sm:p-5">
-      <p className="text-xs font-bold uppercase tracking-wide text-[#075e54]">Interview response</p>
+    <div className="rounded-2xl border border-[#d7e1fa] bg-[#eef1ff] p-4 sm:p-5">
+      <p className="text-xs font-bold uppercase tracking-wide text-[#10137c]">Interview response</p>
       <div className="mt-3 rounded-xl bg-white p-4 text-sm text-slate-800 shadow-sm">
         <p>
           <strong>{interview.companyName}</strong> has scheduled an interview for{' '}
@@ -319,7 +319,7 @@ export function WhatsAppInterviewNotice({
               setConfirming(true);
               onConfirm?.();
             }}
-            className="inline-flex min-h-12 items-center rounded-lg bg-[#15803d] px-4 py-2 text-xs font-bold text-white disabled:opacity-70"
+            className="inline-flex min-h-12 items-center rounded-lg bg-[#1a1fc4] px-4 py-2 text-xs font-bold text-white hover:bg-[#10137c] disabled:opacity-70"
           >
             {busy && confirming ? (
               <>

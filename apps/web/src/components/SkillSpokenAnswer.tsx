@@ -294,7 +294,7 @@ export function SkillSpokenAnswer({
               className="cb-cast-empty"
               role="status"
               aria-live="assertive"
-              style={{ background: 'rgba(10,46,44,0.55)' }}
+              style={{ background: 'rgba(26,31,196,0.55)' }}
             >
               {countdown === 0 ? (
                 <strong style={{ fontSize: '1.75rem', color: '#fff' }}>Start speaking</strong>

@@ -84,7 +84,7 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
         {landingLinks ? (
           <div
             ref={navRef}
-            className="relative hidden flex-1 items-center justify-center md:flex"
+            className="relative hidden flex-1 items-center justify-center lg:flex"
             onMouseLeave={() => setActive(DEFAULT_LINK)}
           >
             <span
@@ -110,10 +110,10 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
             ))}
           </div>
         ) : (
-          <div className="hidden min-w-0 flex-1 md:block" />
+          <div className="hidden min-w-0 flex-1 lg:block" />
         )}
 
-        <div className="hidden w-[148px] shrink-0 items-center justify-end gap-3 sm:w-auto md:flex">
+        <div className="hidden w-[148px] shrink-0 items-center justify-end gap-3 sm:w-auto lg:flex">
           {signedIn ? (
             <>
               <Link
@@ -147,7 +147,7 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
 
         <button
           type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white text-white transition hover:bg-white hover:text-navy md:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white text-white transition hover:bg-white hover:text-navy lg:hidden"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
@@ -166,7 +166,7 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
       </nav>
 
       {open ? (
-        <div className="border-t border-white/15 bg-navbar px-4 py-4 md:hidden">
+        <div className="border-t border-white/15 bg-navbar px-4 py-4 lg:hidden">
           <div className="flex flex-col gap-3">
             {landingLinks
               ? links.map((link) => (

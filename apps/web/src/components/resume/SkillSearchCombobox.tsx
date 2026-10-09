@@ -5,6 +5,7 @@ import { ALL_SKILL_OPTIONS } from '@/data/technology-skills';
 
 const comboboxStyles = `
   .cb-skill-combo { position: relative; width: 100%; }
+  .cb-skill-combo-field { position: relative; }
   .cb-skill-combo-input-wrap {
     display: flex;
     align-items: center;
@@ -201,55 +202,57 @@ export function SkillSearchCombobox({
           {label}
         </label>
       ) : null}
-      <div className="cb-skill-combo-input-wrap">
-        <span aria-hidden style={{ opacity: 0.5 }}>⌕</span>
-        <input
-          id={inputId}
-          aria-label={label ? undefined : placeholder || 'Search skills'}
-          className="cb-skill-combo-input"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-            setHighlight(0);
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={listId}
-          aria-autocomplete="list"
-        />
-      </div>
+      <div className="cb-skill-combo-field">
+        <div className="cb-skill-combo-input-wrap">
+          <span aria-hidden style={{ opacity: 0.5 }}>⌕</span>
+          <input
+            id={inputId}
+            aria-label={label ? undefined : placeholder || 'Search skills'}
+            className="cb-skill-combo-input"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+              setHighlight(0);
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            role="combobox"
+            aria-expanded={open}
+            aria-controls={listId}
+            aria-autocomplete="list"
+          />
+        </div>
 
-      {open && (options.length > 0 || trimmed) && (
-        <ul className="cb-skill-combo-dropdown" id={listId} role="listbox">
-          {options.length === 0 ? (
-            <li className="cb-skill-combo-empty">Press Enter to add &ldquo;{trimmed}&rdquo;</li>
-          ) : (
-            options.map((opt, i) => {
-              const isAdd = opt.startsWith('__add__:');
-              const labelText = isAdd ? `Add "${opt.slice('__add__:'.length)}"` : opt;
-              return (
-                <li
-                  key={opt}
-                  role="option"
-                  aria-selected={i === highlight}
-                  className={`cb-skill-combo-option ${i === highlight ? 'highlighted' : ''} ${isAdd ? 'add-custom' : ''}`}
-                  onMouseEnter={() => setHighlight(i)}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    pick(opt);
-                  }}
-                >
-                  {labelText}
-                </li>
-              );
-            })
-          )}
-        </ul>
-      )}
+        {open && (options.length > 0 || trimmed) && (
+          <ul className="cb-skill-combo-dropdown" id={listId} role="listbox">
+            {options.length === 0 ? (
+              <li className="cb-skill-combo-empty">Press Enter to add &ldquo;{trimmed}&rdquo;</li>
+            ) : (
+              options.map((opt, i) => {
+                const isAdd = opt.startsWith('__add__:');
+                const labelText = isAdd ? `Add "${opt.slice('__add__:'.length)}"` : opt;
+                return (
+                  <li
+                    key={opt}
+                    role="option"
+                    aria-selected={i === highlight}
+                    className={`cb-skill-combo-option ${i === highlight ? 'highlighted' : ''} ${isAdd ? 'add-custom' : ''}`}
+                    onMouseEnter={() => setHighlight(i)}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      pick(opt);
+                    }}
+                  >
+                    {labelText}
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        )}
+      </div>
 
       {!hideChips && uniqueSelected.length > 0 && (
         <div className="cb-skill-chips">

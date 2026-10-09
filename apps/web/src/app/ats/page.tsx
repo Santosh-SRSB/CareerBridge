@@ -277,7 +277,7 @@ function AtsCheckerInner() {
             <p className="text-sm font-semibold text-slate-700">Add a resume first.</p>
             <Link
               href="/resumes"
-              className="mt-4 inline-block rounded-xl bg-[#0a2e2c] px-4 py-2.5 text-sm font-bold text-white"
+              className="mt-4 inline-block rounded-full bg-[#1a1fc4] px-4 py-2.5 text-sm font-bold text-white"
             >
               Go to View Resume
             </Link>
@@ -313,7 +313,7 @@ function AtsCheckerInner() {
                     type="button"
                     onClick={() => void openAts(row.id)}
                     disabled={failed || processing}
-                    className="rounded-xl bg-[#0a2e2c] px-4 py-2 text-sm font-bold text-white hover:bg-[#072422] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-full bg-[#1a1fc4] px-4 py-2 text-sm font-bold text-white hover:bg-[#10137c] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Check ATS score
                   </button>

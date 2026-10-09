@@ -40,7 +40,7 @@ export default function SavedJobsPage() {
             <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Saved Jobs</h1>
             <p className="mt-1 text-sm text-slate-600">Roles you bookmarked to apply later.</p>
           </div>
-          <Link href="/jobs" className="text-sm font-bold text-[#0a2e2c] hover:underline">
+          <Link href="/jobs" className="text-sm font-bold text-[#10137c] hover:underline">
             Find jobs
           </Link>
         </div>

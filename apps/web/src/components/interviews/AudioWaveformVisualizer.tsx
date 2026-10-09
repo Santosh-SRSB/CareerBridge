@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
 
-/** Tunable knobs for the neon multi-layer waveform. */
+/** Tunable knobs for the multi-layer waveform. */
 export const visualizerConfig = {
   lineCount: 48,
   sensitivity: 1.65,
@@ -72,17 +72,17 @@ function envelope(nx: number, width: number) {
 function strokeColor(ctx: CanvasRenderingContext2D, t: number, energy: number, w: number) {
   const g = ctx.createLinearGradient(0, 0, w, 0);
   const bright = 0.35 + energy * 0.65;
-  // Blue → violet → magenta with cyan/white core influence
-  g.addColorStop(0, `rgba(59, 100, 255, ${0.15 + bright * 0.25})`);
-  g.addColorStop(0.25 + t * 0.05, `rgba(120, 70, 255, ${0.2 + bright * 0.35})`);
-  g.addColorStop(0.5, `rgba(${180 + energy * 60}, ${200 + energy * 40}, 255, ${0.35 + bright * 0.5})`);
-  g.addColorStop(0.72, `rgba(200, 80, 255, ${0.22 + bright * 0.4})`);
-  g.addColorStop(1, `rgba(80, 140, 255, ${0.12 + bright * 0.2})`);
+  // Brand blue edges into a navy centre, drawn on a light surface
+  g.addColorStop(0, `rgba(26, 31, 196, ${0.08 + bright * 0.18})`);
+  g.addColorStop(0.25 + t * 0.05, `rgba(59, 90, 230, ${0.14 + bright * 0.28})`);
+  g.addColorStop(0.5, `rgba(16, 19, 124, ${0.3 + bright * 0.45})`);
+  g.addColorStop(0.72, `rgba(79, 110, 247, ${0.16 + bright * 0.3})`);
+  g.addColorStop(1, `rgba(26, 31, 196, ${0.08 + bright * 0.18})`);
   return g;
 }
 
 /**
- * Premium multi-layer neon waveform driven by live mic amplitude (0–1).
+ * Multi-layer waveform driven by live mic amplitude (0–1).
  * Reads `amplitudeRef` inside rAF — no React re-renders per frame.
  */
 export function AudioWaveformVisualizer({
@@ -155,8 +155,7 @@ export function AudioWaveformVisualizer({
 
       // Subtle center spine
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = energy > 0.02 ? `rgba(180, 220, 255, ${0.18 + energy * 0.35})` : 'rgba(120, 150, 200, 0.18)';
+      ctx.strokeStyle = energy > 0.02 ? `rgba(26, 31, 196, ${0.14 + energy * 0.2})` : 'rgba(16, 19, 124, 0.14)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(width * 0.04, midY);
@@ -167,10 +166,9 @@ export function AudioWaveformVisualizer({
       if (energy < 0.008) {
         // Near-flat calm state — tiny glow only
         ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = 'rgba(100, 140, 255, 0.35)';
-        ctx.strokeStyle = `rgba(140, 170, 255, ${config.silenceLineOpacity})`;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = 'rgba(26, 31, 196, 0.2)';
+        ctx.strokeStyle = `rgba(26, 31, 196, ${config.silenceLineOpacity + 0.2})`;
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.moveTo(width * 0.06, midY);
@@ -185,13 +183,12 @@ export function AudioWaveformVisualizer({
       const samples = Math.max(120, Math.floor(width / 3));
 
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
       // Soft bloom pass
-      ctx.shadowBlur = config.glowIntensity * (0.45 + energy * 0.9);
-      ctx.shadowColor = `rgba(120, 80, 255, ${0.25 + energy * 0.45})`;
+      ctx.shadowBlur = config.glowIntensity * (0.2 + energy * 0.4);
+      ctx.shadowColor = `rgba(26, 31, 196, ${0.12 + energy * 0.2})`;
 
       for (let li = 0; li < layers.length; li += 1) {
         const layer = layers[li];
@@ -223,10 +220,10 @@ export function AudioWaveformVisualizer({
         ctx.stroke();
       }
 
-      // Bright cyan/white core highlight
-      ctx.shadowBlur = config.glowIntensity * 1.4;
-      ctx.shadowColor = `rgba(200, 240, 255, ${0.35 + energy * 0.5})`;
-      ctx.strokeStyle = `rgba(240, 250, 255, ${config.activeCoreOpacity * (0.35 + energy * 0.65)})`;
+      // Navy core line
+      ctx.shadowBlur = config.glowIntensity * 0.5;
+      ctx.shadowColor = `rgba(26, 31, 196, ${0.2 + energy * 0.25})`;
+      ctx.strokeStyle = `rgba(16, 19, 124, ${config.activeCoreOpacity * (0.45 + energy * 0.55)})`;
       ctx.lineWidth = 2.4;
       ctx.globalAlpha = 1;
       ctx.beginPath();
@@ -260,7 +257,7 @@ export function AudioWaveformVisualizer({
   }, [active, amplitudeRef, config]);
 
   return (
-    <div ref={wrapRef} className={`relative h-full w-full overflow-hidden bg-black ${className}`}>
+    <div ref={wrapRef} className={`relative h-full w-full overflow-hidden ${className}`}>
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
     </div>
   );

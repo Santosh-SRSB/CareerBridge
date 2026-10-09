@@ -98,7 +98,7 @@ export function PassportPreview({
               </p>
             </div>
           </div>
-          <span className="shrink-0 rounded-pill bg-[#eab308] px-2 py-0.5 text-[9px] font-extrabold text-[#0a2e2c]">
+          <span className="shrink-0 rounded-pill bg-[#eab308] px-2 py-0.5 text-[9px] font-extrabold text-ink">
             FREE
           </span>
         </div>
@@ -135,7 +135,7 @@ export function PassportPreview({
         <div className="relative mt-3 flex flex-col items-center">
           <Link
             href={ready < 100 ? '/passport/personal' : '/passport'}
-            className="inline-flex h-8 items-center rounded-full bg-[#eab308] px-3.5 text-xs font-extrabold text-[#0a2e2c] shadow-[0_8px_18px_rgba(0,0,0,0.28)] transition hover:brightness-110"
+            className="inline-flex h-8 items-center rounded-full bg-[#eab308] px-3.5 text-xs font-extrabold text-ink shadow-[0_8px_18px_rgba(0,0,0,0.28)] transition hover:brightness-110"
           >
             {ready < 100 ? 'Improve Passport' : 'Open dashboard'}
           </Link>

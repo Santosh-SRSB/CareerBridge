@@ -7,34 +7,34 @@ export const ONBOARDING_TOTAL_STEPS = 4;
 
 /** Onboarding card palette — matches Profile Builder reference */
 export const OB = {
-  ink: '#1c1c1a',
-  clay: '#B4592A',
-  moss: '#0B3D33',
-  accent: '#0B3D33',
-  accentDark: '#062019',
-  accentTint: '#E3F2ED',
-  accentTintStrong: '#A9D6C7',
+  ink: '#10137c',
+  clay: '#1A1FC4',
+  moss: '#10137C',
+  accent: '#10137C',
+  accentDark: '#10137c',
+  accentTint: '#E3E4F2',
+  accentTintStrong: '#A9ADD6',
   gold: '#D9A441',
-  bg: '#f4f4f2',
+  bg: '#f8f9fc',
   surface: '#ffffff',
-  surfaceTint: '#f6f6f4',
-  muted: '#6b6a63',
-  textMuted: '#a3a299',
-  border: '#e4e3de',
-  borderStrong: '#d4d3cc',
-  line: '#d4d3cc',
-  lineSoft: '#e4e3de',
-  green50: '#E3F2ED',
-  green100: '#A9D6C7',
-  green200: '#6FB89E',
-  green400: '#1F6E58',
-  green800: '#0B3D33',
+  surfaceTint: '#f5f7ff',
+  muted: '#4b4f8f',
+  textMuted: '#7b7fa8',
+  border: '#e5e7f2',
+  borderStrong: '#d1d5e5',
+  line: '#d1d5e5',
+  lineSoft: '#e5e7f2',
+  green50: '#E3E4F2',
+  green100: '#A9ADD6',
+  green200: '#6F76B8',
+  green400: '#1F276E',
+  green800: '#10137C',
   amber50: '#FAEEDA',
   amber100: '#FAC775',
   amber800: '#633806',
-  teal50: '#E1F5EE',
-  teal100: '#9FE1CB',
-  teal800: '#085041',
+  teal50: '#E1E3F5',
+  teal100: '#9FA6E1',
+  teal800: '#10137c',
   purple50: '#EEEDFE',
   purple100: '#CECBF6',
   purple800: '#3C3489',
@@ -53,18 +53,18 @@ export const onboardingPrimaryButtonClass =
 export const onboardingOptionButtonClass = (active: boolean) =>
   `rounded-full border px-3.5 py-2 text-xs font-medium transition sm:text-sm ${
     active
-      ? 'border-[#0B3D33] bg-[#0B3D33] text-white'
-      : 'border-[#d4d3cc] bg-white text-[#6b6a63] hover:border-[#0B3D33]'
+      ? 'border-[#10137C] bg-[#10137C] text-white'
+      : 'border-[#d1d5e5] bg-white text-[#4b4f8f] hover:border-[#10137C]'
   }`;
 
 export const onboardingSkipButtonClass =
-  'inline-flex items-center gap-1 text-xs font-medium text-[#0B3D33] hover:opacity-80 transition sm:text-sm';
+  'inline-flex items-center gap-1 text-xs font-medium text-[#10137C] hover:opacity-80 transition sm:text-sm';
 
 export const onboardingInputClass =
-  'h-10 w-full rounded-[10px] border border-[#d4d3cc] bg-[#f6f6f4] px-3 text-sm text-[#1c1c1a] outline-none transition focus:border-[#0B3D33] focus:shadow-[0_0_0_3px_#E3F2ED]';
+  'h-10 w-full rounded-[10px] border border-[#d1d5e5] bg-[#f5f7ff] px-3 text-sm text-[#10137c] outline-none transition focus:border-[#10137C] focus:shadow-[0_0_0_3px_#E3E4F2]';
 
 export const onboardingLabelClass =
-  'mb-1.5 block text-[13px] font-medium text-[#6b6a63]';
+  'mb-1.5 block text-[13px] font-medium text-[#4b4f8f]';
 
 export function OnboardingFrame({
   step,
