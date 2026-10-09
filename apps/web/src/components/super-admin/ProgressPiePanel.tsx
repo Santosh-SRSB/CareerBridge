@@ -17,8 +17,6 @@ import { EmptyState, ErrorState, Skeleton } from '@/components/ui/StateViews';
 type Props = {
   title: string;
   noun: string;
-  accent: string;
-  ink: string;
   testId: string;
   load: () => Promise<AdminProgressReport>;
 };
@@ -27,7 +25,7 @@ function ProgressPieSkeleton({ label, rows }: { label: string; rows: number }) {
   return (
     <div role="status" aria-live="polite" data-state="loading" className="flex flex-col items-center gap-4 p-4">
       <span className="sr-only">{label}</span>
-      <div aria-hidden="true" className="cb-skeleton aspect-square w-full max-w-[220px] animate-pulse rounded-full bg-slate-200/80" />
+      <div aria-hidden="true" className="cb-skeleton aspect-square w-full max-w-[220px] animate-pulse rounded-full bg-[var(--sa-tint2)]" />
       <div className="w-full space-y-2">
         {Array.from({ length: rows }).map((_, i) => (
           <Skeleton key={i} className="h-5 w-full" />
@@ -37,7 +35,7 @@ function ProgressPieSkeleton({ label, rows }: { label: string; rows: number }) {
   );
 }
 
-function ProgressPiePanel({ title, noun, accent, ink, testId, load }: Props) {
+function ProgressPiePanel({ title, noun, testId, load }: Props) {
   const [data, setData] = useState<AdminProgressReport | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -67,19 +65,16 @@ function ProgressPiePanel({ title, noun, accent, ink, testId, load }: Props) {
 
   return (
     <section
-      className="flex h-full min-w-0 flex-col border border-[#ddd] bg-white"
+      className="sa-card flex h-full min-w-0 flex-col overflow-hidden"
       aria-labelledby={headingId}
       data-testid={testId}
       data-state={state}
     >
-      <div
-        className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[#eee] px-4 py-3"
-        style={{ backgroundColor: `${accent}14` }}
-      >
-        <h2 id={headingId} className="text-sm font-bold uppercase tracking-wide" style={{ color: ink }}>
+      <div className="sa-soft-h flex flex-wrap items-baseline justify-between gap-2 px-4 py-3">
+        <h2 id={headingId} className="text-sm font-bold uppercase tracking-wide">
           {title}
         </h2>
-        {data && state !== 'error' ? <p className="text-xs text-[#666]">{progressCaption(data, noun)}</p> : null}
+        {data && state !== 'error' ? <p className="sa-muted text-xs">{progressCaption(data, noun)}</p> : null}
       </div>
       {state === 'loading' ? (
         <ProgressPieSkeleton label={`Loading ${title.toLowerCase()}…`} rows={data?.stages.length || 5} />
@@ -131,7 +126,7 @@ function ProgressPiePanel({ title, noun, accent, ink, testId, load }: Props) {
               ) : null,
             )}
           </svg>
-          <ol className="w-full divide-y divide-[#f0f0f0]" data-testid="progress-legend">
+          <ol className="sa-rows w-full" data-testid="progress-legend">
             {data.stages.map((stage, index) => {
               const slice = pie.slices[index]!;
               return (
@@ -145,21 +140,19 @@ function ProgressPiePanel({ title, noun, accent, ink, testId, load }: Props) {
                   onMouseLeave={() => setActiveKey(null)}
                 >
                   <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} aria-hidden="true" />
-                  <span className="w-4 shrink-0 text-xs font-black" style={{ color: ink }}>
-                    {index + 1}
-                  </span>
-                  <span className="min-w-0 flex-1 font-semibold text-[#333]" data-testid="stage-label">
+                  <span className="sa-muted w-4 shrink-0 text-xs font-extrabold">{index + 1}</span>
+                  <span className="sa-ink min-w-0 flex-1 font-semibold" data-testid="stage-label">
                     {stage.label}
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums text-[#666]">{slice.share}%</span>
-                  <span className="w-12 shrink-0 text-right text-base font-black tabular-nums text-[#333]" data-testid="stage-count">
+                  <span className="sa-muted shrink-0 text-xs tabular-nums">{slice.share}%</span>
+                  <span className="sa-value w-12 shrink-0 text-right text-base" data-testid="stage-count">
                     {stage.count}
                   </span>
                 </li>
               );
             })}
           </ol>
-          <p className="w-full text-xs text-[#666]">
+          <p className="sa-muted w-full text-xs">
             Slices compare stage counts; one {noun.replace(/s$/, '')} can appear in several stages.
           </p>
         </div>
@@ -173,8 +166,6 @@ export function CandidateProgressPanel() {
     <ProgressPiePanel
       title="Candidate Progress"
       noun="candidates"
-      accent="#0aa3c2"
-      ink="#086f85"
       testId="candidate-progress"
       load={getAdminCandidateProgress}
     />
@@ -186,8 +177,6 @@ export function EmployerProgressPanel() {
     <ProgressPiePanel
       title="Employer Progress"
       noun="employers"
-      accent="#1f9d68"
-      ink="#16774f"
       testId="employer-progress"
       load={getAdminEmployerProgress}
     />

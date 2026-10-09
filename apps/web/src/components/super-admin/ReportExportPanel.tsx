@@ -32,15 +32,15 @@ export function ReportExportPanel() {
   }
 
   return (
-    <div className="border border-[#ddd] bg-white shadow-sm" style={{ borderTop: '5px solid #1f9d68' }} data-testid="report-export-panel">
+    <div className="sa-card overflow-hidden border-t-[3px] border-t-[var(--sa-brand)]" data-testid="report-export-panel">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wide text-[#1f9d68]">Excel reports</h2>
-          <p className="text-xs text-[#888]">Summary metrics plus every employer or candidate record (.xlsx).</p>
+          <h2 className="sa-brand-text text-sm font-bold uppercase tracking-wide">Excel reports</h2>
+          <p className="sa-muted text-xs">Summary metrics plus every employer or candidate record (.xlsx).</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {KINDS.map((kind) => (
-            <ActionBtn key={kind} accent="#1f9d68" disabled={Boolean(running[kind])} onClick={() => void download(kind)}>
+            <ActionBtn key={kind} disabled={Boolean(running[kind])} onClick={() => void download(kind)}>
               {running[kind] ? 'Preparing…' : ADMIN_REPORT_EXPORTS[kind].label}
             </ActionBtn>
           ))}
@@ -49,8 +49,8 @@ export function ReportExportPanel() {
       {message ? (
         <p
           role={message.tone === 'error' ? 'alert' : 'status'}
-          className={`border-t border-[#eee] px-4 py-2 text-xs font-semibold ${
-            message.tone === 'error' ? 'text-[#b93c1c]' : 'text-[#1e7a50]'
+          className={`border-t border-[var(--sa-tint2)] px-4 py-2 text-xs font-semibold ${
+            message.tone === 'error' ? 'sa-error-text' : 'sa-brand-text'
           }`}
         >
           {message.text}

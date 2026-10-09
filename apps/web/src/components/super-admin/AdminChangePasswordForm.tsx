@@ -5,8 +5,7 @@ import { registrationPasswordError } from '@careerbridge/shared';
 import { changeOwnAdminPassword } from '@/lib/api';
 import { userFacingError } from '@/lib/client-errors';
 
-const inputClass =
-  'w-full border border-[#ddd] bg-white px-3 py-2 text-sm outline-none focus:border-[#555]';
+const inputClass = 'sa-input w-full px-3 py-2 text-sm';
 
 export function AdminChangePasswordForm({ email }: { email?: string | null }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -48,23 +47,21 @@ export function AdminChangePasswordForm({ email }: { email?: string | null }) {
   }
 
   return (
-    <div className="max-w-xl border border-[#ddd] bg-white" data-testid="admin-change-password">
-      <div className="bg-[#3d4f63] px-4 py-3 text-sm font-bold uppercase tracking-wide text-white">
-        Change password
-      </div>
-      <p className="border-b border-[#eee] bg-[#fafafa] px-4 py-2 text-xs text-[#777]">
+    <div className="sa-card max-w-xl overflow-hidden" data-testid="admin-change-password">
+      <div className="sa-panel-h px-4 py-3 text-sm font-bold uppercase tracking-wide">Change password</div>
+      <p className="sa-note sa-muted px-4 py-2 text-xs">
         Changes the password you use to sign in to the admin portal
         {email ? (
           <>
             {' '}
-            as <span className="font-semibold text-[#444]">{email}</span>
+            as <span className="sa-ink font-semibold">{email}</span>
           </>
         ) : null}
         . At least 8 characters with an uppercase letter, a number, and a special character.
       </p>
       <form onSubmit={onSubmit} className="space-y-3 p-4" noValidate>
         <label className="block">
-          <span className="mb-1 block text-[11px] font-bold text-[#444]">Current password</span>
+          <span className="sa-ink mb-1 block text-[11px] font-bold">Current password</span>
           <input
             type="password"
             name="currentPassword"
@@ -75,7 +72,7 @@ export function AdminChangePasswordForm({ email }: { email?: string | null }) {
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[11px] font-bold text-[#444]">New password</span>
+          <span className="sa-ink mb-1 block text-[11px] font-bold">New password</span>
           <input
             type="password"
             name="newPassword"
@@ -86,7 +83,7 @@ export function AdminChangePasswordForm({ email }: { email?: string | null }) {
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[11px] font-bold text-[#444]">Confirm new password</span>
+          <span className="sa-ink mb-1 block text-[11px] font-bold">Confirm new password</span>
           <input
             type="password"
             name="confirmPassword"
@@ -99,18 +96,12 @@ export function AdminChangePasswordForm({ email }: { email?: string | null }) {
         {(error || ok) && (
           <p
             role={error ? 'alert' : 'status'}
-            className={`px-3 py-2 text-sm font-semibold ${
-              error ? 'border border-rose-200 bg-rose-50 text-rose-800' : 'border border-teal-200 bg-teal-50 text-teal-900'
-            }`}
+            className={`sa-notice px-3 py-2 text-sm font-semibold ${error ? 'sa-notice--error' : ''}`}
           >
             {error || ok}
           </p>
         )}
-        <button
-          type="submit"
-          disabled={busy}
-          className="bg-[#3d4f63] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={busy} className="sa-btn">
           {busy ? 'Changing…' : 'Change Password'}
         </button>
       </form>

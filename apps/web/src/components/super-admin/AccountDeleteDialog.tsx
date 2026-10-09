@@ -91,31 +91,31 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-pointer border-0 bg-[rgba(12,51,44,0.45)]"
+        className="absolute inset-0 cursor-pointer border-0 bg-[rgba(16,19,124,0.45)]"
         aria-label="Close"
         onClick={() => !busyRef.current && onClose()}
       />
-      <div className="relative z-[1] max-h-[90vh] w-full max-w-[520px] overflow-y-auto rounded-lg border-t-4 border-[#b42318] bg-white p-5 shadow-2xl">
+      <div className="relative z-[1] max-h-[90vh] w-full max-w-[520px] overflow-y-auto rounded-[var(--sa-radius-lg)] border-t-4 border-[var(--sa-danger)] bg-[var(--sa-surface)] p-5 shadow-2xl">
         <header className="mb-4">
-          <h2 id={titleId} className="text-lg font-bold text-[#b42318]">
+          <h2 id={titleId} className="sa-error-text text-lg font-bold">
             Permanently delete {label}?
           </h2>
-          <p className="mt-1 text-sm text-[#555]">
+          <p className="sa-muted mt-1 text-sm">
             {target.name} will be removed for good. This cannot be undone.
           </p>
         </header>
 
-        <div className="space-y-3 text-sm text-[#333]">
-          {loading ? <p className="text-[#666]">Checking the account…</p> : null}
+        <div className="sa-ink space-y-3 text-sm">
+          {loading ? <p className="sa-muted">Checking the account…</p> : null}
           {preview ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold">{preview.displayName}</span>
-                {preview.email ? <span className="text-xs text-[#666]">{preview.email}</span> : null}
+                {preview.email ? <span className="sa-muted text-xs">{preview.email}</span> : null}
                 <StatusPill status={preview.accountStatus} />
               </div>
               {preview.blockers.length > 0 ? (
-                <ul role="alert" className="space-y-1 border border-[#f3c4bd] bg-[#fdf1ef] px-3 py-2 text-[#b42318]">
+                <ul role="alert" className="sa-notice sa-notice--error space-y-1 px-3 py-2">
                   {preview.blockers.map((b) => (
                     <li key={b}>{b}</li>
                   ))}
@@ -123,7 +123,7 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
               ) : (
                 <>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#999]">Also deleted</p>
+                    <p className="sa-label">Also deleted</p>
                     <ul className="mt-1 grid grid-cols-1 gap-x-4 text-xs sm:grid-cols-2">
                       {preview.related.map((r) => (
                         <li key={r.label} className="flex justify-between gap-2">
@@ -134,14 +134,14 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
                     </ul>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#999]">Kept</p>
-                    <ul className="mt-1 list-disc pl-4 text-xs text-[#555]">
+                    <p className="sa-label">Kept</p>
+                    <ul className="sa-muted mt-1 list-disc pl-4 text-xs">
                       {preview.retained.map((r) => (
                         <li key={r}>{r}</li>
                       ))}
                     </ul>
                   </div>
-                  <label htmlFor={inputId} className="block text-xs font-semibold text-[#333]">
+                  <label htmlFor={inputId} className="block text-xs font-semibold">
                     Type {DELETE_CONFIRM_WORD} to confirm
                   </label>
                   <input
@@ -150,7 +150,7 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
                     onChange={(e) => setTyped(e.target.value)}
                     autoComplete="off"
                     disabled={busy}
-                    className="w-full rounded border border-[#ccc] px-3 py-2 text-sm focus:border-[#b42318] focus:outline-none"
+                    className="sa-input w-full px-3 py-2 text-sm focus:border-[var(--sa-danger)]"
                     data-testid="delete-confirm-input"
                   />
                 </>
@@ -158,7 +158,7 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
             </>
           ) : null}
           {error ? (
-            <p role="alert" className="text-sm text-[#b42318]">
+            <p role="alert" className="sa-error-text text-sm">
               {error}
             </p>
           ) : null}

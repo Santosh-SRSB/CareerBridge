@@ -27,23 +27,23 @@ export function EmployerJobReportPanel() {
   }, []);
 
   return (
-    <section className="border border-[#ddd] bg-white" aria-labelledby="admin-employer-report-title" data-testid="employer-job-report">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[#eee] bg-[#d9770614] px-4 py-3">
-        <h2 id="admin-employer-report-title" className="text-sm font-bold uppercase tracking-wide text-[#a15c04]">
+    <section className="sa-card overflow-hidden" aria-labelledby="admin-employer-report-title" data-testid="employer-job-report">
+      <div className="sa-soft-h flex flex-wrap items-baseline justify-between gap-2 px-4 py-3">
+        <h2 id="admin-employer-report-title" className="text-sm font-bold uppercase tracking-wide">
           Employer report · jobs
         </h2>
-        {data ? <p className="text-xs text-[#666]">{employerReportCaption(data)}</p> : null}
+        {data ? <p className="sa-muted text-xs">{employerReportCaption(data)}</p> : null}
       </div>
       {loading ? (
-        <p className="p-4 text-sm text-[#666]">Loading employer report…</p>
+        <p className="sa-muted p-4 text-sm">Loading employer report…</p>
       ) : error ? (
-        <p role="alert" className="p-4 text-sm text-[#b42318]">
+        <p role="alert" className="sa-error-text p-4 text-sm">
           {error}
         </p>
       ) : data && data.rows.length > 0 ? (
         <div className="max-h-[560px] overflow-auto">
-          <table className="min-w-[1060px] w-full text-left text-sm">
-            <thead className="sticky top-0 bg-[#d97706] text-xs uppercase tracking-wide text-white">
+          <table className="sa-table sa-table--brand min-w-[1060px] text-left text-sm">
+            <thead className="sticky top-0 z-[1]">
               <tr>
                 {EMPLOYER_REPORT_COLUMNS.map((col) => (
                   <th key={col.label} scope="col" className={`px-3 py-2 ${col.numeric ? 'text-right' : ''}`}>
@@ -54,7 +54,7 @@ export function EmployerJobReportPanel() {
             </thead>
             <tbody>
               {data.rows.map((row) => (
-                <tr key={row.jobId} className="border-t border-[#f3e7d6] align-top">
+                <tr key={row.jobId} className="align-top">
                   {EMPLOYER_REPORT_COLUMNS.map((col) => (
                     <td
                       key={col.label}
@@ -71,7 +71,7 @@ export function EmployerJobReportPanel() {
                           ))}
                         </ul>
                       ) : col.label === 'Employer Name' || col.label === 'Job Name' ? (
-                        <span className="font-semibold text-[#333]">{col.value(row)}</span>
+                        <span className="font-semibold">{col.value(row)}</span>
                       ) : (
                         col.value(row)
                       )}
@@ -83,7 +83,7 @@ export function EmployerJobReportPanel() {
           </table>
         </div>
       ) : (
-        <p className="p-4 text-sm text-[#666]">No posted jobs yet.</p>
+        <p className="sa-muted p-4 text-sm">No posted jobs yet.</p>
       )}
     </section>
   );

@@ -8,6 +8,15 @@ import {
   adminWhatsAppStatusLabel,
 } from '@/lib/admin-interview-status';
 
+/** Every module shares the portal palette; values resolve against the tokens on `.role-shell`. */
+const SA_TONE = {
+  accent: 'var(--sa-brand)',
+  soft: 'var(--sa-tint)',
+  ink: 'var(--sa-muted)',
+  panel: 'var(--sa-surface-alt)',
+  pattern: 'none',
+};
+
 export const TAB_THEME: Record<
   SuperAdminNavId,
   {
@@ -20,210 +29,68 @@ export const TAB_THEME: Record<
     pattern: string;
   }
 > = {
-  dashboard: {
-    accent: '#27a9e3',
-    soft: '#e8f6fc',
-    ink: '#1a6d96',
-    title: 'Dashboard',
-    blurb: 'Platform snapshot and quick jumps',
-    panel: '#f4fafd',
-    pattern: 'radial-gradient(circle at 0% 0%, rgba(39,169,227,0.12), transparent 45%)',
-  },
-  candidates: {
-    accent: '#27a9e3',
-    soft: '#e3f4fb',
-    ink: '#1a6d96',
-    title: 'Candidates',
-    blurb: 'People directory · profile cards',
-    panel: '#f3faff',
-    pattern: 'linear-gradient(135deg, rgba(39,169,227,0.08), transparent 50%)',
-  },
-  employers: {
-    accent: '#28b779',
-    soft: '#e7f8f1',
-    ink: '#1a7a52',
-    title: 'Employers',
-    blurb: 'Company verification board',
-    panel: '#f3fbf7',
-    pattern: 'linear-gradient(135deg, rgba(40,183,121,0.1), transparent 55%)',
-  },
-  jobs: {
-    accent: '#ffb848',
-    soft: '#fff6e8',
-    ink: '#9a6a12',
-    title: 'Jobs',
-    blurb: 'Moderation strip by status color',
-    panel: '#fffaf2',
-    pattern: 'repeating-linear-gradient(-45deg, rgba(255,184,72,0.08) 0 8px, transparent 8px 16px)',
-  },
-  applications: {
-    accent: '#da542e',
-    soft: '#fdece7',
-    ink: '#8f3218',
-    title: 'Applications',
-    blurb: 'Pipeline tickets across employers',
-    panel: '#fff8f5',
-    pattern: 'radial-gradient(circle at 100% 0%, rgba(218,84,46,0.12), transparent 40%)',
-  },
-  interviews: {
-    accent: '#2255a4',
-    soft: '#e8eef8',
-    ink: '#163a72',
-    title: 'Interviews',
-    blurb: 'Schedule timeline cards',
-    panel: '#f4f7fc',
-    pattern: 'linear-gradient(180deg, rgba(34,85,164,0.08), transparent 40%)',
-  },
-  skills: {
-    accent: '#852b99',
-    soft: '#f5eaf8',
-    ink: '#5c1d6a',
-    title: 'Skills',
-    blurb: 'Taxonomy chips and master data',
-    panel: '#fbf6fd',
-    pattern: 'radial-gradient(circle at 20% 20%, rgba(133,43,153,0.12), transparent 45%)',
-  },
-  'ai-usage': {
-    accent: '#f74d4d',
-    soft: '#fdeceb',
-    ink: '#a12828',
-    title: 'AI Usage',
-    blurb: 'Cost and feature consumption',
-    panel: '#fff6f6',
-    pattern: 'linear-gradient(120deg, rgba(247,77,77,0.1), transparent 50%)',
-  },
-  notifications: {
-    accent: '#0aa3c2',
-    soft: '#e6f7fb',
-    ink: '#0a6f84',
-    title: 'Notifications',
-    blurb: 'Inbox + WhatsApp delivery board',
-    panel: '#f2fbfd',
-    pattern: 'repeating-linear-gradient(90deg, rgba(10,163,194,0.06) 0 12px, transparent 12px 24px)',
-  },
-  testimonials: {
-    accent: '#0a2e2c',
-    soft: '#e7f3ef',
-    ink: '#0a2e2c',
-    title: 'Testimonials',
-    blurb: 'Approve or reject public feedback quotes',
-    panel: '#f4faf8',
-    pattern: 'radial-gradient(circle at 10% 0%, rgba(10,46,44,0.1), transparent 45%)',
-  },
-  reports: {
-    accent: '#1f9d68',
-    soft: '#e8f8f0',
-    ink: '#146b47',
-    title: 'Reports',
-    blurb: 'Operational metric packs',
-    panel: '#f3faf6',
-    pattern: 'linear-gradient(45deg, rgba(31,157,104,0.08), transparent 55%)',
-  },
-  admins: {
-    accent: '#2b3643',
-    soft: '#eceef1',
-    ink: '#2b3643',
-    title: 'Administration',
-    blurb: 'Staff access control',
-    panel: '#f5f6f8',
-    pattern: 'linear-gradient(180deg, rgba(43,54,67,0.08), transparent 35%)',
-  },
-  settings: {
-    accent: '#5c6570',
-    soft: '#f0f1f2',
-    ink: '#333940',
-    title: 'Settings',
-    blurb: 'Controlled platform configuration',
-    panel: '#f7f7f8',
-    pattern: 'repeating-linear-gradient(0deg, rgba(92,101,112,0.05) 0 1px, transparent 1px 12px)',
-  },
-  audit: {
-    accent: '#d97706',
-    soft: '#fff7e8',
-    ink: '#92400e',
-    title: 'Audit',
-    blurb: 'Chronological action trail',
-    panel: '#fffbf3',
-    pattern: 'linear-gradient(135deg, rgba(217,119,6,0.1), transparent 50%)',
-  },
-  account: {
-    accent: '#3d4f63',
-    soft: '#eef1f4',
-    ink: '#2b3643',
-    title: 'My Account',
-    blurb: 'Your portal sign-in and password',
-    panel: '#f6f8fa',
-    pattern: 'linear-gradient(160deg, rgba(61,79,99,0.08), transparent 45%)',
-  },
+  dashboard: { ...SA_TONE, title: 'Dashboard', blurb: 'Platform snapshot and quick jumps' },
+  candidates: { ...SA_TONE, title: 'Candidates', blurb: 'People directory · profile cards' },
+  employers: { ...SA_TONE, title: 'Employers', blurb: 'Company verification board' },
+  jobs: { ...SA_TONE, title: 'Jobs', blurb: 'Moderation strip by status color' },
+  applications: { ...SA_TONE, title: 'Applications', blurb: 'Pipeline tickets across employers' },
+  interviews: { ...SA_TONE, title: 'Interviews', blurb: 'Schedule timeline cards' },
+  skills: { ...SA_TONE, title: 'Skills', blurb: 'Taxonomy chips and master data' },
+  'ai-usage': { ...SA_TONE, title: 'AI Usage', blurb: 'Cost and feature consumption' },
+  notifications: { ...SA_TONE, title: 'Notifications', blurb: 'Inbox + WhatsApp delivery board' },
+  testimonials: { ...SA_TONE, title: 'Testimonials', blurb: 'Approve or reject public feedback quotes' },
+  reports: { ...SA_TONE, title: 'Reports', blurb: 'Operational metric packs' },
+  admins: { ...SA_TONE, title: 'Administration', blurb: 'Staff access control' },
+  settings: { ...SA_TONE, title: 'Settings', blurb: 'Controlled platform configuration' },
+  audit: { ...SA_TONE, title: 'Audit', blurb: 'Chronological action trail' },
+  account: { ...SA_TONE, title: 'My Account', blurb: 'Your portal sign-in and password' },
 };
 
-/** `status` picks the colour; `label` (e.g. an admin display label) replaces the text when given. */
+const OK_STATUSES = ['ACTIVE', 'PUBLISHED', 'CONFIRMED', 'HIRED', 'DELIVERED', 'SELECTED', 'COMPLETED', 'SUCCESS', 'VERIFIED', 'APPROVED'];
+const BAD_STATUSES = ['SUSPENDED', 'CLOSED', 'FAILED', 'REJECTED', 'CANCELLED', 'INACTIVE'];
+const WARN_STATUSES = ['PAUSED', 'PENDING', 'PENDING_REVIEW', 'QUEUED', 'DRAFT', 'SHORTLISTED', 'SCHEDULED', 'PROPOSED', 'RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED', 'UNDER_REVIEW', 'ON_HOLD', 'PROFILE_SHORTLISTED', 'INTERVIEW_RESCHEDULED', 'FEEDBACK_PENDING'];
+
+/** `status` picks the tone; `label` (e.g. an admin display label) replaces the text when given. */
 export function StatusPill({ status, label }: { status: string; label?: string | null }) {
   const s = status.toUpperCase();
-  const bg =
-    ['ACTIVE', 'PUBLISHED', 'CONFIRMED', 'HIRED', 'DELIVERED', 'SELECTED', 'COMPLETED', 'SUCCESS', 'VERIFIED', 'APPROVED'].includes(s)
-      ? '#1e7a50'
-      : ['SUSPENDED', 'CLOSED', 'FAILED', 'REJECTED', 'CANCELLED', 'INACTIVE'].includes(s)
-        ? '#b93c1c'
-        : ['PAUSED', 'PENDING', 'PENDING_REVIEW', 'QUEUED', 'DRAFT', 'SHORTLISTED', 'SCHEDULED', 'PROPOSED', 'RESCHEDULE_NEEDED', 'RESCHEDULE_REQUESTED', 'UNDER_REVIEW', 'ON_HOLD', 'PROFILE_SHORTLISTED', 'INTERVIEW_RESCHEDULED', 'FEEDBACK_PENDING'].includes(
-              s,
-            )
-          ? '#a35f00'
-          : '#1d6fa5';
-  return (
-    <span
-      className="inline-flex rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
-      style={{ backgroundColor: bg }}
-    >
-      {label || status || '—'}
-    </span>
-  );
+  const tone = OK_STATUSES.includes(s)
+    ? 'sa-pill--ok'
+    : BAD_STATUSES.includes(s)
+      ? 'sa-pill--bad'
+      : WARN_STATUSES.includes(s)
+        ? 'sa-pill--warn'
+        : '';
+  return <span className={`sa-pill ${tone}`}>{label || status || '—'}</span>;
 }
 
 export function ModuleBanner({ tab }: { tab: SuperAdminNavId }) {
   const t = TAB_THEME[tab];
   return (
-    <div
-      className="matrix-dash-hero mb-4 flex flex-wrap items-end justify-between gap-3 border-l-4 px-4 py-3"
-      style={{ borderColor: t.accent }}
-    >
-      <div className="relative z-[1]">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: t.ink }}>
-          Module
-        </p>
-        <h1 className="text-2xl font-semibold text-[#444]">{t.title}</h1>
-        <p className="text-xs" style={{ color: t.ink }}>
-          {t.blurb}
-        </p>
+    <div className="sa-hero mb-4 flex flex-wrap items-end justify-between gap-3 px-4 py-3 sm:px-5">
+      <div>
+        <p className="sa-eyebrow">Module</p>
+        <h1 className="sa-h1">{t.title}</h1>
+        <p className="sa-muted text-xs">{t.blurb}</p>
       </div>
-      <p className="relative z-[1] text-xs text-[#999]">
+      <p className="sa-crumb">
         Home <span className="mx-1">›</span> {t.title}
       </p>
     </div>
   );
 }
 
-export function ModuleCanvas({ tab, children }: { tab: SuperAdminNavId; children: ReactNode }) {
-  const t = TAB_THEME[tab];
-  return (
-    <div
-      className="rounded-sm border border-[#d0d5da] p-3 sm:p-4"
-      style={{ backgroundColor: t.soft, backgroundImage: t.pattern }}
-    >
-      {children}
-    </div>
-  );
+export function ModuleCanvas({ children }: { tab: SuperAdminNavId; children: ReactNode }) {
+  return <div className="sa-canvas p-3 sm:p-4">{children}</div>;
 }
 
 export function SearchBar({
-  accent,
   value,
   onChange,
   onSubmit,
   placeholder,
   filter,
 }: {
-  accent: string;
+  accent?: string;
   value: string;
   onChange: (v: string) => void;
   onSubmit: (e: FormEvent) => void;
@@ -231,43 +98,49 @@ export function SearchBar({
   filter?: ReactNode;
 }) {
   return (
-    <form onSubmit={onSubmit} className="mb-4 flex flex-wrap items-center gap-2 border border-[#e5e5e5] bg-white p-3">
+    <form onSubmit={onSubmit} className="sa-card mb-4 flex flex-wrap items-center gap-2 p-3">
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="min-w-[200px] flex-1 border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm outline-none focus:border-[#999]"
+        className="sa-input min-w-[200px] flex-1 px-3 py-2 text-sm"
       />
       {filter}
-      <button type="submit" className="px-4 py-2 text-sm font-bold text-white" style={{ backgroundColor: accent }}>
+      <button type="submit" className="sa-btn">
         Search
       </button>
     </form>
   );
 }
 
+export type ActionTone = 'primary' | 'secondary' | 'strong' | 'danger';
+
+const ACTION_TONE_CLASS: Record<ActionTone, string> = {
+  primary: '',
+  secondary: 'sa-act--line',
+  strong: 'sa-act--strong',
+  danger: 'sa-act--danger',
+};
+
+/** `danger` and `accent` remain for older callers; the tone comes from `tone` (or `danger` → strong). */
 export function ActionBtn({
   children,
   onClick,
   disabled,
   danger,
-  accent,
+  tone,
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   danger?: boolean;
   accent?: string;
+  tone?: ActionTone;
 }) {
+  const resolved: ActionTone = tone ?? (danger ? 'strong' : 'primary');
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white disabled:opacity-40"
-      style={{ backgroundColor: danger ? '#da542e' : accent || '#27a9e3' }}
-    >
+    <button type="button" disabled={disabled} onClick={onClick} className={`sa-act ${ACTION_TONE_CLASS[resolved]}`}>
       {children}
     </button>
   );
@@ -307,17 +180,17 @@ function txt(value: unknown): string {
 
 function Field({ label, value }: { label: string; value: unknown }) {
   return (
-    <div>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[#999]">{label}</p>
-      <p className="mt-0.5 text-sm font-medium text-[#333]">{txt(value)}</p>
+    <div className="min-w-0">
+      <p className="sa-label">{label}</p>
+      <p className="sa-ink mt-0.5 text-sm font-medium [overflow-wrap:anywhere]">{txt(value)}</p>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="border border-[#eee] bg-[#fafafa] p-3">
-      <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#888]">{title}</p>
+    <div className="sa-inset min-w-0 p-3">
+      <p className="sa-label mb-2">{title}</p>
       {children}
     </div>
   );
@@ -344,44 +217,40 @@ function personName(data: Record<string, unknown>) {
 function InterviewStatusFlow({
   status,
   events,
-  accent,
 }: {
   status: string;
   events: Array<Record<string, unknown>>;
-  accent: string;
 }) {
   const { steps, cancelled } = adminInterviewFlowSteps(status);
   return (
     <Section title="Interview status flow">
       {cancelled ? (
-        <p className="mb-2 rounded bg-[#fbe9e5] px-2 py-1 text-xs font-semibold text-[#b93c1c]">
+        <p className="sa-notice sa-notice--error mb-2 px-2 py-1 text-xs font-semibold">
           Cancelled — this interview is outside the normal flow.
         </p>
       ) : null}
       <ol className="flex flex-wrap items-center gap-1.5" aria-label="Interview status flow">
         {steps.map((step, i) => (
           <li key={step.key} className="flex items-center gap-1.5">
-            <span
-              aria-current={step.current ? 'step' : undefined}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                step.current ? 'text-white' : 'border border-[#ddd] bg-white text-[#888]'
-              }`}
-              style={step.current ? { backgroundColor: accent } : undefined}
-            >
+            <span aria-current={step.current ? 'step' : undefined} className="sa-step px-2.5 py-1 text-[11px]">
               {step.label}
             </span>
-            {i < steps.length - 1 ? <span className="text-[#bbb]">→</span> : null}
+            {i < steps.length - 1 ? (
+              <span className="sa-muted" aria-hidden="true">
+                →
+              </span>
+            ) : null}
           </li>
         ))}
       </ol>
-      <p className="mt-2 text-[11px] text-[#888]">
+      <p className="sa-muted mt-2 text-[11px]">
         Highlighted stage is the current status. Not every candidate passes through every stage.
       </p>
       {events.length > 0 ? (
         <ul className="mt-3 space-y-1.5">
           {events.map((event, i) => (
-            <li key={`${txt(event.at)}-${i}`} className="text-xs text-[#555]">
-              <span className="font-semibold text-[#333]">{txt(event.label)}</span> · {txt(event.at)}
+            <li key={`${txt(event.at)}-${i}`} className="sa-muted text-xs">
+              <span className="sa-ink font-semibold">{txt(event.label)}</span> · {txt(event.at)}
             </li>
           ))}
         </ul>
@@ -394,12 +263,11 @@ function InterviewStatusFlow({
 export function DetailPanel({
   title,
   data,
-  accent,
   onClose,
 }: {
   title: string;
   data: Record<string, unknown>;
-  accent: string;
+  accent?: string;
   onClose: () => void;
 }) {
   const kind = String(data.kind || '');
@@ -460,19 +328,15 @@ export function DetailPanel({
             : personName(data);
 
   return (
-    <section className="overflow-hidden border border-[#e5e5e5] bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-white" style={{ backgroundColor: accent }}>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-white/75">{title}</p>
-          <h2 className="text-lg font-bold">{heading}</h2>
+    <section className="sa-card overflow-hidden">
+      <div className="sa-ccard-h flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <p className="sa-on-dark-muted text-[10px] font-bold uppercase tracking-[0.1em]">{title}</p>
+          <h2 className="text-lg font-extrabold [overflow-wrap:anywhere]">{heading}</h2>
         </div>
         <div className="flex items-center gap-2">
           {status ? <StatusPill status={status} label={adminStatusLabel} /> : null}
-          <button
-            type="button"
-            className="rounded bg-white/15 px-3 py-1 text-xs font-bold text-white hover:bg-white/25"
-            onClick={onClose}
-          >
+          <button type="button" className="sa-btn sa-btn--line sa-btn--on-dark min-h-9 px-4 text-xs" onClick={onClose}>
             Close
           </button>
         </div>
@@ -517,7 +381,7 @@ export function DetailPanel({
           </div>
         </Section>
 
-        {adminStatusLabel && <InterviewStatusFlow status={adminStatus} events={statusEvents} accent={accent} />}
+        {adminStatusLabel && <InterviewStatusFlow status={adminStatus} events={statusEvents} />}
 
         {(kind === 'candidates' || profile) && (
           <Section title="Profile">
@@ -527,7 +391,7 @@ export function DetailPanel({
               <Field label="Onboarded" value={profile?.onboardingCompleted ?? data.onboardingCompleted} />
             </div>
             {Boolean(profile?.about || data.about) && (
-              <p className="mt-3 text-sm leading-relaxed text-[#555]">{txt(profile?.about ?? data.about)}</p>
+              <p className="sa-muted mt-3 text-sm leading-relaxed">{txt(profile?.about ?? data.about)}</p>
             )}
           </Section>
         )}
@@ -580,7 +444,7 @@ export function DetailPanel({
               <Field label="Published" value={data.publishedAt} />
             </div>
             {data.description ? (
-              <p className="mt-3 max-h-28 overflow-auto text-xs leading-relaxed text-[#555]">{txt(data.description)}</p>
+              <p className="sa-muted mt-3 max-h-28 overflow-auto text-xs leading-relaxed">{txt(data.description)}</p>
             ) : null}
           </Section>
         )}
@@ -614,11 +478,7 @@ export function DetailPanel({
           <Section title="Skills">
             <div className="flex flex-wrap gap-1.5">
               {skills.map((s, i) => (
-                <span
-                  key={String(s.id ?? s.name ?? i)}
-                  className="rounded-full px-2.5 py-1 text-[11px] font-bold text-white"
-                  style={{ backgroundColor: accent }}
-                >
+                <span key={String(s.id ?? s.name ?? i)} className="sa-tag px-2.5 py-1 text-[11px]">
                   {txt(s.name)}
                 </span>
               ))}
@@ -630,9 +490,9 @@ export function DetailPanel({
           <Section title="Education history">
             <ul className="space-y-2">
               {education.slice(0, 8).map((row, i) => (
-                <li key={String(row.id ?? i)} className="border-b border-[#eee] pb-2 text-sm last:border-0">
-                  <p className="font-semibold text-[#333]">{txt(row.qualification)}</p>
-                  <p className="text-xs text-[#666]">
+                <li key={String(row.id ?? i)} className="border-b border-[var(--sa-tint2)] pb-2 text-sm last:border-0">
+                  <p className="sa-ink font-semibold">{txt(row.qualification)}</p>
+                  <p className="sa-muted text-xs">
                     {[row.institution, row.fieldOfStudy, row.yearCompleted].filter(Boolean).map(txt).join(' · ') || '—'}
                   </p>
                 </li>
@@ -645,10 +505,10 @@ export function DetailPanel({
           <Section title="Work experience">
             <ul className="space-y-2">
               {experience.slice(0, 8).map((row, i) => (
-                <li key={String(row.id ?? i)} className="border-b border-[#eee] pb-2 text-sm last:border-0">
-                  <p className="font-semibold text-[#333]">{txt(row.jobTitle)}</p>
-                  <p className="text-xs font-medium text-[#555]">{txt(row.company)}</p>
-                  {row.description ? <p className="mt-1 text-xs text-[#666]">{txt(row.description)}</p> : null}
+                <li key={String(row.id ?? i)} className="border-b border-[var(--sa-tint2)] pb-2 text-sm last:border-0">
+                  <p className="sa-ink font-semibold">{txt(row.jobTitle)}</p>
+                  <p className="sa-muted text-xs font-medium">{txt(row.company)}</p>
+                  {row.description ? <p className="mt-1 sa-muted text-xs">{txt(row.description)}</p> : null}
                 </li>
               ))}
             </ul>
@@ -661,10 +521,10 @@ export function DetailPanel({
               {resumes.slice(0, 6).map((row, i) => (
                 <li
                   key={String(row.id ?? i)}
-                  className="flex items-center justify-between gap-2 border-b border-[#eee] pb-2 text-xs last:border-0"
+                  className="flex items-center justify-between gap-2 border-b border-[var(--sa-tint2)] pb-2 text-xs last:border-0"
                 >
-                  <span className="font-semibold text-[#333]">{txt(row.title)}</span>
-                  <span className="text-[#888]">
+                  <span className="sa-ink font-semibold">{txt(row.title)}</span>
+                  <span className="sa-muted">
                     Score {txt(row.score)} · {txt(row.kind)}
                   </span>
                 </li>
@@ -678,7 +538,7 @@ export function DetailPanel({
             <ul className="space-y-2">
               {applications.slice(0, 8).map((row, i) => (
                 <li key={String(row.id ?? i)} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-[#444]">
+                  <span className="sa-ink">
                     {txt(row.jobTitle)} · {txt(row.companyName)}
                   </span>
                   <StatusPill status={String(row.status ?? '')} />
@@ -692,11 +552,11 @@ export function DetailPanel({
           <Section title="Interviews">
             <ul className="space-y-2">
               {interviews.slice(0, 8).map((row, i) => (
-                <li key={String(row.id ?? i)} className="text-xs text-[#555]">
-                  <p className="font-semibold text-[#333]">
+                <li key={String(row.id ?? i)} className="sa-muted text-xs">
+                  <p className="sa-ink font-semibold">
                     {txt(row.jobTitle)} · {txt(row.companyName)}
                   </p>
-                  <p className="mt-1 text-[#777]">{txt(row.scheduledAt)}</p>
+                  <p className="mt-1 sa-muted">{txt(row.scheduledAt)}</p>
                   <div className="mt-1">
                     <StatusPill status={String(row.status ?? '')} />
                   </div>
@@ -711,7 +571,7 @@ export function DetailPanel({
             <ul className="space-y-2">
               {jobs.slice(0, 8).map((row, i) => (
                 <li key={String(row.id ?? i)} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-semibold text-[#333]">{txt(row.title)}</span>
+                  <span className="sa-ink font-semibold">{txt(row.title)}</span>
                   <StatusPill status={String(row.status ?? '')} />
                 </li>
               ))}
@@ -735,7 +595,7 @@ export function DetailPanel({
             <ul className="space-y-2">
               {notifications.slice(0, 8).map((row, i) => (
                 <li key={String(row.id ?? i)} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-[#444]">
+                  <span className="sa-ink">
                     {txt(row.template)} · {txt(row.to)}
                   </span>
                   <StatusPill status={String(row.status ?? '')} />
@@ -749,9 +609,9 @@ export function DetailPanel({
           <Section title="Activity">
             <ul className="space-y-2">
               {activity.slice(0, 12).map((row, i) => (
-                <li key={String(row.id ?? i)} className="border-b border-[#eee] pb-2 text-xs last:border-0">
-                  <p className="font-semibold text-[#333]">{txt(row.action)}</p>
-                  <p className="text-[#777]">
+                <li key={String(row.id ?? i)} className="border-b border-[var(--sa-tint2)] pb-2 text-xs last:border-0">
+                  <p className="sa-ink font-semibold">{txt(row.action)}</p>
+                  <p className="sa-muted">
                     {txt(row.time)} · {txt(row.actor)}
                   </p>
                 </li>

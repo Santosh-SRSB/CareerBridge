@@ -617,7 +617,11 @@ export default function SuperAdminDashboardInner() {
   }
 
   if (!ready) {
-    return <main className="min-h-screen bg-[#eeeeee] p-8 text-sm text-[#888]">Checking access…</main>;
+    return (
+      <main className="role-shell min-h-screen p-8 text-sm">
+        <span className="sa-muted">Checking access…</span>
+      </main>
+    );
   }
 
   const theme = TAB_THEME[tab];
@@ -630,14 +634,14 @@ export default function SuperAdminDashboardInner() {
             const hero = roleDashboardHero(staffRole);
             return (
               <div
-                className={`${hero.className} mb-1 flex flex-wrap items-end justify-between gap-2 border-l-4 px-4 py-3`}
+                className={`${hero.className} sa-hero mb-1 flex flex-wrap items-end justify-between gap-2 px-4 py-3 sm:px-5`}
               >
-                <div className="relative z-[1]">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-80">{hero.eyebrow}</p>
-                  <h1 className="text-2xl font-semibold text-[#222]">{hero.title}</h1>
-                  <p className="text-xs opacity-80">{hero.blurb}</p>
+                <div>
+                  <p className="sa-eyebrow">{hero.eyebrow}</p>
+                  <h1 className="sa-h1">{hero.title}</h1>
+                  <p className="sa-muted text-xs">{hero.blurb}</p>
                 </div>
-                <p className="relative z-[1] text-xs opacity-60">
+                <p className="sa-crumb">
                   Home <span className="mx-1">›</span> Dashboard
                 </p>
               </div>
@@ -648,11 +652,7 @@ export default function SuperAdminDashboardInner() {
         )}
 
         {(error || ok) && (
-          <div
-            className={`px-4 py-3 text-sm font-semibold ${
-              error ? 'border border-rose-200 bg-rose-50 text-rose-800' : 'border border-teal-200 bg-teal-50 text-teal-900'
-            }`}
-          >
+          <div className={`sa-notice px-4 py-3 text-sm font-semibold ${error ? 'sa-notice--error' : ''}`}>
             {error || ok}
           </div>
         )}
@@ -672,37 +672,33 @@ export default function SuperAdminDashboardInner() {
         {tab === 'dashboard' && (
           <div className="space-y-4">
             {!metrics ? (
-              <p className="text-sm text-[#888]">Loading metrics…</p>
+              <p className="sa-muted text-sm">Loading metrics…</p>
             ) : (
               <>
                 <RoleDashboardHome role={staffRole} metrics={metrics} />
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <section className="border border-[#e5e5e5] bg-white p-4">
-                    <h2 className="mb-3 text-base font-semibold text-[#555]">Recent activity</h2>
-                    <ul className="space-y-2 text-sm">
+                  <section className="sa-card p-4">
+                    <h2 className="sa-h2 mb-3 text-base">Recent activity</h2>
+                    <ul className="sa-rows space-y-2 text-sm">
                       {(metrics.recentActivity ?? []).map((item) => (
-                        <li key={`${item.at}-${item.label}`} className="flex gap-3 border-b border-[#f0f0f0] py-2 text-[#555]">
-                          <span className="w-14 shrink-0 font-mono text-xs text-[#999]">{item.at.slice(11, 16)}</span>
+                        <li key={`${item.at}-${item.label}`} className="sa-ink flex gap-3 py-2">
+                          <span className="sa-muted w-14 shrink-0 text-xs font-semibold tabular-nums">{item.at.slice(11, 16)}</span>
                           <span>{item.label}</span>
                         </li>
                       ))}
                       {(metrics.recentActivity ?? []).length === 0 && (
-                        <li className="text-[#999]">No recent platform activity.</li>
+                        <li className="sa-muted">No recent platform activity.</li>
                       )}
                     </ul>
                   </section>
-                  <section className="border border-[#e5e5e5] bg-white p-4">
-                    <h2 className="mb-3 text-base font-semibold text-[#555]">System status</h2>
-                    <ul className="space-y-2 text-sm">
+                  <section className="sa-card p-4">
+                    <h2 className="sa-h2 mb-3 text-base">System status</h2>
+                    <ul className="sa-rows space-y-2 text-sm">
                       {(metrics.systemStatus ?? []).map((item) => (
-                        <li key={item.name} className="flex items-center justify-between border-b border-[#f0f0f0] py-2">
+                        <li key={item.name} className="sa-ink flex items-center justify-between py-2">
                           <span>{item.name}</span>
-                          <span
-                            className={
-                              item.status === 'Healthy' ? 'font-semibold text-[#28b779]' : 'font-semibold text-[#ffb848]'
-                            }
-                          >
-                            ● {item.status}
+                          <span className={`sa-pill ${item.status === 'Healthy' ? 'sa-pill--ok' : 'sa-pill--warn'}`}>
+                            {item.status}
                           </span>
                         </li>
                       ))}
@@ -717,88 +713,76 @@ export default function SuperAdminDashboardInner() {
         {tab === 'ai-usage' && (
           <div className="space-y-4">
             {!metrics ? (
-              <p className="text-sm text-[#888]">Loading AI usage…</p>
+              <p className="sa-muted text-sm">Loading AI usage…</p>
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                   {[
-                    { label: 'Total requests', value: metrics.aiUsage?.totalRequests ?? 0, tone: '#f74d4d' },
-                    { label: 'Failed', value: metrics.aiUsage?.failedRequests ?? 0, tone: '#da542e' },
+                    { label: 'Total requests', value: metrics.aiUsage?.totalRequests ?? 0 },
+                    { label: 'Failed', value: metrics.aiUsage?.failedRequests ?? 0 },
                     {
                       label: 'Estimated cost',
                       value: `₹${Number(metrics.aiUsage?.estimatedCostInr ?? 0).toLocaleString('en-IN')}`,
-                      tone: '#852b99',
                     },
                     {
                       label: 'Tokens',
                       value: Number(metrics.aiUsage?.totalTokens ?? 0).toLocaleString('en-IN'),
-                      tone: '#2255a4',
                     },
                   ].map((card) => (
-                    <div
-                      key={card.label}
-                      className="relative overflow-hidden bg-white p-5 shadow-sm"
-                      style={{ borderTop: `4px solid ${card.tone}` }}
-                    >
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-[#888]">{card.label}</p>
-                      <p className="mt-2 text-3xl font-black text-[#444]">{card.value}</p>
-                      <div
-                        className="pointer-events-none absolute -right-3 -top-3 h-16 w-16 rounded-full opacity-10"
-                        style={{ background: card.tone }}
-                      />
+                    <div key={card.label} className="sa-kpi min-w-0 p-5 shadow-[var(--sa-shadow)]">
+                      <p className="sa-label">{card.label}</p>
+                      <p className="sa-value mt-2 text-3xl [overflow-wrap:anywhere]">{card.value}</p>
                     </div>
                   ))}
                 </div>
-                <div className="bg-[#2b3643] p-4 text-white">
-                  <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-white/80">Usage by feature</h2>
+                <div className="sa-dark rounded-[var(--sa-radius)] p-4">
+                  <h2 className="sa-on-dark-muted mb-3 text-sm font-bold uppercase tracking-wide">Usage by feature</h2>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {(metrics.aiUsage?.byFeature ?? []).map((row) => (
-                      <div key={row.feature} className="flex items-center justify-between bg-white/10 px-3 py-3">
-                        <div>
-                          <span className="text-sm font-semibold">{row.feature}</span>
-                          <p className="text-[11px] text-white/60">
+                      <div key={row.feature} className="sa-dark-cell flex items-center justify-between gap-2 px-3 py-3">
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold [overflow-wrap:anywhere]">{row.feature}</span>
+                          <p className="sa-on-dark-muted text-[11px]">
                             {row.tokens ?? 0} tokens · ₹{Number(row.estimatedCostInr ?? 0).toLocaleString('en-IN')}
                           </p>
                         </div>
-                        <span className="rounded bg-[#f74d4d] px-2 py-0.5 text-xs font-bold">{row.requests}</span>
+                        <span className="sa-badge px-2 py-0.5 text-xs">{row.requests}</span>
                       </div>
                     ))}
                     {(metrics.aiUsage?.byFeature ?? []).length === 0 && (
-                      <p className="text-sm text-white/60">No AI usage recorded yet.</p>
+                      <p className="sa-on-dark-muted text-sm">No AI usage recorded yet.</p>
                     )}
                   </div>
                 </div>
                 {(metrics.aiUsage?.byUser?.length ?? 0) > 0 && (
-                  <div className="overflow-hidden border border-[#f3c7c7] bg-white">
-                    <div className="bg-[#852b99] px-4 py-2 text-sm font-bold text-white">Usage by user</div>
-                    <ul className="divide-y divide-[#f3e8f8]">
+                  <div className="sa-card overflow-hidden">
+                    <div className="sa-panel-h sa-panel-h--brand px-4 py-2 text-sm">Usage by user</div>
+                    <ul className="sa-rows">
                       {metrics.aiUsage!.byUser!.map((row) => (
                         <li key={String(row.userId ?? row.email)} className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
-                          <div>
-                            <p className="font-semibold text-[#444]">{row.email}</p>
-                            <p className="text-xs text-[#888]">
+                          <div className="min-w-0">
+                            <p className="sa-ink font-semibold [overflow-wrap:anywhere]">{row.email}</p>
+                            <p className="sa-muted text-xs">
                               {row.userType || '—'} · {row.tokens} tokens · ₹{row.estimatedCostInr}
                             </p>
                           </div>
-                          <span className="rounded bg-[#852b99] px-2 py-0.5 text-xs font-bold text-white">
-                            {row.requests}
-                          </span>
+                          <span className="sa-badge px-2 py-0.5 text-xs">{row.requests}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
                 {(metrics.aiUsage?.recent?.length ?? 0) > 0 && (
-                  <div className="overflow-hidden border border-[#f3c7c7] bg-white">
-                    <div className="bg-[#f74d4d] px-4 py-2 text-sm font-bold text-white">Recent AI calls</div>
-                    <ul className="divide-y divide-[#f8e8e8]">
+                  <div className="sa-card overflow-hidden">
+                    <div className="sa-panel-h px-4 py-2 text-sm">Recent AI calls</div>
+                    <ul className="sa-rows">
                       {metrics.aiUsage!.recent!.map((row) => (
                         <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                          <div>
-                            <p className="font-semibold text-[#444]">
+                          <div className="min-w-0">
+                            <p className="sa-ink font-semibold [overflow-wrap:anywhere]">
                               {row.feature} · {row.provider}/{row.model}
                             </p>
-                            <p className="text-xs text-[#888]">
+                            <p className="sa-muted text-xs [overflow-wrap:anywhere]">
                               {cell(row.at)} · {row.tokens} tokens · {row.latencyMs}ms
                               {row.error
                                 ? ` · ${(() => {
@@ -829,56 +813,55 @@ export default function SuperAdminDashboardInner() {
         {tab === 'notifications' && (
           <div className="space-y-4">
             {listLoading && !notifications ? (
-              <p className="text-sm text-[#888]">Loading notifications…</p>
+              <p className="sa-muted text-sm">Loading notifications…</p>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-                  {Object.entries(notifications?.summary ?? {}).map(([key, value], i) => {
-                    const colors = ['#27a9e3', '#28b779', '#da542e', '#ffb848', '#2255a4'];
-                    return (
-                      <div key={key} className="px-3 py-4 text-center text-white" style={{ backgroundColor: colors[i % colors.length] }}>
-                        <p className="text-2xl font-black">{value}</p>
-                        <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-white/85">{key}</p>
-                      </div>
-                    );
-                  })}
+                  {Object.entries(notifications?.summary ?? {}).map(([key, value]) => (
+                    <div key={key} className="sa-alert min-w-0 px-3 py-4 text-center">
+                      <p className="text-2xl font-extrabold">{value}</p>
+                      <p className="sa-on-dark-muted mt-1 text-[10px] font-bold uppercase tracking-[0.1em] [overflow-wrap:anywhere]">
+                        {key}
+                      </p>
+                    </div>
+                  ))}
                 </div>
                 <WhatsAppDeliveryPanel delivery={notifications?.delivery} />
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="border border-[#cfe9f5] bg-white">
-                    <div className="bg-[#27a9e3] px-4 py-2 text-sm font-bold text-white">Inbox</div>
-                    <ul className="max-h-80 divide-y divide-[#eef6fb] overflow-y-auto">
+                  <div className="sa-card overflow-hidden">
+                    <div className="sa-panel-h sa-panel-h--brand px-4 py-2 text-sm">Inbox</div>
+                    <ul className="sa-rows max-h-80 overflow-y-auto">
                       {(notifications?.inbox ?? []).map((row) => (
-                        <li key={String(row.id)} className="px-4 py-3 text-sm">
+                        <li key={String(row.id)} className="sa-row-hover px-4 py-3 text-sm">
                           <button
                             type="button"
                             className="w-full text-left"
                             onClick={() => setDetail({ kind: 'notifications', ...row })}
                           >
-                            <p className="font-semibold text-[#444]">{cell(row.title)}</p>
-                            <p className="mt-0.5 text-xs text-[#888]">
+                            <p className="sa-ink font-semibold">{cell(row.title)}</p>
+                            <p className="sa-muted mt-0.5 text-xs [overflow-wrap:anywhere]">
                               {cell(row.type)} · {cell(row.user)} · {cell(row.createdAt)}
                             </p>
                           </button>
                         </li>
                       ))}
                       {(notifications?.inbox ?? []).length === 0 && (
-                        <li className="px-4 py-6 text-sm text-[#999]">No inbox items.</li>
+                        <li className="sa-muted px-4 py-6 text-sm">No inbox items.</li>
                       )}
                     </ul>
                   </div>
-                  <div className="border border-[#c8eadb] bg-white">
-                    <div className="bg-[#28b779] px-4 py-2 text-sm font-bold text-white">WhatsApp</div>
-                    <ul className="max-h-80 divide-y divide-[#eaf7f1] overflow-y-auto">
+                  <div className="sa-card overflow-hidden">
+                    <div className="sa-panel-h px-4 py-2 text-sm">WhatsApp</div>
+                    <ul className="sa-rows max-h-80 overflow-y-auto">
                       {(notifications?.whatsapp ?? []).map((row) => (
-                        <li key={String(row.id)} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
+                        <li key={String(row.id)} className="sa-row-hover flex items-start justify-between gap-3 px-4 py-3 text-sm">
                           <button
                             type="button"
                             className="min-w-0 flex-1 text-left"
                             onClick={() => setDetail({ kind: 'notifications', ...row })}
                           >
-                            <p className="font-semibold text-[#444]">{cell(row.template) || 'Message'}</p>
-                            <p className="mt-0.5 text-xs text-[#888]">
+                            <p className="sa-ink font-semibold">{cell(row.template) || 'Message'}</p>
+                            <p className="sa-muted mt-0.5 text-xs [overflow-wrap:anywhere]">
                               {cell(row.to)} · {cell(row.direction)} · {cell(row.createdAt)}
                               {row.error ? ` · ${cell(row.error)}` : ''}
                             </p>
@@ -887,7 +870,7 @@ export default function SuperAdminDashboardInner() {
                         </li>
                       ))}
                       {(notifications?.whatsapp ?? []).length === 0 && (
-                        <li className="px-4 py-6 text-sm text-[#999]">No WhatsApp messages.</li>
+                        <li className="sa-muted px-4 py-6 text-sm">No WhatsApp messages.</li>
                       )}
                     </ul>
                   </div>
@@ -905,49 +888,43 @@ export default function SuperAdminDashboardInner() {
                   key={value || 'ALL'}
                   type="button"
                   onClick={() => setTestimonialFilter(value)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                    testimonialFilter === value
-                      ? 'bg-[#0a2e2c] text-white'
-                      : 'border border-[#d7e0dd] bg-white text-[#0a2e2c]'
-                  }`}
+                  aria-pressed={testimonialFilter === value}
+                  className="sa-chip min-h-9 px-3.5 text-[11px]"
                 >
                   {value || 'ALL'}
                 </button>
               ))}
             </div>
             {listLoading && testimonials.length === 0 ? (
-              <p className="text-sm text-[#888]">Loading testimonials…</p>
+              <p className="sa-muted text-sm">Loading testimonials…</p>
             ) : testimonials.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-[#d7e0dd] bg-white p-6 text-sm text-[#666]">
-                No testimonials in this filter.
-              </p>
+              <p className="sa-empty p-6 text-sm">No testimonials in this filter.</p>
             ) : (
               <div className="space-y-3">
                 {testimonials.map((row) => (
-                  <article key={row.id} className="rounded-xl border border-[#d7e0dd] bg-white p-4 shadow-sm">
+                  <article key={row.id} className="sa-card p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusPill status={row.status} />
-                        <span className="text-xs font-bold uppercase tracking-wide text-[#888]">
+                        <span className="sa-label text-xs">
                           {row.audience} · {row.source}
                         </span>
                       </div>
-                      <span className="text-sm font-extrabold text-[#0a2e2c]">{'★'.repeat(row.rating)}</span>
+                      <span className="sa-brand-text text-sm font-extrabold">{'★'.repeat(row.rating)}</span>
                     </div>
-                    <p className="mt-3 text-sm font-semibold leading-relaxed text-[#333]">“{row.quote}”</p>
-                    <p className="mt-2 text-xs text-[#666]">
+                    <p className="sa-ink mt-3 text-sm font-semibold leading-relaxed">“{row.quote}”</p>
+                    <p className="sa-muted mt-2 text-xs">
                       {row.displayName || row.user.name || 'Member'}
                       {row.headline ? ` · ${row.headline}` : ''}
                       {row.user.company ? ` · ${row.user.company}` : ''}
                     </p>
-                    <p className="mt-1 text-[11px] text-[#999]">
+                    <p className="sa-muted mt-1 text-[11px]">
                       {row.user.email || row.user.phone} · {new Date(row.createdAt).toLocaleString()}
                     </p>
                     {row.status === 'PENDING' && (staffRole === 'SUPER_ADMIN' || staffRole === 'PLATFORM_ADMIN') ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <ActionBtn
                           disabled={busyId === row.id}
-                          accent="#28b779"
                           onClick={() =>
                             void runAction(row.id, () => reviewAdminTestimonial(row.id, 'APPROVE'), 'Testimonial approved.')
                           }
@@ -955,7 +932,7 @@ export default function SuperAdminDashboardInner() {
                           Approve
                         </ActionBtn>
                         <ActionBtn
-                          danger
+                          tone="strong"
                           disabled={busyId === row.id}
                           onClick={() =>
                             void runAction(
@@ -985,7 +962,7 @@ export default function SuperAdminDashboardInner() {
           <div className="space-y-4">
             <ReportExportPanel />
             {listLoading && !reports ? (
-              <p className="text-sm text-[#888]">Loading reports…</p>
+              <p className="sa-muted text-sm">Loading reports…</p>
             ) : (
               <>
               <FunnelConversionPanel funnel={reportFunnel} />
@@ -996,28 +973,23 @@ export default function SuperAdminDashboardInner() {
               <RevenuePanel />
               <EmployerJobReportPanel />
               <div className="grid gap-4 md:grid-cols-2">
-                {reportBlocks.map((block, idx) => {
-                  const accents = ['#1f9d68', '#0aa3c2', '#d97706', '#da542e', '#852b99'];
-                  const accent = accents[idx % accents.length]!;
+                {reportBlocks.map((block) => {
                   const scalarEntries = block.entries.filter(([, value]) => !Array.isArray(value));
                   const listEntries = block.entries.filter(([, value]) => Array.isArray(value));
                   return (
                     <div
                       key={block.title}
-                      className="overflow-hidden border border-[#ddd] bg-white shadow-sm md:col-span-1"
-                      style={{ borderTop: `5px solid ${accent}` }}
+                      className="sa-card overflow-hidden border-t-[3px] border-t-[var(--sa-brand)] md:col-span-1"
                     >
-                      <div className="border-b border-[#eee] px-4 py-3" style={{ backgroundColor: `${accent}14` }}>
-                        <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: accent }}>
-                          {block.title}
-                        </h2>
+                      <div className="sa-soft-h px-4 py-3">
+                        <h2 className="text-sm font-bold uppercase tracking-wide">{block.title}</h2>
                       </div>
                       {scalarEntries.length > 0 && (
-                        <div className="grid grid-cols-2 gap-px bg-[#eee]">
+                        <div className="sa-gridlines grid grid-cols-2 gap-px">
                           {scalarEntries.map(([key, value]) => (
-                            <div key={String(key)} className="bg-white px-3 py-3">
-                              <p className="text-[10px] font-bold uppercase tracking-wide text-[#999]">{String(key)}</p>
-                              <p className="mt-1 text-lg font-black text-[#444]">{cell(value)}</p>
+                            <div key={String(key)} className="min-w-0 px-3 py-3">
+                              <p className="sa-label [overflow-wrap:anywhere]">{String(key)}</p>
+                              <p className="sa-value mt-1 text-lg [overflow-wrap:anywhere]">{cell(value)}</p>
                             </div>
                           ))}
                         </div>
@@ -1025,19 +997,19 @@ export default function SuperAdminDashboardInner() {
                       {listEntries.map(([key, value]) => {
                         const rows = value as Array<Record<string, unknown>>;
                         return (
-                          <div key={String(key)} className="border-t border-[#eee] px-3 py-3">
-                            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#999]">{String(key)}</p>
+                          <div key={String(key)} className="border-t border-[var(--sa-line)] px-3 py-3">
+                            <p className="sa-label mb-2">{String(key)}</p>
                             <ul className="space-y-2">
                               {rows.slice(0, 8).map((item, i) => (
                                 <li
                                   key={i}
-                                  className="flex items-center justify-between gap-2 rounded border border-[#f0f0f0] bg-[#fafafa] px-3 py-2 text-sm"
+                                  className="sa-inset flex items-center justify-between gap-2 px-3 py-2 text-sm"
                                 >
                                   <div className="min-w-0">
-                                    <p className="truncate font-semibold text-[#444]">
+                                    <p className="sa-ink truncate font-semibold">
                                       {cell(item.feature ?? item.email ?? item.name ?? item.userId)}
                                     </p>
-                                    <p className="text-xs text-[#888]">
+                                    <p className="sa-muted text-xs">
                                       {item.tokens != null ? `${cell(item.tokens)} tokens` : null}
                                       {item.estimatedCostInr != null ? ` · ₹${cell(item.estimatedCostInr)}` : null}
                                       {item.userType ? ` · ${cell(item.userType)}` : null}
@@ -1045,16 +1017,11 @@ export default function SuperAdminDashboardInner() {
                                     </p>
                                   </div>
                                   {item.requests != null ? (
-                                    <span
-                                      className="shrink-0 rounded px-2 py-0.5 text-xs font-bold text-white"
-                                      style={{ backgroundColor: accent }}
-                                    >
-                                      {cell(item.requests)}
-                                    </span>
+                                    <span className="sa-badge shrink-0 px-2 py-0.5 text-xs">{cell(item.requests)}</span>
                                   ) : null}
                                 </li>
                               ))}
-                              {rows.length === 0 && <li className="text-xs text-[#999]">No rows.</li>}
+                              {rows.length === 0 && <li className="sa-muted text-xs">No rows.</li>}
                             </ul>
                           </div>
                         );
@@ -1065,42 +1032,36 @@ export default function SuperAdminDashboardInner() {
               </div>
               </>
             )}
-            {!listLoading && !reports && <p className="text-sm text-[#888]">No report data.</p>}
+            {!listLoading && !reports && <p className="sa-muted text-sm">No report data.</p>}
           </div>
         )}
 
         {tab === 'settings' && superAdmin && <PlatformCatalogSettings />}
 
         {tab === 'settings' && superAdmin && (
-          <div className="mt-4 border border-[#ddd] bg-white">
-            <div className="bg-[#555] px-4 py-3 text-sm font-bold uppercase tracking-wide text-white">
-              Platform configuration
-            </div>
-            <p className="border-b border-[#eee] bg-[#fafafa] px-4 py-2 text-xs text-[#777]">
+          <div className="sa-card mt-4 overflow-hidden">
+            <div className="sa-panel-h px-4 py-3 text-sm uppercase">Platform configuration</div>
+            <p className="sa-note px-4 py-2 text-xs">
               Controlled settings from the Super Admin workflow — Platform, Resume, ATS, AI,
               Notifications, System only.
             </p>
             {listLoading && Object.keys(settings).length === 0 ? (
-              <p className="p-4 text-sm text-[#888]">Loading settings…</p>
+              <p className="sa-muted p-4 text-sm">Loading settings…</p>
             ) : (
               <form onSubmit={onSaveSettings} className="space-y-5 p-4">
                 {SETTINGS_SCHEMA.map((section) => (
                   <div key={section.group}>
-                    <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[#555]">
-                      {section.title}
-                    </h3>
+                    <h3 className="sa-label mb-2 text-xs">{section.title}</h3>
                     <div className="grid gap-3 md:grid-cols-2">
                       {section.fields.map((field) => {
                         const value = settings[field.key] ?? '';
                         const isOn = value === 'true' || value === '1';
                         return (
-                          <label key={field.key} className="block border border-[#eee] bg-[#fafafa] p-3">
-                            <span className="mb-1 block text-[11px] font-bold text-[#444]">
-                              {field.label}
-                            </span>
+                          <label key={field.key} className="sa-inset block p-3">
+                            <span className="sa-ink mb-1 block text-[11px] font-bold">{field.label}</span>
                             {field.kind === 'toggle' ? (
                               <select
-                                className="w-full border border-[#ddd] bg-white px-3 py-2 text-sm outline-none focus:border-[#555]"
+                                className="sa-input w-full px-3 py-2 text-sm"
                                 value={isOn ? 'true' : 'false'}
                                 onChange={(e) =>
                                   setSettings((prev) => ({ ...prev, [field.key]: e.target.value }))
@@ -1111,7 +1072,7 @@ export default function SuperAdminDashboardInner() {
                               </select>
                             ) : (
                               <input
-                                className="w-full border border-[#ddd] bg-white px-3 py-2 text-sm outline-none focus:border-[#555]"
+                                className="sa-input w-full px-3 py-2 text-sm"
                                 value={value}
                                 onChange={(e) =>
                                   setSettings((prev) => ({ ...prev, [field.key]: e.target.value }))
@@ -1124,7 +1085,7 @@ export default function SuperAdminDashboardInner() {
                     </div>
                   </div>
                 ))}
-                <button type="submit" className="bg-[#555] px-4 py-2 text-sm font-bold text-white">
+                <button type="submit" className="sa-btn">
                   Save settings
                 </button>
               </form>
@@ -1143,23 +1104,23 @@ export default function SuperAdminDashboardInner() {
               onSubmit={onSearchSubmit}
               placeholder="Search action, resource, id…"
             />
-            <div className="overflow-hidden border border-[#f0e0c0] bg-[#fffdf8]">
-              <div className="bg-[#ffb848] px-4 py-2 text-sm font-bold text-[#5c3d00]">Chronological trail</div>
+            <div className="sa-card overflow-hidden">
+              <div className="sa-panel-h px-4 py-2 text-sm">Chronological trail</div>
               {listLoading ? (
-                <p className="p-4 text-sm text-[#888]">Loading audit…</p>
+                <p className="sa-muted p-4 text-sm">Loading audit…</p>
               ) : (
-                <ol className="relative space-y-0 border-l-2 border-[#ffb848]/40 ml-6 py-2">
+                <ol className="sa-timeline relative ml-6 space-y-0 py-2">
                   {auditRows.map((row) => (
                     <li key={String(row.id)} className="relative py-3 pl-6 pr-4">
-                      <span className="absolute -left-[7px] top-5 h-3 w-3 rounded-full bg-[#ffb848]" />
-                      <p className="text-[11px] font-mono text-[#9a6a12]">{cell(row.time)}</p>
-                      <p className="font-bold text-[#444]">{cell(row.action)}</p>
-                      <p className="text-xs text-[#777]">
+                      <span className="sa-timeline-dot absolute -left-[7px] top-5 h-3 w-3 rounded-full" />
+                      <p className="sa-muted font-mono text-[11px]">{cell(row.time)}</p>
+                      <p className="sa-ink font-bold [overflow-wrap:anywhere]">{cell(row.action)}</p>
+                      <p className="sa-muted text-xs [overflow-wrap:anywhere]">
                         {cell(row.actor)} · {cell(row.resourceType)} · {cell(row.resourceId)}
                       </p>
                     </li>
                   ))}
-                  {auditRows.length === 0 && <li className="py-6 pl-6 text-sm text-[#999]">No audit entries.</li>}
+                  {auditRows.length === 0 && <li className="sa-muted py-6 pl-6 text-sm">No audit entries.</li>}
                 </ol>
               )}
             </div>
@@ -1181,7 +1142,7 @@ export default function SuperAdminDashboardInner() {
                   onChange={(e) => setListSort(e.target.value as ListSort)}
                   aria-label="Sort list"
                   data-testid="admin-list-sort"
-                  className="min-h-12 border border-[#ddd] bg-white px-3 py-2 text-sm"
+                  className="sa-input px-3 py-2 text-sm"
                 >
                   {LIST_SORT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1199,7 +1160,7 @@ export default function SuperAdminDashboardInner() {
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     aria-label="Filter by status"
-                    className="border border-[#ddd] bg-white px-3 py-2 text-sm"
+                    className="sa-input px-3 py-2 text-sm"
                   >
                     <option value="">All statuses</option>
                     {tab === 'jobs' &&
@@ -1246,30 +1207,30 @@ export default function SuperAdminDashboardInner() {
             {tab === 'applications' && <ApplicationPipelinePanel refreshKey={pipelineRefresh} />}
 
             {tab === 'skills' && canManageSkills(staffRole) && (
-              <div className="border border-[#e4d0ec] bg-[#fbf6fd] p-4">
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#5c1d6a]">Add skill</h3>
+              <div className="sa-card p-4">
+                <h3 className="sa-label mb-3 text-sm">Add skill</h3>
                 <form onSubmit={onCreateSkill} className="grid gap-2 md:grid-cols-4">
                   <input
                     required
                     value={skillName}
                     onChange={(e) => setSkillName(e.target.value)}
                     placeholder="Name"
-                    className="border border-[#d8bde4] bg-white px-3 py-2 text-sm"
+                    className="sa-input px-3 py-2 text-sm"
                   />
                   <input
                     required
                     value={skillCategory}
                     onChange={(e) => setSkillCategory(e.target.value)}
                     placeholder="Category"
-                    className="border border-[#d8bde4] bg-white px-3 py-2 text-sm"
+                    className="sa-input px-3 py-2 text-sm"
                   />
                   <input
                     value={skillAliases}
                     onChange={(e) => setSkillAliases(e.target.value)}
                     placeholder="Aliases"
-                    className="border border-[#d8bde4] bg-white px-3 py-2 text-sm"
+                    className="sa-input px-3 py-2 text-sm"
                   />
-                  <button type="submit" className="bg-[#852b99] px-4 py-2 text-sm font-bold text-white">
+                  <button type="submit" className="sa-btn">
                     Create skill
                   </button>
                 </form>
@@ -1277,8 +1238,8 @@ export default function SuperAdminDashboardInner() {
             )}
 
             {tab === 'admins' && canManageAdmins(staffRole) && (
-              <div className="border border-[#2b3643]/20 bg-[#2b3643] p-4 text-white">
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-white/80">Create platform staff</h3>
+              <div className="sa-dark rounded-[var(--sa-radius)] p-4">
+                <h3 className="sa-on-dark-muted mb-3 text-sm font-bold uppercase tracking-wide">Create platform staff</h3>
                 <form onSubmit={onCreateAdmin} className="grid gap-2 md:grid-cols-3">
                   <input
                     required
@@ -1286,14 +1247,14 @@ export default function SuperAdminDashboardInner() {
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
                     placeholder="Email"
-                    className="border-0 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50"
+                    className="sa-input sa-input--dark px-3 py-2 text-sm"
                   />
                   <input
                     required
                     value={adminName}
                     onChange={(e) => setAdminName(e.target.value)}
                     placeholder="Full name"
-                    className="border-0 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50"
+                    className="sa-input sa-input--dark px-3 py-2 text-sm"
                   />
                   <input
                     required
@@ -1303,44 +1264,36 @@ export default function SuperAdminDashboardInner() {
                     placeholder="Password (visible to Super Admin)"
                     minLength={8}
                     autoComplete="new-password"
-                    className="border-0 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50"
+                    className="sa-input sa-input--dark px-3 py-2 text-sm"
                   />
                   <input
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
                     placeholder="Phone (optional)"
-                    className="border-0 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50"
+                    className="sa-input sa-input--dark px-3 py-2 text-sm"
                   />
                   <select
                     value={adminRole}
                     onChange={(e) =>
                       setAdminRole(e.target.value as 'SUPER_ADMIN' | 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR')
                     }
-                    className="border-0 bg-white/10 px-3 py-2 text-sm text-white"
+                    className="sa-input sa-input--dark px-3 py-2 text-sm"
                   >
-                    <option value="PLATFORM_OPERATOR" className="text-[#333]">
-                      Platform operator
-                    </option>
-                    <option value="PLATFORM_ADMIN" className="text-[#333]">
-                      Platform admin
-                    </option>
-                    <option value="SUPER_ADMIN" className="text-[#333]">
-                      Super admin
-                    </option>
+                    <option value="PLATFORM_OPERATOR">Platform operator</option>
+                    <option value="PLATFORM_ADMIN">Platform admin</option>
+                    <option value="SUPER_ADMIN">Super admin</option>
                   </select>
-                  <button type="submit" className="bg-[#27a9e3] px-4 py-2 text-sm font-bold text-white">
+                  <button type="submit" className="sa-btn sa-btn--on-dark">
                     Create admin
                   </button>
                 </form>
               </div>
             )}
 
-            {listLoading && <p className="text-sm text-[#888]">Loading {tab}…</p>}
+            {listLoading && <p className="sa-muted text-sm">Loading {tab}…</p>}
 
             {!listLoading && rows.length === 0 && (
-              <div className="border border-dashed border-[#ccc] bg-white px-4 py-10 text-center text-sm text-[#999]">
-                No records found.
-              </div>
+              <div className="sa-empty px-4 py-10 text-center text-sm">No records found.</div>
             )}
 
             {tab === 'candidates' && !listLoading && rows.length > 0 && (
@@ -1352,37 +1305,34 @@ export default function SuperAdminDashboardInner() {
                   const skills = Array.isArray(row.primarySkills) ? row.primarySkills.map(String) : [];
                   const completion = Number(row.profileCompletion ?? 0);
                   return (
-                    <article key={id} className="border border-[#d5ebf6] bg-white shadow-sm">
-                      <div className="flex items-center gap-3 bg-[#27a9e3] px-4 py-3 text-white">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-sm font-bold">
+                    <article key={id} className="sa-ccard">
+                      <div className="sa-ccard-h flex items-center gap-3 px-4 py-3">
+                        <span className="sa-avatar flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm">
                           {name.slice(0, 1).toUpperCase()}
                         </span>
                         <div className="min-w-0">
                           <p className="truncate font-bold">{name}</p>
-                          <p className="truncate text-xs text-white/80">{cell(row.email)}</p>
+                          <p className="truncate text-xs opacity-90">{cell(row.email)}</p>
                         </div>
                       </div>
                       <div className="space-y-2 p-4 text-sm">
-                        <p className="text-[#666]">{cell(row.location)}</p>
-                        <div className="h-2 overflow-hidden rounded bg-[#e8f4fb]">
-                          <div className="h-full bg-[#27a9e3]" style={{ width: `${Math.min(100, completion)}%` }} />
+                        <p className="sa-ink">{cell(row.location)}</p>
+                        <div className="sa-meter h-2 overflow-hidden">
+                          <span style={{ width: `${Math.min(100, completion)}%` }} />
                         </div>
-                        <p className="text-[11px] font-semibold text-[#1a6d96]">Profile {completion}%</p>
-                        <p className="line-clamp-2 text-xs text-[#777]">
+                        <p className="sa-muted text-[11px] font-semibold">Profile {completion}%</p>
+                        <p className="sa-muted line-clamp-2 text-xs">
                           Skills: {skills.length ? skills.join(', ') : '—'}
                         </p>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <StatusPill status={status} />
-                          <span className="text-xs font-semibold text-[#27a9e3]">
+                          <span className="sa-brand-text text-xs font-semibold">
                             {cell(row.applications)} apps · {cell(row.resumeCount)} resumes
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5 pt-1">
-                          <ActionBtn accent="#27a9e3" onClick={() => void openDetail('candidates', id)}>
-                            View
-                          </ActionBtn>
+                          <ActionBtn onClick={() => void openDetail('candidates', id)}>View</ActionBtn>
                           <ActionBtn
-                            accent="#28b779"
                             disabled={!id || busyId === id || status === 'ACTIVE'}
                             onClick={() =>
                               void runAction(id, () => setAdminCandidateStatus(id, 'ACTIVE'), 'Candidate activated.')
@@ -1391,7 +1341,7 @@ export default function SuperAdminDashboardInner() {
                             Activate
                           </ActionBtn>
                           <ActionBtn
-                            accent="#ffb848"
+                            tone="secondary"
                             disabled={!id || busyId === id || status === 'INACTIVE'}
                             onClick={() =>
                               void runAction(id, () => setAdminCandidateStatus(id, 'INACTIVE'), 'Candidate deactivated.')
@@ -1400,7 +1350,7 @@ export default function SuperAdminDashboardInner() {
                             Deactivate
                           </ActionBtn>
                           <ActionBtn
-                            danger
+                            tone="strong"
                             disabled={!id || busyId === id || status === 'SUSPENDED'}
                             onClick={() =>
                               void runAction(id, () => setAdminCandidateStatus(id, 'SUSPENDED'), 'Candidate suspended.')
@@ -1410,7 +1360,7 @@ export default function SuperAdminDashboardInner() {
                           </ActionBtn>
                           {canOfferAccountDeletion({ viewerRole: staffRole, kind: 'candidates', status }) ? (
                             <ActionBtn
-                              accent="#8a1c0f"
+                              tone="danger"
                               disabled={!id || busyId === id}
                               onClick={() => setDeleteTarget({ kind: 'candidates', id, name })}
                             >
@@ -1432,32 +1382,28 @@ export default function SuperAdminDashboardInner() {
                   const status = String(row.accountStatus ?? '');
                   const verified = Boolean(row.verified);
                   return (
-                    <article key={id} className="flex overflow-hidden border border-[#c8eadb] bg-white">
-                      <div className="w-1.5 shrink-0" style={{ backgroundColor: verified ? '#28b779' : '#ffb848' }} />
-                      <div className="flex-1 p-4">
+                    <article key={id} className="sa-ccard flex">
+                      <div className={`w-1.5 shrink-0 ${verified ? 'sa-strip--ok' : 'sa-strip--warn'}`} />
+                      <div className="min-w-0 flex-1 p-4">
                         <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h3 className="font-bold text-[#333]">{cell(row.companyName)}</h3>
-                            <p className="text-xs text-[#777]">{cell(row.email)}</p>
+                          <div className="min-w-0">
+                            <h3 className="sa-ink font-bold [overflow-wrap:anywhere]">{cell(row.companyName)}</h3>
+                            <p className="sa-muted text-xs [overflow-wrap:anywhere]">{cell(row.email)}</p>
                           </div>
                           <StatusPill status={status} />
                         </div>
-                        <p className="mt-2 text-xs text-[#666]">
+                        <p className="sa-muted mt-2 text-xs">
                           {verified ? 'Verified employer' : 'Pending verification'} · {cell(row.jobs)} jobs
                         </p>
                         <div className="mt-3 flex flex-wrap gap-1.5">
-                          <ActionBtn accent="#28b779" onClick={() => void openDetail('employers', id)}>
-                            View
-                          </ActionBtn>
+                          <ActionBtn onClick={() => void openDetail('employers', id)}>View</ActionBtn>
                           <ActionBtn
-                            accent="#27a9e3"
                             disabled={!id || verified || busyId === id}
                             onClick={() => void runAction(id, () => verifyEmployer(id), 'Employer verified.')}
                           >
                             Verify
                           </ActionBtn>
                           <ActionBtn
-                            accent="#28b779"
                             disabled={!id || busyId === id || status === 'ACTIVE'}
                             onClick={() =>
                               void runAction(id, () => setAdminEmployerStatus(id, 'ACTIVE'), 'Employer activated.')
@@ -1466,7 +1412,7 @@ export default function SuperAdminDashboardInner() {
                             Activate
                           </ActionBtn>
                           <ActionBtn
-                            accent="#ffb848"
+                            tone="secondary"
                             disabled={!id || busyId === id || status === 'INACTIVE'}
                             onClick={() =>
                               void runAction(id, () => setAdminEmployerStatus(id, 'INACTIVE'), 'Employer deactivated.')
@@ -1475,7 +1421,7 @@ export default function SuperAdminDashboardInner() {
                             Deactivate
                           </ActionBtn>
                           <ActionBtn
-                            danger
+                            tone="strong"
                             disabled={!id || busyId === id || status === 'SUSPENDED'}
                             onClick={() =>
                               void runAction(id, () => setAdminEmployerStatus(id, 'SUSPENDED'), 'Employer suspended.')
@@ -1485,7 +1431,7 @@ export default function SuperAdminDashboardInner() {
                           </ActionBtn>
                           {canOfferAccountDeletion({ viewerRole: staffRole, kind: 'employers', status }) ? (
                             <ActionBtn
-                              accent="#8a1c0f"
+                              tone="danger"
                               disabled={!id || busyId === id}
                               onClick={() =>
                                 setDeleteTarget({ kind: 'employers', id, name: String(row.companyName ?? 'Employer') })
@@ -1509,33 +1455,32 @@ export default function SuperAdminDashboardInner() {
                   const status = String(row.status ?? '');
                   const bar =
                     status === 'PUBLISHED'
-                      ? '#28b779'
+                      ? 'sa-strip--ok'
                       : status === 'PAUSED'
-                        ? '#ffb848'
+                        ? 'sa-strip--muted'
                         : status === 'PENDING_REVIEW'
-                          ? '#d97706'
+                          ? 'sa-strip--info'
                           : status === 'CLOSED'
-                          ? '#da542e'
-                          : '#27a9e3';
+                          ? 'sa-strip--bad'
+                          : 'sa-strip--warn';
                   return (
-                    <article key={id} className="flex items-stretch border border-[#eee] bg-white">
-                      <div className="w-2 shrink-0" style={{ backgroundColor: bar }} />
-                      <div className="flex flex-1 flex-wrap items-center justify-between gap-3 px-4 py-3">
+                    <article key={id} className="sa-ccard flex items-stretch">
+                      <div className={`w-1.5 shrink-0 ${bar}`} />
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 px-4 py-3">
                         <div className="min-w-0">
-                          <p className="font-bold text-[#444]">{cell(row.title)}</p>
-                          <p className="text-xs text-[#777]">
+                          <p className="sa-ink font-bold [overflow-wrap:anywhere]">{cell(row.title)}</p>
+                          <p className="sa-muted text-xs">
                             {cell(row.companyName)} · {cell(row.city)} · {cell(row.applications)} apps
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <StatusPill status={status} />
-                          <ActionBtn accent="#ffb848" onClick={() => void openDetail('jobs', id)}>
+                          <ActionBtn onClick={() => void openDetail('jobs', id)}>
                             View
                           </ActionBtn>
                           {canManageJobs(staffRole) && status === 'PENDING_REVIEW' ? (
                             <>
                               <ActionBtn
-                                accent="#28b779"
                                 disabled={!id || busyId === id}
                                 onClick={() =>
                                   void runAction(id, () => approveAdminJob(id), 'Job approved and published.')
@@ -1544,7 +1489,7 @@ export default function SuperAdminDashboardInner() {
                                 Approve
                               </ActionBtn>
                               <ActionBtn
-                                danger
+                                tone="strong"
                                 disabled={!id || busyId === id}
                                 onClick={() =>
                                   void runAction(id, () => rejectAdminJob(id), 'Job rejected and returned to the employer.')
@@ -1557,7 +1502,6 @@ export default function SuperAdminDashboardInner() {
                           {canManageJobs(staffRole) && status !== 'PENDING_REVIEW' ? (
                             <>
                               <ActionBtn
-                                accent="#28b779"
                                 disabled={!id || busyId === id || status === 'PUBLISHED'}
                                 onClick={() =>
                                   void runAction(id, () => setAdminJobStatus(id, 'PUBLISHED'), 'Job published.')
@@ -1566,7 +1510,7 @@ export default function SuperAdminDashboardInner() {
                                 Publish
                               </ActionBtn>
                               <ActionBtn
-                                accent="#ffb848"
+                                tone="secondary"
                                 disabled={!id || busyId === id || status === 'PAUSED'}
                                 onClick={() =>
                                   void runAction(id, () => setAdminJobStatus(id, 'PAUSED'), 'Job paused.')
@@ -1575,7 +1519,7 @@ export default function SuperAdminDashboardInner() {
                                 Pause
                               </ActionBtn>
                               <ActionBtn
-                                danger
+                                tone="strong"
                                 disabled={!id || busyId === id || status === 'CLOSED'}
                                 onClick={() =>
                                   void runAction(id, () => setAdminJobStatus(id, 'CLOSED'), 'Job closed.')
@@ -1598,19 +1542,17 @@ export default function SuperAdminDashboardInner() {
                 {sortedRows.map((row) => (
                   <article
                     key={String(row.id)}
-                    className="relative overflow-hidden border border-[#f3d5cb] bg-[#fff9f7] p-4"
+                    className="sa-ccard relative border-l-4 border-l-[var(--sa-peri)] p-4"
                   >
-                    <div className="absolute right-0 top-0 bg-[#da542e] px-2 py-1 text-[10px] font-bold uppercase text-white">
+                    <div className="sa-badge sa-badge--dark absolute right-0 top-0 rounded-none rounded-bl-[var(--sa-radius-sm)] px-2 py-1 text-[10px] uppercase">
                       {cell(row.status)}
                     </div>
-                    <p className="pr-16 font-bold text-[#444]">{cell(row.candidateName)}</p>
-                    <p className="mt-1 text-sm text-[#666]">{cell(row.jobTitle)}</p>
-                    <p className="text-xs text-[#999]">{cell(row.companyName)}</p>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#da542e]">Match {cell(row.matchScore)}</span>
-                      <ActionBtn accent="#da542e" onClick={() => void openDetail('applications', String(row.id))}>
-                        View
-                      </ActionBtn>
+                    <p className="sa-ink pr-24 font-bold [overflow-wrap:anywhere]">{cell(row.candidateName)}</p>
+                    <p className="sa-ink mt-1 text-sm">{cell(row.jobTitle)}</p>
+                    <p className="sa-muted text-xs">{cell(row.companyName)}</p>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <span className="sa-brand-text text-xs font-bold">Match {cell(row.matchScore)}</span>
+                      <ActionBtn onClick={() => void openDetail('applications', String(row.id))}>View</ActionBtn>
                     </div>
                   </article>
                 ))}
@@ -1624,19 +1566,19 @@ export default function SuperAdminDashboardInner() {
                   return (
                     <article
                       key={`${String(row.recordType ?? 'INTERVIEW')}-${String(row.id)}`}
-                      className="grid gap-3 border border-[#d5dff0] bg-white p-4 md:grid-cols-[140px_1fr_auto]"
+                      className="sa-ccard grid gap-3 p-4 md:grid-cols-[140px_1fr_auto]"
                     >
-                      <div className="bg-[#2255a4] px-3 py-3 text-center text-white">
-                        <p className="text-[10px] uppercase tracking-wide text-white/70">Scheduled</p>
+                      <div className="sa-when px-3 py-3 text-center">
+                        <p className="sa-on-dark-muted text-[10px] font-bold uppercase tracking-[0.12em]">Scheduled</p>
                         <p className="mt-1 text-xs font-bold leading-snug">
                           {shortlistedOnly ? 'Not scheduled yet' : cell(row.scheduledAt)}
                         </p>
                       </div>
-                      <div>
-                        <p className="font-bold text-[#333]">{cell(row.candidateName)}</p>
-                        <p className="text-sm text-[#666]">{cell(row.jobTitle)}</p>
-                        <p className="text-xs text-[#888]">{cell(row.companyName)}</p>
-                        <p className="mt-1 text-[11px] text-[#2255a4]">
+                      <div className="min-w-0">
+                        <p className="sa-ink font-bold [overflow-wrap:anywhere]">{cell(row.candidateName)}</p>
+                        <p className="sa-ink text-sm">{cell(row.jobTitle)}</p>
+                        <p className="sa-muted text-xs">{cell(row.companyName)}</p>
+                        <p className="sa-brand-text mt-1 text-[11px] font-bold">
                           {shortlistedOnly
                             ? 'Shortlisted · awaiting interview scheduling'
                             : `Mode ${cell(row.mode)} · WhatsApp ${adminWhatsAppStatusLabel(row.whatsappStatus) ?? '—'}`}
@@ -1648,7 +1590,6 @@ export default function SuperAdminDashboardInner() {
                           label={adminInterviewStatusLabel(row.adminStatus)}
                         />
                         <ActionBtn
-                          accent="#2255a4"
                           onClick={() =>
                             void (shortlistedOnly
                               ? openDetail('applications', String(row.applicationId ?? row.id), {
@@ -1672,16 +1613,15 @@ export default function SuperAdminDashboardInner() {
                   {sortedRows.map((row) => (
                     <span
                       key={`chip-${String(row.id)}`}
-                      className="rounded-full px-3 py-1 text-xs font-bold text-white"
-                      style={{ backgroundColor: Boolean(row.active) ? '#852b99' : '#999' }}
+                      className={`sa-tag px-3 py-1 text-xs ${Boolean(row.active) ? '' : 'sa-tag--off'}`}
                     >
                       {cell(row.name)}
                     </span>
                   ))}
                 </div>
-                <div className="overflow-hidden border border-[#e4d0ec] bg-white">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-[#852b99] text-xs uppercase tracking-wide text-white">
+                <div className="sa-card overflow-x-auto">
+                  <table className="sa-table sa-table--brand min-w-full text-left text-sm">
+                    <thead>
                       <tr>
                         <th className="px-3 py-2">Name</th>
                         <th className="px-3 py-2">Category</th>
@@ -1695,10 +1635,10 @@ export default function SuperAdminDashboardInner() {
                         const id = String(row.id ?? '');
                         const active = Boolean(row.active);
                         return (
-                          <tr key={id} className="border-t border-[#f0e6f5]">
+                          <tr key={id}>
                             <td className="px-3 py-2.5 font-semibold">{cell(row.name)}</td>
                             <td className="px-3 py-2.5">{cell(row.category)}</td>
-                            <td className="px-3 py-2.5 text-[#666]">{cell(row.aliases)}</td>
+                            <td className="sa-muted px-3 py-2.5">{cell(row.aliases)}</td>
                             <td className="px-3 py-2.5">
                               <StatusPill status={active ? 'ACTIVE' : 'INACTIVE'} />
                             </td>
@@ -1706,7 +1646,7 @@ export default function SuperAdminDashboardInner() {
                               {canManageSkills(staffRole) ? (
                                 <div className="flex flex-wrap gap-1.5">
                                   <ActionBtn
-                                    accent="#2255a4"
+                                    tone="secondary"
                                     disabled={!id || busyId === id}
                                     onClick={() => {
                                       const name = window.prompt('Skill name', String(row.name ?? ''))?.trim();
@@ -1731,7 +1671,7 @@ export default function SuperAdminDashboardInner() {
                                     Edit
                                   </ActionBtn>
                                   <ActionBtn
-                                    accent="#852b99"
+                                    tone="secondary"
                                     disabled={!id || busyId === id}
                                     onClick={() =>
                                       void runAction(
@@ -1785,30 +1725,29 @@ export default function SuperAdminDashboardInner() {
                   const password = row.password != null && String(row.password).length > 0 ? String(row.password) : null;
                   const canSuspend = superAdmin && role !== 'SUPER_ADMIN' && status !== 'SUSPENDED';
                   return (
-                    <article key={id} className="border border-[#2b3643]/15 bg-[#f7f8fa] p-4">
+                    <article key={id} className="sa-ccard p-4">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-bold text-[#2b3643]">{cell(row.fullName) || cell(row.email)}</p>
-                          <p className="text-xs text-[#777]">{cell(row.email)}</p>
+                        <div className="min-w-0">
+                          <p className="sa-ink font-bold [overflow-wrap:anywhere]">{cell(row.fullName) || cell(row.email)}</p>
+                          <p className="sa-muted text-xs [overflow-wrap:anywhere]">{cell(row.email)}</p>
                         </div>
-                        <span className="rounded bg-[#2b3643] px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                        <span className="sa-badge sa-badge--dark shrink-0 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em]">
                           {role}
                         </span>
                       </div>
-                      <div className="mt-3 rounded border border-[#2b3643]/10 bg-white px-3 py-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-[#999]">Login password</p>
-                        <p className="mt-0.5 font-mono text-sm text-[#2b3643]">
+                      <div className="sa-inset mt-3 px-3 py-2">
+                        <p className="sa-label">Login password</p>
+                        <p className="sa-ink mt-0.5 font-mono text-sm [overflow-wrap:anywhere]">
                           {password || 'Not stored — set a new password'}
                         </p>
                       </div>
-                      <div className="mt-3 flex items-center justify-between">
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                         <StatusPill status={status} />
-                        <span className="text-[11px] text-[#999]">{cell(row.createdAt)}</span>
+                        <span className="sa-muted text-[11px]">{cell(row.createdAt)}</span>
                       </div>
                       {superAdmin ? (
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           <ActionBtn
-                            accent="#28b779"
                             disabled={!id || busyId === id || status === 'ACTIVE'}
                             onClick={() =>
                               void runAction(id, () => setPlatformAdminStatus(id, 'ACTIVE'), 'Admin activated.')
@@ -1817,7 +1756,7 @@ export default function SuperAdminDashboardInner() {
                             Activate
                           </ActionBtn>
                           <ActionBtn
-                            accent="#ffb848"
+                            tone="secondary"
                             disabled={!id || busyId === id || status === 'INACTIVE' || role === 'SUPER_ADMIN'}
                             onClick={() =>
                               void runAction(id, () => setPlatformAdminStatus(id, 'INACTIVE'), 'Admin deactivated.')
@@ -1826,7 +1765,7 @@ export default function SuperAdminDashboardInner() {
                             Deactivate
                           </ActionBtn>
                           <ActionBtn
-                            danger
+                            tone="strong"
                             disabled={!canSuspend || busyId === id}
                             onClick={() =>
                               void runAction(id, () => setPlatformAdminStatus(id, 'SUSPENDED'), 'Admin suspended.')
@@ -1835,7 +1774,7 @@ export default function SuperAdminDashboardInner() {
                             Suspend
                           </ActionBtn>
                           <ActionBtn
-                            accent="#2b3643"
+                            tone="secondary"
                             disabled={!id || busyId === id || role === 'SUPER_ADMIN'}
                             onClick={() => {
                               const picked = window
@@ -1865,7 +1804,7 @@ export default function SuperAdminDashboardInner() {
                             Change role
                           </ActionBtn>
                           <ActionBtn
-                            accent="#27a9e3"
+                            tone="secondary"
                             disabled={!id || busyId === id}
                             onClick={() => {
                               const next = window
@@ -1883,7 +1822,7 @@ export default function SuperAdminDashboardInner() {
                           </ActionBtn>
                           {canOfferAccountDeletion({ viewerRole: staffRole, kind: 'admins', status, targetRole: role }) ? (
                             <ActionBtn
-                              accent="#8a1c0f"
+                              tone="danger"
                               disabled={!id || busyId === id}
                               onClick={() =>
                                 setDeleteTarget({ kind: 'admins', id, name: String(row.fullName || row.email || 'Admin') })

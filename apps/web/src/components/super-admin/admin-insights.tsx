@@ -21,13 +21,20 @@ function inr(value: number) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
 }
 
-function Tile({ label, value, tone = '#2255a4' }: { label: string; value: string | number; tone?: string }) {
+type TileTone = 'default' | 'brand' | 'muted' | 'danger';
+
+const TILE_TONE_CLASS: Record<TileTone, string> = {
+  default: 'sa-ink',
+  brand: 'sa-brand-text',
+  muted: 'sa-muted',
+  danger: 'sa-error-text',
+};
+
+function Tile({ label, value, tone = 'default' }: { label: string; value: string | number; tone?: TileTone }) {
   return (
-    <div className="border border-[#e5e5e5] bg-white px-3 py-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[#666]">{label}</p>
-      <p className="mt-1 text-xl font-black" style={{ color: tone }}>
-        {value}
-      </p>
+    <div className="min-w-0 px-3 py-3">
+      <p className="sa-label">{label}</p>
+      <p className={`mt-1 text-xl font-extrabold tabular-nums [overflow-wrap:anywhere] ${TILE_TONE_CLASS[tone]}`}>{value}</p>
     </div>
   );
 }
@@ -35,23 +42,23 @@ function Tile({ label, value, tone = '#2255a4' }: { label: string; value: string
 export function FunnelConversionPanel({ funnel }: { funnel: AdminFunnelStage[] }) {
   if (funnel.length === 0) return null;
   return (
-    <section className="border border-[#ddd] bg-white" aria-labelledby="admin-funnel-title">
-      <div className="border-b border-[#eee] bg-[#1f9d6814] px-4 py-3">
-        <h2 id="admin-funnel-title" className="text-sm font-bold uppercase tracking-wide text-[#16774f]">
+    <section className="sa-card overflow-hidden" aria-labelledby="admin-funnel-title">
+      <div className="sa-soft-h px-4 py-3">
+        <h2 id="admin-funnel-title" className="text-sm font-bold uppercase tracking-wide">
           Hiring funnel &amp; conversion rates
         </h2>
       </div>
-      <ol className="grid gap-px bg-[#eee] sm:grid-cols-2 lg:grid-cols-5">
+      <ol className="sa-gridlines grid gap-px sm:grid-cols-2 lg:grid-cols-5">
         {funnel.map((stage) => (
-          <li key={stage.stage} className="bg-white px-3 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-[#666]">{stage.stage}</p>
-            <p className="mt-1 text-2xl font-black text-[#333]">{stage.count}</p>
-            <p className="mt-1 text-xs text-[#555]">
+          <li key={stage.stage} className="px-3 py-3">
+            <p className="sa-label">{stage.stage}</p>
+            <p className="sa-value mt-1 text-2xl">{stage.count}</p>
+            <p className="sa-muted mt-1 text-xs">
               {stage.conversionRate == null ? (
                 'Top of funnel'
               ) : (
                 <>
-                  <span className="font-bold text-[#16774f]">{rate(stage.conversionRate)}</span> {stage.basis}
+                  <span className="sa-brand-text font-bold">{rate(stage.conversionRate)}</span> {stage.basis}
                 </>
               )}
             </p>
@@ -79,42 +86,40 @@ export function RevenuePanel() {
   }, []);
 
   return (
-    <section className="border border-[#ddd] bg-white" aria-labelledby="admin-revenue-title">
-      <div className="border-b border-[#eee] bg-[#852b9914] px-4 py-3">
-        <h2 id="admin-revenue-title" className="text-sm font-bold uppercase tracking-wide text-[#6b2080]">
+    <section className="sa-card overflow-hidden" aria-labelledby="admin-revenue-title">
+      <div className="sa-soft-h px-4 py-3">
+        <h2 id="admin-revenue-title" className="text-sm font-bold uppercase tracking-wide">
           Revenue &amp; credits{data ? ` · ${data.period}` : ''}
         </h2>
       </div>
       {loading ? (
-        <p className="p-4 text-sm text-[#666]">Loading revenue…</p>
+        <p className="sa-muted p-4 text-sm">Loading revenue…</p>
       ) : error ? (
-        <p role="alert" className="p-4 text-sm text-[#b42318]">
+        <p role="alert" className="sa-error-text p-4 text-sm">
           {error}
         </p>
       ) : data ? (
         <>
-          <div className="grid gap-px bg-[#eee] sm:grid-cols-2 lg:grid-cols-4">
-            <Tile label="Total revenue" value={inr(data.totalRevenueInr)} tone="#6b2080" />
-            <Tile label="Revenue this month" value={inr(data.revenueThisMonthInr)} tone="#6b2080" />
+          <div className="sa-gridlines grid gap-px sm:grid-cols-2 lg:grid-cols-4">
+            <Tile label="Total revenue" value={inr(data.totalRevenueInr)} tone="brand" />
+            <Tile label="Revenue this month" value={inr(data.revenueThisMonthInr)} tone="brand" />
             <Tile label="Paid payments" value={data.paidPayments} />
-            <Tile label="Pending payments" value={data.pendingPayments} tone="#9a6700" />
+            <Tile label="Pending payments" value={data.pendingPayments} tone="muted" />
             <Tile label="Paying employers" value={data.payingEmployers} />
             <Tile label="New employers this month" value={data.newEmployersThisMonth} />
             <Tile label="Candidate views used this month" value={data.creditsConsumedThisMonth} />
           </div>
           {data.bySource ? (
-            <div className="border-t border-[#eee]" data-testid="revenue-by-source">
-              <p className="px-4 pt-3 text-[10px] font-bold uppercase tracking-wide text-[#6b2080]">
-                Paid revenue by source
-              </p>
-              <div className="mt-2 grid gap-px bg-[#eee] sm:grid-cols-3">
-                <Tile label="Job posting fees" value={inr(data.bySource.jobPostingFeesInr)} tone="#6b2080" />
-                <Tile label="Hiring fees" value={inr(data.bySource.hiringFeesInr)} tone="#6b2080" />
-                <Tile label="Other paid revenue" value={inr(data.bySource.otherInr)} tone="#6b2080" />
+            <div className="border-t border-[var(--sa-line)]" data-testid="revenue-by-source">
+              <p className="sa-label px-4 pt-3">Paid revenue by source</p>
+              <div className="sa-gridlines mt-2 grid gap-px sm:grid-cols-3">
+                <Tile label="Job posting fees" value={inr(data.bySource.jobPostingFeesInr)} tone="brand" />
+                <Tile label="Hiring fees" value={inr(data.bySource.hiringFeesInr)} tone="brand" />
+                <Tile label="Other paid revenue" value={inr(data.bySource.otherInr)} tone="brand" />
               </div>
             </div>
           ) : null}
-          <div className="space-y-1 px-4 py-3 text-xs text-[#555]">
+          <div className="sa-muted space-y-1 px-4 py-3 text-xs">
             {data.definition ? <p>{data.definition}</p> : null}
             {data.excluded ? (
               <p data-testid="revenue-excluded">
@@ -135,35 +140,33 @@ export function RevenuePanel() {
 export function WhatsAppDeliveryPanel({ delivery }: { delivery: AdminWhatsAppDelivery | null | undefined }) {
   if (!delivery) {
     return (
-      <p className="border border-[#c8eadb] bg-white px-4 py-3 text-sm text-[#555]">
-        WhatsApp delivery metrics are unavailable right now.
-      </p>
+      <p className="sa-card sa-muted px-4 py-3 text-sm">WhatsApp delivery metrics are unavailable right now.</p>
     );
   }
   return (
-    <section className="border border-[#c8eadb] bg-white" aria-labelledby="admin-wa-delivery-title">
-      <div className="bg-[#1b7f55] px-4 py-2 text-sm font-bold text-white" id="admin-wa-delivery-title">
+    <section className="sa-card overflow-hidden" aria-labelledby="admin-wa-delivery-title">
+      <div className="sa-panel-h px-4 py-2 text-sm" id="admin-wa-delivery-title">
         WhatsApp delivery · last {delivery.windowDays} days
       </div>
-      <div className="grid gap-px bg-[#eaf7f1] sm:grid-cols-3 lg:grid-cols-6">
+      <div className="sa-gridlines grid gap-px sm:grid-cols-3 lg:grid-cols-6">
         <Tile label="Sent" value={delivery.sent} />
-        <Tile label="Delivered" value={delivery.delivered} tone="#1b7f55" />
-        <Tile label="Read" value={delivery.read} tone="#1b7f55" />
-        <Tile label="Failed" value={delivery.failed} tone="#b42318" />
-        <Tile label="Queued" value={delivery.pending} tone="#9a6700" />
-        <Tile label="Delivery rate" value={rate(delivery.deliveryRate)} tone="#1b7f55" />
+        <Tile label="Delivered" value={delivery.delivered} tone="brand" />
+        <Tile label="Read" value={delivery.read} tone="brand" />
+        <Tile label="Failed" value={delivery.failed} tone="danger" />
+        <Tile label="Queued" value={delivery.pending} tone="muted" />
+        <Tile label="Delivery rate" value={rate(delivery.deliveryRate)} tone="brand" />
       </div>
-      <div className="px-4 py-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-[#555]">Recent failures</h3>
+      <div className="border-t border-[var(--sa-line)] px-4 py-3">
+        <h3 className="sa-label text-xs">Recent failures</h3>
         {delivery.recentFailures.length === 0 ? (
-          <p className="mt-2 text-sm text-[#555]">No failed messages in this period.</p>
+          <p className="sa-muted mt-2 text-sm">No failed messages in this period.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-[#f3e1de]">
+          <ul className="sa-rows mt-2">
             {delivery.recentFailures.map((f) => (
               <li key={f.id} className="py-2 text-sm">
-                <p className="font-semibold text-[#444]">{f.template || 'Message'}</p>
-                <p className="text-xs text-[#b42318]">{f.reason}</p>
-                <p className="text-xs text-[#666]">{new Date(f.createdAt).toLocaleString('en-IN')}</p>
+                <p className="sa-ink font-semibold">{f.template || 'Message'}</p>
+                <p className="sa-error-text text-xs">{f.reason}</p>
+                <p className="sa-muted text-xs">{new Date(f.createdAt).toLocaleString('en-IN')}</p>
               </li>
             ))}
           </ul>
@@ -190,23 +193,23 @@ export function ApplicationPipelinePanel({ refreshKey = 0 }: { refreshKey?: numb
 
   if (error) {
     return (
-      <p role="alert" className="border border-[#f3d5cb] bg-white px-4 py-3 text-sm text-[#b42318]">
+      <p role="alert" className="sa-notice sa-notice--error px-4 py-3 text-sm">
         {error}
       </p>
     );
   }
-  if (!data) return <p className="text-sm text-[#666]">Loading pipeline…</p>;
+  if (!data) return <p className="sa-muted text-sm">Loading pipeline…</p>;
   return (
-    <section className="border border-[#f3d5cb] bg-white" aria-labelledby="admin-pipeline-title">
-      <div className="flex items-center justify-between bg-[#b8401f] px-4 py-2 text-sm font-bold text-white">
+    <section className="sa-card overflow-hidden" aria-labelledby="admin-pipeline-title">
+      <div className="sa-panel-h flex items-center justify-between gap-2 px-4 py-2 text-sm">
         <h2 id="admin-pipeline-title">Application pipeline</h2>
         <span>{data.total} total</span>
       </div>
-      <ol className="grid gap-px bg-[#f3d5cb] sm:grid-cols-5">
+      <ol className="sa-gridlines grid gap-px sm:grid-cols-5">
         {data.stages.map((stage) => (
-          <li key={stage.stage} className="bg-white px-3 py-3 text-center">
-            <p className="text-2xl font-black text-[#333]">{stage.count}</p>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-[#666]">{stage.stage}</p>
+          <li key={stage.stage} className="px-3 py-3 text-center">
+            <p className="sa-value text-2xl">{stage.count}</p>
+            <p className="sa-label">{stage.stage}</p>
           </li>
         ))}
       </ol>
@@ -246,11 +249,11 @@ export function CandidateFilterBar({
     });
   }
 
-  const field = 'border border-[#ddd] bg-white px-3 py-2 text-sm';
+  const field = 'sa-input px-3 py-2 text-sm';
   return (
-    <form onSubmit={submit} className="border border-[#d5ebf6] bg-white p-3" aria-label="Candidate filters">
+    <form onSubmit={submit} className="sa-card p-3" aria-label="Candidate filters">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <label className="text-xs font-bold text-[#555]" htmlFor={`${id}-location`}>
+        <label className="sa-ink text-xs font-bold" htmlFor={`${id}-location`}>
           Location
           <input
             id={`${id}-location`}
@@ -260,7 +263,7 @@ export function CandidateFilterBar({
             className={`${field} mt-1 w-full font-normal`}
           />
         </label>
-        <label className="text-xs font-bold text-[#555]" htmlFor={`${id}-skill`}>
+        <label className="sa-ink text-xs font-bold" htmlFor={`${id}-skill`}>
           Skill
           <input
             id={`${id}-skill`}
@@ -270,7 +273,7 @@ export function CandidateFilterBar({
             className={`${field} mt-1 w-full font-normal`}
           />
         </label>
-        <label className="text-xs font-bold text-[#555]" htmlFor={`${id}-from`}>
+        <label className="sa-ink text-xs font-bold" htmlFor={`${id}-from`}>
           Registered from
           <input
             id={`${id}-from`}
@@ -281,7 +284,7 @@ export function CandidateFilterBar({
             aria-invalid={Boolean(error)}
           />
         </label>
-        <label className="text-xs font-bold text-[#555]" htmlFor={`${id}-to`}>
+        <label className="sa-ink text-xs font-bold" htmlFor={`${id}-to`}>
           Registered to
           <input
             id={`${id}-to`}
@@ -293,13 +296,13 @@ export function CandidateFilterBar({
             aria-describedby={error ? `${id}-error` : undefined}
           />
         </label>
-        <div className="flex items-end gap-2">
-          <button type="submit" className="bg-[#1b7fb0] px-4 py-2 text-sm font-bold text-white">
+        <div className="flex flex-wrap items-end gap-2">
+          <button type="submit" className="sa-btn">
             Apply filters
           </button>
           <button
             type="button"
-            className="border border-[#ccc] bg-white px-4 py-2 text-sm font-bold text-[#444]"
+            className="sa-btn sa-btn--line"
             onClick={() => {
               setError('');
               onApply(EMPTY_CANDIDATE_FILTERS);
@@ -310,7 +313,7 @@ export function CandidateFilterBar({
         </div>
       </div>
       {error && (
-        <p id={`${id}-error`} role="alert" className="mt-2 text-sm text-[#b42318]">
+        <p id={`${id}-error`} role="alert" className="sa-error-text mt-2 text-sm">
           {error}
         </p>
       )}
@@ -360,7 +363,7 @@ export function SkillMergeControl({
     return (
       <button
         type="button"
-        className="bg-[#5c1d6a] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white disabled:opacity-40"
+        className="sa-act sa-act--line"
         disabled={targets.length === 0}
         onClick={() => setOpen(true)}
       >
@@ -378,7 +381,7 @@ export function SkillMergeControl({
         id={selectId}
         value={targetId}
         onChange={(e) => setTargetId(e.target.value)}
-        className="border border-[#d8bde4] bg-white px-2 py-1 text-xs"
+        className="sa-input min-h-8 px-2 py-1 text-xs"
       >
         <option value="">Merge into…</option>
         {targets.map((s) => (
@@ -389,7 +392,7 @@ export function SkillMergeControl({
       </select>
       <button
         type="button"
-        className="bg-[#5c1d6a] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white disabled:opacity-40"
+        className="sa-act"
         disabled={!target || busy}
         onClick={() => setConfirming(true)}
       >
@@ -397,7 +400,7 @@ export function SkillMergeControl({
       </button>
       <button
         type="button"
-        className="border border-[#ccc] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#444]"
+        className="sa-act sa-act--line"
         onClick={() => {
           setOpen(false);
           setTargetId('');

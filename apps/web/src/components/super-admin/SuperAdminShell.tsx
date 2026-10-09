@@ -5,54 +5,39 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { canOpenAdminTab, roleLabel, type SuperAdminNavId } from '@/lib/admin-portal';
-import { TAB_THEME } from '@/components/super-admin/admin-tab-ui';
+import { AdminNavIcon } from '@/components/super-admin/admin-icons';
 import { logout } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
 import '@/components/super-admin/super-admin-shell.css';
 
 export type { SuperAdminNavId };
 
-const NAV: Array<{ id: SuperAdminNavId; label: string; href: string; icon: string }> = [
-  { id: 'dashboard', label: 'Dashboard', href: '/adminsrsb/dashboard', icon: '▣' },
-  { id: 'candidates', label: 'Candidates', href: '/adminsrsb/dashboard?tab=candidates', icon: '👤' },
-  { id: 'employers', label: 'Employers', href: '/adminsrsb/dashboard?tab=employers', icon: '🏢' },
-  { id: 'jobs', label: 'Jobs', href: '/adminsrsb/dashboard?tab=jobs', icon: '📋' },
-  { id: 'applications', label: 'Applications', href: '/adminsrsb/dashboard?tab=applications', icon: '📄' },
-  { id: 'interviews', label: 'Interviews', href: '/adminsrsb/dashboard?tab=interviews', icon: '🎥' },
-  { id: 'skills', label: 'Skills', href: '/adminsrsb/dashboard?tab=skills', icon: '✦' },
-  { id: 'ai-usage', label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage', icon: '⚡' },
-  { id: 'notifications', label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications', icon: '🔔' },
-  { id: 'testimonials', label: 'Testimonials', href: '/adminsrsb/dashboard?tab=testimonials', icon: '💬' },
-  { id: 'reports', label: 'Reports', href: '/adminsrsb/dashboard?tab=reports', icon: '📊' },
-  { id: 'admins', label: 'Administration', href: '/adminsrsb/dashboard?tab=admins', icon: '🛡' },
-  { id: 'settings', label: 'Settings', href: '/adminsrsb/dashboard?tab=settings', icon: '⚙' },
-  { id: 'audit', label: 'Audit', href: '/adminsrsb/dashboard?tab=audit', icon: '🧾' },
-  { id: 'account', label: 'My Account', href: '/adminsrsb/dashboard?tab=account', icon: '🔑' },
+const NAV: Array<{ id: SuperAdminNavId; label: string; href: string }> = [
+  { id: 'dashboard', label: 'Dashboard', href: '/adminsrsb/dashboard' },
+  { id: 'candidates', label: 'Candidates', href: '/adminsrsb/dashboard?tab=candidates' },
+  { id: 'employers', label: 'Employers', href: '/adminsrsb/dashboard?tab=employers' },
+  { id: 'jobs', label: 'Jobs', href: '/adminsrsb/dashboard?tab=jobs' },
+  { id: 'applications', label: 'Applications', href: '/adminsrsb/dashboard?tab=applications' },
+  { id: 'interviews', label: 'Interviews', href: '/adminsrsb/dashboard?tab=interviews' },
+  { id: 'skills', label: 'Skills', href: '/adminsrsb/dashboard?tab=skills' },
+  { id: 'ai-usage', label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage' },
+  { id: 'notifications', label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications' },
+  { id: 'testimonials', label: 'Testimonials', href: '/adminsrsb/dashboard?tab=testimonials' },
+  { id: 'reports', label: 'Reports', href: '/adminsrsb/dashboard?tab=reports' },
+  { id: 'admins', label: 'Administration', href: '/adminsrsb/dashboard?tab=admins' },
+  { id: 'settings', label: 'Settings', href: '/adminsrsb/dashboard?tab=settings' },
+  { id: 'audit', label: 'Audit', href: '/adminsrsb/dashboard?tab=audit' },
+  { id: 'account', label: 'My Account', href: '/adminsrsb/dashboard?tab=account' },
 ];
 
 function shellMeta(role?: string | null) {
   if (role === 'SUPER_ADMIN') {
-    return {
-      brand: 'SRSB Super Admin',
-      tag: 'Command bridge',
-      shell: 'role-shell role-shell--super matrix-admin',
-      signOut: 'bg-[#c9a227] hover:bg-[#b8921f] text-[#1a222c]',
-    };
+    return { brand: 'SRSB Super Admin', tag: 'Command bridge', shell: 'role-shell role-shell--super' };
   }
   if (role === 'PLATFORM_OPERATOR') {
-    return {
-      brand: 'SRSB Operations',
-      tag: 'Ops floor',
-      shell: 'role-shell role-shell--ops matrix-admin',
-      signOut: 'bg-cyan-500 hover:bg-cyan-400 text-[#0c2744]',
-    };
+    return { brand: 'SRSB Operations', tag: 'Ops floor', shell: 'role-shell role-shell--ops' };
   }
-  return {
-    brand: 'SRSB Admin',
-    tag: 'Admin console',
-    shell: 'role-shell role-shell--admin matrix-admin',
-    signOut: 'bg-teal-600 hover:bg-teal-500 text-white',
-  };
+  return { brand: 'SRSB Admin', tag: 'Admin console', shell: 'role-shell role-shell--admin' };
 }
 
 export function SuperAdminShell({
@@ -70,7 +55,7 @@ export function SuperAdminShell({
   const meta = shellMeta(role);
 
   return (
-    <div className={`${meta.shell} min-h-screen text-[#555]`}>
+    <div className={`${meta.shell} min-h-screen`}>
       {open ? (
         <button
           type="button"
@@ -115,20 +100,17 @@ export function SuperAdminShell({
         <nav className="flex-1 overflow-y-auto py-2">
           {items.map((item) => {
             const isActive = active === item.id;
-            const accent = TAB_THEME[item.id].accent;
             return (
               <Link
                 key={item.id}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className={`role-shell__nav-link flex items-center gap-3 px-4 py-2.5 text-[13px] transition ${
-                  isActive ? 'role-shell__nav-link--active font-semibold' : ''
+                aria-current={isActive ? 'page' : undefined}
+                className={`role-shell__nav-link flex min-h-[42px] items-center gap-3 px-3 text-[13px] transition ${
+                  isActive ? 'role-shell__nav-link--active' : ''
                 }`}
-                style={isActive ? { backgroundColor: accent, color: '#fff' } : undefined}
               >
-                <span className="w-5 text-center text-sm opacity-90" aria-hidden>
-                  {item.icon}
-                </span>
+                <AdminNavIcon id={item.id} />
                 <span className="truncate">{item.label}</span>
               </Link>
             );
@@ -141,7 +123,7 @@ export function SuperAdminShell({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="role-shell__menu-btn inline-flex h-9 w-9 items-center justify-center lg:hidden"
+              className="role-shell__menu-btn inline-flex h-10 w-10 items-center justify-center lg:hidden"
               onClick={() => setOpen((v) => !v)}
               aria-label="Toggle menu"
             >
@@ -154,12 +136,12 @@ export function SuperAdminShell({
             <span className="role-shell__header-label text-sm font-semibold">{meta.tag}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/" className="role-shell__public hidden px-2.5 py-1.5 text-xs font-semibold sm:inline">
+            <Link href="/" className="role-shell__public hidden px-3.5 text-xs sm:inline-flex">
               Public site
             </Link>
             <button
               type="button"
-              className={`rounded px-3 py-1.5 text-xs font-bold ${meta.signOut}`}
+              className="role-shell__signout px-3.5 text-xs"
               onClick={async () => {
                 await logout();
                 router.replace('/adminsrsb');
@@ -167,7 +149,7 @@ export function SuperAdminShell({
             >
               Sign out
             </button>
-            <span className="role-shell__avatar ml-1 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white">
+            <span className="role-shell__avatar ml-1 flex h-9 w-9 items-center justify-center rounded-full text-xs font-extrabold">
               {(user?.firstName?.[0] || user?.phone?.slice(-1) || 'A').toUpperCase()}
             </span>
           </div>

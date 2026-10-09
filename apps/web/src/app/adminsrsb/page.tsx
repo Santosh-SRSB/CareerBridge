@@ -9,6 +9,7 @@ import { loginAdminPortal } from '@/lib/api';
 import { clearSession, getStoredUser, isPlatformRole } from '@/lib/session';
 import { roleLabel } from '@/lib/admin-portal';
 import { validateEmailAddress } from '@/lib/validation';
+import '@/components/super-admin/super-admin-shell.css';
 
 export default function SrsbAdminLoginPage() {
   const router = useRouter();
@@ -57,47 +58,47 @@ export default function SrsbAdminLoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center bg-[#0b1f2a] px-4 py-10">
+    <main className="role-shell relative flex min-h-screen items-center justify-center bg-[var(--sa-dark)] px-4 py-10">
       <div
-        className="pointer-events-none absolute inset-0 opacity-40"
+        className="pointer-events-none absolute inset-0 opacity-50"
         style={{
           background:
-            'radial-gradient(circle at 20% 20%, rgba(13,148,136,0.35), transparent 45%), radial-gradient(circle at 80% 10%, rgba(2,132,199,0.28), transparent 40%), linear-gradient(160deg, #0b1f2a, #102a37 55%, #0b1f2a)',
+            'radial-gradient(circle at 20% 20%, rgba(79,99,255,0.45), transparent 45%), radial-gradient(circle at 80% 10%, rgba(169,175,255,0.3), transparent 40%), linear-gradient(160deg, var(--sa-dark), var(--sa-brand-deep) 55%, var(--sa-dark))',
         }}
       />
-      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-7 shadow-2xl backdrop-blur">
+      <div className="relative w-full max-w-md rounded-[var(--sa-radius-lg)] border border-white/10 bg-white/95 p-7 shadow-2xl backdrop-blur">
         <div className="mb-6 flex items-center justify-between">
           <Logo />
-          <span className="rounded-full bg-[#0b1f2a] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+          <span className="rounded-full bg-[var(--sa-brand)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
             Staff Login
           </span>
         </div>
-        <h1 className="text-2xl font-black tracking-tight text-[#0b1f2a]">SRSB Admin Portal</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className="sa-ink text-2xl font-extrabold tracking-tight">SRSB Admin Portal</h1>
+        <p className="sa-muted mt-1 text-sm">
           Super Admin, Admin, and Operator — each login uses its own email. Sign out before switching
           accounts.
         </p>
 
         {existing ? (
-          <div className="mt-5 space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4">
-            <p className="text-sm text-slate-700">
+          <div className="sa-notice mt-5 space-y-3 p-4">
+            <p className="text-sm">
               Already signed in as{' '}
-              <span className="font-bold text-[#0b1f2a]">{roleLabel(existing.role)}</span>
+              <span className="font-bold">{roleLabel(existing.role)}</span>
               {existing.email ? (
-                <span className="block text-xs text-slate-500">{existing.email}</span>
+                <span className="sa-muted block text-xs">{existing.email}</span>
               ) : null}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                className="bg-[#0d9488] hover:bg-[#0f766e]"
+                className="!bg-[var(--sa-brand)] hover:!bg-[var(--sa-brand-deep)]"
                 onClick={() => router.replace('/adminsrsb/dashboard')}
               >
                 Continue
               </Button>
               <Button
                 type="button"
-                className="bg-slate-700 hover:bg-slate-800"
+                className="!bg-[var(--sa-dark)] hover:!bg-[var(--sa-brand-deep)]"
                 onClick={() => {
                   clearSession();
                   setExisting(null);
@@ -139,11 +140,11 @@ export default function SrsbAdminLoginPage() {
               type="submit"
               loading={loading}
               loadingLabel="Signing in…"
-              className="w-full bg-[#0d9488] hover:bg-[#0f766e]"
+              className="w-full !bg-[var(--sa-brand)] hover:!bg-[var(--sa-brand-deep)]"
             >
               Sign in
             </Button>
-            <p className="text-[11px] leading-relaxed text-slate-500">
+            <p className="sa-muted text-[11px] leading-relaxed">
               Use your staff email and password. Contact Super Admin if you need access.
             </p>
           </form>

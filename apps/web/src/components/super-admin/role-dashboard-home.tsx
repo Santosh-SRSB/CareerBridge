@@ -3,37 +3,32 @@
 import Link from 'next/link';
 import type { AdminDashboard } from '@careerbridge/shared';
 import { canOpenAdminTab, type SuperAdminNavId } from '@/lib/admin-portal';
+import { AdminNavIcon } from '@/components/super-admin/admin-icons';
 
 type Tile = {
+  id: SuperAdminNavId;
   label: string;
   href: string;
-  color: string;
-  icon: string;
 };
 
 const MODULE_TILES: Tile[] = [
-  { label: 'Candidates', href: '/adminsrsb/dashboard?tab=candidates', color: '#27a9e3', icon: '👤' },
-  { label: 'Employers', href: '/adminsrsb/dashboard?tab=employers', color: '#28b779', icon: '🏢' },
-  { label: 'Jobs', href: '/adminsrsb/dashboard?tab=jobs', color: '#ffb848', icon: '📋' },
-  { label: 'Applications', href: '/adminsrsb/dashboard?tab=applications', color: '#da542e', icon: '📄' },
-  { label: 'Interviews', href: '/adminsrsb/dashboard?tab=interviews', color: '#2255a4', icon: '🎥' },
-  { label: 'Skills', href: '/adminsrsb/dashboard?tab=skills', color: '#f74d4d', icon: '✦' },
-  { label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage', color: '#852b99', icon: '⚡' },
-  { label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications', color: '#0aa3c2', icon: '🔔' },
-  { label: 'Testimonials', href: '/adminsrsb/dashboard?tab=testimonials', color: '#0a2e2c', icon: '💬' },
-  { label: 'Reports', href: '/adminsrsb/dashboard?tab=reports', color: '#1f9d68', icon: '📊' },
-  { label: 'Audit', href: '/adminsrsb/dashboard?tab=audit', color: '#c9a227', icon: '🧾' },
-  { label: 'Administration', href: '/adminsrsb/dashboard?tab=admins', color: '#2b3643', icon: '🛡' },
-  { label: 'Settings', href: '/adminsrsb/dashboard?tab=settings', color: '#5c6570', icon: '⚙' },
+  { id: 'candidates', label: 'Candidates', href: '/adminsrsb/dashboard?tab=candidates' },
+  { id: 'employers', label: 'Employers', href: '/adminsrsb/dashboard?tab=employers' },
+  { id: 'jobs', label: 'Jobs', href: '/adminsrsb/dashboard?tab=jobs' },
+  { id: 'applications', label: 'Applications', href: '/adminsrsb/dashboard?tab=applications' },
+  { id: 'interviews', label: 'Interviews', href: '/adminsrsb/dashboard?tab=interviews' },
+  { id: 'skills', label: 'Skills', href: '/adminsrsb/dashboard?tab=skills' },
+  { id: 'ai-usage', label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage' },
+  { id: 'notifications', label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications' },
+  { id: 'testimonials', label: 'Testimonials', href: '/adminsrsb/dashboard?tab=testimonials' },
+  { id: 'reports', label: 'Reports', href: '/adminsrsb/dashboard?tab=reports' },
+  { id: 'audit', label: 'Audit', href: '/adminsrsb/dashboard?tab=audit' },
+  { id: 'admins', label: 'Administration', href: '/adminsrsb/dashboard?tab=admins' },
+  { id: 'settings', label: 'Settings', href: '/adminsrsb/dashboard?tab=settings' },
 ];
 
 function visibleTiles(role: string | null) {
-  return MODULE_TILES.filter((tile) => {
-    const id = tile.href.includes('tab=')
-      ? (tile.href.split('tab=')[1] as SuperAdminNavId)
-      : 'dashboard';
-    return canOpenAdminTab(role, id);
-  });
+  return MODULE_TILES.filter((tile) => canOpenAdminTab(role, tile.id));
 }
 
 function aiBudgetLabel(status: 'OK' | 'WARNING' | 'LIMIT_REACHED' | 'DISABLED') {
@@ -97,36 +92,33 @@ function SuperCommandHome({ metrics, role }: { metrics: AdminDashboard; role: st
           <Link
             key={tile.label}
             href={tile.href}
-            className="sa-tile flex min-h-[88px] flex-col items-center justify-center gap-2 px-2 text-center text-white"
-            style={{ ['--matrix-c1' as string]: tile.color, backgroundColor: tile.color }}
+            className="sa-tile flex min-h-[88px] flex-col items-center justify-center gap-2 px-2 text-center"
           >
-            <span className="text-2xl" aria-hidden>
-              {tile.icon}
-            </span>
-            <span className="text-xs font-semibold uppercase tracking-wide">{tile.label}</span>
+            <AdminNavIcon id={tile.id} size={22} />
+            <span className="text-[11px]">{tile.label}</span>
           </Link>
         ))}
       </div>
 
-      <section className="border border-[#d4af37]/40 bg-[#1a222c] text-white">
-        <div className="border-b border-[#d4af37]/25 px-4 py-3">
-          <h2 className="text-base font-semibold text-[#f0e6c8]">Command overview</h2>
-          <p className="text-xs text-white/55">Full-platform visibility</p>
+      <section className="sa-overview">
+        <div className="px-4 py-3">
+          <h2 className="text-base font-bold">Command overview</h2>
+          <p className="sa-on-dark-muted text-xs">Full-platform visibility</p>
         </div>
-        <div className="grid grid-cols-2 gap-px bg-[#d4af37]/20 sm:grid-cols-4 xl:grid-cols-8">
+        <div className="sa-overview-grid grid grid-cols-2 gap-px sm:grid-cols-4 xl:grid-cols-8">
           {stats.map(([label, value]) => (
-            <div key={label} className="bg-[#232b36] px-3 py-4 text-center">
-              <p className="text-xl font-bold text-[#f0e6c8]">{value}</p>
-              <p className="mt-1 text-[10px] uppercase tracking-wide text-white/55">{label}</p>
+            <div key={label} className="px-3 py-4 text-center">
+              <p className="text-xl font-extrabold">{value}</p>
+              <p className="sa-on-dark-muted mt-1 text-[10px] font-bold uppercase tracking-[0.1em]">{label}</p>
             </div>
           ))}
         </div>
       </section>
 
       {metrics.funnel ? (
-        <section className="border border-[#d4af37]/30 bg-white">
-          <div className="border-b border-[#eee] bg-[#faf8f2] px-4 py-3">
-            <h2 className="text-base font-semibold text-[#1a222c]">Recruitment funnel</h2>
+        <section className="sa-card overflow-hidden">
+          <div className="sa-card-h px-4 py-3">
+            <h2 className="sa-h2 text-base">Recruitment funnel</h2>
           </div>
           <div className="grid grid-cols-2 gap-2 p-4 md:grid-cols-5">
             {[
@@ -136,9 +128,9 @@ function SuperCommandHome({ metrics, role }: { metrics: AdminDashboard; role: st
               ['Interviews', metrics.funnel.interviews],
               ['Hires', metrics.funnel.hires],
             ].map(([label, value]) => (
-              <div key={String(label)} className="border-l-4 border-[#c9a227] bg-[#faf8f2] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">{label}</p>
-                <p className="mt-2 text-2xl font-bold text-[#1a222c]">{value}</p>
+              <div key={String(label)} className="sa-stat p-4">
+                <p className="sa-label">{label}</p>
+                <p className="sa-value mt-2 text-2xl">{value}</p>
               </div>
             ))}
           </div>
@@ -146,9 +138,9 @@ function SuperCommandHome({ metrics, role }: { metrics: AdminDashboard; role: st
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="border border-[#ddd] bg-white">
-          <div className="border-b border-[#eee] px-4 py-3">
-            <h2 className="text-base font-semibold text-[#555]">Activity · 7 days</h2>
+        <section className="sa-card overflow-hidden">
+          <div className="sa-card-h px-4 py-3">
+            <h2 className="sa-h2 text-base">Activity · 7 days</h2>
           </div>
           <div className="grid grid-cols-2 gap-2 p-4 md:grid-cols-3">
             {[
@@ -158,22 +150,22 @@ function SuperCommandHome({ metrics, role }: { metrics: AdminDashboard; role: st
               ['Applications', metrics.activity?.applications7d ?? 0],
               ['Interviews', metrics.activity?.interviews7d ?? 0],
             ].map(([label, value]) => (
-              <div key={String(label)} className="border border-[#eee] bg-[#faf8f2] p-3">
-                <p className="text-[10px] uppercase tracking-wide text-[#999]">{label}</p>
-                <p className="mt-1 text-xl font-bold text-[#1a222c]">{value}</p>
+              <div key={String(label)} className="sa-stat sa-stat--peri min-w-0 p-3">
+                <p className="sa-label">{label}</p>
+                <p className="sa-value mt-1 text-xl">{value}</p>
               </div>
             ))}
           </div>
         </section>
-        <section className="border border-[#ddd] bg-white">
-          <div className="border-b border-[#eee] px-4 py-3">
-            <h2 className="text-base font-semibold text-[#555]">Operational alerts</h2>
+        <section className="sa-card overflow-hidden">
+          <div className="sa-card-h px-4 py-3">
+            <h2 className="sa-h2 text-base">Operational alerts</h2>
           </div>
           <div className="grid grid-cols-2 gap-2 p-4">
             {alertItems(metrics).map((item) => (
-              <Link key={item.label} href={item.href} className="bg-[#3d4957] px-3 py-4 text-center text-white">
-                <p className="text-xl font-bold">{item.value}</p>
-                <p className="mt-1 text-[10px] uppercase tracking-wide text-white/70">{item.label}</p>
+              <Link key={item.label} href={item.href} className="sa-alert min-w-0 px-3 py-4 text-center">
+                <p className="text-xl font-extrabold">{item.value}</p>
+                <p className="sa-on-dark-muted mt-1 text-[10px] font-bold uppercase tracking-[0.1em]">{item.label}</p>
               </Link>
             ))}
           </div>
@@ -199,42 +191,33 @@ function AdminExecutiveHome({ metrics, role }: { metrics: AdminDashboard; role: 
     <div className="role-home role-home--admin space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-teal-100 bg-white p-4 shadow-sm">
-            <div className="mb-3 h-1.5 w-10 rounded-full bg-teal-600" />
-            <p className="text-3xl font-bold tracking-tight text-[#0f3d4c]">{kpi.value}</p>
-            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-teal-700/70">{kpi.label}</p>
+          <div key={kpi.label} className="sa-kpi p-4 shadow-[var(--sa-shadow)]">
+            <p className="sa-value text-3xl tracking-tight">{kpi.value}</p>
+            <p className="sa-label mt-1 text-xs">{kpi.label}</p>
           </div>
         ))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <section className="rounded-2xl border border-teal-100 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-teal-800">Modules</h2>
-          <p className="mb-3 text-xs text-slate-500">Day-to-day platform work</p>
+        <section className="sa-card p-4">
+          <h2 className="sa-eyebrow text-sm">Modules</h2>
+          <p className="sa-muted mb-3 text-xs">Day-to-day platform work</p>
           <div className="space-y-2">
             {tiles.map((tile) => (
-              <Link
-                key={tile.label}
-                href={tile.href}
-                className="flex items-center gap-3 rounded-xl border border-slate-100 bg-[#f4fbfa] px-3 py-3 transition hover:border-teal-300 hover:bg-white"
-              >
-                <span
-                  className="flex h-10 w-10 items-center justify-center rounded-xl text-lg text-white"
-                  style={{ backgroundColor: tile.color }}
-                  aria-hidden
-                >
-                  {tile.icon}
+              <Link key={tile.label} href={tile.href} className="sa-stat flex items-center gap-3 px-3 py-3">
+                <span className="sa-icon-box flex h-10 w-10 shrink-0 items-center justify-center">
+                  <AdminNavIcon id={tile.id} />
                 </span>
-                <span className="flex-1 text-sm font-semibold text-[#0f3d4c]">{tile.label}</span>
-                <span className="text-xs font-bold text-teal-700">Open →</span>
+                <span className="sa-ink flex-1 text-sm font-semibold">{tile.label}</span>
+                <span className="sa-brand-text text-xs font-bold">Open →</span>
               </Link>
             ))}
           </div>
         </section>
 
-        <section className="rounded-2xl border border-teal-100 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-teal-800">Pipeline</h2>
-          <p className="mb-4 text-xs text-slate-500">Recruitment funnel</p>
+        <section className="sa-card p-4">
+          <h2 className="sa-eyebrow text-sm">Pipeline</h2>
+          <p className="sa-muted mb-4 text-xs">Recruitment funnel</p>
           <div className="space-y-3">
             {(
               [
@@ -247,26 +230,22 @@ function AdminExecutiveHome({ metrics, role }: { metrics: AdminDashboard; role: 
             ).map(([label, value, width]) => (
               <div key={label}>
                 <div className="mb-1 flex justify-between text-xs">
-                  <span className="font-semibold text-slate-600">{label}</span>
-                  <span className="font-bold text-teal-800">{value}</span>
+                  <span className="sa-muted font-semibold">{label}</span>
+                  <span className="sa-ink font-bold">{value}</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-teal-100">
-                  <div className="admin-bar h-full rounded-full" style={{ width: `${Math.max(8, width)}%` }} />
+                <div className="sa-meter h-2 overflow-hidden">
+                  <span style={{ width: `${Math.max(8, width)}%` }} />
                 </div>
               </div>
             ))}
           </div>
 
-          <h2 className="mb-2 mt-6 text-sm font-bold uppercase tracking-[0.14em] text-teal-800">Alerts</h2>
+          <h2 className="sa-eyebrow mb-2 mt-6 text-sm">Alerts</h2>
           <div className="grid grid-cols-2 gap-2">
             {alertItems(metrics).map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="rounded-xl border border-rose-100 bg-rose-50/70 px-3 py-3"
-              >
-                <p className="text-2xl font-bold text-rose-700">{item.value}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-800/70">{item.label}</p>
+              <Link key={item.label} href={item.href} className="sa-alert min-w-0 px-3 py-3">
+                <p className="text-2xl font-extrabold">{item.value}</p>
+                <p className="sa-on-dark-muted text-[10px] font-bold uppercase tracking-[0.1em]">{item.label}</p>
               </Link>
             ))}
           </div>
@@ -286,25 +265,25 @@ function OpsFloorHome({ metrics, role }: { metrics: AdminDashboard; role: string
           <Link
             key={tile.label}
             href={tile.href}
-            className="inline-flex items-center gap-2 border border-cyan-700 bg-[#0c2744] px-3 py-2 text-white"
+            className="sa-chip inline-flex min-h-10 items-center gap-2 px-3.5 text-xs"
           >
-            <span aria-hidden>{tile.icon}</span>
-            <span className="text-xs font-bold uppercase tracking-wide">{tile.label}</span>
+            <AdminNavIcon id={tile.id} size={16} />
+            <span>{tile.label}</span>
           </Link>
         ))}
       </div>
 
-      <section className="overflow-hidden border border-[#0c2744] bg-[#0c2744] text-white">
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <section className="sa-overview">
+        <div className="flex items-center justify-between border-b border-[var(--sa-on-dark-line)] px-4 py-3">
           <div>
-            <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-cyan-200">Live ops board</h2>
-            <p className="text-xs text-white/50">Queue visibility</p>
+            <h2 className="text-sm font-bold uppercase tracking-[0.16em]">Live ops board</h2>
+            <p className="sa-on-dark-muted text-xs">Queue visibility</p>
           </div>
-          <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Live
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--sa-lav)]" /> Live
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-px bg-white/10 sm:grid-cols-4">
+        <div className="sa-overview-grid grid grid-cols-2 gap-px sm:grid-cols-4">
           {[
             { label: 'Candidates', value: metrics.candidates },
             { label: 'Active jobs', value: metrics.openJobs },
@@ -315,17 +294,17 @@ function OpsFloorHome({ metrics, role }: { metrics: AdminDashboard; role: string
             { label: 'Employers', value: metrics.employers },
             { label: 'Active people', value: metrics.activeCandidates },
           ].map((cell) => (
-            <div key={cell.label} className="bg-[#0f3052] px-4 py-5">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">{cell.label}</p>
-              <p className="mt-2 text-3xl font-black tabular-nums text-cyan-300">{cell.value}</p>
+            <div key={cell.label} className="px-4 py-5">
+              <p className="sa-on-dark-muted text-[10px] font-bold uppercase tracking-wider">{cell.label}</p>
+              <p className="mt-2 text-3xl font-extrabold tabular-nums">{cell.value}</p>
             </div>
           ))}
         </div>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="border border-slate-200 bg-white p-4">
-          <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-[#0c2744]">Funnel steps</h2>
+        <section className="sa-card p-4">
+          <h2 className="sa-eyebrow text-sm">Funnel steps</h2>
           <div className="mt-4 flex flex-wrap items-end gap-2">
             {(
               [
@@ -339,26 +318,22 @@ function OpsFloorHome({ metrics, role }: { metrics: AdminDashboard; role: string
               const h = 48 + Math.min(120, Number(value) * 18 + i * 8);
               return (
                 <div key={label} className="flex min-w-[52px] flex-1 flex-col items-center gap-2">
-                  <span className="text-sm font-bold text-[#0c2744]">{value}</span>
-                  <div className="w-full bg-cyan-700" style={{ height: h }} />
-                  <span className="text-[10px] font-bold uppercase text-slate-500">{label}</span>
+                  <span className="sa-ink text-sm font-bold">{value}</span>
+                  <div className="sa-bar w-full rounded-t-md" style={{ height: h }} />
+                  <span className="sa-muted text-[10px] font-bold uppercase">{label}</span>
                 </div>
               );
             })}
           </div>
         </section>
 
-        <section className="border border-amber-200 bg-[#fffbeb] p-4">
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-amber-900">Ops alerts</h2>
+        <section className="sa-card p-4">
+          <h2 className="sa-eyebrow mb-3 text-sm">Ops alerts</h2>
           <div className="space-y-2">
             {alertItems(metrics).map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="flex items-center justify-between border border-amber-100 bg-white px-3 py-2.5"
-              >
-                <span className="text-sm font-semibold text-slate-700">{item.label}</span>
-                <span className="bg-amber-500 px-2 py-0.5 text-sm font-black text-white">{item.value}</span>
+              <Link key={item.label} href={item.href} className="sa-stat flex items-center justify-between gap-2 px-3 py-2.5">
+                <span className="sa-ink text-sm font-semibold">{item.label}</span>
+                <span className="sa-badge sa-badge--dark px-2 py-0.5 text-sm">{item.value}</span>
               </Link>
             ))}
           </div>

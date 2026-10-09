@@ -32,19 +32,16 @@ const JOB_CATEGORY_GROUPS = [
   { value: 'NON_TECH', label: 'Non-tech' },
 ];
 
-const inputClass = 'min-h-12 w-full border border-[#ccc] bg-white px-3 text-sm outline-none focus:border-[#333]';
-const buttonClass =
-  'min-h-12 min-w-12 border border-[#999] bg-white px-3 text-xs font-bold text-[#333] hover:bg-[#f2f2f2] disabled:opacity-50';
-const primaryButtonClass = 'min-h-12 bg-[#333] px-4 text-sm font-bold text-white hover:bg-[#111] disabled:opacity-50';
+const inputClass = 'sa-input min-h-11 w-full px-3 text-sm';
+const buttonClass = 'sa-act sa-act--line min-h-10 min-w-10 px-3';
+const primaryButtonClass = 'sa-btn min-h-11';
 
 export function PlatformCatalogSettings() {
   const [section, setSection] = useState<SectionId>('job-categories');
   return (
-    <div className="border border-[#ddd] bg-white">
-      <div className="bg-[#555] px-4 py-3 text-sm font-bold uppercase tracking-wide text-white">
-        Reference data
-      </div>
-      <div role="tablist" aria-label="Settings lists" className="flex flex-wrap gap-1 border-b border-[#eee] bg-[#fafafa] p-2">
+    <div className="sa-card overflow-hidden">
+      <div className="sa-panel-h px-4 py-3 text-sm font-bold uppercase tracking-wide">Reference data</div>
+      <div role="tablist" aria-label="Settings lists" className="sa-note flex flex-wrap gap-1.5 p-2">
         {SECTIONS.map((item) => (
           <button
             key={item.id}
@@ -54,9 +51,7 @@ export function PlatformCatalogSettings() {
             aria-selected={section === item.id}
             aria-controls={`settings-panel-${item.id}`}
             onClick={() => setSection(item.id)}
-            className={`min-h-12 px-3 text-xs font-bold ${
-              section === item.id ? 'bg-[#333] text-white' : 'border border-[#ccc] bg-white text-[#333]'
-            }`}
+            className="sa-tab min-h-11 px-3 text-xs"
           >
             {item.label}
           </button>
@@ -207,7 +202,7 @@ function CatalogPanel({ slug }: { slug: Exclude<SectionId, 'notification-templat
   return (
     <section aria-label={title} className="space-y-4">
       <form onSubmit={onAdd} noValidate className="grid gap-2 md:grid-cols-[1fr_auto_auto] md:items-end">
-        <label className="block text-xs font-bold text-[#444]">
+        <label className="block sa-ink text-xs font-bold">
           {kind === 'LOCATION_CITY' ? 'New city' : `New ${title.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '')}`}
           <input
             value={newLabel}
@@ -219,7 +214,7 @@ function CatalogPanel({ slug }: { slug: Exclude<SectionId, 'notification-templat
           />
         </label>
         {showParent ? (
-          <label className="block text-xs font-bold text-[#444]">
+          <label className="block sa-ink text-xs font-bold">
             {kind === 'LOCATION_CITY' ? 'State' : 'Group'}
             <select value={newParent} onChange={(e) => setNewParent(e.target.value)} className={`${inputClass} mt-1`}>
               {kind === 'LOCATION_CITY' ? <option value="">Select state</option> : null}
@@ -238,13 +233,13 @@ function CatalogPanel({ slug }: { slug: Exclude<SectionId, 'notification-templat
           {busy === 'add' ? 'Adding…' : 'Add'}
         </button>
         {formError ? (
-          <p id={`${slug}-form-error`} role="alert" className="text-xs font-semibold text-red-700 md:col-span-3">
+          <p id={`${slug}-form-error`} role="alert" className="sa-error-text text-xs font-semibold md:col-span-3">
             {formError}
           </p>
         ) : null}
       </form>
 
-      <label className="block text-xs font-bold text-[#444]">
+      <label className="block sa-ink text-xs font-bold">
         Filter
         <input
           type="search"
@@ -265,20 +260,20 @@ function CatalogPanel({ slug }: { slug: Exclude<SectionId, 'notification-templat
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-sm">
+          <table className="sa-table min-w-[560px] text-sm">
             <caption className="sr-only">{title}</caption>
             <thead>
-              <tr className="border-b border-[#ddd] text-left text-xs uppercase text-[#555]">
-                <th scope="col" className="py-2 pr-2">Name</th>
-                {showParent ? <th scope="col" className="py-2 pr-2">{kind === 'LOCATION_CITY' ? 'State' : 'Group'}</th> : null}
-                <th scope="col" className="py-2 pr-2">Status</th>
-                <th scope="col" className="py-2">Actions</th>
+              <tr className="text-left">
+                <th scope="col" className="px-2 py-2">Name</th>
+                {showParent ? <th scope="col" className="px-2 py-2">{kind === 'LOCATION_CITY' ? 'State' : 'Group'}</th> : null}
+                <th scope="col" className="px-2 py-2">Status</th>
+                <th scope="col" className="px-2 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {visible.map((item) => (
-                <tr key={item.id} className="border-b border-[#eee]" data-testid="catalog-row">
-                  <td className="py-2 pr-2">
+                <tr key={item.id} data-testid="catalog-row">
+                  <td className="px-2 py-2">
                     {editing?.id === item.id ? (
                       <input
                         value={editing.label}
@@ -292,17 +287,13 @@ function CatalogPanel({ slug }: { slug: Exclude<SectionId, 'notification-templat
                       item.label
                     )}
                   </td>
-                  {showParent ? <td className="py-2 pr-2">{parentLabel(item.parentValue)}</td> : null}
-                  <td className="py-2 pr-2">
-                    <span
-                      className={`inline-block px-2 py-0.5 text-xs font-bold ${
-                        item.active ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-200 text-slate-800'
-                      }`}
-                    >
+                  {showParent ? <td className="px-2 py-2">{parentLabel(item.parentValue)}</td> : null}
+                  <td className="px-2 py-2">
+                    <span className={`sa-pill ${item.active ? 'sa-pill--ok' : 'sa-pill--warn'}`}>
                       {item.active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="py-2">
+                  <td className="px-2 py-2">
                     <div className="flex flex-wrap gap-1">
                       {editing?.id === item.id ? (
                         <>
@@ -337,7 +328,7 @@ function CatalogPanel({ slug }: { slug: Exclude<SectionId, 'notification-templat
                         onClick={() => setDeleteTarget(item)}
                         disabled={busy === item.id}
                         aria-label={`Delete ${item.label}`}
-                        className={`${buttonClass} text-red-800`}
+                        className="sa-act sa-act--danger min-h-10 min-w-10 px-3"
                       >
                         Delete
                       </button>
@@ -385,7 +376,7 @@ function NotificationTemplatesPanel() {
 
   return (
     <section aria-label="Notification templates" className="space-y-4">
-      <p className="text-xs text-[#666]">
+      <p className="sa-muted text-xs">
         Edit the in-app notification text. Use placeholders such as {'{{jobTitle}}'}; each template lists the ones it
         supports. Changes apply to new notifications immediately.
       </p>
@@ -448,20 +439,20 @@ function TemplateEditor({
   }
 
   return (
-    <form onSubmit={save} className="border border-[#e5e5e5] bg-[#fafafa] p-3" data-testid="notification-template">
+    <form onSubmit={save} className="sa-inset p-3" data-testid="notification-template">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-bold text-[#222]">{template.label}</h3>
-        <span className="bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-800">
+        <h3 className="sa-ink text-sm font-bold">{template.label}</h3>
+        <span className="sa-badge sa-badge--soft px-2 py-0.5 text-[11px]">
           To {template.audience === 'CANDIDATE' ? 'candidate' : 'employer'}
         </span>
         {template.customized ? (
-          <span className="bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900">Customised</span>
+          <span className="sa-badge sa-badge--dark px-2 py-0.5 text-[11px]">Customised</span>
         ) : null}
       </div>
-      <p className="mb-2 text-[11px] text-[#555]">
+      <p className="sa-muted mb-2 text-[11px]">
         Placeholders: {template.variables.map((v) => `{{${v}}}`).join(', ')}
       </p>
-      <label htmlFor={`${idBase}-title`} className="block text-xs font-bold text-[#444]">
+      <label htmlFor={`${idBase}-title`} className="block sa-ink text-xs font-bold">
         Title
       </label>
       <input
@@ -471,7 +462,7 @@ function TemplateEditor({
         maxLength={120}
         className={`${inputClass} mb-2 mt-1`}
       />
-      <label htmlFor={`${idBase}-body`} className="block text-xs font-bold text-[#444]">
+      <label htmlFor={`${idBase}-body`} className="block sa-ink text-xs font-bold">
         Message
       </label>
       <textarea
@@ -480,14 +471,19 @@ function TemplateEditor({
         onChange={(e) => setBody(e.target.value)}
         maxLength={1000}
         rows={3}
-        className="mt-1 w-full border border-[#ccc] bg-white px-3 py-2 text-sm outline-none focus:border-[#333]"
+        className="sa-input mt-1 w-full px-3 py-2 text-sm"
       />
-      <label className="mt-2 flex min-h-12 items-center gap-2 text-xs font-bold text-[#444]">
-        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-5 w-5" />
+      <label className="mt-2 flex min-h-12 items-center gap-2 sa-ink text-xs font-bold">
+        <input
+          type="checkbox"
+          checked={active}
+          onChange={(e) => setActive(e.target.checked)}
+          className="h-5 w-5 accent-[var(--sa-brand)]"
+        />
         Use this text (when off, the built-in default is sent)
       </label>
       {error ? (
-        <p role="alert" className="mt-1 text-xs font-semibold text-red-700">
+        <p role="alert" className="sa-error-text mt-1 text-xs font-semibold">
           {error}
         </p>
       ) : null}
