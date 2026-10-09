@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
+import { EvEmpty, EvPageHead, EvSkeleton } from '@/components/employer/ui';
 import { Button } from '@/components/ui/Button';
 import {
   listNotifications,
@@ -96,51 +96,55 @@ function NotificationsList({
   }
 
   return (
-    <div className="ep-page ep-page--messages">
-      <EmployerSectionHero
-        tone="messages"
+    <>
+      <EvPageHead
+        eyebrow="Inbox"
         title="Notifications"
         subtitle="Applications, interviews, and account updates."
-        action={
-          <Button type="button" variant="outline" onClick={() => void onMarkAll()}>
+        actions={
+          <button type="button" className="ev-btn ev-btn--ghost" onClick={() => void onMarkAll()}>
             Mark all read
-          </Button>
+          </button>
         }
       />
 
-      {loading ? <p className="text-sm text-muted">Loading…</p> : null}
+      <section className="ev-card ev-mt" aria-busy={loading}>
+        {loading ? (
+          <div className="ev-stack">
+            <EvSkeleton height={64} />
+            <EvSkeleton height={64} />
+            <EvSkeleton height={64} />
+          </div>
+        ) : items.length === 0 ? (
+          <EvEmpty title="No notifications yet" body="Updates about applications, interviews, and your account will appear here." />
+        ) : (
+          <ul className="ev-plain-list ev-notes">
+            {items.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => void onOpen(item)}
+                  className={`ev-note-item${item.read ? '' : ' is-unread'}`}
+                >
+                  <b>
+                    {item.title}
+                    {!item.read ? <span className="ev-new">New</span> : null}
+                  </b>
+                  <span className="ev-sub">{item.body}</span>
+                  <small>{formatWhen(item.createdAt)}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <div className="ep-msg-shell">
-        {!loading && items.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted">No notifications yet.</div>
-        ) : null}
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => void onOpen(item)}
-            className={`ep-msg-item ${item.read ? '' : 'is-unread'}`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-extrabold text-primary">{item.title}</p>
-                <p className="mt-1 text-sm text-muted">{item.body}</p>
-                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  {formatWhen(item.createdAt)}
-                </p>
-              </div>
-              {!item.read ? (
-                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#1f2c9d]" />
-              ) : null}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <Link href={homeHref} className="ep-link text-sm font-extrabold">
-        ← Back to dashboard
-      </Link>
-    </div>
+      <p className="ev-mt">
+        <Link href={homeHref} className="ev-lnk">
+          ← Back to dashboard
+        </Link>
+      </p>
+    </>
   );
 }
 

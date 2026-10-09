@@ -1,7 +1,9 @@
 'use client';
 
 import type { JobMatch } from '@careerbridge/shared';
-import { PROFILE_MATCH_LABEL, atsMatchBand, atsMatchBandLabel, toAtsMatchBreakdown } from '@careerbridge/shared';
+import { PROFILE_MATCH_LABEL, atsMatchBandInfo, toAtsMatchBreakdown } from '@careerbridge/shared';
+import { EvPill } from '@/components/employer/ui';
+import { matchBarTone, matchPillTone } from '@/lib/employer-ui-status';
 
 type Props = {
   match: JobMatch;
@@ -9,11 +11,15 @@ type Props = {
   className?: string;
 };
 
+const RING_COLOR = { good: '#12936b', mid: '#1f23c4', low: '#e08a1e' } as const;
+
 export function EmployerAtsBandChip({ score }: { score: number }) {
-  const band = atsMatchBand(score);
+  const info = atsMatchBandInfo(score);
   return (
-    <span className={`ep-ats-chip ep-ats-chip--${band.toLowerCase()}`} title={PROFILE_MATCH_LABEL}>
-      {PROFILE_MATCH_LABEL} {score}/100 · {atsMatchBandLabel(score)}
+    <span title={PROFILE_MATCH_LABEL}>
+      <EvPill tone={matchPillTone(info.color)}>
+        {PROFILE_MATCH_LABEL} {score}/100 · {info.label}
+      </EvPill>
     </span>
   );
 }
@@ -21,65 +27,43 @@ export function EmployerAtsBandChip({ score }: { score: number }) {
 /** Employer-facing ATS breakdown (PDF: score, factors, why / gaps). */
 export function EmployerAtsPanel({ match, compact = false, className = '' }: Props) {
   const ats = toAtsMatchBreakdown(match);
+  const color = RING_COLOR[matchBarTone(ats.band)];
+  const pct = Math.max(0, Math.min(100, ats.score));
 
   return (
-    <section className={`ep-ats-panel ${compact ? 'ep-ats-panel--compact' : ''} ${className}`.trim()}>
-      <header className="ep-ats-panel__head">
+    <section className={`ev-ats ${className}`.trim()} aria-label={`${PROFILE_MATCH_LABEL} ${ats.score} out of 100`}>
+      <div className="ev-ring" style={{ background: `conic-gradient(${color} ${pct}%, var(--ev-soft) 0)` }}>
         <div>
-          <p className="ep-ats-panel__eyebrow">{PROFILE_MATCH_LABEL}</p>
-          <p className="ep-ats-panel__score">
-            <strong>{ats.score}</strong>
-            <span>/ 100</span>
-          </p>
-          <p className={`ep-ats-panel__band ep-ats-panel__band--${ats.band.toLowerCase()}`}>
-            {ats.bandLabel}
-          </p>
+          <span>
+            <b>{ats.score}</b>
+            <br />
+            <small>{ats.bandLabel}</small>
+          </span>
         </div>
-        <div className="ep-ats-panel__ring" aria-hidden>
-          <svg viewBox="0 0 72 72">
-            <circle cx="36" cy="36" r="30" fill="none" stroke="#e6e2d8" strokeWidth="6" />
-            <circle
-              cx="36"
-              cy="36"
-              r="30"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="6"
-              strokeLinecap="round"
-              strokeDasharray={`${(ats.score / 100) * 188} 188`}
-              transform="rotate(-90 36 36)"
-              className={`ep-ats-panel__ring-arc ep-ats-panel__ring-arc--${ats.band.toLowerCase()}`}
-            />
-          </svg>
+      </div>
+
+      {ats.factors.map((factor) => (
+        <div key={factor.key}>
+          <div className="ev-mrow">
+            <span>{factor.label}</span>
+            <span>
+              {factor.score}/{factor.max}
+            </span>
+          </div>
+          <div className="ev-bar" aria-hidden>
+            <i style={{ width: `${Math.min(100, Math.max(0, factor.pct))}%` }} />
+          </div>
         </div>
-      </header>
+      ))}
 
-      <ul className="ep-ats-panel__factors">
-        {ats.factors.map((factor) => (
-          <li key={factor.key}>
-            <div className="ep-ats-panel__factor-row">
-              <span>{factor.label}</span>
-              <strong>
-                {factor.score}/{factor.max}
-              </strong>
-            </div>
-            <div className="ep-ats-panel__bar" aria-hidden>
-              <span style={{ width: `${Math.min(100, Math.max(0, factor.pct))}%` }} />
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      {!compact ? (
-        <div className="ep-ats-panel__explain">
+      {!compact && (ats.reasons.length > 0 || ats.gaps.length > 0) ? (
+        <div className="ev-explain">
           {ats.reasons.length > 0 ? (
             <div>
               <h3>Why this candidate matches</h3>
-              <ul>
+              <ul className="ev-list ev-list--ok">
                 {ats.reasons.map((reason) => (
-                  <li key={reason} className="ep-ats-panel__ok">
-                    {reason}
-                  </li>
+                  <li key={reason}>{reason}</li>
                 ))}
               </ul>
             </div>
@@ -87,11 +71,9 @@ export function EmployerAtsPanel({ match, compact = false, className = '' }: Pro
           {ats.gaps.length > 0 ? (
             <div>
               <h3>Missing / weaker areas</h3>
-              <ul>
+              <ul className="ev-list ev-list--gap">
                 {ats.gaps.map((gap) => (
-                  <li key={gap} className="ep-ats-panel__gap">
-                    {gap}
-                  </li>
+                  <li key={gap}>{gap}</li>
                 ))}
               </ul>
             </div>
@@ -99,9 +81,7 @@ export function EmployerAtsPanel({ match, compact = false, className = '' }: Pro
         </div>
       ) : null}
 
-      <p className="ep-ats-panel__note">
-        Profile match supports your decision — it does not auto-reject or auto-hire.
-      </p>
+      <p className="ev-hint">Profile match supports your decision — it does not auto-reject or auto-hire.</p>
     </section>
   );
 }

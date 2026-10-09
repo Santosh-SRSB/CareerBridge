@@ -16,12 +16,19 @@ import {
   saveBase64File,
   type JobMatchRow,
 } from '@/lib/api';
-import { EmployerShellFallback, EmployerPageHeader } from '@/components/EmployerPortal';
+import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { EmployerAtsBandChip, EmployerAtsPanel } from '@/components/employer/EmployerAtsPanel';
 import { MatchedCandidateCard } from '@/components/employer/MatchedCandidateCard';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
-import { StatusBadge } from '@/components/AppNav';
-import { Button } from '@/components/ui/Button';
+import {
+  EvAlert,
+  EvApplicationPill,
+  EvAvatar,
+  EvEmpty,
+  EvJobStatus,
+  EvPageHead,
+  EvSkeleton,
+} from '@/components/employer/ui';
 import { PROFILE_MATCH_LABEL, atsMatchBandLabel, toAtsMatchBreakdown } from '@careerbridge/shared';
 
 const ACTIONS = [
@@ -40,6 +47,22 @@ const OUTCOMES = [
   { value: 'REJECTED', label: 'Rejected' },
   { value: 'POSITION_FILLED', label: 'Position filled' },
 ] as const;
+
+function formatSalary(min: unknown, max: unknown) {
+  return [min, max]
+    .filter((v) => v != null)
+    .map((v) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return String(v);
+      if (n >= 100000) {
+        const lakhs = n / 100000;
+        return `₹${lakhs % 1 === 0 ? lakhs.toFixed(0) : lakhs.toFixed(2)}L`;
+      }
+      if (n >= 1000) return `₹${Math.round(n / 1000)}k`;
+      return `₹${n}`;
+    })
+    .join(' – ');
+}
 
 export default function EmployerJobApplicationsPage() {
   const params = useParams<{ id: string }>();
@@ -107,6 +130,50 @@ export default function EmployerJobApplicationsPage() {
     }
   }
 
+  async function onViewResume(candidateId: string) {
+    setError('');
+    try {
+      const file = await downloadEmployerCandidateResume(candidateId, params.id);
+      if (file.pdf) {
+        saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
+      } else if (file.html) {
+        saveBase64File(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
+      } else {
+        setError('Resume file was empty.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open resume.');
+    }
+  }
+
+  async function onMove(applicationId: string, action: (typeof ACTIONS)[number]['value']) {
+    setError('');
+    setMessage('');
+    try {
+      await changeApplicationStatus(applicationId, action);
+      if (action === 'HIRE') {
+        await recordHiringOutcome(applicationId, 'HIRED');
+        setMessage('Candidate hired.');
+      } else if (action === 'SHORTLIST') {
+        setMessage('Candidate has been shortlisted.');
+      }
+      await load();
+    } catch (err) {
+      setError(userFacingError(err, action === 'SHORTLIST' ? 'shortlist candidate' : 'update candidate status'));
+    }
+  }
+
+  async function onOutcome(applicationId: string, outcome: (typeof OUTCOMES)[number]) {
+    setError('');
+    try {
+      await recordHiringOutcome(applicationId, outcome.value);
+      setMessage(outcome.value === 'HIRED' ? 'Candidate hired.' : `Outcome saved: ${outcome.label}.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save outcome.');
+    }
+  }
+
   const countLabel =
     matches.length > 0
       ? `${matches.length} matched profile${matches.length === 1 ? '' : 's'}`
@@ -114,378 +181,312 @@ export default function EmployerJobApplicationsPage() {
         ? 'No matched profiles yet'
         : `${items.length} applicant${items.length === 1 ? '' : 's'}`;
 
+  const salary =
+    jobDetail && (jobDetail.salaryMin != null || jobDetail.salaryMax != null)
+      ? formatSalary(jobDetail.salaryMin, jobDetail.salaryMax)
+      : '';
+
   return (
     <EmployerShellFallback title="Matched candidates">
-      <div className="ep-desk">
-        <EmployerPageHeader
-          title={title === 'this job' ? 'Posted job' : title}
-          subtitle={`${loading ? '' : countLabel}${loading ? '' : ' · '}Job details and matched candidates`}
-          action={
-            <Link href="/employer/jobs" className="ep-link">
-              ← My Jobs
+      <EvPageHead
+        eyebrow="Posted job"
+        title={title === 'this job' ? 'Posted job' : title}
+        subtitle={`${loading ? '' : `${countLabel} · `}Job details and matched candidates`}
+        actions={
+          <>
+            <Link href="/employer/jobs" className="ev-btn ev-btn--ghost">
+              ← My jobs
             </Link>
-          }
-        />
+            <Link href={`/employer/jobs/new?edit=${encodeURIComponent(params.id)}`} className="ev-btn">
+              Edit job
+            </Link>
+          </>
+        }
+      />
 
-        {!loading && jobDetail ? (
-          <article className="ep-job-detail">
-            <header className="ep-job-detail__head">
-              <div className="ep-job-detail__intro">
-                <div className="ep-job-detail__kicker">
-                  <p className="ep-job-detail__eyebrow">Posted job</p>
-                  <StatusBadge status={status} />
-                </div>
-                <h2 className="ep-job-detail__title">{String(jobDetail.title || title)}</h2>
-                <ul className="ep-job-detail__chips">
-                  {jobDetail.city ? <li>{String(jobDetail.city)}</li> : null}
-                  {jobDetail.department ? <li>{String(jobDetail.department)}</li> : null}
-                  {jobDetail.jobType ? (
-                    <li>{String(jobDetail.jobType).replaceAll('_', ' ')}</li>
-                  ) : null}
-                </ul>
-              </div>
-            </header>
+      {loading ? <EvSkeleton height={220} /> : null}
 
-            <div className="ep-job-detail__facts">
-              <div className="ep-job-detail__fact">
-                <span>Experience</span>
-                <strong>{String(jobDetail.experience || '—')}</strong>
+      {!loading && jobDetail ? (
+        <article className="ev-card">
+          <div className="ev-card-head">
+            <div>
+              <span className="ev-eyebrow">JOB DETAILS</span>
+              <h2 style={{ marginTop: 4 }}>{String(jobDetail.title || title)}</h2>
+              <div className="ev-chips">
+                {jobDetail.city ? <span className="ev-chip">{String(jobDetail.city)}</span> : null}
+                {jobDetail.department ? <span className="ev-chip">{String(jobDetail.department)}</span> : null}
+                {jobDetail.jobType ? (
+                  <span className="ev-chip">{String(jobDetail.jobType).replaceAll('_', ' ')}</span>
+                ) : null}
               </div>
-              <div className="ep-job-detail__fact">
-                <span>Education</span>
-                <strong>{String(jobDetail.educationMin || '—')}</strong>
-              </div>
-              <div className="ep-job-detail__fact">
-                <span>Employment</span>
-                <strong>{String(jobDetail.jobType || '—').replaceAll('_', ' ')}</strong>
-              </div>
-              {(jobDetail.salaryMin != null || jobDetail.salaryMax != null) ? (
-                <div className="ep-job-detail__fact ep-job-detail__fact--salary">
-                  <span>Salary / month</span>
-                  <strong>
-                    {[jobDetail.salaryMin, jobDetail.salaryMax]
-                      .filter((v) => v != null)
-                      .map((v) => {
-                        const n = Number(v);
-                        if (!Number.isFinite(n)) return String(v);
-                        if (n >= 100000) {
-                          const lakhs = n / 100000;
-                          return `₹${lakhs % 1 === 0 ? lakhs.toFixed(0) : lakhs.toFixed(2)}L`;
-                        }
-                        if (n >= 1000) return `₹${Math.round(n / 1000)}k`;
-                        return `₹${n}`;
-                      })
-                      .join(' – ')}
-                  </strong>
-                </div>
-              ) : null}
             </div>
+            <EvJobStatus status={status} />
+          </div>
 
-            {jobDetail.description ? (
-              <div className="ep-job-detail__desc">
-                <span>Description</span>
-                <p>{String(jobDetail.description)}</p>
+          <div className="ev-kvl" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))' }}>
+            <div>
+              <small>EXPERIENCE</small>
+              <b>{String(jobDetail.experience || '—')}</b>
+            </div>
+            <div>
+              <small>EDUCATION</small>
+              <b>{String(jobDetail.educationMin || '—')}</b>
+            </div>
+            <div>
+              <small>EMPLOYMENT</small>
+              <b>{String(jobDetail.jobType || '—').replaceAll('_', ' ')}</b>
+            </div>
+            {salary ? (
+              <div>
+                <small>SALARY / MONTH</small>
+                <b>{salary}</b>
               </div>
             ) : null}
+          </div>
 
-            <footer className="ep-job-detail__actions">
-              <Link
-                href={`/employer/jobs/new?edit=${encodeURIComponent(params.id)}`}
-                className="ep-job-detail__edit"
-              >
-                Edit job
-              </Link>
-              <div className="ep-job-detail__status-actions">
-                <JobStatusActions jobId={params.id} status={status} onUpdated={load} />
-              </div>
-            </footer>
-          </article>
+          {jobDetail.description ? (
+            <div style={{ marginBottom: 16 }}>
+              <span className="ev-eyebrow">DESCRIPTION</span>
+              <p style={{ margin: '6px 0 0', whiteSpace: 'pre-line' }}>{String(jobDetail.description)}</p>
+            </div>
+          ) : null}
+
+          <JobStatusActions jobId={params.id} status={status} onUpdated={load} />
+        </article>
+      ) : null}
+
+      <section className="ev-card ev-mt" aria-labelledby="matched-title">
+        <div className="ev-card-head">
+          <div>
+            <h2 id="matched-title">Matched candidates</h2>
+            <p className="ev-sub">
+              {loading
+                ? 'Loading ranked talent…'
+                : matches.length > 0
+                  ? `${matches.length} ranked profile${matches.length === 1 ? '' : 's'} for this role`
+                  : 'Rank candidates by ATS fit for this job'}
+            </p>
+          </div>
+          <button type="button" className="ev-btn ev-btn--ghost" disabled={ranking} onClick={() => void onRank()}>
+            {ranking ? 'Ranking…' : 'Rank matches'}
+          </button>
+        </div>
+        {error ? <EvAlert tone="error">{error}</EvAlert> : null}
+        {message ? <EvAlert tone="ok">{message}</EvAlert> : null}
+
+        {!loading && matches.length === 0 && items.length === 0 ? (
+          <EvEmpty
+            title="No matched profiles yet"
+            body="Tap Rank matches to score candidates against this job."
+            action={
+              <button type="button" className="ev-btn" disabled={ranking} onClick={() => void onRank()}>
+                Rank matches
+              </button>
+            }
+          />
         ) : null}
 
-        <article className="ep-card ep-list-card ep-match-section">
-          <div className="ep-match-section__toolbar">
-            <div>
-              <h2>Matched candidates</h2>
-              <p>
-                {loading
-                  ? 'Loading ranked talent…'
-                  : matches.length > 0
-                    ? `${matches.length} ranked profile${matches.length === 1 ? '' : 's'} for this role`
-                    : 'Rank candidates by ATS fit for this job'}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              block={false}
-              loading={ranking}
-              loadingLabel="Ranking…"
-              onClick={() => void onRank()}
-              className="ep-match-section__rank-btn"
-            >
-              Rank matches
-            </Button>
+        {!loading && matches.length > 0 ? (
+          <div className="ev-grid ev-g2">
+            {matches.map((row) => {
+              const name =
+                [row.candidate?.firstName, row.candidate?.lastName].filter(Boolean).join(' ') || 'Candidate';
+              return (
+                <MatchedCandidateCard
+                  key={row.id}
+                  rank={row.rank}
+                  name={name}
+                  city={row.candidate?.city}
+                  skills={row.candidate?.skills || []}
+                  totalScore={row.totalScore}
+                  skillsScore={row.skillsScore}
+                  experienceScore={row.experienceScore}
+                  reasons={row.reasons}
+                  gaps={row.gaps}
+                  badge={row.applicationId ? 'applied' : 'matched'}
+                  jobId={params.id}
+                  candidateId={row.candidate?.id}
+                />
+              );
+            })}
           </div>
-          {error ? <p className="mt-3 text-sm font-semibold text-error">{error}</p> : null}
-          {message ? <p className="mt-3 text-sm font-semibold text-teal">{message}</p> : null}
-          {loading ? <p className="mt-6 text-sm text-muted">Loading…</p> : null}
+        ) : null}
+      </section>
 
-          {!loading && matches.length === 0 && items.length === 0 ? (
-            <div className="mt-8 rounded-2xl border border-dashed border-primary/20 bg-fog/60 px-5 py-10 text-center">
-              <p className="font-semibold text-primary">No matched profiles yet</p>
-              <p className="mt-2 text-sm text-muted">Tap Rank matches to score candidates against this job.</p>
-              <Button type="button" size="sm" block={false} className="ep-btn-save mt-3" onClick={() => void onRank()}>
-                Rank matches
-              </Button>
-            </div>
-          ) : null}
-
-          {!loading && matches.length > 0 ? (
-            <div className="ep-match-pool">
-              {matches.map((row) => {
-                const name =
-                  [row.candidate?.firstName, row.candidate?.lastName].filter(Boolean).join(' ') ||
-                  'Candidate';
-                return (
-                  <MatchedCandidateCard
-                    key={row.id}
-                    rank={row.rank}
-                    name={name}
-                    city={row.candidate?.city}
-                    skills={row.candidate?.skills || []}
-                    totalScore={row.totalScore}
-                    skillsScore={row.skillsScore}
-                    experienceScore={row.experienceScore}
-                    reasons={row.reasons}
-                    gaps={row.gaps}
-                    badge={row.applicationId ? 'applied' : 'matched'}
-                    jobId={params.id}
-                    candidateId={row.candidate?.id}
-                  />
-                );
-              })}
-            </div>
-          ) : null}
-
-          {!loading && rankedItems.length > 0 ? (
-            <div className="ep-applicant-list">
-              <h2 className="ep-applicant-list__title">Applications</h2>
-              {rankedItems.map((item) => {
-                const rank = matchByApp.get(item.id);
-                const name =
-                  [item.candidate.firstName, item.candidate.lastName].filter(Boolean).join(' ') ||
-                  'Candidate';
-                const atsScore = item.match?.score ?? rank?.totalScore ?? null;
-                const breakdown = item.match ? toAtsMatchBreakdown(item.match) : null;
-                const locationParts = (item.candidate.city || '')
-                  .split(/[,|/·•]+/)
-                  .map((p) => p.trim())
-                  .filter(Boolean);
-                const uniqueLoc: string[] = [];
-                for (const part of locationParts) {
-                  if (!uniqueLoc.some((u) => u.toLowerCase() === part.toLowerCase())) {
-                    uniqueLoc.push(part);
-                  }
+      {!loading && rankedItems.length > 0 ? (
+        <section className="ev-mt" aria-labelledby="job-applications-title">
+          <h2 id="job-applications-title">Applications</h2>
+          <div className="ev-grid">
+            {rankedItems.map((item) => {
+              const rank = matchByApp.get(item.id);
+              const name =
+                [item.candidate.firstName, item.candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
+              const atsScore = item.match?.score ?? rank?.totalScore ?? null;
+              const breakdown = item.match ? toAtsMatchBreakdown(item.match) : null;
+              const locationParts = (item.candidate.city || '')
+                .split(/[,|/·•]+/)
+                .map((p) => p.trim())
+                .filter(Boolean);
+              const uniqueLoc: string[] = [];
+              for (const part of locationParts) {
+                if (!uniqueLoc.some((u) => u.toLowerCase() === part.toLowerCase())) {
+                  uniqueLoc.push(part);
                 }
-                const location = uniqueLoc.slice(0, 2).join(', ') || 'Location n/a';
-                const skillPreview = (item.candidate.skills || [])
-                  .slice(0, 5)
-                  .map((s) => s.replace(/^Frontend:\s*/i, '').trim());
-                return (
-                  <section key={item.id} className="ep-applicant">
-                    <header className="ep-applicant__head">
-                      <div className="ep-applicant__identity">
-                        <div className="ep-applicant__name-row">
-                          {rank ? <span className="ep-applicant__rank">#{rank.rank}</span> : null}
-                          <h3 className="ep-applicant__name">{name}</h3>
-                          {atsScore != null ? <EmployerAtsBandChip score={atsScore} /> : null}
-                        </div>
-                        <p className="ep-applicant__meta">
-                          <span>{location}</span>
-                          {skillPreview.length > 0 ? (
-                            <span className="ep-applicant__skills">{skillPreview.join(' · ')}</span>
-                          ) : null}
-                        </p>
-                      </div>
-                      <StatusBadge status={item.status} />
-                    </header>
-
-                    {item.match ? (
-                      <EmployerAtsPanel match={item.match} compact className="ep-applicant__ats" />
-                    ) : (
-                      <div className="ep-applicant__stats">
-                        <div className="ep-applicant__stat">
-                          <span>{PROFILE_MATCH_LABEL}</span>
-                          <strong>{rank?.totalScore ?? '—'}</strong>
-                        </div>
-                        <div className="ep-applicant__stat">
-                          <span>Skills</span>
-                          <strong>{rank?.skillsScore ?? '—'}</strong>
-                        </div>
-                        <div className="ep-applicant__stat">
-                          <span>Experience</span>
-                          <strong>{rank?.experienceScore ?? '—'}</strong>
-                        </div>
-                        <div className="ep-applicant__stat">
-                          <span>Band</span>
-                          <strong>
-                            {rank ? atsMatchBandLabel(rank.totalScore).replace(' Match', '') : '—'}
-                          </strong>
-                        </div>
-                      </div>
-                    )}
-
-                    {breakdown ? null : (rank?.reasons?.length || rank?.gaps?.length) ? (
-                      <div className="ep-applicant__notes">
-                        {rank?.reasons?.length ? (
-                          <div>
-                            <p className="ep-applicant__notes-label">Why this match</p>
-                            <ul>
-                              {rank.reasons.slice(0, 4).map((reason) => (
-                                <li key={reason} className="ep-applicant__ok">
-                                  {reason}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : null}
-                        {rank?.gaps?.length ? (
-                          <div>
-                            <p className="ep-applicant__notes-label">Missing / weaker</p>
-                            <ul>
-                              {rank.gaps.slice(0, 4).map((gap) => (
-                                <li key={gap} className="ep-applicant__gap">
-                                  {gap}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    <nav className="ep-applicant__links" aria-label="Candidate documents">
-                      <Link
-                        href={`/employer/candidates/${item.candidate.id}?jobId=${encodeURIComponent(params.id)}`}
-                        className="ep-applicant__link"
-                      >
-                        View passport
-                      </Link>
-                      <button
-                        type="button"
-                        className="ep-applicant__link"
-                        onClick={async () => {
-                          setError('');
-                          try {
-                            const file = await downloadEmployerCandidateResume(item.candidate.id, params.id);
-                            if (file.pdf) {
-                              saveBase64File(
-                                file.pdf,
-                                file.fileName || 'resume.pdf',
-                                file.mimeType || 'application/pdf',
-                              );
-                            } else if (file.html) {
-                              saveBase64File(
-                                file.html,
-                                file.fileName || 'resume.html',
-                                file.mimeType || 'text/html',
-                              );
-                            } else {
-                              setError('Resume file was empty.');
-                            }
-                          } catch (err) {
-                            setError(err instanceof Error ? err.message : 'Could not open resume.');
-                          }
-                        }}
-                      >
-                        View resume
-                      </button>
-                      <Link
-                        href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(item.id)}&jobId=${encodeURIComponent(params.id)}`}
-                        className="ep-applicant__link"
-                      >
-                        Schedule interview
-                      </Link>
-                    </nav>
-
-                    <div className="ep-applicant__pipeline" role="group" aria-label="Move candidate">
-                      {ACTIONS.map((action) => {
-                        const active =
-                          (action.value === 'REVIEW' && item.status === 'UNDER_REVIEW') ||
-                          (action.value === 'SHORTLIST' && item.status === 'SHORTLISTED') ||
-                          (action.value === 'INTERVIEW' && item.status === 'INTERVIEW') ||
-                          (action.value === 'SELECT' && item.status === 'SELECTED') ||
-                          (action.value === 'HIRE' && item.status === 'HIRED') ||
-                          (action.value === 'REJECT' && item.status === 'REJECTED');
-                        return (
-                          <button
-                            key={action.value}
-                            type="button"
-                            className={`ep-applicant__stage${action.value === 'HIRE' ? ' is-hire' : ''}${
-                              active ? ' is-active' : ''
-                            }`}
-                            onClick={async () => {
-                              setError('');
-                              setMessage('');
-                              try {
-                                await changeApplicationStatus(item.id, action.value);
-                                if (action.value === 'HIRE') {
-                                  await recordHiringOutcome(item.id, 'HIRED');
-                                  setMessage('Candidate hired.');
-                                } else if (action.value === 'SHORTLIST') {
-                                  setMessage('Candidate has been shortlisted.');
-                                }
-                                await load();
-                              } catch (err) {
-                                setError(
-                                  userFacingError(
-                                    err,
-                                    action.value === 'SHORTLIST' ? 'shortlist candidate' : 'update candidate status',
-                                  ),
-                                );
-                              }
-                            }}
-                          >
-                            {action.label}
-                          </button>
-                        );
-                      })}
+              }
+              const location = uniqueLoc.slice(0, 2).join(', ') || 'Location n/a';
+              const skillPreview = (item.candidate.skills || [])
+                .slice(0, 5)
+                .map((s) => s.replace(/^Frontend:\s*/i, '').trim());
+              return (
+                <article key={item.id} className="ev-card ev-cand">
+                  <div className="ev-cand-hd">
+                    <EvAvatar name={name} size="lg" />
+                    <div>
+                      <h3>
+                        {rank ? <span className="ev-tag" style={{ marginLeft: 0, marginRight: 8 }}>#{rank.rank}</span> : null}
+                        {name}
+                      </h3>
+                      <span className="ev-sub">
+                        {location}
+                        {skillPreview.length > 0 ? ` · ${skillPreview.join(' · ')}` : ''}
+                      </span>
                     </div>
+                    <div className="ev-chips">
+                      {atsScore != null ? <EmployerAtsBandChip score={atsScore} /> : null}
+                      <EvApplicationPill status={item.status} />
+                    </div>
+                  </div>
 
-                    <div className="ep-applicant__outcome" role="group" aria-label="Hiring outcome">
-                      <span className="ep-applicant__outcome-label">Outcome</span>
-                      {OUTCOMES.map((outcome) => (
-                        <button
-                          key={outcome.value}
-                          type="button"
-                          className="ep-applicant__outcome-btn"
-                          onClick={async () => {
-                            setError('');
-                            try {
-                              await recordHiringOutcome(item.id, outcome.value);
-                              setMessage(
-                                outcome.value === 'HIRED'
-                                  ? 'Candidate hired.'
-                                  : `Outcome saved: ${outcome.label}.`,
-                              );
-                              await load();
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : 'Could not save outcome.');
-                            }
-                          }}
+                  <div className="ev-grid ev-g2-wide">
+                    <div>
+                      {item.match ? (
+                        <EmployerAtsPanel match={item.match} compact />
+                      ) : (
+                        <div
+                          className="ev-kvl"
+                          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 120px), 1fr))' }}
                         >
-                          {outcome.label}
-                        </button>
-                      ))}
+                          <div>
+                            <small>{PROFILE_MATCH_LABEL.toUpperCase()}</small>
+                            <b>{rank?.totalScore ?? '—'}</b>
+                          </div>
+                          <div>
+                            <small>SKILLS</small>
+                            <b>{rank?.skillsScore ?? '—'}</b>
+                          </div>
+                          <div>
+                            <small>EXPERIENCE</small>
+                            <b>{rank?.experienceScore ?? '—'}</b>
+                          </div>
+                          <div>
+                            <small>BAND</small>
+                            <b>{rank ? atsMatchBandLabel(rank.totalScore).replace(' Match', '') : '—'}</b>
+                          </div>
+                        </div>
+                      )}
+
+                      {breakdown ? null : rank?.reasons?.length || rank?.gaps?.length ? (
+                        <div className="ev-explain">
+                          {rank?.reasons?.length ? (
+                            <div>
+                              <h3>Why this match</h3>
+                              <ul className="ev-list ev-list--ok">
+                                {rank.reasons.slice(0, 4).map((reason) => (
+                                  <li key={reason}>{reason}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                          {rank?.gaps?.length ? (
+                            <div>
+                              <h3>Missing / weaker</h3>
+                              <ul className="ev-list ev-list--gap">
+                                {rank.gaps.slice(0, 4).map((gap) => (
+                                  <li key={gap}>{gap}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
-                  </section>
-                );
-              })}
-            </div>
-          ) : null}
-        </article>
-      </div>
+
+                    <div className="ev-grid" style={{ alignContent: 'start' }}>
+                      <nav className="ev-chips2" aria-label="Candidate documents">
+                        <Link
+                          href={`/employer/candidates/${item.candidate.id}?jobId=${encodeURIComponent(params.id)}`}
+                          className="ev-btn ev-btn--ghost ev-btn--sm"
+                        >
+                          View passport
+                        </Link>
+                        <button
+                          type="button"
+                          className="ev-btn ev-btn--ghost ev-btn--sm"
+                          onClick={() => void onViewResume(item.candidate.id)}
+                        >
+                          View resume
+                        </button>
+                        <Link
+                          href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(item.id)}&jobId=${encodeURIComponent(params.id)}`}
+                          className="ev-btn ev-btn--sm"
+                        >
+                          Schedule interview
+                        </Link>
+                      </nav>
+
+                      <div>
+                        <div className="ev-sub2" style={{ marginTop: 0 }}>
+                          MOVE CANDIDATE
+                        </div>
+                        <div className="ev-chips2" role="group" aria-label="Move candidate">
+                          {ACTIONS.map((action) => {
+                            const active =
+                              (action.value === 'REVIEW' && item.status === 'UNDER_REVIEW') ||
+                              (action.value === 'SHORTLIST' && item.status === 'SHORTLISTED') ||
+                              (action.value === 'INTERVIEW' && item.status === 'INTERVIEW') ||
+                              (action.value === 'SELECT' && item.status === 'SELECTED') ||
+                              (action.value === 'HIRE' && item.status === 'HIRED') ||
+                              (action.value === 'REJECT' && item.status === 'REJECTED');
+                            return (
+                              <button
+                                key={action.value}
+                                type="button"
+                                className={`ev-chipbtn${active ? ' on' : ''}`}
+                                aria-pressed={active}
+                                onClick={() => void onMove(item.id, action.value)}
+                              >
+                                {action.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="ev-sub2" style={{ marginTop: 0 }}>
+                          OUTCOME
+                        </div>
+                        <div className="ev-chips2" role="group" aria-label="Hiring outcome">
+                          {OUTCOMES.map((outcome) => (
+                            <button
+                              key={outcome.value}
+                              type="button"
+                              className="ev-chipbtn"
+                              onClick={() => void onOutcome(item.id, outcome)}
+                            >
+                              {outcome.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </EmployerShellFallback>
   );
 }

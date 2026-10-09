@@ -16,6 +16,7 @@ type Props = {
   jobId: string;
   status: string;
   onUpdated?: () => void | Promise<void>;
+  /** Buttons only (for an existing `.ev-jx` action row); no status notes. */
   compact?: boolean;
 };
 
@@ -45,82 +46,28 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
 
   if (status === 'CLOSED') {
     if (compact) return null;
-    return <p className="text-xs font-semibold text-muted">This position is closed.</p>;
+    return <p className="ev-jx-note">This position is closed.</p>;
   }
 
   if (status === 'PENDING_REVIEW') {
     if (compact) return null;
     return (
-      <p className="text-xs font-semibold text-amber-900">
+      <p className="ev-jx-note">
         Waiting for CareerBridge approval. Candidates will see this job once it is approved.
       </p>
     );
   }
 
-  if (compact) {
-    return (
-      <>
-        {status === 'PUBLISHED' ? (
-          <>
-            <button
-              type="button"
-              className="ep-wire-action"
-              disabled={busy !== null}
-              onClick={() => void run('pause', () => pauseEmployerJob(jobId))}
-            >
-              {busy === 'pause' ? '…' : 'Pause'}
-            </button>
-            <button
-              type="button"
-              className="ep-wire-action ep-wire-action--danger"
-              disabled={busy !== null}
-              onClick={() => void run('close', () => closeEmployerJob(jobId))}
-            >
-              {busy === 'close' ? '…' : 'Close'}
-            </button>
-          </>
-        ) : null}
-        {status === 'PAUSED' || status === 'DRAFT' ? (
-          <>
-            <button
-              type="button"
-              className="ep-wire-action"
-              disabled={busy !== null}
-              onClick={() => void run('publish', () => publishEmployerJob(jobId))}
-            >
-              {busy === 'publish' ? '…' : status === 'PAUSED' ? 'Resume' : 'Publish'}
-            </button>
-            {status === 'PAUSED' ? (
-              <button
-                type="button"
-                className="ep-wire-action ep-wire-action--danger"
-                disabled={busy !== null}
-                onClick={() => void run('close', () => closeEmployerJob(jobId))}
-              >
-                {busy === 'close' ? '…' : 'Close'}
-              </button>
-            ) : null}
-          </>
-        ) : null}
-      </>
-    );
-  }
-
-  return (
-    <div className="ep-job-actions">
+  const buttons = (
+    <>
       {status === 'PUBLISHED' ? (
         <>
-          <button
-            type="button"
-            className="ep-job-actions__btn"
-            disabled={busy !== null}
-            onClick={() => void run('pause', () => pauseEmployerJob(jobId))}
-          >
+          <button type="button" disabled={busy !== null} onClick={() => void run('pause', () => pauseEmployerJob(jobId))}>
             {busy === 'pause' ? '…' : 'Pause'}
           </button>
           <button
             type="button"
-            className="ep-job-actions__btn ep-job-actions__btn--danger"
+            className="d"
             disabled={busy !== null}
             onClick={() => void run('close', () => closeEmployerJob(jobId))}
           >
@@ -132,7 +79,7 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
         <>
           <button
             type="button"
-            className="ep-job-actions__btn ep-job-actions__btn--primary"
+            className="p"
             disabled={busy !== null}
             onClick={() => void run('publish', () => publishEmployerJob(jobId))}
           >
@@ -141,7 +88,7 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
           {status === 'PAUSED' ? (
             <button
               type="button"
-              className="ep-job-actions__btn ep-job-actions__btn--danger"
+              className="d"
               disabled={busy !== null}
               onClick={() => void run('close', () => closeEmployerJob(jobId))}
             >
@@ -150,6 +97,9 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
           ) : null}
         </>
       ) : null}
-    </div>
+    </>
   );
+
+  if (compact) return buttons;
+  return <div className="ev-jx">{buttons}</div>;
 }

@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { getEmployerJob } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
+import { EvJobStatus, EvPageHead } from '@/components/employer/ui';
 
 type JobDetail = {
   title?: string;
@@ -65,6 +66,12 @@ function formatJobType(value?: string | null) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const NEXT_STEPS = [
+  { title: 'Review matches', body: 'Browse candidates by skill fit.' },
+  { title: 'Schedule interviews', body: 'Invite strong profiles to talk.' },
+  { title: 'Move to hire', body: 'Update application status as you decide.' },
+] as const;
+
 function JobPostedBody() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -90,196 +97,169 @@ function JobPostedBody() {
   const { benefits, languages } = splitBenefitsAndLanguages(job?.benefits);
   const hasSkillsPanel = skills.length > 0 || languages.length > 0 || benefits.length > 0;
 
+  const facts: Array<[string, string | number]> = [
+    ['Title', title || '—'],
+    ['Department', job?.department || '—'],
+    ['Location', job?.city || '—'],
+    ['Job type', formatJobType(job?.jobType)],
+    ['Work mode', formatJobType(job?.workMode)],
+    ['Openings', job?.openings ?? '—'],
+    ['Experience', job?.experience || '—'],
+    ['Education', job?.educationMin || '—'],
+  ];
+
   return (
     <EmployerShellFallback title="Job posted">
-      <div className="ep-posted-success">
-        <section className="ep-posted-success__hero">
-          <div className="ep-posted-success__check" aria-hidden>
-            ✓
-          </div>
-          <h1>{pendingReview ? 'Job submitted for review' : 'Job posted successfully'}</h1>
-          <p>
-            <strong>{title || 'Your role'}</strong>
+      <EvPageHead
+        eyebrow="✓ Job posted"
+        title={pendingReview ? 'Job submitted for review' : 'Job posted successfully'}
+        subtitle={
+          <>
+            <b>{title || 'Your role'}</b>
             {pendingReview
               ? ' is waiting for CareerBridge approval. Candidates will see it once it is approved.'
               : status === 'PUBLISHED'
                 ? ' is live on CareerBridge.'
                 : ' has been saved.'}
-          </p>
-          <div className="ep-posted-success__cta">
-            <Link href="/employer/jobs/new" className="ep-posted-success__btn">
+          </>
+        }
+        actions={
+          <>
+            <Link href="/employer/jobs/new" className="ev-btn">
               Post another job
             </Link>
-            <Link href="/employer/jobs" className="ep-posted-success__link">
+            <Link href="/employer/jobs" className="ev-btn ev-btn--ghost">
+              Go to My Jobs →
+            </Link>
+          </>
+        }
+      />
+
+      <div className="ev-grid ev-g2">
+        <article className="ev-card">
+          <div className="ev-card-head">
+            <div>
+              <h2>Job details</h2>
+              <p className="ev-sub">Review what candidates will see.</p>
+            </div>
+            {status ? <EvJobStatus status={status} /> : null}
+          </div>
+          {facts.map(([label, value]) => (
+            <div key={label} className="ev-r2">
+              <span>{label}</span>
+              <b>{value}</b>
+            </div>
+          ))}
+        </article>
+
+        <article className="ev-card">
+          <h2>Skills &amp; benefits</h2>
+          <p className="ev-sub" style={{ marginTop: -8, marginBottom: 12 }}>
+            Shown on the job listing.
+          </p>
+          {hasSkillsPanel ? (
+            <>
+              {skills.length ? (
+                <>
+                  <div className="ev-sub2">SKILLS</div>
+                  <div className="ev-chips2">
+                    {skills.map((skill) => (
+                      <span key={`skill-${skill}`} className="ev-sk" style={{ paddingRight: 14 }}>
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              {languages.length ? (
+                <>
+                  <div className="ev-sub2">LANGUAGES</div>
+                  <div className="ev-chips2">
+                    {languages.map((lang) => (
+                      <span key={`lang-${lang}`} className="ev-chip">
+                        {lang}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              {benefits.length ? (
+                <>
+                  <div className="ev-sub2">BENEFITS</div>
+                  <div className="ev-chips2">
+                    {benefits.map((benefit) => (
+                      <span key={`benefit-${benefit}`} className="ev-pill ev-pill--green">
+                        {benefit}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <p className="ev-sub">No skills or benefits listed yet.</p>
+          )}
+        </article>
+      </div>
+
+      <article className="ev-card ev-mt">
+        <h2>Next steps</h2>
+        <p className="ev-sub" style={{ marginTop: -8, marginBottom: 12 }}>
+          Here&apos;s how to go from posting to hiring.
+        </p>
+        <div className="ev-grid ev-g4">
+          {NEXT_STEPS.map((step, index) => (
+            <div key={step.title} className="ev-row" style={{ margin: 0, justifyContent: 'flex-start' }}>
+              <span className="ev-num">{index + 1}</span>
+              <span>
+                <b style={{ color: 'var(--ev-ink)' }}>{step.title}</b>
+                <br />
+                <span className="ev-sub">{step.body}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <div className="ev-grid ev-g2 ev-mt">
+        <article className="ev-card">
+          <h2>{pendingReview ? 'Awaiting approval' : 'Ready to hire'}</h2>
+          <p className="ev-sub" style={{ marginBottom: 14 }}>
+            {pendingReview
+              ? 'Candidate matching starts as soon as the job is approved.'
+              : 'Matched profiles are available for this role.'}
+          </p>
+          <Link href={`/employer/jobs/${params.id}`} className="ev-btn">
+            View job &amp; candidates
+          </Link>
+        </article>
+
+        <article className="ev-card">
+          <h2>Position controls</h2>
+          <div className="ev-jx" style={{ justifyContent: 'flex-start', marginBottom: 14 }}>
+            <JobStatusActions
+              jobId={params.id}
+              status={status}
+              compact
+              onUpdated={async () => {
+                const next = await getEmployerJob(params.id);
+                setJob(next as JobDetail);
+                if (typeof next.status === 'string') setStatus(next.status);
+              }}
+            />
+          </div>
+          <div className="ev-chips2">
+            <Link href={`/employer/jobs/${params.id}`} className="ev-lnk">
+              Open job details
+            </Link>
+            <Link href="/employer/jobs/new" className="ev-lnk">
+              Post another job →
+            </Link>
+            <Link href="/employer/jobs" className="ev-lnk">
               Go to My Jobs →
             </Link>
           </div>
-        </section>
-
-        <div className="ep-posted-success__body">
-          <div className="ep-posted-success__top">
-            <article className="ep-posted-success__card">
-              <header>
-                <h2>Job details</h2>
-                <p>Review what candidates will see.</p>
-              </header>
-              <dl className="ep-posted-success__facts">
-                <div>
-                  <dt>Title</dt>
-                  <dd>{title || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Department</dt>
-                  <dd>{job?.department || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Location</dt>
-                  <dd>{job?.city || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Job type</dt>
-                  <dd>{formatJobType(job?.jobType)}</dd>
-                </div>
-                <div>
-                  <dt>Work mode</dt>
-                  <dd>{formatJobType(job?.workMode)}</dd>
-                </div>
-                <div>
-                  <dt>Openings</dt>
-                  <dd>{job?.openings ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Experience</dt>
-                  <dd>{job?.experience || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Education</dt>
-                  <dd>{job?.educationMin || '—'}</dd>
-                </div>
-              </dl>
-            </article>
-
-            <article className="ep-posted-success__card">
-              <header>
-                <h2>Skills &amp; benefits</h2>
-                <p>Shown on the job listing.</p>
-              </header>
-              {hasSkillsPanel ? (
-                <div className="ep-posted-success__skill-groups">
-                  {skills.length ? (
-                    <div className="ep-posted-success__skill-group">
-                      <span className="ep-posted-success__skill-label">Skills</span>
-                      <div className="ep-posted-success__tags">
-                        {skills.map((skill) => (
-                          <span key={`skill-${skill}`}>{skill}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {languages.length ? (
-                    <div className="ep-posted-success__skill-group">
-                      <span className="ep-posted-success__skill-label">Languages</span>
-                      <div className="ep-posted-success__tags">
-                        {languages.map((lang) => (
-                          <span key={`lang-${lang}`}>{lang}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {benefits.length ? (
-                    <div className="ep-posted-success__skill-group">
-                      <span className="ep-posted-success__skill-label">Benefits</span>
-                      <div className="ep-posted-success__tags">
-                        {benefits.map((benefit) => (
-                          <span key={`benefit-${benefit}`} className="is-benefit">
-                            {benefit}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="ep-posted-success__empty">No skills or benefits listed yet.</p>
-              )}
-            </article>
-          </div>
-
-          <article className="ep-posted-success__card ep-posted-success__card--steps">
-            <header>
-              <h2>Next steps</h2>
-              <p>Here&apos;s how to go from posting to hiring.</p>
-            </header>
-            <ol className="ep-posted-success__steps">
-              <li>
-                <span className="ep-posted-success__step-num" aria-hidden>
-                  1
-                </span>
-                <div>
-                  <strong>Review matches</strong>
-                  <p>Browse candidates by skill fit.</p>
-                </div>
-              </li>
-              <li>
-                <span className="ep-posted-success__step-num" aria-hidden>
-                  2
-                </span>
-                <div>
-                  <strong>Schedule interviews</strong>
-                  <p>Invite strong profiles to talk.</p>
-                </div>
-              </li>
-              <li>
-                <span className="ep-posted-success__step-num" aria-hidden>
-                  3
-                </span>
-                <div>
-                  <strong>Move to hire</strong>
-                  <p>Update application status as you decide.</p>
-                </div>
-              </li>
-            </ol>
-          </article>
-
-          <article className="ep-posted-success__card ep-posted-success__card--hire">
-            <div>
-              <h2>{pendingReview ? 'Awaiting approval' : 'Ready to hire'}</h2>
-              <p>
-                {pendingReview
-                  ? 'Candidate matching starts as soon as the job is approved.'
-                  : 'Matched profiles are available for this role.'}
-              </p>
-            </div>
-            <Link href={`/employer/jobs/${params.id}`} className="ep-posted-success__solid">
-              View job &amp; candidates
-            </Link>
-          </article>
-
-          <article className="ep-posted-success__card ep-posted-success__card--controls">
-            <div className="ep-posted-success__controls">
-              <div className="ep-posted-success__controls-left">
-                <span className="ep-posted-success__controls-label">Position controls</span>
-                <div className="ep-posted-success__status-btns">
-                  <JobStatusActions
-                    jobId={params.id}
-                    status={status}
-                    compact
-                    onUpdated={async () => {
-                      const next = await getEmployerJob(params.id);
-                      setJob(next as JobDetail);
-                      if (typeof next.status === 'string') setStatus(next.status);
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="ep-posted-success__navlinks">
-                <Link href={`/employer/jobs/${params.id}`}>Open job details</Link>
-                <Link href="/employer/jobs/new">Post another job →</Link>
-                <Link href="/employer/jobs">Go to My Jobs →</Link>
-              </div>
-            </div>
-          </article>
-        </div>
+        </article>
       </div>
     </EmployerShellFallback>
   );

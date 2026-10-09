@@ -4,12 +4,19 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import type { EmployerApplication } from '@careerbridge/shared';
-import { atsMatchBandLabel } from '@careerbridge/shared';
 import { listAllEmployerApplications, listEmployerJobs } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { EmployerSectionHero } from '@/components/employer/EmployerSectionHero';
-import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
-import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
+import {
+  EvApplicationPill,
+  EvAvatar,
+  EvEmpty,
+  EvMatch,
+  EvMiniStage,
+  EvPageHead,
+  EvSkeleton,
+  EvStat,
+} from '@/components/employer/ui';
+import { ErrorState } from '@/components/ui/StateViews';
 import { LOAD_ERROR_MESSAGE } from '@/lib/client-errors';
 import { SortableHeader } from '@/components/ui/SortableHeader';
 import { nextSort, sortRows, type SortState, type SortValue } from '@/lib/table-sort';
@@ -50,12 +57,6 @@ function experienceLabel(years: number) {
   if (years <= 0) return 'Fresher';
   if (years === 1) return '1 Year';
   return `${years} Years`;
-}
-
-function matchTone(score: number) {
-  if (score >= 90) return 'high';
-  if (score >= 70) return 'mid';
-  return 'low';
 }
 
 export default function EmployerApplicationsIndex() {
@@ -145,17 +146,33 @@ function EmployerApplicationsBody() {
   const selectedJobTitle =
     jobFilter === 'all' ? null : jobs.find((job) => job.id === jobFilter)?.title || filtered[0]?.job.title || null;
 
+  const counts = useMemo(() => {
+    const by = (statuses: string[]) => jobScoped.filter((item) => statuses.includes(item.status)).length;
+    return {
+      total: jobScoped.length,
+      applied: by(['APPLIED', 'UNDER_REVIEW', 'REVIEW']),
+      shortlisted: by(['SHORTLISTED']),
+      interview: by(['INTERVIEW']),
+    };
+  }, [jobScoped]);
+
   return (
     <EmployerShellFallback title="Applications">
-      <div className="ep-apps ep-page ep-page--applications">
-        <EmployerSectionHero
-          tone="applications"
+      <>
+        <EvPageHead
+          eyebrow="Pipeline"
           title={selectedJobTitle ? `Applications — ${selectedJobTitle}` : 'Applications'}
           subtitle="Review inbound candidates by Profile Match and status. Click View to open the full candidate profile."
         />
 
-        <div className="ep-apps__filters" role="group" aria-label="Filters">
-          <span className="ep-apps__filters-label">Filters:</span>
+        <div className="ev-grid ev-g4 ev-mt">
+          <EvStat label="Total" value={loading ? '—' : counts.total} hint="All applications" icon="▦" />
+          <EvStat label="Applied" value={loading ? '—' : counts.applied} hint="Awaiting review" icon="✉" />
+          <EvStat label="Shortlisted" value={loading ? '—' : counts.shortlisted} hint="In pipeline" icon="★" />
+          <EvStat label="Interview" value={loading ? '—' : counts.interview} hint="In interview stage" icon="◷" />
+        </div>
+
+        <div className="ev-card ev-mt ev-filterbar" role="group" aria-label="Filters">
           <label>
             <span className="sr-only">Job</span>
             <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)}>
@@ -244,104 +261,111 @@ function EmployerApplicationsBody() {
           </label>
         </div>
 
-        {error && !loading ? <ErrorState message={error} onRetry={() => setReloadKey((k) => k + 1)} /> : null}
-        {loading ? <SkeletonList rows={4} label="Loading applications…" /> : null}
+        {error && !loading ? (
+          <div className="ev-mt">
+            <ErrorState message={error} onRetry={() => setReloadKey((k) => k + 1)} />
+          </div>
+        ) : null}
+        {loading ? (
+          <div className="ev-mt" aria-busy="true">
+            <span className="sr-only">Loading applications…</span>
+            <EvSkeleton height={280} />
+          </div>
+        ) : null}
 
         {!loading && !error && items.length > 0 && filtered.length === 0 ? (
-          <p className="ep-apps__empty" role="status">
-            No applications match these filters.
-          </p>
+          <div className="ev-card ev-mt" role="status">
+            <EvEmpty title="No applications match these filters." body="Try another job, status or Profile Match filter." />
+          </div>
         ) : null}
 
         {!loading && !error && items.length === 0 ? (
-          <div className="ep-polished-empty">
-            <EmployerEmptyCue cue="search" />
-            <div>
-              <p className="ep-polished-empty__title">No applications yet</p>
-              <p className="ep-polished-empty__copy">Publish a job to start receiving candidates.</p>
-              <Link href="/employer/jobs/new" className="ep-hero__link ep-polished-empty__cta">
-                + Post a job
-              </Link>
-            </div>
+          <div className="ev-card ev-mt">
+            <EvEmpty
+              title="No applications yet"
+              body="Publish a job to start receiving candidates."
+              action={
+                <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
+                  + Post a job
+                </Link>
+              }
+            />
           </div>
         ) : null}
 
         {!loading && filtered.length > 0 ? (
-          <div className="ep-apps__sheet">
-            <div className="ep-apps__table-wrap">
-              <table className="ep-apps__sheet-table">
-                <thead>
-                  <tr>
-                    <SortableHeader sortKey="candidate" sort={sort} onSort={onSort}>
-                      Candidate
-                    </SortableHeader>
-                    <SortableHeader sortKey="experience" sort={sort} onSort={onSort}>
-                      Experience
-                    </SortableHeader>
-                    <SortableHeader sortKey="location" sort={sort} onSort={onSort}>
-                      Location
-                    </SortableHeader>
-                    <SortableHeader sortKey="score" sort={sort} onSort={onSort}>
-                      Profile Match
-                    </SortableHeader>
-                    <SortableHeader sortKey="status" sort={sort} onSort={onSort}>
-                      Status
-                    </SortableHeader>
-                    <th scope="col">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((item) => {
-                    const score = item.match?.score;
-                    const profileHref = `/employer/candidates/${item.candidate.id}?jobId=${encodeURIComponent(item.job.id)}&from=applications`;
-                    return (
-                      <tr key={item.id}>
-                        <td>
-                          <strong>{candidateName(item)}</strong>
-                          {jobFilter === 'all' ? <em>{item.job.title}</em> : null}
-                          {item.employerNote ? (
-                            <small className="mt-1 block text-xs text-slate-600" title="Private note — not visible to the candidate">
-                              Note: {item.employerNote}
-                            </small>
-                          ) : null}
-                        </td>
-                        <td>{experienceLabel(experienceYears(item))}</td>
-                        <td>{item.candidate.city || '—'}</td>
-                        <td>
-                          {score != null ? (
-                            <span
-                              className={`ep-apps__match ep-apps__match--${matchTone(score)}`}
-                              title={atsMatchBandLabel(score)}
-                            >
-                              {score}
-                              <em>{atsMatchBandLabel(score).replace(' Match', '')}</em>
+          <>
+            <div className="ev-card ev-mt">
+              <div className="ev-scroll">
+                <table className="ev-table ev-table--sort">
+                  <thead>
+                    <tr>
+                      <SortableHeader sortKey="candidate" sort={sort} onSort={onSort}>
+                        Candidate
+                      </SortableHeader>
+                      <SortableHeader sortKey="experience" sort={sort} onSort={onSort}>
+                        Experience
+                      </SortableHeader>
+                      <SortableHeader sortKey="location" sort={sort} onSort={onSort}>
+                        Location
+                      </SortableHeader>
+                      <SortableHeader sortKey="score" sort={sort} onSort={onSort}>
+                        Profile Match
+                      </SortableHeader>
+                      <SortableHeader sortKey="status" sort={sort} onSort={onSort}>
+                        Stage
+                      </SortableHeader>
+                      <th scope="col">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item) => {
+                      const profileHref = `/employer/candidates/${item.candidate.id}?jobId=${encodeURIComponent(item.job.id)}&from=applications`;
+                      return (
+                        <tr key={item.id}>
+                          <td>
+                            <div className="ev-who">
+                              <EvAvatar name={candidateName(item)} size="md" />
+                              <div>
+                                <b>{candidateName(item)}</b>
+                                {jobFilter === 'all' ? <span className="ev-sub">{item.job.title}</span> : null}
+                                {item.employerNote ? (
+                                  <small className="ev-note-line" title="Private note — not visible to the candidate">
+                                    Note: {item.employerNote}
+                                  </small>
+                                ) : null}
+                              </div>
+                            </div>
+                          </td>
+                          <td>{experienceLabel(experienceYears(item))}</td>
+                          <td>{item.candidate.city || '—'}</td>
+                          <td>
+                            <EvMatch score={item.match?.score} />
+                          </td>
+                          <td>
+                            <span style={{ whiteSpace: 'nowrap' }}>
+                              <EvApplicationPill status={item.status} />
+                              <EvMiniStage status={item.status} />
                             </span>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td>
-                          <span className={`ep-apps__status ep-apps__status--${item.status.toLowerCase()}`}>
-                            {applicationStatusLabel(item.status)}
-                          </span>
-                        </td>
-                        <td>
-                          <Link href={profileHref} className="ep-apps__row-view">
-                            View
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td>
+                            <Link href={profileHref} className="ev-btn ev-btn--ghost ev-btn--sm">
+                              View
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <p className="ep-apps__hint">
-              Click <strong>View</strong> to open the candidate profile on a separate page.
+            <p className="ev-note">
+              Click <b>View</b> to open the candidate profile with the Profile Match breakdown.
             </p>
-          </div>
+          </>
         ) : null}
-      </div>
+      </>
     </EmployerShellFallback>
   );
 }

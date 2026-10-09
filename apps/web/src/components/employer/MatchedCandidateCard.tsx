@@ -2,7 +2,9 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { PROFILE_MATCH_LABEL, atsMatchBand, atsMatchBandInfo } from '@careerbridge/shared';
+import { PROFILE_MATCH_LABEL, atsMatchBandInfo } from '@careerbridge/shared';
+import { EvAvatar, EvPill } from '@/components/employer/ui';
+import { matchPillTone } from '@/lib/employer-ui-status';
 
 export type MatchedCandidateCardProps = {
   rank: number;
@@ -19,10 +21,6 @@ export type MatchedCandidateCardProps = {
   jobId?: string;
   candidateId?: string | null;
 };
-
-function bandClass(score: number) {
-  return atsMatchBand(score).toLowerCase();
-}
 
 function cleanLocation(city?: string | null) {
   if (!city?.trim()) return 'Location n/a';
@@ -65,8 +63,7 @@ export function MatchedCandidateCard({
   jobId,
   candidateId,
 }: MatchedCandidateCardProps) {
-  const band = bandClass(totalScore);
-  const bandLabel = atsMatchBandInfo(totalScore).label;
+  const info = atsMatchBandInfo(totalScore);
   const location = cleanLocation(city);
   const topSkills = skills.slice(0, 5).map(shortSkill);
   const moreSkills = Math.max(0, skills.length - 5);
@@ -77,79 +74,70 @@ export function MatchedCandidateCard({
       : null);
 
   return (
-    <article className={`ep-talent ep-talent--${band}`}>
-      <aside className="ep-talent__score" aria-label={`${PROFILE_MATCH_LABEL} ${Math.round(totalScore)} out of 100`}>
-        <span className="ep-talent__rank">#{rank}</span>
-        <strong className="ep-talent__score-num">{Math.round(totalScore)}</strong>
-        <em className="ep-talent__score-label">/100</em>
-        <span className="ep-talent__match-label">{PROFILE_MATCH_LABEL}</span>
-      </aside>
-
-      <div className="ep-talent__body">
-        <div className="ep-talent__row">
-          <header className="ep-talent__head">
-            <div className="ep-talent__title">
-              <h3>{displayName(name)}</h3>
-              {badge === 'matched' ? (
-                <span className="ep-talent__pill">Matched</span>
-              ) : badge === 'applied' ? (
-                <span className="ep-talent__pill ep-talent__pill--dark">Applied</span>
-              ) : (
-                badge
-              )}
-              <span className={`ep-talent__band ep-talent__band--${band}`}>{bandLabel}</span>
-            </div>
-            <p className="ep-talent__loc">{location}</p>
-          </header>
-          {profileHref ? (
-            <Link href={profileHref} className="ep-talent__cta">
-              Open profile
-            </Link>
-          ) : null}
+    <article className="ev-card ev-cand">
+      <div className="ev-cand-hd">
+        <EvAvatar name={name} size="lg" />
+        <div>
+          <h3>
+            {displayName(name)} <span className="ev-tag">#{rank}</span>
+          </h3>
+          <span className="ev-sub">{location}</span>
         </div>
-
-        <div className="ep-talent__metrics">
-          <div className="ep-talent__metric">
-            <strong>
-              {Math.round(skillsScore)}
-              <em>/40</em>
-            </strong>
-            <span>Skills fit</span>
-          </div>
-          <div className="ep-talent__metric">
-            <strong>
-              {Math.round(experienceScore)}
-              <em>/20</em>
-            </strong>
-            <span>Exp fit</span>
-          </div>
-        </div>
-
-        {topSkills.length > 0 ? (
-          <ul className="ep-talent__skills">
-            {topSkills.map((skill) => (
-              <li key={skill}>{skill}</li>
-            ))}
-            {moreSkills > 0 ? <li className="is-more">+{moreSkills}</li> : null}
-          </ul>
-        ) : null}
-
-        {reasons.length > 0 || gaps.length > 0 ? (
-          <div className="ep-talent__notes">
-            {reasons[0] ? (
-              <p className="ep-talent__note ep-talent__note--ok">
-                <span>Fit</span> {reasons[0]}
-                {reasons[1] ? ` · ${reasons[1]}` : ''}
-              </p>
-            ) : null}
-            {gaps.length > 0 ? (
-              <p className="ep-talent__note ep-talent__note--gap">
-                <span>Gaps</span> {gaps.slice(0, 3).join(', ')}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+        <span aria-label={`${PROFILE_MATCH_LABEL} ${Math.round(totalScore)} out of 100`}>
+          <EvPill tone={matchPillTone(info.color)}>Match {Math.round(totalScore)}/100</EvPill>
+        </span>
       </div>
+
+      <div className="ev-chips">
+        {badge === 'matched' ? (
+          <EvPill>Matched</EvPill>
+        ) : badge === 'applied' ? (
+          <EvPill tone="blue">Applied</EvPill>
+        ) : (
+          badge
+        )}
+        <EvPill tone={matchPillTone(info.color)}>{info.label}</EvPill>
+      </div>
+
+      <div className="ev-kv">
+        <div>
+          <small>SKILLS FIT</small>
+          <b>{Math.round(skillsScore)}/40</b>
+        </div>
+        <div>
+          <small>EXPERIENCE FIT</small>
+          <b>{Math.round(experienceScore)}/20</b>
+        </div>
+      </div>
+
+      {topSkills.length > 0 ? (
+        <div className="ev-chips">
+          {topSkills.map((skill) => (
+            <span key={skill} className="ev-chip">
+              {skill}
+            </span>
+          ))}
+          {moreSkills > 0 ? <span className="ev-chip">+{moreSkills}</span> : null}
+        </div>
+      ) : null}
+
+      {reasons[0] ? (
+        <p className="ev-hint">
+          <b>Fit:</b> {reasons[0]}
+          {reasons[1] ? ` · ${reasons[1]}` : ''}
+        </p>
+      ) : null}
+      {gaps.length > 0 ? (
+        <p className="ev-hint">
+          <b>Gaps:</b> {gaps.slice(0, 3).join(', ')}
+        </p>
+      ) : null}
+
+      {profileHref ? (
+        <Link href={profileHref} className="ev-btn ev-btn--ghost">
+          Open profile
+        </Link>
+      ) : null}
     </article>
   );
 }

@@ -37,8 +37,8 @@ import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSe
 import { CitySelect } from '@/components/ui/CitySelect';
 import { CategorySelect } from '@/components/ui/CategorySelect';
 import { Textarea } from '@/components/ui/Textarea';
-import { Button } from '@/components/ui/Button';
 import { SkillSearchCombobox } from '@/components/resume/SkillSearchCombobox';
+import { EvAlert, EvSkeleton, EvStepHead } from '@/components/employer/ui';
 
 const STEPS = [
   {
@@ -100,17 +100,18 @@ function ChoiceGrid({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <fieldset className="min-w-0">
-      <legend className="mb-2 text-sm font-semibold text-primary">{label}</legend>
-      <div className="ep-choice">
+    <fieldset className="ev-fieldset">
+      <legend className="ev-sub2">{label.toUpperCase()}</legend>
+      <div className="ev-chips2">
         {options.map((option) => {
           const active = value === option.value;
           return (
             <button
               key={option.value}
               type="button"
+              aria-pressed={active}
               onClick={() => onChange(option.value)}
-              className={`ep-choice__btn ${active ? 'is-on' : ''}`}
+              className={`ev-chipbtn${active ? ' on' : ''}`}
             >
               {option.label}
             </button>
@@ -135,21 +136,12 @@ function SelectField({
   required?: boolean;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-semibold text-primary">
+    <label className="ev-form ev-field">
+      <span className="ev-flabel">
         {label}
-        {required ? (
-          <span className="ml-0.5 text-error" aria-hidden="true">
-            *
-          </span>
-        ) : null}
+        {required ? <em aria-hidden="true"> *</em> : null}
       </span>
-      <select
-        required={required}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="ep-create__control"
-      >
+      <select required={required} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -502,6 +494,11 @@ export default function NewJobPage() {
     setStep((value) => Math.max(value - 1, 1));
   }
 
+  function editStep(target: number) {
+    setError('');
+    setStep(target);
+  }
+
   async function saveDraft() {
     const problem = validateStep(2);
     if (problem) {
@@ -570,8 +567,11 @@ export default function NewJobPage() {
   if (bootLoading) {
     return (
       <EmployerShellFallback title="Edit Job">
-        <div className="ep-create">
-          <p className="text-sm text-muted">Loading job…</p>
+        <div className="ev-wzp">
+          <div className="ev-mt">
+            <EvSkeleton height={320} />
+          </div>
+          <p className="ev-status">Loading job…</p>
         </div>
       </EmployerShellFallback>
     );
@@ -579,67 +579,48 @@ export default function NewJobPage() {
 
   return (
     <EmployerShellFallback title={isEditing ? 'Edit Job' : 'Submit Job'}>
-      <div className="ep-create ep-page ep-page--create">
-        <header className="ep-create-prohead">
+      <div className="ev-wzp">
+        <div className="ev-jh">
           <div>
-            <p className="ep-create-prohead__eyebrow">Hiring</p>
-            <h1 className="ep-create-prohead__title">
-              {isEditing ? 'Edit job' : 'Create job'}
-            </h1>
-            <p className="ep-create-prohead__sub">
-              Define the role clearly so the right candidates can find and apply.
+            <Link href="/employer/jobs" className="ev-back">
+              ← My jobs
+            </Link>
+            <h1>{isEditing ? 'Edit job' : 'Post a new job'}</h1>
+            <p>
+              {isEditing
+                ? 'Update the role details, then save your changes.'
+                : 'Four quick steps. You can save a draft at any time.'}
             </p>
           </div>
-          <Link href="/employer/jobs" className="ep-create-prohead__back">
-            ← Back to jobs
-          </Link>
-        </header>
+        </div>
 
-        <article className="ep-card ep-flow-card ep-create-panel">
-          <div className="ep-create-panel__rail">
-            <nav className="ep-flow-steps ep-flow-steps--rail" aria-label="Job posting steps">
-              {STEPS.map((item, index) => {
-                const active = item.id === step;
-                const done = item.id < step;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      if (item.id < step) {
-                        setError('');
-                        setStep(item.id);
-                      }
-                    }}
-                    className={`ep-flow-steps__item ${active ? 'is-active' : ''} ${done ? 'is-done' : ''}`}
-                  >
-                    <span className="ep-flow-steps__icon" aria-hidden>
-                      {done ? '✓' : index + 1}
-                    </span>
-                    <span className="ep-flow-steps__label">{item.short}</span>
-                  </button>
-                );
-              })}
-            </nav>
-            <div className="ep-flow-progress">
-              <div className="ep-flow-progress__meta">
-                <span>
-                  Step {step} of {STEPS.length}
-                </span>
-                <strong>{progressPct}%</strong>
-              </div>
-              <div className="ep-flow-progress__bar">
-                <span style={{ width: `${progressPct}%` }} />
-              </div>
-            </div>
-          </div>
+        <nav className="ev-wz" aria-label={`Job posting steps, ${progressPct}% complete`}>
+          {STEPS.map((item) => {
+            const active = item.id === step;
+            const done = item.id < step;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                data-n={done ? '✓' : item.id}
+                aria-current={active ? 'step' : undefined}
+                aria-disabled={item.id > step}
+                onClick={() => {
+                  if (item.id < step) {
+                    setError('');
+                    setStep(item.id);
+                  }
+                }}
+                className={active ? 'on' : done ? 'done' : undefined}
+              >
+                {item.short}
+              </button>
+            );
+          })}
+        </nav>
 
-          <div className="ep-flow-card__head">
-            <div>
-              <h2>{current.short}</h2>
-              <p>{current.subtitle}</p>
-            </div>
-          </div>
+        <article className="ev-card">
+          <EvStepHead n={step} title={current.title} hint={current.subtitle} />
 
           <form
             key={step}
@@ -649,11 +630,10 @@ export default function NewJobPage() {
               else void onSubmit(event);
             }}
             noValidate
-            className="ep-flow-form"
           >
             {step === 1 ? (
-              <div className="ep-flow-block grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
+              <div className="ev-f ev-stack">
+                <div className="ev-span">
                   <SearchableCreatableSelect
                     label="Job Title"
                     id="job-title"
@@ -666,20 +646,22 @@ export default function NewJobPage() {
                     emptyLimit={30}
                   />
                 </div>
-                <SearchableCreatableSelect
-                  label="Department"
-                  id="department"
-                  required
-                  value={department}
-                  onChange={setDepartment}
-                  options={JOB_DEPARTMENTS}
-                  placeholder="Search department or type your own…"
-                  allowCustom
-                />
-                <div className="sm:col-span-2">
+                <div className="ev-span">
+                  <SearchableCreatableSelect
+                    label="Department"
+                    id="department"
+                    required
+                    value={department}
+                    onChange={setDepartment}
+                    options={JOB_DEPARTMENTS}
+                    placeholder="Search department or type your own…"
+                    allowCustom
+                  />
+                </div>
+                <div className="ev-span">
                   <CitySelect label="Location" required value={city} onChange={setCity} />
                 </div>
-                <div className="sm:col-span-2">
+                <div className="ev-span">
                   <ChoiceGrid
                     label="Job Type"
                     value={jobType}
@@ -691,7 +673,7 @@ export default function NewJobPage() {
             ) : null}
 
             {step === 2 ? (
-              <div className="space-y-5">
+              <div className="ev-stack">
                 <SelectField
                   label="Experience"
                   required
@@ -699,7 +681,7 @@ export default function NewJobPage() {
                   onChange={(value) => setExperience(value as (typeof JOB_EXPERIENCE_RANGES)[number])}
                   options={JOB_EXPERIENCE_RANGES.map((item) => ({ value: item, label: item }))}
                 />
-                <div className="ep-flow-block">
+                <div>
                   <SkillSearchCombobox
                     label="Required Skills"
                     selected={skills}
@@ -720,34 +702,35 @@ export default function NewJobPage() {
                   placeholder="Search degree or type your own…"
                   allowCustom
                 />
-                <div>
-                  <p className="mb-2 text-sm font-semibold text-primary">Languages</p>
-                  <div className="flex flex-wrap gap-2">
+                <fieldset className="ev-fieldset">
+                  <legend className="ev-sub2">LANGUAGES</legend>
+                  <div className="ev-chips2">
                     {PREFERRED_LANGUAGES.map((lang) => {
                       const active = languages.includes(lang);
                       return (
                         <button
                           key={lang}
                           type="button"
+                          aria-pressed={active}
                           onClick={() =>
                             setLanguages((current) =>
                               active ? current.filter((item) => item !== lang) : [...current, lang],
                             )
                           }
-                          className={`ep-choice__btn ${active ? 'is-on' : ''}`}
+                          className={`ev-chipbtn${active ? ' on' : ''}`}
                         >
                           {lang}
                         </button>
                       );
                     })}
                   </div>
-                </div>
+                </fieldset>
               </div>
             ) : null}
 
             {step === 3 ? (
-              <div className="space-y-5">
-                <div className="ep-flow-block grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="ev-stack">
+                <div className="ev-f ev-stack">
                   <Input
                     label="Salary from (₹ / month)"
                     name="salaryMin"
@@ -786,14 +769,11 @@ export default function NewJobPage() {
                   onChange={(event) => setDescription(event.target.value.slice(0, JOB_DESCRIPTION_MAX))}
                 />
                 <div>
-                  <p className="mb-2 text-sm font-semibold text-primary">Benefits</p>
+                  <span className="ev-flabel">Benefits</span>
                   {benefits.length ? (
-                    <ul className="mb-2 flex flex-wrap gap-2">
+                    <ul className="ev-chips2" style={{ margin: '0 0 10px', padding: 0, listStyle: 'none' }}>
                       {benefits.map((item) => (
-                        <li
-                          key={item}
-                          className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary"
-                        >
+                        <li key={item} className="ev-sk">
                           {item}
                           <button
                             type="button"
@@ -806,19 +786,17 @@ export default function NewJobPage() {
                       ))}
                     </ul>
                   ) : null}
-                  <div className="flex gap-2">
+                  <div className="ev-skadd">
                     <input
                       value={benefitDraft}
                       onChange={(e) => setBenefitDraft(e.target.value)}
                       aria-label="Add a benefit"
                       placeholder="e.g. Health insurance"
-                      className="ep-create__control min-w-0 flex-1"
+                      className="ev-input"
                     />
-                    <Button
+                    <button
                       type="button"
-                      variant="secondary"
-                      block={false}
-                      size="sm"
+                      className="ev-btn ev-btn--ghost"
                       onClick={() => {
                         const next = benefitDraft.trim();
                         if (!next || benefits.includes(next)) return;
@@ -826,84 +804,140 @@ export default function NewJobPage() {
                         setBenefitDraft('');
                       }}
                     >
-                      + Add Benefit
-                    </Button>
+                      + Add benefit
+                    </button>
                   </div>
                 </div>
               </div>
             ) : null}
 
             {step === 4 ? (
-              <div className="ep-create__preview">
-                <div>
-                  <h3 className="text-lg font-extrabold text-primary">{title || 'Job title'}</h3>
-                  <p className="mt-1 text-sm text-muted">
-                    {department || 'Department'} · {city || 'Location'} · ₹{salaryMin || '0'}–₹{salaryMax || '0'} / month
-                  </p>
+              <div>
+                <div className="ev-rvg">
+                  <div className="ev-rvh">
+                    <h2>Basics</h2>
+                    <button type="button" className="ev-lnk" style={{ margin: 0 }} onClick={() => editStep(1)}>
+                      Edit
+                    </button>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Job title</span>
+                    <b>{title || '—'}</b>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Department</span>
+                    <b>{department || '—'}</b>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Location</span>
+                    <b>{city || '—'}</b>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Job type</span>
+                    <b>{JOB_TYPE_LABELS[jobType]}</b>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-muted">Requirements</p>
-                  <ul className="mt-2 space-y-1 text-sm text-primary">
-                    <li>✓ {experience}</li>
-                    <li>✓ {educationMin}</li>
-                    {skills.map((skill) => (
-                      <li key={skill}>✓ {skill}</li>
-                    ))}
-                    {languages.length ? <li>✓ {languages.join(', ')}</li> : null}
-                  </ul>
+                <div className="ev-rvg">
+                  <div className="ev-rvh">
+                    <h2>Requirements</h2>
+                    <button type="button" className="ev-lnk" style={{ margin: 0 }} onClick={() => editStep(2)}>
+                      Edit
+                    </button>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Experience</span>
+                    <b>{experience}</b>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Education</span>
+                    <b>{educationMin || '—'}</b>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Skills</span>
+                    <b>{skills.length ? skills.join(', ') : 'None added'}</b>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Languages</span>
+                    <b>{languages.length ? languages.join(', ') : '—'}</b>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-muted">About the job</p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-primary">{description || '—'}</p>
+                <div className="ev-rvg">
+                  <div className="ev-rvh">
+                    <h2>Details</h2>
+                    <button type="button" className="ev-lnk" style={{ margin: 0 }} onClick={() => editStep(3)}>
+                      Edit
+                    </button>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Salary</span>
+                    <b>
+                      ₹{salaryMin || '0'} – ₹{salaryMax || '0'} / month
+                    </b>
+                  </div>
+                  <div className="ev-r2">
+                    <span>Benefits</span>
+                    <b>{benefits.length ? benefits.join(', ') : '—'}</b>
+                  </div>
+                  <div className="ev-r2" style={{ display: 'block' }}>
+                    <span>About the job</span>
+                    <p style={{ margin: '6px 0 0', whiteSpace: 'pre-wrap', color: 'var(--ev-ink)' }}>
+                      {description || '—'}
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : null}
 
             {error ? (
-                <p className="ep-alert ep-alert--error">{error}</p>
-              ) : null}
+              <div className="ev-mt">
+                <EvAlert tone="error">{error}</EvAlert>
+              </div>
+            ) : null}
 
-              <div className="ep-flow-foot">
-                {step > 1 ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={goBack}
-                    block={false}
-                    className="ep-create__back"
-                  >
-                    Back
-                  </Button>
-                ) : (
-                  <span className="ep-flow-foot__hint" aria-hidden />
-                )}
+            <div className="ev-wnav">
+              {step > 1 ? (
+                <button type="button" className="ev-btn ev-btn--ghost" onClick={goBack}>
+                  ← Back
+                </button>
+              ) : (
+                <Link href="/employer/jobs" className="ev-btn ev-btn--ghost">
+                  Cancel
+                </Link>
+              )}
+              <small>
+                Step {step} of {STEPS.length}
+              </small>
+              <span>
                 {!isEditing ? (
-                  <Button
+                  <button
                     type="button"
-                    variant="secondary"
-                    size="sm"
-                    block={false}
-                    loading={draftSaving}
-                    loadingLabel="Saving…"
-                    disabled={loading}
+                    className="ev-btn ev-btn--ghost"
+                    disabled={draftSaving || loading}
                     onClick={() => void saveDraft()}
                   >
-                    Save Draft
-                  </Button>
+                    {draftSaving ? 'Saving…' : 'Save as draft'}
+                  </button>
                 ) : null}
-                <Button
-                  type="submit"
-                  size="sm"
-                  loading={loading}
-                  loadingLabel={step === STEPS.length ? (isEditing ? 'Saving…' : 'Publishing…') : 'Please wait…'}
-                  block={false}
-                  className="ep-btn-save"
-                >
-                  {step === STEPS.length ? (isEditing ? 'Save Job' : 'Publish Job') : 'Continue'}
-                </Button>
-              </div>
-            </form>
+                <button type="submit" className="ev-btn ev-btn--accent" disabled={loading || skillsBusy}>
+                  {loading || skillsBusy
+                    ? step === STEPS.length
+                      ? isEditing
+                        ? 'Saving…'
+                        : 'Publishing…'
+                      : 'Please wait…'
+                    : step === STEPS.length
+                      ? isEditing
+                        ? 'Save job'
+                        : 'Publish job'
+                      : (
+                          <span>
+                            Next<span className="ev-hide-sm">: {STEPS[step].short}</span> →
+                          </span>
+                        )}
+                </button>
+              </span>
+            </div>
+          </form>
         </article>
       </div>
     </EmployerShellFallback>

@@ -12,7 +12,7 @@ import {
   DEFAULT_LANGUAGES,
   JOB_SKILL_SUGGESTIONS,
   PROFILE_MATCH_LABEL,
-  atsMatchBand,
+  atsMatchBandInfo,
 } from '@careerbridge/shared';
 import {
   listEmployerJobs,
@@ -21,14 +21,14 @@ import {
   setTalentShortlist,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
-import { Button } from '@/components/ui/Button';
+import { EvAlert, EvEmpty, EvPageHead, EvPill, EvSkeleton } from '@/components/employer/ui';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
-import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
+import { ErrorState } from '@/components/ui/StateViews';
 import { toast } from '@/components/ui/Toast';
 import { userFacingError } from '@/lib/client-errors';
+import { matchPillTone } from '@/lib/employer-ui-status';
 import { ALL_SKILL_OPTIONS } from '@/data/technology-skills';
 import { useCatalog } from '@/hooks/useCatalog';
 import { jobStatusLabel } from '@/lib/job-status';
@@ -177,7 +177,7 @@ export default function EmployerCandidatesPage() {
     }
   }
 
-  function loadJobs() {
+  function loadJobs(initial: CandidateFilters = EMPTY_FILTERS) {
     setLoading(true);
     setJobsError(false);
     listEmployerJobs()
@@ -186,7 +186,7 @@ export default function EmployerCandidatesPage() {
         const firstId = rows[0]?.id || '';
         if (firstId) {
           setJobId(firstId);
-          await runSearch(firstId, EMPTY_FILTERS);
+          await runSearch(firstId, initial);
         }
       })
       .catch(() => {
@@ -197,7 +197,10 @@ export default function EmployerCandidatesPage() {
   }
 
   useEffect(() => {
-    loadJobs();
+    const q = (new URLSearchParams(window.location.search).get('q') || '').trim().slice(0, 100);
+    const initial = q ? { ...EMPTY_FILTERS, q } : EMPTY_FILTERS;
+    if (q) setFilters(initial);
+    loadJobs(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
   }, []);
 
@@ -265,369 +268,352 @@ export default function EmployerCandidatesPage() {
 
   return (
     <EmployerShellFallback title="Candidates">
-      <div className="ep-cand ep-page ep-page--candidates">
-        <div className="ep-cand__shell">
-          <header className="ep-cand__intro">
-            <div>
-              <p className="ep-cand__intro-eyebrow">Talent pool</p>
-              <h1 className="ep-cand__intro-title">Candidates</h1>
-              <p className="ep-cand__intro-sub">
-                Ranked matches for your open roles. Shortlist candidates and schedule interviews.
-              </p>
+      <EvPageHead
+        eyebrow="Talent pool"
+        title="Candidates"
+        subtitle="Ranked matches for your open roles. Shortlist candidates and schedule interviews."
+        actions={
+          selectedJob ? (
+            <div className="ev-card ev-matching">
+              <small>Matching</small>
+              <b>{selectedJob.title}</b>
             </div>
-            {selectedJob ? (
-              <div className="ep-cand__intro-job">
-                <span>Matching</span>
-                <strong>{selectedJob.title}</strong>
-              </div>
-            ) : null}
-          </header>
+          ) : null
+        }
+      />
 
-          <form
-            className="ep-cand__card ep-cand__card--search"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void runSearch(jobId, filters, 1);
+      <form
+        className="ev-card ev-form ev-mt"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void runSearch(jobId, filters, 1);
+        }}
+      >
+        <label className="ev-field" style={{ margin: 0 }}>
+          <span className="ev-flabel">Match against job</span>
+          <select
+            value={jobId}
+            onChange={(e) => {
+              const next = e.target.value;
+              setJobId(next);
+              setResults([]);
+              setHasSearched(false);
+              setError('');
+              if (next) void runSearch(next, filters, 1);
             }}
+            disabled={loading}
+            required
           >
-            <label className="ep-cand__field ep-cand__field--job">
-              <span>Match against job</span>
-              <select
-                value={jobId}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setJobId(next);
-                  setResults([]);
-                  setHasSearched(false);
-                  setError('');
-                  if (next) void runSearch(next, filters, 1);
-                }}
-                disabled={loading}
-                required
-              >
-                <option value="">Select a job</option>
-                {jobs.map((job) => (
-                  <option key={job.id} value={job.id}>
-                    {job.title}
-                    {job.city ? ` · ${job.city}` : ''}
-                    {job.status ? ` (${jobStatusLabel(job.status)})` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <option value="">Select a job</option>
+            {jobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.title}
+                {job.city ? ` · ${job.city}` : ''}
+                {job.status ? ` (${jobStatusLabel(job.status)})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
 
-            <div className="ep-cand__filters">
-              <label className="ep-cand__field">
-                <span>Name / keyword</span>
-                <input
-                  type="text"
-                  value={filters.q}
-                  onChange={(e) => patchFilters({ q: e.target.value })}
-                  placeholder="Optional"
-                />
-              </label>
-              <div className="ep-cand__field">
-                <CitySelect
-                  id="cand-city"
-                  label="Location"
-                  value={filters.city}
-                  onChange={(city) => patchFilters({ city })}
-                />
-              </div>
-              <label className="ep-cand__field">
-                <span>Experience</span>
-                <select value={filters.experience} onChange={(e) => patchFilters({ experience: e.target.value })}>
-                  <option value="">Any experience</option>
-                  {CANDIDATE_EXPERIENCE_FILTERS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="ep-cand__field">
-                <SearchableCreatableSelect
-                  id="cand-skill"
-                  label={`Skills (${filters.skills.length}/${CANDIDATE_SEARCH_MAX_SKILLS})`}
-                  value={skillDraft}
-                  onChange={addSkill}
-                  options={SKILL_FILTER_OPTIONS}
-                  placeholder="Add a skill…"
-                  allowCustom
-                  emptyLimit={40}
-                />
-              </div>
-              <label className="ep-cand__field">
-                <span>Language</span>
-                <select value={filters.language} onChange={(e) => patchFilters({ language: e.target.value })}>
-                  <option value="">Any language</option>
-                  {languageOptions.map((item) => (
-                    <option key={item.value} value={item.label}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="ep-cand__field">
-                <span>Education</span>
-                <select value={filters.education} onChange={(e) => patchFilters({ education: e.target.value })}>
-                  {CANDIDATE_EDUCATION_FILTERS.map((item) => (
-                    <option key={item.value} value={item.value === 'any' ? '' : item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="ep-cand__field">
-                <span>Availability</span>
-                <select
-                  value={filters.availability}
-                  onChange={(e) => patchFilters({ availability: e.target.value })}
-                >
-                  <option value="">Any availability</option>
-                  {CANDIDATE_AVAILABILITY_FILTERS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="ep-cand__field">
-                <span>Sort by</span>
-                <select
-                  value={filters.sort}
-                  onChange={(e) => {
-                    const next = { ...filters, sort: e.target.value };
-                    setFilters(next);
-                    if (jobId && hasSearched) void runSearch(jobId, next, 1);
-                  }}
-                >
-                  {CANDIDATE_SEARCH_SORTS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {filters.skills.length ? (
-              <div className="ep-cand__skills" aria-label="Selected skills">
-                {filters.skills.map((item) => (
-                  <span key={item}>
-                    {item}
-                    <button
-                      type="button"
-                      onClick={() => removeSkill(item)}
-                      aria-label={`Remove ${item}`}
-                      className="-my-3 ml-1 inline-flex min-h-12 min-w-12 items-center justify-center font-bold"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {skillError ? (
-              <p className="ep-cand__error" role="alert">
-                {skillError}
-              </p>
-            ) : null}
-
-            {error ? (
-              <p className="ep-cand__error" role="alert">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="ep-cand__actions">
-              <button type="button" className="ep-cand__clear" onClick={clearFilters}>
-                Clear All
-              </button>
-              <Button
-                type="submit"
-                loading={searching}
-                loadingLabel="Searching…"
-                block={false}
-                disabled={!jobId || loading}
-                className="ep-cand__submit"
-              >
-                Search candidates
-              </Button>
-            </div>
-          </form>
-
-          <section className="ep-cand__results" aria-live="polite">
-            {loading || searching ? <SkeletonList rows={3} label="Loading candidates…" /> : null}
-
-            {!loading && jobsError ? (
-              <ErrorState message="Something went wrong. We couldn't load candidates." onRetry={loadJobs} />
-            ) : null}
-
-            {!loading && !searching && loadFailed ? (
-              <ErrorState
-                message="Something went wrong. We couldn't load candidates."
-                onRetry={() => void runSearch(jobId, filters, page)}
-              />
-            ) : null}
-
-            {!loading && !searching && !jobsError && !hasSearched ? (
-              <div className="ep-cand__empty-state">
-                <EmployerEmptyCue cue="search" />
-                <p>Select a job to see candidates</p>
-                <span>Matched candidates load automatically for your roles.</span>
-              </div>
-            ) : null}
-
-            {!loading && !searching && !loadFailed && hasSearched && (results?.length ?? 0) === 0 ? (
-              <div className="ep-cand__empty-state" data-state="empty">
-                <EmployerEmptyCue cue="search" />
-                <p>No candidates found</p>
-                <span>Try broader filters or another job posting.</span>
-              </div>
-            ) : null}
-
-            {!loading && !searching && (results?.length ?? 0) > 0 ? (
-              <>
-                <div className="ep-cand__results-head">
-                  <h2 className="ep-cand__results-title">Matched candidates</h2>
-                  <p className="ep-cand__results-meta" data-testid="candidates-count">
-                    {total} {total === 1 ? 'candidate' : 'candidates'} found
-                    {unlockLimit > 0 && totalMatched > total ? ` · ${totalMatched} matched in total` : ''}
-                  </p>
-                </div>
-
-                <ul className="ep-cand__list">
-                  {results.map((row) => {
-                    const isShortlisted = row.applicationStatus === 'SHORTLISTED' || Boolean(row.talentShortlisted);
-                    const canShortlist = row.applicationId
-                      ? ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(String(row.applicationStatus || 'APPLIED'))
-                      : !row.talentShortlisted;
-                    const shortlistBusy = busyId === `shortlist-${row.id}`;
-                    const visibleSkills = row.skills.slice(0, 3);
-                    const moreSkills = Math.max((row.skillsTotal || row.skills.length) - visibleSkills.length, 0);
-                    const availabilityTone = row.availabilityTone || 'neutral';
-
-                    return (
-                      <li key={row.id} className="ep-cand__box">
-                        <div className="ep-cand__box-top">
-                          <div className="ep-cand__avatar" aria-hidden>
-                            {initials(row)}
-                          </div>
-                          <div className="ep-cand__box-identity">
-                            <p className="ep-cand__name">{candidateName(row)}</p>
-                            <p className="ep-cand__meta">{formatLocation(row.city, row.state)}</p>
-                          </div>
-                          {row.matchScore !== null ? (
-                            <span
-                              className={`ep-cand__score ep-ats-chip--${atsMatchBand(row.matchScore).toLowerCase()}`}
-                              title={`${PROFILE_MATCH_LABEL} for the selected job`}
-                              aria-label={`${PROFILE_MATCH_LABEL} ${row.matchScore} out of 100`}
-                            >
-                              <small className="block text-[10px] font-bold uppercase tracking-wide">
-                                {PROFILE_MATCH_LABEL}
-                              </small>
-                              {row.matchScore}/100
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <div className="ep-cand__stats">
-                          <div>
-                            <span>Experience</span>
-                            <strong>{formatExperience(row)}</strong>
-                          </div>
-                          <div>
-                            <span>Education</span>
-                            <strong>{row.highestEducation?.trim() || 'Not provided'}</strong>
-                          </div>
-                          <div>
-                            <span>Availability</span>
-                            <strong className={`ep-cand__avail ep-cand__avail--${availabilityTone}`}>
-                              {row.availabilityLabel || 'Available'}
-                            </strong>
-                          </div>
-                        </div>
-
-                        {visibleSkills.length ? (
-                          <div className="ep-cand__skills">
-                            {visibleSkills.map((item) => (
-                              <span key={item}>{item}</span>
-                            ))}
-                            {moreSkills > 0 ? <span className="ep-cand__skills-more">+{moreSkills}</span> : null}
-                          </div>
-                        ) : (
-                          <div className="ep-cand__skills">
-                            <span className="ep-cand__skills-empty">No skills listed</span>
-                          </div>
-                        )}
-
-                        <div className="ep-cand__actions-row">
-                          <Link
-                            href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
-                            className="ep-cand__btn ep-cand__btn--ghost"
-                          >
-                            View profile
-                          </Link>
-                          {canShortlist ? (
-                            <button
-                              type="button"
-                              className="ep-cand__btn ep-cand__btn--solid"
-                              disabled={shortlistBusy}
-                              onClick={() =>
-                                setShortlistTarget({
-                                  candidateId: row.id,
-                                  applicationId: row.applicationId || null,
-                                  name: candidateName(row),
-                                })
-                              }
-                            >
-                              {shortlistBusy ? '…' : 'Shortlist'}
-                            </button>
-                          ) : null}
-                          {isShortlisted ? (
-                            <span
-                              className="ep-cand__btn ep-cand__btn--ghost"
-                              data-testid="shortlisted-badge"
-                              title={row.applicationId ? undefined : 'Saved to your private shortlist for this job'}
-                            >
-                              Shortlisted ✓
-                            </span>
-                          ) : null}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                {pageCount > 1 ? (
-                  <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Candidate pages">
-                    <button
-                      type="button"
-                      className="ep-cand__btn ep-cand__btn--ghost min-h-12"
-                      disabled={page <= 1 || searching}
-                      onClick={() => void runSearch(jobId, filters, page - 1)}
-                    >
-                      Previous
-                    </button>
-                    <span className="text-sm font-semibold text-[#3f4a57]">
-                      Page {page} of {pageCount}
-                    </span>
-                    <button
-                      type="button"
-                      className="ep-cand__btn ep-cand__btn--ghost min-h-12"
-                      disabled={page >= pageCount || searching}
-                      onClick={() => void runSearch(jobId, filters, page + 1)}
-                    >
-                      Next
-                    </button>
-                  </nav>
-                ) : null}
-              </>
-            ) : null}
-          </section>
+        <div className="ev-f ev-filters">
+          <label>
+            Name / keyword
+            <input
+              type="text"
+              value={filters.q}
+              onChange={(e) => patchFilters({ q: e.target.value })}
+              placeholder="Optional"
+            />
+          </label>
+          <div>
+            <CitySelect id="cand-city" label="Location" value={filters.city} onChange={(city) => patchFilters({ city })} />
+          </div>
+          <label>
+            Experience
+            <select value={filters.experience} onChange={(e) => patchFilters({ experience: e.target.value })}>
+              <option value="">Any experience</option>
+              {CANDIDATE_EXPERIENCE_FILTERS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div>
+            <SearchableCreatableSelect
+              id="cand-skill"
+              label={`Skills (${filters.skills.length}/${CANDIDATE_SEARCH_MAX_SKILLS})`}
+              value={skillDraft}
+              onChange={addSkill}
+              options={SKILL_FILTER_OPTIONS}
+              placeholder="Add a skill…"
+              allowCustom
+              emptyLimit={40}
+            />
+          </div>
+          <label>
+            Language
+            <select value={filters.language} onChange={(e) => patchFilters({ language: e.target.value })}>
+              <option value="">Any language</option>
+              {languageOptions.map((item) => (
+                <option key={item.value} value={item.label}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Education
+            <select value={filters.education} onChange={(e) => patchFilters({ education: e.target.value })}>
+              {CANDIDATE_EDUCATION_FILTERS.map((item) => (
+                <option key={item.value} value={item.value === 'any' ? '' : item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Availability
+            <select value={filters.availability} onChange={(e) => patchFilters({ availability: e.target.value })}>
+              <option value="">Any availability</option>
+              {CANDIDATE_AVAILABILITY_FILTERS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Sort by
+            <select
+              value={filters.sort}
+              onChange={(e) => {
+                const next = { ...filters, sort: e.target.value };
+                setFilters(next);
+                if (jobId && hasSearched) void runSearch(jobId, next, 1);
+              }}
+            >
+              {CANDIDATE_SEARCH_SORTS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      </div>
+
+        {filters.skills.length ? (
+          <ul className="ev-chips2 ev-mt-sm" aria-label="Selected skills">
+            {filters.skills.map((item) => (
+              <li key={item} className="ev-sk">
+                {item}
+                <button type="button" onClick={() => removeSkill(item)} aria-label={`Remove ${item}`}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {skillError ? <p className="ev-error" role="alert">{skillError}</p> : null}
+
+        {error ? (
+          <div className="ev-mt-sm">
+            <EvAlert tone="error">{error}</EvAlert>
+          </div>
+        ) : null}
+
+        <div className="ev-form-actions">
+          <button type="button" className="ev-lnk ev-lnk--mut" onClick={clearFilters}>
+            Clear All
+          </button>
+          <button type="submit" className="ev-btn ev-btn--accent" disabled={!jobId || loading || searching}>
+            {searching ? 'Searching…' : 'Search candidates'}
+          </button>
+        </div>
+      </form>
+
+      <section className="ev-mt" aria-live="polite">
+        {loading || searching ? (
+          <div className="ev-grid ev-g2" aria-busy="true">
+            <span className="sr-only">Loading candidates…</span>
+            <EvSkeleton height={260} />
+            <EvSkeleton height={260} />
+          </div>
+        ) : null}
+
+        {!loading && jobsError ? (
+          <ErrorState message="Something went wrong. We couldn't load candidates." onRetry={() => loadJobs(filters)} />
+        ) : null}
+
+        {!loading && !searching && loadFailed ? (
+          <ErrorState
+            message="Something went wrong. We couldn't load candidates."
+            onRetry={() => void runSearch(jobId, filters, page)}
+          />
+        ) : null}
+
+        {!loading && !searching && !jobsError && !hasSearched ? (
+          <div className="ev-card">
+            <EvEmpty
+              title="Select a job to see candidates"
+              body="Matched candidates load automatically for your roles."
+              action={
+                jobs.length ? null : (
+                  <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
+                    Post a job
+                  </Link>
+                )
+              }
+            />
+          </div>
+        ) : null}
+
+        {!loading && !searching && !loadFailed && hasSearched && (results?.length ?? 0) === 0 ? (
+          <div className="ev-card" data-state="empty">
+            <EvEmpty title="No candidates found" body="Try broader filters or another job posting." />
+          </div>
+        ) : null}
+
+        {!loading && !searching && (results?.length ?? 0) > 0 ? (
+          <>
+            <div className="ev-results-head">
+              <h2>Matched candidates</h2>
+              <span className="ev-sub" data-testid="candidates-count">
+                <b>
+                  {total} {total === 1 ? 'candidate' : 'candidates'} found
+                </b>
+                {unlockLimit > 0 && totalMatched > total ? ` · ${totalMatched} matched in total` : ''}
+              </span>
+            </div>
+
+            <ul className="ev-grid ev-g2 ev-plain-list">
+              {results.map((row) => {
+                const isShortlisted = row.applicationStatus === 'SHORTLISTED' || Boolean(row.talentShortlisted);
+                const canShortlist = row.applicationId
+                  ? ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(String(row.applicationStatus || 'APPLIED'))
+                  : !row.talentShortlisted;
+                const shortlistBusy = busyId === `shortlist-${row.id}`;
+                const visibleSkills = row.skills.slice(0, 3);
+                const moreSkills = Math.max((row.skillsTotal || row.skills.length) - visibleSkills.length, 0);
+                const availabilityTone = row.availabilityTone || 'neutral';
+                const band = row.matchScore !== null ? atsMatchBandInfo(row.matchScore) : null;
+
+                return (
+                  <li key={row.id} className="ev-card ev-cand">
+                    <div className="ev-cand-hd">
+                      <span className="ev-av" aria-hidden>
+                        {initials(row)}
+                      </span>
+                      <div>
+                        <h3>{candidateName(row)}</h3>
+                        <span className="ev-sub">{formatLocation(row.city, row.state)}</span>
+                      </div>
+                      {band && row.matchScore !== null ? (
+                        <span
+                          title={`${PROFILE_MATCH_LABEL} for the selected job · ${band.label}`}
+                          aria-label={`${PROFILE_MATCH_LABEL} ${row.matchScore} out of 100`}
+                        >
+                          <EvPill tone={matchPillTone(band.color)}>Match {row.matchScore}/100</EvPill>
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="ev-kv">
+                      <div>
+                        <small>EXPERIENCE</small>
+                        <b>{formatExperience(row)}</b>
+                      </div>
+                      <div>
+                        <small>EDUCATION</small>
+                        <b>{row.highestEducation?.trim() || 'Not provided'}</b>
+                      </div>
+                    </div>
+                    <div className="ev-kv">
+                      <div>
+                        <small>AVAILABILITY</small>
+                        <b className={`ev-avail ev-avail--${availabilityTone}`}>{row.availabilityLabel || 'Available'}</b>
+                      </div>
+                    </div>
+
+                    <div className="ev-chips">
+                      {visibleSkills.length ? (
+                        <>
+                          {visibleSkills.map((item) => (
+                            <span key={item} className="ev-chip">
+                              {item}
+                            </span>
+                          ))}
+                          {moreSkills > 0 ? <span className="ev-chip">+{moreSkills}</span> : null}
+                        </>
+                      ) : (
+                        <span className="ev-sub">No skills listed</span>
+                      )}
+                    </div>
+
+                    <div className="ev-kv">
+                      <Link
+                        href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
+                        className="ev-btn ev-btn--ghost"
+                      >
+                        View profile
+                      </Link>
+                      {canShortlist ? (
+                        <button
+                          type="button"
+                          className="ev-btn"
+                          disabled={shortlistBusy}
+                          onClick={() =>
+                            setShortlistTarget({
+                              candidateId: row.id,
+                              applicationId: row.applicationId || null,
+                              name: candidateName(row),
+                            })
+                          }
+                        >
+                          {shortlistBusy ? '…' : 'Shortlist'}
+                        </button>
+                      ) : null}
+                      {isShortlisted ? (
+                        <span
+                          className="ev-btn ev-btn--ghost ev-btn--static"
+                          data-testid="shortlisted-badge"
+                          title={row.applicationId ? undefined : 'Saved to your private shortlist for this job'}
+                        >
+                          Shortlisted ✓
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {pageCount > 1 ? (
+              <nav className="ev-pager" aria-label="Candidate pages">
+                <button
+                  type="button"
+                  className="ev-btn ev-btn--ghost"
+                  disabled={page <= 1 || searching}
+                  onClick={() => void runSearch(jobId, filters, page - 1)}
+                >
+                  Previous
+                </button>
+                <span className="ev-sub">
+                  Page {page} of {pageCount}
+                </span>
+                <button
+                  type="button"
+                  className="ev-btn ev-btn--ghost"
+                  disabled={page >= pageCount || searching}
+                  onClick={() => void runSearch(jobId, filters, page + 1)}
+                >
+                  Next
+                </button>
+              </nav>
+            ) : null}
+          </>
+        ) : null}
+      </section>
 
       <ShortlistConfirmModal
         open={Boolean(shortlistTarget)}

@@ -17,7 +17,7 @@ import {
 import { getEmployerMe, updateEmployerMe, uploadEmployerLogo, listEmployerJobs } from '@/lib/api';
 import { EmployerShell, EmployerShellFallback, statusLabel } from '@/components/EmployerPortal';
 import { CitySelect } from '@/components/ui/CitySelect';
-import { Button } from '@/components/ui/Button';
+import { EvAlert, EvEmpty, EvPageHead, EvPageSkeleton, EvPill } from '@/components/employer/ui';
 import { getStoredUser } from '@/lib/session';
 import Link from 'next/link';
 import { FormEvent, useMemo } from 'react';
@@ -45,12 +45,12 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
     <span>
       {label}
       {required ? (
-        <span className="text-red-700" aria-hidden>
+        <em className="ev-req" aria-hidden>
           {' '}
           *
-        </span>
+        </em>
       ) : (
-        <span className="font-normal text-slate-600"> (optional)</span>
+        <span className="ev-opt"> (optional)</span>
       )}
     </span>
   );
@@ -59,7 +59,7 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
 function FieldError({ id, error }: { id: string; error?: string }) {
   if (!error) return null;
   return (
-    <em id={`${id}-error`} className="not-italic text-sm font-semibold text-red-700" role="alert">
+    <em id={`${id}-error`} className="ev-error" role="alert">
       {error}
     </em>
   );
@@ -85,7 +85,7 @@ function Field({
   type?: string;
 }) {
   return (
-    <label className="ep-field" htmlFor={name}>
+    <label htmlFor={name}>
       <FieldLabel label={label} required={required} />
       <input
         id={name}
@@ -97,7 +97,6 @@ function Field({
         aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${name}-error` : undefined}
-        className={error ? 'border-red-600' : undefined}
         onChange={(event) => onChange(event.target.value)}
       />
       <FieldError id={name} error={error} />
@@ -120,18 +119,16 @@ function MiniCalendar() {
   const monthLabel = today.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
   return (
-    <article className="ep-card ep-cal">
-      <div className="ep-card__head">
-        <h2>{monthLabel}</h2>
-      </div>
-      <div className="ep-cal__week">
+    <article className="ev-card">
+      <h2 className="ev-h2">{monthLabel}</h2>
+      <div className="ev-cal ev-cal--week" aria-hidden>
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
           <span key={`${d}-${i}`}>{d}</span>
         ))}
       </div>
-      <div className="ep-cal__grid">
+      <div className="ev-cal">
         {cells.map((day, i) => (
-          <span key={`${day}-${i}`} className={day === today.getDate() ? 'is-today' : ''}>
+          <span key={`${day}-${i}`} className={day === today.getDate() ? 'is-today' : undefined}>
             {day || ''}
           </span>
         ))}
@@ -284,313 +281,323 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
     }
   }
 
-  return (
-    <div className="ep-desk">
-      <div className="ep-desk__title-row">
-        <Link href={settingsTab ? '/employer/profile?tab=desk' : '/employer/profile'} className="ep-link">
-          {settingsTab ? 'View workspace →' : '← Company Profile'}
-        </Link>
-      </div>
+  const logoPreview = profile.logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={profile.logoUrl} alt="" />
+  ) : (
+    <span>{(profile.companyName || 'C').slice(0, 1).toUpperCase()}</span>
+  );
 
-      {!settingsTab ? (
-        <>
-          <div className="ep-desk__top">
-            <article className="ep-card ep-identity">
-              <div className="ep-identity__photo" aria-hidden>
-                {profile.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={profile.logoUrl} alt="" className="ep-identity__logo" />
-                ) : (
-                  contact.slice(0, 1).toUpperCase()
-                )}
-              </div>
-              <div className="ep-identity__body">
-                <div className="ep-identity__name">
-                  <h2>{contact}</h2>
-                  <span className="ep-pill">{badge}</span>
-                </div>
-                <p className="ep-identity__role">
-                  {profile.designation || 'Hiring manager'}
-                  {profile.industry ? ` · ${profile.industry}` : ''}
-                </p>
-                <ul className="ep-identity__meta">
-                  <li>{email}</li>
-                  <li>{phone}</li>
-                  <li>{profile.companyName}</li>
-                  <li>{profile.city || 'Location not set'}</li>
-                </ul>
-              </div>
-            </article>
+  if (!settingsTab) {
+    return (
+      <>
+        <EvPageHead
+          eyebrow="Company"
+          title="Hiring workspace"
+          subtitle={`${profile.companyName}${profile.city ? ` · ${profile.city}` : ''}`}
+          actions={
+            <Link href="/employer/profile" className="ev-btn ev-btn--ghost">
+              ← Company Profile
+            </Link>
+          }
+        />
 
-            <MiniCalendar />
+        <div className="ev-grid ev-g3 ev-mt">
+          <article className="ev-card ev-ident">
+            <div className="ev-logo" aria-hidden>
+              {profile.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.logoUrl} alt="" />
+              ) : (
+                <span>{contact.slice(0, 1).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="ev-ident-name">
+              <h2 className="ev-h2">{contact}</h2>
+              <EvPill tone={status === 'VERIFIED' ? 'green' : 'amber'}>{badge}</EvPill>
+            </div>
+            <p className="ev-sub">
+              {profile.designation || 'Hiring manager'}
+              {profile.industry ? ` · ${profile.industry}` : ''}
+            </p>
+            <ul className="ev-plain-list ev-ident-meta">
+              <li>{email}</li>
+              <li>{phone}</li>
+              <li>{profile.companyName}</li>
+              <li>{profile.city || 'Location not set'}</li>
+            </ul>
+          </article>
 
-            <article className="ep-card ep-events">
-              <div className="ep-card__head">
-                <h2>Upcoming activity</h2>
-                <Link href="/employer/jobs">View all</Link>
-              </div>
-              {events.length === 0 ? (
-                <div className="ep-empty">
-                  <p>No live roles yet</p>
-                  <Link href="/employer/jobs/new" className="ep-btn-gold">
+          <MiniCalendar />
+
+          <article className="ev-card">
+            <div className="ev-card-head">
+              <h2 className="ev-h2">Upcoming activity</h2>
+              <Link href="/employer/jobs" className="ev-lnk">
+                View all
+              </Link>
+            </div>
+            {events.length === 0 ? (
+              <EvEmpty
+                title="No live roles yet"
+                action={
+                  <Link href="/employer/jobs/new" className="ev-btn ev-mt-sm">
                     Post a job
                   </Link>
-                </div>
-              ) : (
-                <ul className="ep-events__list">
-                  {events.map((item, index) => (
-                    <li key={item.href} className={index === 0 ? 'is-hot' : ''}>
-                      <Link href={item.href}>
-                        <strong>{item.title}</strong>
-                        <span>{item.meta}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
-          </div>
-
-          <div className="ep-desk__bottom">
-            <article className="ep-card ep-info">
-              <h2>Company information</h2>
-              <div className="ep-info__chips">
-                <div>
-                  <span>Status</span>
-                  <strong>{badge}</strong>
-                </div>
-                <div>
-                  <span>Industry</span>
-                  <strong>{profile.industry || '—'}</strong>
-                </div>
-                <div>
-                  <span>City</span>
-                  <strong>{profile.city || '—'}</strong>
-                </div>
-                <div>
-                  <span>GST</span>
-                  <strong>{profile.gstNumber || 'Not added'}</strong>
-                </div>
-              </div>
-              <div className="ep-info__icons">
-                <div>
-                  <span>🏢</span>
-                  <p>Employer</p>
-                </div>
-                <div>
-                  <span>📍</span>
-                  <p>{profile.city || 'City'}</p>
-                </div>
-                <div>
-                  <span>✓</span>
-                  <p>{status === 'VERIFIED' ? 'Verified' : 'Verify'}</p>
-                </div>
-                <div>
-                  <span>✉</span>
-                  <p>Contact</p>
-                </div>
-              </div>
-            </article>
-
-            <article className="ep-card ep-onboard">
-              <div className="ep-card__head">
-                <h2>Onboarding</h2>
-                <span>
-                  {doneCount}/{onboarding.length} completed
-                </span>
-              </div>
-              <ul className="ep-onboard__list">
-                {onboarding.map((step) => (
-                  <li key={step.id} className={step.done ? 'is-done' : ''}>
-                    <span className="ep-onboard__check" aria-hidden>
-                      {step.done ? '✓' : ''}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p>{step.label}</p>
-                    </div>
-                    <Link href={step.href}>{step.done ? 'View' : 'Start'}</Link>
+                }
+              />
+            ) : (
+              <ul className="ev-plain-list ev-linkrows">
+                {events.map((item) => (
+                  <li key={item.href}>
+                    <Link href={item.href}>
+                      {item.title}
+                      <small>{item.meta}</small>
+                    </Link>
                   </li>
                 ))}
               </ul>
-              <Link href="/employer/jobs/new" className="ep-btn-gold ep-onboard__cta">
-                Add new job
-              </Link>
-            </article>
-          </div>
-        </>
-      ) : (
-        <article className="ep-card ep-settings">
-          <form onSubmit={onSubmit} noValidate className="ep-settings__form">
-            <div className="ep-card__head">
+            )}
+          </article>
+        </div>
+
+        <div className="ev-grid ev-g2 ev-mt">
+          <article className="ev-card">
+            <h2 className="ev-h2">Company information</h2>
+            <div className="ev-kvl">
               <div>
-                <h2>Company Profile</h2>
-                <p>E03 — Logo, company details, and website for your hiring workspace.</p>
+                <small>Status</small>
+                <b>{badge}</b>
               </div>
-              <div className="ep-settings__logo">
-                <div className="ep-settings__logo-preview" aria-hidden>
-                  {profile.logoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={profile.logoUrl} alt="" />
-                  ) : (
-                    <span>{(profile.companyName || 'C').slice(0, 1).toUpperCase()}</span>
-                  )}
-                </div>
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  className="sr-only"
-                  onChange={(event) => void onLogoSelected(event.target.files?.[0] || null)}
-                />
-                <button
-                  type="button"
-                  className="ep-btn-gold text-sm font-extrabold"
-                  disabled={logoBusy}
-                  onClick={() => logoInputRef.current?.click()}
-                >
-                  {logoBusy ? 'Uploading…' : profile.logoUrl ? 'Change logo' : 'Logo'}
-                </button>
+              <div>
+                <small>Industry</small>
+                <b>{profile.industry || '—'}</b>
+              </div>
+              <div>
+                <small>City</small>
+                <b>{profile.city || '—'}</b>
+              </div>
+              <div>
+                <small>GST</small>
+                <b>{profile.gstNumber || 'Not added'}</b>
               </div>
             </div>
-            <div className="ep-settings__grid">
-              <Field
-                label="Company name"
-                name="companyName"
-                value={profile.companyName}
-                placeholder="Your company name"
-                required
-                error={fieldErrors.companyName}
-                onChange={(companyName) => setProfile({ ...profile, companyName })}
-              />
-              <label className="ep-field" htmlFor="industry">
-                <FieldLabel label="Industry" required />
-                <select
-                  id="industry"
-                  value={profile.industry || ''}
-                  required
-                  aria-required
-                  aria-invalid={fieldErrors.industry ? true : undefined}
-                  aria-describedby={fieldErrors.industry ? 'industry-error' : undefined}
-                  className={fieldErrors.industry ? 'border-red-600' : undefined}
-                  onChange={(e) => setProfile({ ...profile, industry: e.target.value })}
-                >
-                  <option value="">Select industry</option>
-                  {profile.industry && !(COMPANY_INDUSTRIES as readonly string[]).includes(profile.industry) ? (
-                    <option value={profile.industry}>{profile.industry}</option>
-                  ) : null}
-                  {COMPANY_INDUSTRIES.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-                <FieldError id="industry" error={fieldErrors.industry} />
-              </label>
-              <label className="ep-field" htmlFor="companySize">
-                <FieldLabel label="Company size" required />
-                <select
-                  id="companySize"
-                  value={profile.companySize || ''}
-                  required
-                  aria-required
-                  aria-invalid={fieldErrors.companySize ? true : undefined}
-                  aria-describedby={fieldErrors.companySize ? 'companySize-error' : undefined}
-                  className={fieldErrors.companySize ? 'border-red-600' : undefined}
-                  onChange={(e) => setProfile({ ...profile, companySize: e.target.value })}
-                >
-                  <option value="">Select company size</option>
-                  {COMPANY_SIZES.map((size) => (
-                    <option key={size} value={size}>
-                      {COMPANY_SIZE_LABELS[size]}
-                    </option>
-                  ))}
-                </select>
-                <FieldError id="companySize" error={fieldErrors.companySize} />
-              </label>
-              <div className="ep-field ep-field--full">
-                <CitySelect
-                  id="company-city"
-                  label="Location *"
-                  value={profile.city || ''}
-                  onChange={(city) => setProfile({ ...profile, city })}
-                />
-                <FieldError id="company-city" error={fieldErrors.city} />
-              </div>
-              <label className="ep-field ep-field--full" htmlFor="about">
-                <FieldLabel label="About the company" />
-                <textarea
-                  id="about"
-                  rows={4}
-                  maxLength={COMPANY_ABOUT_MAX}
-                  value={profile.about || ''}
-                  placeholder="What does your company do? What is it like to work there?"
-                  aria-describedby="about-count"
-                  onChange={(e) => setProfile({ ...profile, about: e.target.value.slice(0, COMPANY_ABOUT_MAX) })}
-                />
-                <em id="about-count" className="not-italic text-xs text-slate-700" aria-live="polite">
-                  {(profile.about || '').length}/{COMPANY_ABOUT_MAX}
-                </em>
-              </label>
-              <Field
-                label="Contact person"
-                name="contactName"
-                value={profile.contactName || ''}
-                placeholder="Primary hiring contact"
-                required
-                error={fieldErrors.contactName}
-                onChange={(contactName) => setProfile({ ...profile, contactName })}
-              />
-              <Field
-                label="Designation"
-                name="designation"
-                value={profile.designation || ''}
-                placeholder="e.g. HR Manager"
-                onChange={(designation) => setProfile({ ...profile, designation })}
-              />
-              <Field
-                label="Work email"
-                name="workEmail"
-                value={profile.workEmail || ''}
-                placeholder="hr@company.com"
-                onChange={(workEmail) => setProfile({ ...profile, workEmail })}
-              />
-              <Field
-                label="Website"
-                name="website"
-                value={profile.website || ''}
-                placeholder="https://company.com"
-                type="url"
-                error={fieldErrors.website}
-                onChange={(website) => setProfile({ ...profile, website })}
-              />
-              <Field
-                label="LinkedIn URL"
-                name="linkedinUrl"
-                value={profile.linkedinUrl || ''}
-                placeholder="https://www.linkedin.com/company/your-company"
-                type="url"
-                error={fieldErrors.linkedinUrl}
-                onChange={(linkedinUrl) => setProfile({ ...profile, linkedinUrl })}
-              />
+            <ul className="ev-plain-list ev-iconrow">
+              <li>
+                <span aria-hidden>🏢</span>
+                Employer
+              </li>
+              <li>
+                <span aria-hidden>📍</span>
+                {profile.city || 'City'}
+              </li>
+              <li>
+                <span aria-hidden>✓</span>
+                {status === 'VERIFIED' ? 'Verified' : 'Verify'}
+              </li>
+              <li>
+                <span aria-hidden>✉</span>
+                Contact
+              </li>
+            </ul>
+          </article>
+
+          <article className="ev-card">
+            <div className="ev-card-head">
+              <h2 className="ev-h2">Onboarding</h2>
+              <span className="ev-pill">
+                {doneCount}/{onboarding.length} completed
+              </span>
             </div>
-            {error ? <p className="ep-alert ep-alert--error">{error}</p> : null}
-            {message ? <p className="ep-alert ep-alert--ok">{message}</p> : null}
-            <div className="ep-settings__foot">
-              <p>Changes apply immediately after you save.</p>
-              <Button
-                type="submit"
-                loading={saving}
-                loadingLabel="Saving..."
-                block={false}
-                className="ep-btn-save"
-              >
-                Save profile
-              </Button>
-            </div>
-          </form>
-        </article>
-      )}
-    </div>
+            <ul className="ev-plain-list ev-checklist">
+              {onboarding.map((step) => (
+                <li key={step.id} className={step.done ? 'is-done' : undefined}>
+                  <span className="ev-check" aria-hidden>
+                    {step.done ? '✓' : ''}
+                  </span>
+                  <span>{step.label}</span>
+                  <Link href={step.href} className="ev-lnk">
+                    {step.done ? 'View' : 'Start'}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Link href="/employer/jobs/new" className="ev-btn ev-mt-sm">
+              Add new job
+            </Link>
+          </article>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <EvPageHead
+        eyebrow="Company"
+        title="Company Profile"
+        subtitle="Logo, company details, and website for your hiring workspace."
+        actions={
+          <>
+            <span className="ev-logo ev-logo--sm" aria-hidden>
+              {logoPreview}
+            </span>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              className="sr-only"
+              onChange={(event) => void onLogoSelected(event.target.files?.[0] || null)}
+            />
+            <button
+              type="button"
+              className="ev-btn"
+              disabled={logoBusy}
+              onClick={() => logoInputRef.current?.click()}
+            >
+              {logoBusy ? 'Uploading…' : profile.logoUrl ? 'Change logo' : 'Logo'}
+            </button>
+            <Link href="/employer/profile?tab=desk" className="ev-btn ev-btn--ghost">
+              View workspace →
+            </Link>
+          </>
+        }
+      />
+
+      <form onSubmit={onSubmit} noValidate className="ev-card ev-form ev-mt">
+        <div className="ev-f">
+          <Field
+            label="Company name"
+            name="companyName"
+            value={profile.companyName}
+            placeholder="Your company name"
+            required
+            error={fieldErrors.companyName}
+            onChange={(companyName) => setProfile({ ...profile, companyName })}
+          />
+          <label htmlFor="industry">
+            <FieldLabel label="Industry" required />
+            <select
+              id="industry"
+              value={profile.industry || ''}
+              required
+              aria-required
+              aria-invalid={fieldErrors.industry ? true : undefined}
+              aria-describedby={fieldErrors.industry ? 'industry-error' : undefined}
+              onChange={(e) => setProfile({ ...profile, industry: e.target.value })}
+            >
+              <option value="">Select industry</option>
+              {profile.industry && !(COMPANY_INDUSTRIES as readonly string[]).includes(profile.industry) ? (
+                <option value={profile.industry}>{profile.industry}</option>
+              ) : null}
+              {COMPANY_INDUSTRIES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+            <FieldError id="industry" error={fieldErrors.industry} />
+          </label>
+          <label htmlFor="companySize">
+            <FieldLabel label="Company size" required />
+            <select
+              id="companySize"
+              value={profile.companySize || ''}
+              required
+              aria-required
+              aria-invalid={fieldErrors.companySize ? true : undefined}
+              aria-describedby={fieldErrors.companySize ? 'companySize-error' : undefined}
+              onChange={(e) => setProfile({ ...profile, companySize: e.target.value })}
+            >
+              <option value="">Select company size</option>
+              {COMPANY_SIZES.map((size) => (
+                <option key={size} value={size}>
+                  {COMPANY_SIZE_LABELS[size]}
+                </option>
+              ))}
+            </select>
+            <FieldError id="companySize" error={fieldErrors.companySize} />
+          </label>
+          <div>
+            <CitySelect
+              id="company-city"
+              label="Location *"
+              value={profile.city || ''}
+              onChange={(city) => setProfile({ ...profile, city })}
+            />
+            <FieldError id="company-city" error={fieldErrors.city} />
+          </div>
+          <label htmlFor="about" className="ev-span">
+            <FieldLabel label="About the company" />
+            <textarea
+              id="about"
+              rows={4}
+              maxLength={COMPANY_ABOUT_MAX}
+              value={profile.about || ''}
+              placeholder="What does your company do? What is it like to work there?"
+              aria-describedby="about-count"
+              onChange={(e) => setProfile({ ...profile, about: e.target.value.slice(0, COMPANY_ABOUT_MAX) })}
+            />
+            <em id="about-count" className="ev-count" aria-live="polite">
+              {(profile.about || '').length}/{COMPANY_ABOUT_MAX}
+            </em>
+          </label>
+          <Field
+            label="Contact person"
+            name="contactName"
+            value={profile.contactName || ''}
+            placeholder="Primary hiring contact"
+            required
+            error={fieldErrors.contactName}
+            onChange={(contactName) => setProfile({ ...profile, contactName })}
+          />
+          <Field
+            label="Designation"
+            name="designation"
+            value={profile.designation || ''}
+            placeholder="e.g. HR Manager"
+            onChange={(designation) => setProfile({ ...profile, designation })}
+          />
+          <Field
+            label="Work email"
+            name="workEmail"
+            value={profile.workEmail || ''}
+            placeholder="hr@company.com"
+            onChange={(workEmail) => setProfile({ ...profile, workEmail })}
+          />
+          <Field
+            label="Website"
+            name="website"
+            value={profile.website || ''}
+            placeholder="https://company.com"
+            type="url"
+            error={fieldErrors.website}
+            onChange={(website) => setProfile({ ...profile, website })}
+          />
+          <Field
+            label="LinkedIn URL"
+            name="linkedinUrl"
+            value={profile.linkedinUrl || ''}
+            placeholder="https://www.linkedin.com/company/your-company"
+            type="url"
+            error={fieldErrors.linkedinUrl}
+            onChange={(linkedinUrl) => setProfile({ ...profile, linkedinUrl })}
+          />
+        </div>
+        {error || message ? (
+          <div className="ev-mt">
+            {error ? <EvAlert tone="error">{error}</EvAlert> : null}
+            {message ? <EvAlert tone="ok">{message}</EvAlert> : null}
+          </div>
+        ) : null}
+        <div className="ev-form-actions ev-form-actions--split">
+          <p className="ev-sub">Changes apply immediately after you save.</p>
+          <button type="submit" className="ev-btn ev-btn--amber" disabled={saving} aria-busy={saving}>
+            {saving ? 'Saving...' : 'Save profile'}
+          </button>
+        </div>
+      </form>
+    </>
   );
 }
 
@@ -605,7 +612,7 @@ function ProfilePageBody() {
   if (!profile) {
     return (
       <EmployerShellFallback title="Profile">
-        <p className="ep-loading">{error || 'Loading company profile…'}</p>
+        {error ? <EvAlert tone="error">{error}</EvAlert> : <EvPageSkeleton />}
       </EmployerShellFallback>
     );
   }
@@ -622,7 +629,7 @@ export default function EmployerProfilePage() {
     <Suspense
       fallback={
         <EmployerShellFallback title="Profile">
-          <p className="ep-loading">Loading company profile…</p>
+          <EvPageSkeleton />
         </EmployerShellFallback>
       }
     >

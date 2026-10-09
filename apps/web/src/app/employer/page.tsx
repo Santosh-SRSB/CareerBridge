@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
   EmployerApplication,
   EmployerDashboard,
   EmployerInterviewRecord,
+  EmployerJobSummary,
   EmployerProfile,
 } from '@careerbridge/shared';
 import {
@@ -14,11 +16,34 @@ import {
   getEmployerMe,
   listAllEmployerApplications,
   listEmployerInterviews,
+  listEmployerJobs,
 } from '@/lib/api';
-import { EmployerShell, TinyEagleIcon } from '@/components/EmployerPortal';
+import { EmployerShell, EmployerShellSkeleton, useEmployerShell } from '@/components/EmployerPortal';
+import {
+  EvApplicationPill,
+  EvAvatar,
+  EvEmpty,
+  EvInterviewPill,
+  EvJobStatus,
+  EvMatch,
+  EvStat,
+} from '@/components/employer/ui';
 import { TestimonialPromptCard } from '@/components/TestimonialPromptCard';
-import { EmptyState, ErrorState } from '@/components/ui/StateViews';
+import { ErrorState } from '@/components/ui/StateViews';
 import { isUnauthorizedError } from '@/lib/client-errors';
+
+const HERO_SLIDES = [
+  { src: '/employer/hero-1.jpg', position: '50% 0%' },
+  { src: '/employer/hero-2.jpg', position: '50% 3%' },
+  { src: '/employer/hero-3.jpg', position: '50% 14%' },
+] as const;
+
+const MOVE_NEXT = [
+  { href: '/employer/jobs/new', label: 'Post a job' },
+  { href: '/employer/candidates', label: 'Review candidates' },
+  { href: '/employer/interviews/schedule', label: 'Schedule interview' },
+  { href: '/employer/reports', label: 'See analytics' },
+] as const;
 
 function greetingLabel(date = new Date()) {
   const h = date.getHours();
@@ -29,115 +54,145 @@ function greetingLabel(date = new Date()) {
 
 function formatInterviewWhen(iso: string) {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return { day: '—', time: '—' };
-  return {
-    day: date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }),
-    time: date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }),
-  };
+  if (Number.isNaN(date.getTime())) return '—';
+  return `${date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · ${date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}`;
 }
 
-function PerformanceChart({
-  series,
-}: {
-  series: Array<{ label: string; count: number }>;
-}) {
-  const bars = useMemo(() => {
-    const rows =
-      series.length > 0
-        ? series
-        : Array.from({ length: 6 }, () => ({ label: '—', count: 0 }));
-    const max = Math.max(...rows.map((row) => row.count), 0);
-    return rows.map((row) => ({
-      ...row,
-      heightPct: max > 0 ? Math.max(8, Math.round((row.count / max) * 100)) : 8,
-    }));
-  }, [series]);
+function candidateName(person: { firstName: string | null; lastName: string | null }) {
+  return [person.firstName, person.lastName].filter(Boolean).join(' ') || 'Candidate';
+}
 
-  const total = bars.reduce((sum, row) => sum + row.count, 0);
+function DashboardHero({ companyLabel }: { companyLabel: string }) {
+  const shell = useEmployerShell();
+  const [slide, setSlide] = useState(0);
+  const unread = shell?.unreadCount ?? 0;
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => setSlide((s) => (s + 1) % HERO_SLIDES.length), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
-    <div className="ep-saas-bars-wrap">
-      <div
-        className="ep-saas-bars"
-        role="img"
-        aria-label={
-          total > 0
-            ? `Applications over the last six months: ${bars.map((b) => `${b.label} ${b.count}`).join(', ')}`
-            : 'No applications in the last six months'
-        }
-      >
-        {bars.map((bar, index) => (
-          <div
-            key={`perf-bar-${index}-${bar.label}`}
-            className="ep-saas-bars__col"
-            title={`${bar.label}: ${bar.count}`}
-          >
-            <span className="ep-saas-bars__value">{bar.count}</span>
-            <div className="ep-saas-bars__plot">
-              <div className="ep-saas-bars__bar" style={{ height: `${bar.heightPct}%` }} />
-            </div>
-            <span className="ep-saas-bars__label">{bar.label}</span>
-          </div>
+    <section className="ev-hero" aria-label="Welcome">
+      <div className="ev-hbar">
+        <Link
+          href="/notifications"
+          className="ev-pillbtn"
+          aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </svg>
+          {unread > 0 ? <span className="ev-badge">{unread > 99 ? '99+' : unread}</span> : null}
+        </Link>
+        {shell ? (
+          <button type="button" className="ev-pillbtn ev-pillbtn--lo" onClick={() => shell.signOut()}>
+            {shell.impersonating ? 'Exit to admin' : 'Logout'}
+          </button>
+        ) : null}
+      </div>
+      <div className="ev-hero-art" aria-hidden>
+        {HERO_SLIDES.map((item, index) => (
+          <Image
+            key={item.src}
+            src={item.src}
+            alt=""
+            width={900}
+            height={1100}
+            priority={index === 0}
+            className={index === slide ? 'on' : undefined}
+            style={{ objectPosition: item.position }}
+          />
         ))}
       </div>
-      <p className="ep-saas-bars__caption">
-        {total > 0
-          ? `${total} application${total === 1 ? '' : 's'} in the last 6 months`
-          : 'Applications will appear here as candidates apply'}
-      </p>
-    </div>
+      <div className="ev-hero-in">
+        <small>
+          {greetingLabel()}, {companyLabel}
+        </small>
+        <h1>
+          Find the next strong hire. This week.
+          <span className="ev-caret" aria-hidden />
+        </h1>
+        <p>Skills, experience, or location — shortlist from the people who already applied, then book an interview.</p>
+        <Link href="/employer/jobs/new" className="ev-btn ev-btn--amber">
+          Post a job
+        </Link>
+      </div>
+      <div className="ev-dots">
+        {HERO_SLIDES.map((item, index) => (
+          <button
+            key={item.src}
+            type="button"
+            className={index === slide ? 'on' : undefined}
+            aria-label={`Show image ${index + 1}`}
+            aria-pressed={index === slide}
+            onClick={() => setSlide(index)}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
-function DashboardSkeleton() {
+function HiringOverview({ applications, jobs }: { applications: EmployerApplication[]; jobs: EmployerJobSummary[] }) {
+  const [range, setRange] = useState<6 | 12>(6);
+  const [jobId, setJobId] = useState('');
+
+  const rows = useMemo(() => {
+    const since = new Date();
+    since.setMonth(since.getMonth() - range);
+    const scoped = applications.filter((a) => {
+      if (jobId && a.job.id !== jobId) return false;
+      const created = new Date(a.createdAt);
+      return Number.isNaN(created.getTime()) || created >= since;
+    });
+    const total = scoped.length;
+    const count = (statuses: string[]) => scoped.filter((a) => statuses.includes(a.status)).length;
+    return [
+      { label: 'Applications', value: total },
+      { label: 'Shortlisted', value: count(['SHORTLISTED']) },
+      { label: 'Interviews', value: count(['INTERVIEW']) },
+      { label: 'Hired', value: count(['HIRED', 'SELECTED']) },
+    ].map((row) => ({ ...row, pct: total > 0 ? Math.max(3, Math.round((row.value / total) * 100)) : 3 }));
+  }, [applications, jobId, range]);
+
   return (
-    <div className="ep-app ep-app--desk ep-app--saas ep-app--leftnav">
-      <div className="ep-main">
-        <div className="ep-content">
-          <div className="ep-saas-dash ep-saas-dash--loading" aria-busy="true">
-            <div className="ep-saas-skel ep-saas-skel--lg" />
-            <div className="ep-saas-skel-row">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="ep-saas-skel ep-saas-skel--card" />
-              ))}
-            </div>
-            <div className="ep-saas-skel-grid">
-              <div className="ep-saas-skel ep-saas-skel--panel" />
-              <div className="ep-saas-skel ep-saas-skel--panel" />
-            </div>
+    <div className="ev-card ev-mt">
+      <h2>3. Hiring overview</h2>
+      <div className="ev-tabs">
+        <button type="button" className={`ev-tab${range === 6 ? ' on' : ''}`} aria-pressed={range === 6} onClick={() => setRange(6)}>
+          6 months
+        </button>
+        <button type="button" className={`ev-tab${range === 12 ? ' on' : ''}`} aria-pressed={range === 12} onClick={() => setRange(12)}>
+          1 year
+        </button>
+        <span className="ev-form">
+          <select aria-label="Filter by job" value={jobId} onChange={(e) => setJobId(e.target.value)}>
+            <option value="">All Jobs</option>
+            {jobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.title}
+              </option>
+            ))}
+          </select>
+        </span>
+      </div>
+      {rows.map((row) => (
+        <div key={row.label}>
+          <div className="ev-row ev-row--flat">
+            <span>{row.label}</span>
+            <b>{row.value}</b>
+          </div>
+          <div className="ev-bar">
+            <i style={{ width: `${row.pct}%` }} />
           </div>
         </div>
-      </div>
+      ))}
     </div>
   );
 }
-
-const QUICK_ACTIONS = [
-  {
-    href: '/employer/jobs/new',
-    title: 'Post a Job',
-    copy: 'Publish a new opening',
-    key: 'post',
-  },
-  {
-    href: '/employer/candidates',
-    title: 'Find Candidates',
-    copy: 'Browse matched talent',
-    key: 'find',
-  },
-  {
-    href: '/employer/interviews/schedule',
-    title: 'Schedule Interview',
-    copy: 'Book time with talent',
-    key: 'schedule',
-  },
-  {
-    href: '/employer/applications',
-    title: 'View Applications',
-    copy: 'Review your pipeline',
-    key: 'apps',
-  },
-] as const;
 
 export default function EmployerDashboardPage() {
   const router = useRouter();
@@ -145,9 +200,11 @@ export default function EmployerDashboardPage() {
   const [profile, setProfile] = useState<EmployerProfile | null>(null);
   const [applications, setApplications] = useState<EmployerApplication[]>([]);
   const [interviews, setInterviews] = useState<EmployerInterviewRecord[]>([]);
+  const [jobs, setJobs] = useState<EmployerJobSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -163,14 +220,16 @@ export default function EmployerDashboardPage() {
           return;
         }
         setProfile(employer);
-        const [dash, appRows, interviewRows] = await Promise.all([
+        const [dash, appRows, interviewRows, jobRows] = await Promise.all([
           getEmployerDashboard(),
           listAllEmployerApplications().catch(() => [] as EmployerApplication[]),
           listEmployerInterviews().catch(() => [] as EmployerInterviewRecord[]),
+          listEmployerJobs().catch(() => [] as EmployerJobSummary[]),
         ]);
         setData(dash);
         setApplications(appRows);
         setInterviews(interviewRows);
+        setJobs(jobRows);
       })
       .catch((err) => {
         if (isUnauthorizedError(err)) {
@@ -196,314 +255,298 @@ export default function EmployerDashboardPage() {
     [interviews],
   );
 
+  const recentApplications = useMemo(
+    () => [...applications].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)).slice(0, 8),
+    [applications],
+  );
+
+  const openRoles = useMemo(
+    () =>
+      [...jobs]
+        .filter((job) => job.status !== 'CLOSED')
+        .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+        .slice(0, 5),
+    [jobs],
+  );
+
   if (!loading && loadFailed) {
     const retry = <ErrorState onRetry={() => setReloadKey((k) => k + 1)} className="m-6" />;
     return profile ? <EmployerShell profile={profile}>{retry}</EmployerShell> : retry;
   }
 
   if (loading || !data || !profile) {
-    return <DashboardSkeleton />;
+    return <EmployerShellSkeleton />;
   }
 
   const isNewEmployer = data.openJobs === 0 && data.applications === 0 && data.interviews === 0;
-
   const companyLabel = profile.companyName?.trim() || 'your company';
+  const months = data.applicationsByMonth || [];
+  const thisMonth = months.length ? months[months.length - 1].count : null;
+  const viewsByJob = new Map((data.jobPerformance || []).map((row) => [row.jobId, row.views]));
+  const shortlistPct = data.applications > 0 ? Math.round((data.shortlisted / data.applications) * 100) : 0;
 
-  const metrics = [
-    { label: 'Active Jobs', value: data.openJobs, href: '/employer/jobs' },
-    { label: 'Total Applicants', value: data.applications, href: '/employer/applications' },
-    { label: 'Shortlisted', value: data.shortlisted, href: '/employer/applications' },
-    { label: 'Interviews Scheduled', value: data.interviews, href: '/employer/interviews' },
-    { label: 'Hired Candidates', value: hiredCount, href: '/employer/applications' },
-  ] as const;
+  function onSearch(event: FormEvent) {
+    event.preventDefault();
+    const q = query.trim();
+    router.push(q ? `/employer/candidates?q=${encodeURIComponent(q)}` : '/employer/candidates');
+  }
 
   return (
-    <EmployerShell profile={profile}>
-      <div className="ep-saas-dash">
-        <div className="ep-saas-dash__stage">
-          <aside className="ep-saas-hinge" aria-label="Welcome">
-            <span className="ep-saas-hinge__nail" aria-hidden />
-            <div className="ep-saas-hinge__swing">
-              <div className="ep-saas-hinge__board">
-                <TinyEagleIcon className="ep-saas-hinge__eagle" size={12} />
-                <strong>Welcome to Employer Dashboard</strong>
-              </div>
-            </div>
-          </aside>
+    <EmployerShell profile={profile} bleed>
+      <DashboardHero companyLabel={companyLabel} />
 
-          <header className="ep-saas-dash__welcome">
-            <div className="ep-saas-dash__welcome-copy">
-              <p className="ep-saas-dash__eyebrow" aria-hidden>
-                Employer workspace
-              </p>
-              <h1 className="ep-saas-dash__title">
-                <span className="ep-saas-dash__write ep-saas-dash__write--greet">
-                  {greetingLabel()},
-                </span>{' '}
-                <span className="ep-saas-dash__write ep-saas-dash__write--name">{companyLabel}</span>
-                <span className="ep-saas-dash__caret" aria-hidden />
-              </h1>
-              <p className="ep-saas-dash__sub ep-saas-dash__sub--process" aria-label="Hiring process">
-                <span className="ep-saas-dash__process-label">Hiring process</span>
-                <span className="ep-saas-dash__write ep-saas-dash__write--flow">
-                  Post job → See candidates → Check ATS → Select candidates → Interview → Hired
-                </span>
-              </p>
-            </div>
-          </header>
+      <form className="ev-search" role="search" onSubmit={onSearch}>
+        <span aria-hidden>&#9906;</span>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search candidates, skills, locations..."
+          aria-label="Search candidates"
+        />
+        <button type="submit">Search</button>
+      </form>
 
-          <div className="ep-saas-dash__cluster ep-saas-dash__cluster--right">
-            <Link href="/employer/jobs/new" className="ep-saas-btn ep-saas-btn--primary ep-saas-btn--sm">
-              + Post a job
-            </Link>
-            <aside className="ep-saas-guide" aria-label="Hiring steps guide">
-              <div className="ep-saas-guide__tips" aria-live="polite">
-                <p className="ep-saas-guide__tip ep-saas-guide__tip--1">1. Post your job</p>
-                <p className="ep-saas-guide__tip ep-saas-guide__tip--2">2. See candidates</p>
-                <p className="ep-saas-guide__tip ep-saas-guide__tip--3">3. Check ATS & select</p>
-                <p className="ep-saas-guide__tip ep-saas-guide__tip--4">4. Interview → Hire</p>
-              </div>
-              <div className="ep-saas-guide__girl" aria-hidden>
-                <svg viewBox="0 0 128 168" fill="none">
-                  {/* raised pointing arm */}
-                  <path
-                    className="ep-saas-guide__arm"
-                    d="M82 78c16-16 26-30 28-44"
-                    stroke="#f0c4a8"
-                    strokeWidth="6.5"
-                    strokeLinecap="round"
-                  />
-                  <circle
-                    className="ep-saas-guide__hand"
-                    cx="110"
-                    cy="32"
-                    r="6.5"
-                    fill="#f0c4a8"
-                    stroke="#0c332c"
-                    strokeWidth="1.4"
-                  />
-                  {/* neat bun + professional hair */}
-                  <circle cx="58" cy="22" r="9" fill="#2a1a12" />
-                  <ellipse cx="58" cy="40" rx="20" ry="22" fill="#2a1a12" />
-                  {/* face */}
-                  <circle cx="58" cy="44" r="15" fill="#f0c4a8" stroke="#0c332c" strokeWidth="1.5" />
-                  <circle cx="52" cy="42" r="1.5" fill="#0c332c" />
-                  <circle cx="64" cy="42" r="1.5" fill="#0c332c" />
-                  <path d="M53 50c2 2.2 8 2.2 10 0" stroke="#0c332c" strokeWidth="1.3" strokeLinecap="round" />
-                  {/* blazer + blouse */}
-                  <path
-                    d="M40 70c1 26 6 42 18 42s17-16 18-42c-5 4-11 6-18 6s-13-2-18-6Z"
-                    fill="#0c332c"
-                    stroke="#0c332c"
-                    strokeWidth="1.4"
-                  />
-                  <path d="M50 72c2.5 10 5 16 8 16s5.5-6 8-16c-2.5 2-5.5 3-8 3s-5.5-1-8-3Z" fill="#f6f4ef" />
-                  <path d="M58 72v16" stroke="#1f9d8a" strokeWidth="1.2" />
-                  {/* lapels */}
-                  <path d="M42 72l10 8-4-10" fill="#144039" stroke="#0c332c" strokeWidth="1" />
-                  <path d="M74 72l-10 8 4-10" fill="#144039" stroke="#0c332c" strokeWidth="1" />
-                  {/* resting arm */}
-                  <path d="M40 78c-11 12-13 24-11 32" stroke="#f0c4a8" strokeWidth="5.5" strokeLinecap="round" />
-                  {/* pencil skirt */}
-                  <path
-                    d="M42 110h32l5 34H37l5-34Z"
-                    fill="#1a3d36"
-                    stroke="#0c332c"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M48 112h20" stroke="#1f9d8a" strokeWidth="1.2" opacity="0.7" />
-                  {/* legs + heels */}
-                  <path d="M50 144v12M66 144v12" stroke="#f0c4a8" strokeWidth="3.2" strokeLinecap="round" />
-                  <path d="M46 156h10l-1 4H45l1-4Z" fill="#0c332c" />
-                  <path d="M62 156h10l-1 4H61l1-4Z" fill="#0c332c" />
-                </svg>
-              </div>
-            </aside>
-          </div>
-        </div>
-
-        <div className="mb-5 px-1">
-          <TestimonialPromptCard audience="EMPLOYER" />
-        </div>
+      <div className="ev-pad">
+        <TestimonialPromptCard audience="EMPLOYER" />
 
         {isNewEmployer ? (
-          <EmptyState
-            className="mb-5"
-            title="Welcome! Create your first job to start receiving applications."
-            message="Post a job and CareerBridge will match it with candidates from your area."
-            actionLabel="Create Job"
-            actionHref="/employer/jobs/new"
-          />
+          <div className="ev-card ev-mt">
+            <EvEmpty
+              title="Welcome! Create your first job to start receiving applications."
+              body="Post a job and CareerBridge will match it with candidates from your area."
+              action={
+                <Link href="/employer/jobs/new" className="ev-btn">
+                  Create Job
+                </Link>
+              }
+            />
+          </div>
         ) : null}
 
-        <section className="ep-saas-metrics" aria-label="Overview statistics">
-          {metrics.map((item) => (
-            <Link key={item.label} href={item.href} className="ep-saas-metric">
-              <span className="ep-saas-metric__label">{item.label}</span>
-              <p className="ep-saas-metric__value">{item.value}</p>
-            </Link>
-          ))}
+        <section className="ev-grid ev-g5 ev-mt" aria-label="Overview statistics">
+          <EvStat
+            label="Active Jobs"
+            value={data.openJobs}
+            hint={`${data.openJobs} role${data.openJobs === 1 ? '' : 's'} open`}
+            icon="▤"
+            href="/employer/jobs"
+          />
+          <EvStat
+            label="Total Applicants"
+            value={data.applications}
+            hint={thisMonth == null ? 'All applications' : `${thisMonth} this month`}
+            icon="☺"
+            href="/employer/applications"
+          />
+          <EvStat
+            label="Shortlisted"
+            value={data.shortlisted}
+            hint={`${shortlistPct}% of applicants`}
+            icon="☆"
+            href="/employer/applications"
+          />
+          <EvStat
+            label="Interviews"
+            value={data.interviews}
+            hint={upcomingInterviews.length ? `${upcomingInterviews.length} upcoming` : 'None scheduled'}
+            icon="▥"
+            href="/employer/interviews"
+          />
+          <EvStat label="Hired" value={hiredCount} hint="Offers come next" icon="✓" href="/employer/applications" />
         </section>
 
-        <section className="ep-saas-quick" aria-label="Quick actions">
-          {QUICK_ACTIONS.map((item) => (
-            <Link key={item.key} href={item.href} className="ep-saas-quick__card">
-              <strong>
-                <TinyEagleIcon className="ep-saas-quick__eagle" size={11} />
-                {item.title}
-              </strong>
-              <span>{item.copy}</span>
-            </Link>
-          ))}
-        </section>
-
-        <div className="ep-saas-grid">
-          <section className="ep-saas-panel" aria-labelledby="perf-title">
-            <div className="ep-saas-panel__head">
-              <div>
-                <h2 id="perf-title">Recruitment performance</h2>
-              </div>
-            </div>
-            <PerformanceChart series={data.applicationsByMonth || []} />
-            <h3 className="mt-4 text-sm font-extrabold text-slate-900">Active jobs</h3>
-            {(data.jobPerformance?.length ?? 0) === 0 ? (
-              <p className="mt-1 text-sm text-slate-600">No active jobs yet.</p>
-            ) : (
-              <div className="ep-saas-table-wrap">
-                <table className="ep-saas-table" data-testid="job-performance">
-                  <thead>
-                    <tr>
-                      <th>Job</th>
-                      <th>Applications</th>
-                      <th>Views</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.jobPerformance!.map((row) => (
-                      <tr key={row.jobId}>
-                        <td>{row.title}</td>
-                        <td>
-                          <Link
-                            href={`/employer/applications?jobId=${encodeURIComponent(row.jobId)}`}
-                            className="ep-saas-table__link"
-                          >
-                            {row.applications}
-                          </Link>
-                        </td>
-                        <td>{row.views}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <section className="ep-saas-panel" aria-labelledby="interviews-title">
-            <div className="ep-saas-panel__head">
-              <div>
-                <h2 id="interviews-title">Upcoming interviews</h2>
-              </div>
-              <Link href="/employer/interviews" className="ep-saas-panel__link">
+        <div className="ev-grid ev-g2 ev-mt">
+          <div className="ev-card">
+            <div className="ev-card-head">
+              <h2>1. Open roles</h2>
+              <Link href="/employer/jobs" className="ev-lnk">
                 View all
               </Link>
             </div>
-            {upcomingInterviews.length === 0 ? (
-              <div className="ep-saas-empty">
-                <p>No interviews scheduled</p>
-              </div>
+            {openRoles.length === 0 ? (
+              <EvEmpty
+                title="No open roles"
+                body="Post a job to start receiving applicants."
+                action={
+                  <Link href="/employer/jobs/new" className="ev-btn">
+                    Post a job
+                  </Link>
+                }
+              />
             ) : (
-              <ul className="ep-saas-interview-list">
-                {upcomingInterviews.map((row) => {
-                  const when = formatInterviewWhen(row.scheduledAt);
-                  const name =
-                    [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
-                  return (
-                    <li key={row.id}>
-                      <div className="ep-saas-interview__when">
-                        <strong>{when.day}</strong>
-                        <em>{when.time}</em>
-                      </div>
-                      <div className="ep-saas-interview__body">
-                        <strong>{name}</strong>
-                        <span>{row.job.title}</span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              openRoles.map((job, index) => (
+                <Link key={job.id} href={`/employer/jobs/${job.id}`} className="ev-row" style={{ color: 'inherit', textDecoration: 'none' }}>
+                  <span className="ev-row-main">
+                    <span className="ev-num">{index + 1}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <b style={{ color: 'var(--ev-ink)' }}>{job.title}</b>
+                      <br />
+                      <span className="ev-sub">
+                        {job.city || '—'} ·{' '}
+                        {job.status === 'DRAFT'
+                          ? 'Draft'
+                          : `${job.applicantCount} applicant${job.applicantCount === 1 ? '' : 's'}`}
+                        {viewsByJob.has(job.id) ? ` · ${viewsByJob.get(job.id)} views` : ''}
+                      </span>
+                    </span>
+                  </span>
+                  <EvJobStatus status={job.status} />
+                </Link>
+              ))
             )}
-          </section>
+          </div>
+
+          <div className="ev-card">
+            <div className="ev-card-head">
+              <h2>2. Upcoming interview{upcomingInterviews.length > 1 ? 's' : ''}</h2>
+              {upcomingInterviews.length ? (
+                <Link href="/employer/interviews" className="ev-lnk">
+                  View all
+                </Link>
+              ) : null}
+            </div>
+            {upcomingInterviews.length === 0 ? (
+              <EvEmpty
+                title="No interviews yet"
+                body="Shortlist an applicant, then book a time."
+                action={
+                  <Link href="/employer/interviews/schedule" className="ev-btn">
+                    Open schedule
+                  </Link>
+                }
+              />
+            ) : (
+              upcomingInterviews.map((row) => (
+                <div key={row.id} className="ev-row">
+                  <span className="ev-row-main">
+                    <EvAvatar name={candidateName(row.candidate)} size="sm" />
+                    <span style={{ minWidth: 0 }}>
+                      <b style={{ color: 'var(--ev-ink)' }}>{candidateName(row.candidate)}</b>
+                      <br />
+                      <span className="ev-sub">
+                        {row.job.title} · {formatInterviewWhen(row.scheduledAt)}
+                      </span>
+                    </span>
+                  </span>
+                  <EvInterviewPill status={row.status} />
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
-        <section className="ep-saas-panel ep-saas-panel--wide" aria-labelledby="recent-apps-title">
-          <div className="ep-saas-panel__head">
-            <div>
-              <h2 id="recent-apps-title">Recent applications</h2>
-              <p className="ep-saas-panel__hint">Latest inbound candidates across your jobs</p>
-            </div>
-            <Link href="/employer/applications" className="ep-saas-panel__link">
+        <HiringOverview applications={applications} jobs={jobs} />
+
+        <div className="ev-card ev-mt">
+          <div className="ev-card-head">
+            <h2>4. Recent applications</h2>
+            <Link href="/employer/applications" className="ev-lnk">
               View all
             </Link>
           </div>
-          {(data.recent?.length ?? 0) === 0 ? (
-            <div className="ep-saas-empty">
-              <p>No applications yet</p>
-              <Link href="/employer/jobs/new" className="ep-saas-btn ep-saas-btn--primary ep-saas-btn--sm">
-                Post a job
-              </Link>
-            </div>
+          {recentApplications.length === 0 && (data.recent?.length ?? 0) === 0 ? (
+            <EvEmpty
+              title="No applications yet"
+              action={
+                <Link href="/employer/jobs/new" className="ev-btn">
+                  Post a job
+                </Link>
+              }
+            />
           ) : (
-            <div className="ep-saas-table-wrap">
-              <table className="ep-saas-table">
+            <div className="ev-scroll">
+              <table className="ev-table">
                 <thead>
                   <tr>
                     <th>Candidate</th>
                     <th>Job</th>
-                    <th>Date Applied</th>
+                    <th>Percentage matched</th>
+                    <th>Skills</th>
                     <th>Status</th>
                     <th aria-label="Open" />
                   </tr>
                 </thead>
                 <tbody>
-                  {data.recent.slice(0, 8).map((row) => (
-                    <tr key={row.applicationId}>
-                      <td>
-                        <strong>{row.candidateName}</strong>
-                      </td>
-                      <td>{row.jobTitle}</td>
-                      <td>
-                        {row.appliedAt
-                          ? new Date(row.appliedAt).toLocaleDateString('en-IN', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })
-                          : '—'}
-                      </td>
-                      <td>
-                        <span className="ep-saas-status">{row.status.replaceAll('_', ' ')}</span>
-                      </td>
-                      <td>
-                        <Link
-                          href={
-                            row.candidateId
-                              ? `/employer/candidates/${row.candidateId}?jobId=${encodeURIComponent(row.jobId || '')}&from=applications`
-                              : `/employer/applications?jobId=${encodeURIComponent(row.jobId || '')}`
-                          }
-                          className="ep-saas-table__link"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {recentApplications.length
+                    ? recentApplications.map((row) => {
+                        const name = candidateName(row.candidate);
+                        const skills = row.candidate.skills || [];
+                        return (
+                          <tr key={row.id}>
+                            <td>
+                              <span className="ev-who">
+                                <EvAvatar name={name} size="sm" />
+                                <b>{name}</b>
+                              </span>
+                            </td>
+                            <td>{row.job.title}</td>
+                            <td>
+                              <EvMatch score={row.match?.score} />
+                            </td>
+                            <td>
+                              {skills.length ? `${skills.slice(0, 3).join(', ')}${skills.length > 3 ? ` +${skills.length - 3}` : ''}` : '—'}
+                            </td>
+                            <td>
+                              <EvApplicationPill status={row.status} />
+                            </td>
+                            <td>
+                              <Link
+                                href={`/employer/candidates/${row.candidate.id}?jobId=${encodeURIComponent(row.job.id)}&from=applications`}
+                                className="ev-btn ev-btn--ghost ev-btn--sm"
+                              >
+                                View
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    : data.recent.slice(0, 8).map((row) => (
+                        <tr key={row.applicationId}>
+                          <td>
+                            <span className="ev-who">
+                              <EvAvatar name={row.candidateName} size="sm" />
+                              <b>{row.candidateName}</b>
+                            </span>
+                          </td>
+                          <td>{row.jobTitle}</td>
+                          <td>—</td>
+                          <td>—</td>
+                          <td>
+                            <EvApplicationPill status={row.status} />
+                          </td>
+                          <td>
+                            <Link
+                              href={
+                                row.candidateId
+                                  ? `/employer/candidates/${row.candidateId}?jobId=${encodeURIComponent(row.jobId || '')}&from=applications`
+                                  : `/employer/applications?jobId=${encodeURIComponent(row.jobId || '')}`
+                              }
+                              className="ev-btn ev-btn--ghost ev-btn--sm"
+                            >
+                              View
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
                 </tbody>
               </table>
             </div>
           )}
-        </section>
+        </div>
+
+        <div className="ev-card ev-mt">
+          <h2>5. Move next</h2>
+          <div className="ev-grid ev-g4">
+            {MOVE_NEXT.map((item, index) => (
+              <Link key={item.href} href={item.href} className="ev-btn ev-btn--ghost ev-move">
+                <span className="ev-num">{index + 1}</span>
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <p className="ev-foot">© {new Date().getFullYear()} CareerBridge by SRSB Workforce Solutions Pvt. Ltd.</p>
       </div>
     </EmployerShell>
   );

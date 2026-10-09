@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { EmployerJobSummary } from '@careerbridge/shared';
-import { listEmployerJobs } from '@/lib/api';
+import { getEmployerDashboard, listEmployerJobs } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { EmployerSectionHero, EmployerQuickLink } from '@/components/employer/EmployerSectionHero';
-import { EmployerEmptyCue } from '@/components/employer/EmployerEmptyCue';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
-import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
+import { EvEmpty, EvJobStatus, EvPlainHead, EvSkeleton } from '@/components/employer/ui';
+import { ErrorState } from '@/components/ui/StateViews';
 import { LOAD_ERROR_MESSAGE } from '@/lib/client-errors';
-import { JOB_STATUS_FILTERS, jobStatusLabel, jobStatusTone, type JobStatusFilter } from '@/lib/job-status';
+import { JOB_STATUS_FILTERS, type JobStatusFilter } from '@/lib/job-status';
+
+type JobSort = 'new' | 'old' | 'apps';
 
 function postedLabel(job: EmployerJobSummary) {
   const raw = job.publishedAt || job.createdAt;
@@ -26,67 +27,20 @@ function postedLabel(job: EmployerJobSummary) {
   return `Posted ${days} days ago`;
 }
 
-function JobRoleIcon({ status }: { status: string }) {
-  if (status === 'PAUSED') {
-    return (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden>
-        <rect x="4" y="3.5" width="16" height="17" rx="2.5" stroke="currentColor" strokeWidth="1.7" />
-        <path d="M8 8.5h8M8 12h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        <rect x="9.2" y="14.2" width="2.2" height="3.6" rx="0.4" fill="currentColor" />
-        <rect x="12.6" y="14.2" width="2.2" height="3.6" rx="0.4" fill="currentColor" />
-      </svg>
-    );
-  }
-  if (status === 'CLOSED') {
-    return (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden>
-        <rect x="4" y="3.5" width="16" height="17" rx="2.5" stroke="currentColor" strokeWidth="1.7" />
-        <path d="M8 9h8M8 12.5h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        <path
-          d="M9.2 16.2l5.6-5.6M14.8 16.2L9.2 10.6"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
-  if (status === 'DRAFT') {
-    return (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden>
-        <path
-          d="M7 3.5h7.2L19 8.3V20a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 6 20V5A1.5 1.5 0 0 1 7.5 3.5H7z"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinejoin="round"
-        />
-        <path d="M14 3.8V8h4.2" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-        <path d="M9 12.2h6M9 15.5h4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden>
-      <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M8 9.2h8M8 12.5h8M8 15.8h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <circle cx="17.2" cy="16.2" r="2.4" fill="currentColor" />
-      <path d="M16.4 16.2h1.6M17.2 15.4v1.6" stroke="#0a2e2c" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function jobIconTone(status: string) {
-  if (status === 'PUBLISHED') return 'cb-job-row__glyph cb-job-row__glyph--live';
-  if (status === 'PAUSED') return 'cb-job-row__glyph cb-job-row__glyph--paused';
-  if (status === 'CLOSED') return 'cb-job-row__glyph cb-job-row__glyph--closed';
-  return 'cb-job-row__glyph';
+function postedTime(job: EmployerJobSummary) {
+  const time = new Date(job.publishedAt || job.createdAt).getTime();
+  return Number.isNaN(time) ? 0 : time;
 }
 
 export default function EmployerJobsPage() {
   const [jobs, setJobs] = useState<EmployerJobSummary[]>([]);
+  const [views, setViews] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<JobStatusFilter>('ALL');
+  const [sort, setSort] = useState<JobSort>('new');
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setError('');
@@ -98,18 +52,37 @@ export default function EmployerJobsPage() {
     } finally {
       setLoading(false);
     }
+    getEmployerDashboard()
+      .then((dash) => setViews(new Map((dash.jobPerformance || []).map((row) => [row.jobId, row.views]))))
+      .catch(() => undefined);
   }
 
   useEffect(() => {
     void load();
   }, []);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const stats = useMemo(() => {
     const active = jobs.filter((job) => job.status === 'PUBLISHED').length;
     const drafts = jobs.filter((job) => job.status === 'DRAFT' || job.status === 'PAUSED').length;
     const applicants = jobs.reduce((sum, job) => sum + (job.applicantCount || 0), 0);
-    return { active, drafts, applicants, total: jobs.length };
-  }, [jobs]);
+    let totalViews = 0;
+    views.forEach((value) => {
+      totalViews += value;
+    });
+    return { active, drafts, applicants, total: jobs.length, views: totalViews };
+  }, [jobs, views]);
 
   const counts = useMemo(() => {
     const out: Record<string, number> = { ALL: jobs.length };
@@ -117,176 +90,162 @@ export default function EmployerJobsPage() {
     return out;
   }, [jobs]);
 
-  const visibleJobs = useMemo(
-    () => (filter === 'ALL' ? jobs : jobs.filter((job) => job.status === filter)),
-    [jobs, filter],
-  );
+  const visibleJobs = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = jobs.filter(
+      (job) => (filter === 'ALL' || job.status === filter) && (!q || job.title.toLowerCase().includes(q)),
+    );
+    if (sort === 'apps') return [...list].sort((a, b) => (b.applicantCount || 0) - (a.applicantCount || 0));
+    return [...list].sort((a, b) => (sort === 'new' ? postedTime(b) - postedTime(a) : postedTime(a) - postedTime(b)));
+  }, [jobs, filter, query, sort]);
 
   return (
     <EmployerShellFallback title="My Jobs">
-      <div className="ep-desk ep-page ep-page--jobs">
-        <EmployerSectionHero
-          tone="jobs"
-          title="My Jobs"
-          subtitle="Create, publish, pause, and close openings from one board."
-          action={
-            <EmployerQuickLink href="/employer/jobs/new">Post new job</EmployerQuickLink>
-          }
-        />
+      <EvPlainHead
+        title="My jobs"
+        subtitle="Create, publish, pause and close openings from one board."
+        actions={
+          <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
+            + Post new job
+          </Link>
+        }
+      />
 
-        {!loading && jobs.length ? (
-          <div className="ep-stats">
+      {loading ? (
+        <div className="ev-grid">
+          <EvSkeleton height={130} />
+          <EvSkeleton height={110} />
+          <EvSkeleton height={110} />
+        </div>
+      ) : null}
+      {error && !loading ? <ErrorState message={error} onRetry={() => void load()} /> : null}
+
+      {!loading && !error && !jobs.length ? (
+        <div className="ev-card">
+          <EvEmpty
+            title="No jobs yet"
+            body="Create your first job posting to start hiring."
+            action={
+              <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
+                + Create Job
+              </Link>
+            }
+          />
+        </div>
+      ) : null}
+
+      {!loading && !error && jobs.length > 0 ? (
+        <>
+          <div className="ev-jstats">
             {[
-              {
-                label: 'Total roles',
-                value: stats.total,
-                tone: '',
-                hint: 'All openings',
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.8" />
-                    <path d="M8 9h8M8 12.5h8M8 16h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  </svg>
-                ),
-              },
-              {
-                label: 'Active',
-                value: stats.active,
-                tone: 'ep-stat__icon--teal',
-                hint: 'Live now',
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <circle cx="12" cy="12" r="7.5" stroke="currentColor" strokeWidth="1.8" />
-                    <path d="M9.2 12.2l1.9 1.9 3.7-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ),
-              },
-              {
-                label: 'Draft / paused',
-                value: stats.drafts,
-                tone: 'ep-stat__icon--soft',
-                hint: 'Needs action',
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <rect x="9" y="6" width="2.4" height="12" rx="0.6" fill="currentColor" />
-                    <rect x="12.6" y="6" width="2.4" height="12" rx="0.6" fill="currentColor" />
-                  </svg>
-                ),
-              },
+              { label: 'Total roles', value: stats.total, hint: 'All openings' },
+              { label: 'Active', value: stats.active, hint: 'Live now' },
+              { label: 'Draft or paused', value: stats.drafts, hint: 'Need action' },
               {
                 label: 'Applicants',
                 value: stats.applicants,
-                tone: 'ep-stat__icon--soft',
-                hint: 'Across roles',
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="1.8" />
-                    <circle cx="16" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.8" />
-                    <path d="M4.5 18c.6-2.4 2.4-3.6 4.5-3.6s3.9 1.2 4.5 3.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  </svg>
-                ),
+                hint: views.size ? `${stats.views} views across roles` : 'Across roles',
               },
             ].map((item) => (
-              <div key={item.label} className="ep-card ep-stat">
-                <div className={`ep-stat__icon ${item.tone}`}>{item.icon}</div>
-                <p>{item.label}</p>
-                <strong>{item.value}</strong>
-                <em>{item.hint}</em>
+              <div key={item.label}>
+                <span>{item.label}</span>
+                <b>{item.value}</b>
+                <small>{item.hint}</small>
               </div>
             ))}
           </div>
-        ) : null}
 
-        <article className="ep-card ep-list-card">
-          {loading ? <SkeletonList rows={3} label="Loading jobs…" className="p-4" /> : null}
-          {error && !loading ? <ErrorState message={error} onRetry={() => void load()} className="m-4" /> : null}
-
-          {!loading && !error && !jobs.length ? (
-            <div className="ep-polished-empty">
-              <EmployerEmptyCue cue="jobs" />
-              <div>
-                <p className="ep-polished-empty__title">No jobs yet</p>
-                <p className="ep-polished-empty__copy">Create your first job posting to start hiring.</p>
-                <Link href="/employer/jobs/new" className="ep-hero__link ep-polished-empty__cta">
-                  + Create Job
-                </Link>
-              </div>
-            </div>
-          ) : null}
-
-          {!loading && !error && jobs.length > 0 ? (
-            <div className="flex flex-wrap gap-2 p-4 pb-0" role="group" aria-label="Filter jobs by status">
+          <div className="ev-jbar">
+            <div className="ev-jtabs" role="group" aria-label="Filter jobs by status">
               {JOB_STATUS_FILTERS.map((item) => (
                 <button
                   key={item.value}
                   type="button"
+                  className={`ev-jtab${filter === item.value ? ' on' : ''}`}
                   aria-pressed={filter === item.value}
                   onClick={() => setFilter(item.value)}
-                  className={`min-h-12 rounded-full border px-4 text-sm font-bold ${
-                    filter === item.value
-                      ? 'border-primary bg-primary text-white'
-                      : 'border-slate-300 bg-white text-slate-800 hover:border-primary'
-                  }`}
                 >
-                  {item.label} ({counts[item.value] || 0})
+                  {item.label}
+                  <em>{counts[item.value] || 0}</em>
                 </button>
               ))}
             </div>
-          ) : null}
+            <select aria-label="Sort jobs" value={sort} onChange={(e) => setSort(e.target.value as JobSort)}>
+              <option value="new">Newest first</option>
+              <option value="old">Oldest first</option>
+              <option value="apps">Most applicants</option>
+            </select>
+            <label className="ev-jsearch">
+              <span aria-hidden>&#9906;</span>
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search jobs (press /)"
+                aria-label="Search jobs"
+              />
+            </label>
+          </div>
 
-          {!loading && !error && jobs.length > 0 && !visibleJobs.length ? (
-            <p className="p-6 text-sm font-semibold text-slate-700" role="status">
-              No {JOB_STATUS_FILTERS.find((f) => f.value === filter)?.label.toLowerCase()} jobs.
-            </p>
-          ) : null}
-
-          {!loading && visibleJobs.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="ep-wire-table min-w-[640px]">
-                <thead>
-                  <tr>
-                    <th>Job</th>
-                    <th>Status</th>
-                    <th>Applications</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleJobs.map((job) => (
-                    <tr key={job.id}>
-                      <td>
-                        <p className="font-extrabold text-primary">{job.title}</p>
-                        <p className="text-xs text-muted">{job.city || '—'} · {postedLabel(job)}</p>
-                      </td>
-                      <td>
-                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${jobStatusTone(job.status)}`}>
-                          {jobStatusLabel(job.status)}
-                        </span>
-                      </td>
-                      <td className="font-semibold">
+          {!visibleJobs.length ? (
+            <div className="ev-card" role="status">
+              <EvEmpty title="No jobs found" body="Try another status or clear the search." />
+            </div>
+          ) : (
+            visibleJobs.map((job) => {
+              const applicants = job.applicantCount || 0;
+              const jobViews = views.get(job.id);
+              const conversion = jobViews ? (applicants / jobViews) * 100 : null;
+              return (
+                <article key={job.id} className="ev-jcard">
+                  <div className="ev-jt">
+                    <b>{job.title}</b>
+                    <span>
+                      {job.city || '—'} · {postedLabel(job)}
+                    </span>
+                  </div>
+                  <EvJobStatus status={job.status} />
+                  <div className="ev-ja">
+                    {applicants > 0 ? (
+                      <>
+                        <b>{applicants}</b> application{applicants === 1 ? '' : 's'}
                         <Link
                           href={`/employer/applications?jobId=${encodeURIComponent(job.id)}`}
-                          className="text-primary underline underline-offset-2 hover:no-underline"
-                          aria-label={`${job.applicantCount || 0} applications for ${job.title}`}
+                          aria-label={`Review ${applicants} applicant${applicants === 1 ? '' : 's'} for ${job.title}`}
                         >
-                          {job.applicantCount || 0} {(job.applicantCount || 0) === 1 ? 'Application' : 'Applications'}
+                          Review applicants
                         </Link>
-                      </td>
-                      <td>
-                        <div className="ep-wire-actions">
-                          <Link href={`/employer/jobs/${job.id}`}>View</Link>
-                          <Link href={`/employer/jobs/new?edit=${encodeURIComponent(job.id)}`}>Edit</Link>
-                          <JobStatusActions jobId={job.id} status={job.status} compact onUpdated={load} />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </article>
-      </div>
+                        {conversion != null ? (
+                          <>
+                            <div className="ev-pb" aria-hidden>
+                              <i style={{ width: `${Math.min(100, Math.max(10, conversion * 16))}%` }} />
+                            </div>
+                            <small>
+                              {jobViews} views · {conversion.toFixed(1)}% conversion
+                            </small>
+                          </>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <b>0</b> applications
+                        <small>
+                          {job.status === 'DRAFT' ? 'Publish to start receiving applicants' : 'No applications yet'}
+                        </small>
+                      </>
+                    )}
+                  </div>
+                  <div className="ev-jx">
+                    <Link href={`/employer/jobs/${job.id}`}>View</Link>
+                    <Link href={`/employer/jobs/new?edit=${encodeURIComponent(job.id)}`}>Edit</Link>
+                    <JobStatusActions jobId={job.id} status={job.status} compact onUpdated={load} />
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </>
+      ) : null}
     </EmployerShellFallback>
   );
 }

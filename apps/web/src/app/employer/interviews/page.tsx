@@ -11,10 +11,12 @@ import {
   requestEmployerInterviewFeedback,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
+import { EvAlert, EvAvatar, EvEmpty, EvPageHead, EvPill, EvSkeleton } from '@/components/employer/ui';
 import { Button } from '@/components/ui/Button';
-import { ErrorState, SkeletonList } from '@/components/ui/StateViews';
+import { ErrorState } from '@/components/ui/StateViews';
 import { toast } from '@/components/ui/Toast';
 import { userFacingError } from '@/lib/client-errors';
+import type { EvTone } from '@/lib/employer-ui-status';
 
 type FilterTab = 'all' | 'upcoming' | 'completed';
 type StatusFilter =
@@ -117,6 +119,14 @@ function statusTone(status: string) {
   if (status === 'RESCHEDULE_REQUESTED' || status === 'RESCHEDULE_NEEDED') return 'warn';
   return 'default';
 }
+
+const STATUS_TONE: Record<ReturnType<typeof statusTone>, EvTone> = {
+  ok: 'green',
+  done: 'hired',
+  off: 'red',
+  warn: 'purple',
+  default: 'amber',
+};
 
 function proposedTimeLine(row: EmployerInterviewRecord) {
   if (row.status === 'RESCHEDULE_REQUESTED' && row.candidateAvailability?.label) {
@@ -372,250 +382,232 @@ export default function EmployerInterviewsPage() {
 
   return (
     <EmployerShellFallback title="Interviews">
-      <div className="ep-ivdesk ep-page ep-page--interviews">
-        <header className="ep-ivdesk__head">
-          <div className="ep-ivdesk__head-copy">
-            <p className="ep-ivdesk__eyebrow">Scheduling</p>
-            <h1 className="ep-ivdesk__title">Interviews</h1>
-            <p className="ep-ivdesk__sub">View, reschedule, cancel, and record outcomes in one place.</p>
-          </div>
-          <Link href="/employer/interviews/schedule" className="ep-ivdesk__cta">
-            Schedule interview
-          </Link>
-        </header>
+      <div className="ev-ivdesk">
+        <EvPageHead
+          eyebrow="Scheduling"
+          title="Interviews"
+          subtitle="View, reschedule, cancel, and record outcomes in one place."
+          actions={
+            <Link href="/employer/interviews/schedule" className="ev-btn">
+              Schedule interview
+            </Link>
+          }
+        />
 
-        {error ? (
-          <p className="ep-ivdesk__alert" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {!loading && loadFailed ? <ErrorState onRetry={() => initialLoad()} /> : null}
-        {message ? <p className="ep-ivdesk__alert ep-ivdesk__alert--ok">{message}</p> : null}
+        <div className="ev-mt">
+          {error ? <EvAlert tone="error">{error}</EvAlert> : null}
+          {!loading && loadFailed ? <ErrorState onRetry={() => initialLoad()} /> : null}
+          {message ? <EvAlert tone="ok">{message}</EvAlert> : null}
+        </div>
 
         {!loading && (items.length > 0 || showCancelled) ? (
-          <div className="ep-ivdesk__tabs" role="tablist" aria-label="Interview filters">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={filter === tab.id}
-                className={`ep-ivdesk__tab ${filter === tab.id ? 'is-active' : ''}`}
-                onClick={() => setFilter(tab.id)}
-              >
-                {tab.label} · {tab.count}
-              </button>
-            ))}
-          </div>
-        ) : null}
+          <div className="ev-card ev-ivfilters">
+            <div className="ev-tabs" role="tablist" aria-label="Interview filters">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === tab.id}
+                  className={`ev-tab${filter === tab.id ? ' on' : ''}`}
+                  onClick={() => setFilter(tab.id)}
+                >
+                  {tab.label} · {tab.count}
+                </button>
+              ))}
+            </div>
 
-        {!loading && (items.length > 0 || showCancelled) ? (
-          <div className="flex flex-wrap items-end gap-3" role="group" aria-label="Status and date filters">
-            <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800" htmlFor="ep-iv-status">
-              Status
-              <select
-                id="ep-iv-status"
-                className="min-h-12 rounded-lg border border-slate-300 bg-white px-3"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              >
-                {STATUS_FILTERS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800" htmlFor="ep-iv-from">
-              From
-              <input
-                id="ep-iv-from"
-                type="date"
-                className="min-h-12 rounded-lg border border-slate-300 bg-white px-3"
-                value={fromDate}
-                max={toDate || undefined}
-                onChange={(e) => setFromDate(e.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800" htmlFor="ep-iv-to">
-              To
-              <input
-                id="ep-iv-to"
-                type="date"
-                className="min-h-12 rounded-lg border border-slate-300 bg-white px-3"
-                value={toDate}
-                min={fromDate || undefined}
-                aria-invalid={dateRangeInvalid || undefined}
-                aria-describedby={dateRangeInvalid ? 'ep-iv-range-error' : undefined}
-                onChange={(e) => setToDate(e.target.value)}
-              />
-            </label>
-            {statusFilter !== 'ALL' || fromDate || toDate ? (
-              <button
-                type="button"
-                className="min-h-12 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800"
-                onClick={() => {
-                  setStatusFilter('ALL');
-                  setFromDate('');
-                  setToDate('');
-                }}
-              >
-                Clear filters
-              </button>
-            ) : null}
+            <div className="ev-form ev-ivfilters-row" role="group" aria-label="Status and date filters">
+              <label htmlFor="ep-iv-status">
+                Status
+                <select
+                  id="ep-iv-status"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                >
+                  {STATUS_FILTERS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label htmlFor="ep-iv-from">
+                From
+                <input
+                  id="ep-iv-from"
+                  type="date"
+                  value={fromDate}
+                  max={toDate || undefined}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </label>
+              <label htmlFor="ep-iv-to">
+                To
+                <input
+                  id="ep-iv-to"
+                  type="date"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  aria-invalid={dateRangeInvalid || undefined}
+                  aria-describedby={dateRangeInvalid ? 'ep-iv-range-error' : undefined}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </label>
+              {statusFilter !== 'ALL' || fromDate || toDate ? (
+                <button
+                  type="button"
+                  className="ev-btn ev-btn--ghost"
+                  onClick={() => {
+                    setStatusFilter('ALL');
+                    setFromDate('');
+                    setToDate('');
+                  }}
+                >
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
             {dateRangeInvalid ? (
-              <p id="ep-iv-range-error" className="w-full text-sm font-semibold text-red-700" role="alert">
+              <p id="ep-iv-range-error" className="ev-error" role="alert">
                 The end date must be on or after the start date.
               </p>
             ) : null}
           </div>
         ) : null}
 
-        {loading ? <SkeletonList rows={3} label="Loading interviews…" /> : null}
+        {loading ? (
+          <div className="ev-mt" aria-busy="true">
+            <span className="sr-only">Loading interviews…</span>
+            <EvSkeleton height={240} />
+          </div>
+        ) : null}
 
         {!loading && !loadFailed && items.length === 0 && !showCancelled ? (
-          <section className="ep-ivdesk__empty">
-            <h2>No interviews yet</h2>
-            <p>Shortlist an applicant, then book a time. Candidates get notified with the details.</p>
-            <Link href="/employer/interviews/schedule" className="ep-ivdesk__cta">
-              Schedule interview
-            </Link>
-          </section>
+          <div className="ev-card ev-mt">
+            <EvEmpty
+              title="No interviews yet"
+              body="Shortlist an applicant, then book a time. Candidates get notified with the details."
+              action={
+                <Link href="/employer/interviews/schedule" className="ev-btn">
+                  Schedule interview
+                </Link>
+              }
+            />
+          </div>
         ) : null}
 
         {!loading && !loadFailed && (items.length > 0 || showCancelled) && visible.length === 0 ? (
-          <section className="ep-ivdesk__empty" role="status">
-            <h2>No interviews match these filters</h2>
-            <p>Change the status, dates or tab to see other interviews.</p>
-          </section>
+          <div className="ev-card ev-mt" role="status">
+            <EvEmpty title="No interviews match these filters" body="Change the status, dates or tab to see other interviews." />
+          </div>
         ) : null}
 
         {!loading && visible.length > 0 ? (
-          <div className="ep-ivdesk__table-wrap">
-            <table className="ep-ivdesk__table">
-              <thead>
-                <tr>
-                  <th>Candidate</th>
-                  <th>Job</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((item) => {
-                  const upcoming = isUpcoming(item.status);
-                  return (
-                    <tr key={item.id}>
-                      <td>
-                        <div className="ep-ivdesk__who">
-                          <strong>{candidateName(item)}</strong>
-                          <span>
-                            {formatMode(item.mode)} · {item.durationMin} min
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="ep-ivdesk__cell">{item.job.title}</span>
-                      </td>
-                      <td>
-                        <span className="ep-ivdesk__cell">{formatWhen(item.scheduledAt)}</span>
-                        {proposedTimeLine(item) ? (
-                          <span className="ep-ivdesk__cell" style={{ display: 'block', fontWeight: 600 }}>
-                            {proposedTimeLine(item)}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td>
-                        <span className={`ep-ivdesk__status ep-ivdesk__status--${statusTone(item.status)}`}>
-                          <i aria-hidden />
-                          {statusLabel(item.status)}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="ep-ivdesk__actions">
-                          <Button
-                            type="button"
-                            size="sm"
-                            block={false}
-                            className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
-                            onClick={() => openDetails(item)}
-                          >
-                            View
-                          </Button>
-                          {upcoming ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              block={false}
-                              className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
-                              onClick={() => openReschedule(item)}
-                            >
-                              Reschedule
-                            </Button>
-                          ) : null}
-                          {upcoming ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              block={false}
-                              className="ep-ivdesk__btn ep-ivdesk__btn--ghost"
-                              disabled={busyId === item.id}
-                              onClick={() => {
-                                setCancelReason('');
-                                setCancelRow(item);
-                              }}
-                            >
-                              Cancel
-                            </Button>
-                          ) : null}
-                          {upcoming && (item.status === 'SCHEDULED' || item.status === 'PROPOSED') ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              block={false}
-                              className="ep-ivdesk__btn ep-ivdesk__btn--solid"
-                              loading={busyId === item.id}
-                              onClick={() => void act(item.id, 'confirm')}
-                            >
-                              Confirm
-                            </Button>
-                          ) : null}
-                          {upcoming && item.status === 'CONFIRMED' ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              block={false}
-                              className="ep-ivdesk__btn ep-ivdesk__btn--solid"
-                              loading={busyId === item.id}
-                              onClick={() => void act(item.id, 'complete')}
-                            >
-                              Mark done
-                            </Button>
-                          ) : null}
-                          {(item.status === 'COMPLETED' || item.status === 'CONFIRMED') &&
-                          !['SELECTED', 'HIRED', 'REJECTED'].includes(item.applicationStatus) ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              block={false}
-                              className="ep-ivdesk__btn ep-ivdesk__btn--solid"
-                              onClick={() => {
-                                setOutcomeRow(item);
-                                setOutcome('SELECTED');
-                                setOutcomeNotes('');
-                              }}
-                            >
-                              Outcome
-                            </Button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="ev-card ev-mt">
+            <div className="ev-scroll">
+              <table className="ev-table ev-table--iv">
+                <thead>
+                  <tr>
+                    <th scope="col">Candidate</th>
+                    <th scope="col">Job</th>
+                    <th scope="col">When</th>
+                    <th scope="col">Mode</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((item) => {
+                    const upcoming = isUpcoming(item.status);
+                    const busy = busyId === item.id;
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <div className="ev-who">
+                            <EvAvatar name={candidateName(item)} size="md" />
+                            <div>
+                              <b>{candidateName(item)}</b>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{item.job.title}</td>
+                        <td>
+                          <span style={{ whiteSpace: 'nowrap' }}>{formatWhen(item.scheduledAt)}</span>
+                          <span className="ev-sub ev-block">{item.durationMin} min</span>
+                          {proposedTimeLine(item) ? <b className="ev-block ev-proposed">{proposedTimeLine(item)}</b> : null}
+                        </td>
+                        <td>{formatMode(item.mode)}</td>
+                        <td>
+                          <EvPill tone={STATUS_TONE[statusTone(item.status)]}>{statusLabel(item.status)}</EvPill>
+                        </td>
+                        <td>
+                          <div className="ev-rowacts">
+                            <button type="button" className="ev-lnk" onClick={() => openDetails(item)}>
+                              View
+                            </button>
+                            {upcoming ? (
+                              <button type="button" className="ev-lnk" onClick={() => openReschedule(item)}>
+                                Reschedule
+                              </button>
+                            ) : null}
+                            {upcoming ? (
+                              <button
+                                type="button"
+                                className="ev-lnk ev-lnk--red"
+                                disabled={busy}
+                                onClick={() => {
+                                  setCancelReason('');
+                                  setCancelRow(item);
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            ) : null}
+                            {upcoming && (item.status === 'SCHEDULED' || item.status === 'PROPOSED') ? (
+                              <button
+                                type="button"
+                                className="ev-btn ev-btn--sm"
+                                disabled={busy}
+                                aria-busy={busy || undefined}
+                                onClick={() => void act(item.id, 'confirm')}
+                              >
+                                {busy ? 'Please wait…' : 'Confirm'}
+                              </button>
+                            ) : null}
+                            {upcoming && item.status === 'CONFIRMED' ? (
+                              <button
+                                type="button"
+                                className="ev-btn ev-btn--sm"
+                                disabled={busy}
+                                aria-busy={busy || undefined}
+                                onClick={() => void act(item.id, 'complete')}
+                              >
+                                {busy ? 'Please wait…' : 'Mark done'}
+                              </button>
+                            ) : null}
+                            {(item.status === 'COMPLETED' || item.status === 'CONFIRMED') &&
+                            !['SELECTED', 'HIRED', 'REJECTED'].includes(item.applicationStatus) ? (
+                              <button
+                                type="button"
+                                className="ev-btn ev-btn--sm ev-btn--accent"
+                                onClick={() => {
+                                  setOutcomeRow(item);
+                                  setOutcome('SELECTED');
+                                  setOutcomeNotes('');
+                                }}
+                              >
+                                Outcome
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : null}
 

@@ -1,11 +1,11 @@
 'use client';
 
 import { userFacingError } from '@/lib/client-errors';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { EmployerCandidatePassport } from '@careerbridge/shared';
-import { PROFILE_MATCH_LABEL, toAtsMatchBreakdown } from '@careerbridge/shared';
+import { PROFILE_MATCH_LABEL } from '@careerbridge/shared';
 import {
   changeApplicationStatus,
   downloadEmployerCandidateResume,
@@ -13,14 +13,16 @@ import {
   saveBase64File,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
-import { Button } from '@/components/ui/Button';
 import { toast } from '@/components/ui/Toast';
-import { StatusBadge } from '@/components/AppNav';
 import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
 import { RejectConfirmModal } from '@/components/employer/RejectConfirmModal';
+import { EmployerAtsPanel } from '@/components/employer/EmployerAtsPanel';
+import { EvAlert, EvApplicationPill, EvPageHead, EvSkeleton } from '@/components/employer/ui';
+import { pipelineStage } from '@/lib/employer-ui-status';
 
 const FINAL_APPLICATION_STATUSES = ['HIRED', 'REJECTED', 'WITHDRAWN'];
 const SCHEDULABLE_APPLICATION_STATUSES = ['SHORTLISTED', 'INTERVIEW', 'ON_HOLD'];
+const PIPELINE_LABELS = ['Applied', 'Shortlisted', 'Interview', 'Hired'];
 
 function titleCaseName(value: string) {
   return value
@@ -63,12 +65,6 @@ function experienceLabel(years: number, months: number) {
   return `${years}y`;
 }
 
-function educationHeadline(profile: EmployerCandidatePassport) {
-  const top = profile.education[0];
-  if (!top) return profile.highestEducation || null;
-  return [top.qualification, top.institution, top.yearCompleted].filter(Boolean).join(' ');
-}
-
 export default function EmployerCandidateProfilePage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -92,11 +88,6 @@ export default function EmployerCandidateProfilePage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load candidate.'))
       .finally(() => setLoading(false));
   }, [params.id, jobId]);
-
-  const ats = useMemo(
-    () => (profile?.match ? toAtsMatchBreakdown(profile.match) : null),
-    [profile],
-  );
 
   const resolvedJobId = jobId || profile?.application?.jobId;
 
@@ -153,234 +144,140 @@ export default function EmployerCandidateProfilePage() {
     ? `/employer/applications${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`
     : '/employer/candidates';
 
-  const locationLine = profile
-    ? [formatLocation(profile.city, profile.state), educationHeadline(profile)].filter(Boolean).join(' · ')
-    : '';
+  const locationLine = profile ? formatLocation(profile.city, profile.state) : '';
+
+  const application = profile?.application ?? null;
+  const stage = pipelineStage(application?.status);
 
   return (
     <EmployerShellFallback title="Candidate profile">
-      <div className="ep-pass">
-        <div className="ep-pass__topbar">
-          <Link href={backHref} className="ep-pass__back">
+      <EvPageHead
+        eyebrow="Candidate profile"
+        title={
+          profile ? (
+            <span className="ev-title-av">
+              <span className="ev-av" aria-hidden>
+                {initials(profile)}
+              </span>
+              {candidateName(profile)}
+            </span>
+          ) : (
+            'Candidate'
+          )
+        }
+        subtitle={
+          profile
+            ? [application ? `Applied · ${application.jobTitle}` : resolvedJobId ? 'Matched profile' : null, locationLine]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            : undefined
+        }
+        actions={
+          <Link href={backHref} className="ev-btn ev-btn--ghost">
             ← Back to {fromApps ? 'applications' : 'candidates'}
           </Link>
+        }
+      />
+
+      <div className="ev-mt">
+        {error ? <EvAlert tone="error">{error}</EvAlert> : null}
+        {message ? <EvAlert tone="ok">{message}</EvAlert> : null}
+      </div>
+
+      {loading ? (
+        <div className="ev-grid ev-g2-wide" aria-busy="true">
+          <span className="sr-only">Loading profile…</span>
+          <EvSkeleton height={320} />
+          <EvSkeleton height={320} />
         </div>
+      ) : null}
 
-        {loading ? <p className="ep-pass__muted">Loading profile…</p> : null}
-        {error ? <p className="ep-pass__alert ep-pass__alert--error">{error}</p> : null}
-        {message ? <p className="ep-pass__alert ep-pass__alert--ok">{message}</p> : null}
+      {profile ? (
+        <>
+          <div className="ev-grid ev-g2-wide">
+            <section className="ev-card">
+              <h2 className="ev-h2">{PROFILE_MATCH_LABEL}</h2>
+              {profile.match ? (
+                <EmployerAtsPanel match={profile.match} />
+              ) : (
+                <p className="ev-sub">Select a job to see the Profile Match breakdown for this profile.</p>
+              )}
+            </section>
 
-        {profile ? (
-          <article className="ep-pass__card">
-            <header className="ep-pass__hero">
-              <div className="ep-pass__hero-main">
-                <span className="ep-pass__avatar" aria-hidden>
-                  {initials(profile)}
-                </span>
-                <div>
-                  <h1 className="ep-pass__name">{candidateName(profile)}</h1>
-                  {locationLine ? <p className="ep-pass__meta">{locationLine}</p> : null}
-                </div>
-              </div>
-              {ats ? (
-                <div className="ep-pass__score" aria-label={`${PROFILE_MATCH_LABEL} ${ats.score} out of 100, ${ats.bandLabel}`}>
-                  <small className="block text-[10px] font-bold uppercase tracking-wide">{PROFILE_MATCH_LABEL}</small>
-                  <strong>
-                    {ats.score}
-                    <em>/100</em>
-                  </strong>
-                  <span>{ats.bandLabel}</span>
-                </div>
-              ) : null}
-            </header>
-
-            <div className="ep-pass__body">
-              <aside className="ep-pass__side">
-                <section className="ep-pass__block">
-                  <h2>Snapshot</h2>
-                  <div className="ep-pass__badges">
-                    {profile.openToRelocating ? <span>Open to relocate</span> : null}
-                    {profile.hasResume ? <span>Has resume</span> : <span className="is-muted">No resume</span>}
-                  </div>
-                  <div className="ep-pass__meters">
-                    <div>
-                      <div className="ep-pass__meter-row">
-                        <span>Profile complete</span>
-                        <strong>{profile.profileCompletion}%</strong>
-                      </div>
-                      <div className="ep-pass__meter" aria-hidden>
-                        <i style={{ width: `${Math.min(100, Math.max(0, profile.profileCompletion))}%` }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="ep-pass__meter-row">
-                        <span>Experience</span>
-                        <strong>{experienceLabel(profile.experienceYears, profile.experienceMonths)}</strong>
-                      </div>
-                      <div className="ep-pass__meter" aria-hidden>
-                        <i
-                          style={{
-                            width: `${Math.min(100, Math.max(8, (profile.experienceYears / 10) * 100 + profile.experienceMonths))}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {profile.about ? (
-                  <section className="ep-pass__block">
-                    <h2>About</h2>
-                    <p className="ep-pass__copy">{profile.about}</p>
-                  </section>
-                ) : null}
-
-                <section className="ep-pass__block">
-                  <h2>Education</h2>
-                  {profile.education.length === 0 ? (
-                    <p className="ep-pass__muted">No education listed yet.</p>
-                  ) : (
-                    <ul className="ep-pass__edu">
-                      {profile.education.map((item) => (
-                        <li key={`${item.qualification}-${item.institution}-${item.yearCompleted}`}>
-                          <strong>
-                            {[item.qualification, item.institution].filter(Boolean).join(' ')}
-                          </strong>
-                          {item.yearCompleted ? <span>{item.yearCompleted}</span> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="ep-pass__block">
-                  <h2>Skills</h2>
-                  <div className="ep-pass__chips">
-                    {profile.skills.length ? (
-                      profile.skills.map((skill) => <span key={skill}>{skill}</span>)
-                    ) : (
-                      <p className="ep-pass__muted">No skills listed.</p>
-                    )}
-                  </div>
-                </section>
-              </aside>
-
-              <div className="ep-pass__main">
-                {ats ? (
-                  <section className="ep-pass__block">
-                    <h2>Profile Match breakdown</h2>
-                    <ul className="ep-pass__factors">
-                      {ats.factors.map((factor) => (
-                        <li key={factor.key}>
-                          <div className="ep-pass__factor-row">
-                            <span>{factor.label}</span>
-                            <strong>
-                              {factor.score}/{factor.max}
-                            </strong>
-                          </div>
-                          <div className="ep-pass__factor-bar" aria-hidden>
-                            <i style={{ width: `${Math.min(100, Math.max(0, factor.pct))}%` }} />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
+            <section className="ev-card">
+              <h2 className="ev-h2">Application status</h2>
+              {application ? (
+                stage < 0 ? (
+                  <p>
+                    <EvApplicationPill status={application.status} />
+                  </p>
                 ) : (
-                  <section className="ep-pass__block">
-                    <h2>Profile Match breakdown</h2>
-                    <p className="ep-pass__muted">Select a job to see the Profile Match breakdown for this profile.</p>
-                  </section>
-                )}
+                  <div className="ev-stepper" aria-label={`Current stage: ${application.status}`}>
+                    {PIPELINE_LABELS.map((label, index) => (
+                      <span key={label} className={index <= stage ? 'done' : undefined}>
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <p className="ev-sub">
+                  {resolvedJobId
+                    ? 'Matched profile — this candidate has not applied to this job yet.'
+                    : 'This candidate has not applied to one of your jobs.'}
+                </p>
+              )}
 
-                {ats && (ats.reasons.length > 0 || ats.gaps.length > 0) ? (
-                  <section className="ep-pass__block">
-                    <div className="ep-pass__split">
-                      <div>
-                        <h3>Why this matches</h3>
-                        {ats.reasons.length ? (
-                          <ul className="ep-pass__reasons">
-                            {ats.reasons.map((reason) => (
-                              <li key={reason}>
-                                <span aria-hidden>✓</span>
-                                {reason}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="ep-pass__muted">No strengths listed.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h3>Missing / weaker</h3>
-                        {ats.gaps.length ? (
-                          <ul className="ep-pass__gaps">
-                            {ats.gaps.map((gap) => (
-                              <li key={gap}>
-                                <span aria-hidden>!</span>
-                                {gap}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="ep-pass__muted">No major gaps flagged.</p>
-                        )}
-                      </div>
-                    </div>
-                  </section>
+              <div className="ev-kvl">
+                {application ? (
+                  <div>
+                    <small>APPLIED FOR</small>
+                    <b>{application.jobTitle}</b>
+                  </div>
                 ) : null}
-
-                <section className="ep-pass__block">
-                  <h2>Experience</h2>
-                  {profile.experiences.length === 0 ? (
-                    <p className="ep-pass__muted">No experience listed yet.</p>
-                  ) : (
-                    <ul className="ep-pass__exp">
-                      {profile.experiences.map((item) => (
-                        <li key={`${item.company}-${item.jobTitle}`}>
-                          <strong>{item.jobTitle}</strong>
-                          <span>
-                            {item.company}
-                            {item.isInternship ? ' · Internship' : ''}
-                            {item.stillInCompany ? ' · Current' : ''}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              </div>
-            </div>
-
-            <footer className="ep-pass__foot">
-              <div className="ep-pass__foot-left">
-                {profile.application ? (
-                  <>
-                    <span className="ep-pass__pill">
-                      Applied · {profile.application.jobTitle}
-                    </span>
-                    <StatusBadge status={profile.application.status} />
-                  </>
-                ) : resolvedJobId ? (
-                  <span className="ep-pass__pill">Matched profile</span>
+                {application ? (
+                  <div>
+                    <small>CURRENT STATUS</small>
+                    <b>
+                      <EvApplicationPill status={application.status} />
+                    </b>
+                  </div>
+                ) : null}
+                <div>
+                  <small>EXPERIENCE</small>
+                  <b>{experienceLabel(profile.experienceYears, profile.experienceMonths)}</b>
+                </div>
+                {profile.highestEducation ? (
+                  <div>
+                    <small>HIGHEST EDUCATION</small>
+                    <b>{profile.highestEducation}</b>
+                  </div>
+                ) : null}
+                <div>
+                  <small>CANDIDATE LOCATION</small>
+                  <b>{formatLocation(profile.city, profile.state) || 'Not provided'}</b>
+                </div>
+                <div>
+                  <small>PROFILE COMPLETE</small>
+                  <b>{profile.profileCompletion}%</b>
+                </div>
+                <div>
+                  <small>RESUME</small>
+                  <b>{profile.hasResume ? 'Available' : 'No resume'}</b>
+                </div>
+                {profile.openToRelocating ? (
+                  <div>
+                    <small>RELOCATION</small>
+                    <b>Open to relocate</b>
+                  </div>
                 ) : null}
               </div>
-              <div className="ep-pass__foot-actions">
-                {profile.hasResume ? (
+
+              <div className="ev-actions">
+                {application && ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(application.status) ? (
                   <button
                     type="button"
-                    className="ep-pass__btn ep-pass__btn--ghost"
-                    disabled={busy !== ''}
-                    onClick={() => void viewResume()}
-                  >
-                    {busy === 'RESUME' ? 'Opening…' : 'Download resume'}
-                  </button>
-                ) : null}
-                {profile.application && ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(profile.application.status) ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    block={false}
-                    className="ep-pass__btn ep-pass__btn--solid"
+                    className="ev-btn"
                     disabled={busy !== ''}
                     onClick={() => {
                       setModalError('');
@@ -388,19 +285,35 @@ export default function EmployerCandidateProfilePage() {
                     }}
                   >
                     Shortlist
-                  </Button>
+                  </button>
                 ) : null}
-                {profile.application?.status === 'SHORTLISTED' ? (
-                  <span className="ep-pass__pill" aria-label="Already shortlisted">
+                {application?.status === 'SHORTLISTED' ? (
+                  <span className="ev-btn ev-btn--ghost ev-btn--static" aria-label="Already shortlisted">
                     Shortlisted ✓
                   </span>
                 ) : null}
-                {profile.application && !FINAL_APPLICATION_STATUSES.includes(profile.application.status) ? (
-                  <Button
+                {application && SCHEDULABLE_APPLICATION_STATUSES.includes(application.status) ? (
+                  <Link
+                    href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(application.id)}&jobId=${encodeURIComponent(application.jobId)}`}
+                    className="ev-btn ev-btn--ghost"
+                  >
+                    Schedule interview
+                  </Link>
+                ) : null}
+                {profile.hasResume ? (
+                  <button
                     type="button"
-                    size="sm"
-                    variant="destructive"
-                    block={false}
+                    className="ev-btn ev-btn--ghost"
+                    disabled={busy !== ''}
+                    onClick={() => void viewResume()}
+                  >
+                    {busy === 'RESUME' ? 'Opening…' : 'Download resume'}
+                  </button>
+                ) : null}
+                {application && !FINAL_APPLICATION_STATUSES.includes(application.status) ? (
+                  <button
+                    type="button"
+                    className="ev-btn ev-btn--danger"
                     disabled={busy !== ''}
                     onClick={() => {
                       setModalError('');
@@ -408,21 +321,70 @@ export default function EmployerCandidateProfilePage() {
                     }}
                   >
                     Reject
-                  </Button>
-                ) : null}
-                {profile.application && SCHEDULABLE_APPLICATION_STATUSES.includes(profile.application.status) ? (
-                  <Link
-                    href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(profile.application.id)}&jobId=${encodeURIComponent(profile.application.jobId)}`}
-                    className="ep-pass__btn ep-pass__btn--ghost"
-                  >
-                    Schedule interview
-                  </Link>
+                  </button>
                 ) : null}
               </div>
-            </footer>
-          </article>
-        ) : null}
-      </div>
+            </section>
+          </div>
+
+          <div className="ev-grid ev-g2 ev-mt">
+            <section className="ev-card">
+              {profile.about ? (
+                <>
+                  <h2 className="ev-h2">About</h2>
+                  <p className="ev-copy">{profile.about}</p>
+                </>
+              ) : null}
+              <h2 className="ev-h2">Skills</h2>
+              {profile.skills.length ? (
+                <div className="ev-chips">
+                  {profile.skills.map((skill) => (
+                    <span key={skill} className="ev-chip">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="ev-sub">No skills listed.</p>
+              )}
+            </section>
+
+            <section className="ev-card">
+              <h2 className="ev-h2">Experience</h2>
+              {profile.experiences.length === 0 ? (
+                <p className="ev-sub">No experience listed yet.</p>
+              ) : (
+                <ul className="ev-tl">
+                  {profile.experiences.map((item) => (
+                    <li key={`${item.company}-${item.jobTitle}`}>
+                      <b>{item.jobTitle}</b>
+                      <span className="ev-sub">
+                        {item.company}
+                        {item.isInternship ? ' · Internship' : ''}
+                        {item.stillInCompany ? ' · Current' : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <h2 className="ev-h2">Education</h2>
+              {profile.education.length === 0 ? (
+                <p className="ev-sub">No education listed yet.</p>
+              ) : (
+                <ul className="ev-tl">
+                  {profile.education.map((item) => (
+                    <li key={`${item.qualification}-${item.institution}-${item.yearCompleted}`}>
+                      <b>{[item.qualification, item.institution].filter(Boolean).join(' ')}</b>
+                      {item.yearCompleted ? <span className="ev-sub">{item.yearCompleted}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </>
+      ) : null}
       <ShortlistConfirmModal
         open={modal === 'SHORTLIST'}
         candidateName={profile ? candidateName(profile) : 'Candidate'}
