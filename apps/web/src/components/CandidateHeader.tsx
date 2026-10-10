@@ -1,7 +1,6 @@
 'use client';
 
-import Image from 'next/image';
-import Link from 'next/link';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 export function CandidateHeader({
   onBack,
@@ -35,18 +34,7 @@ export function CandidateHeader({
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-100 bg-white/95 px-4 py-3.5 backdrop-blur-md">
-      <Link href="/dashboard" className="flex items-center gap-2">
-        <Image
-          src="/srsb-mark.png"
-          alt="SRSB"
-          width={40}
-          height={40}
-          className="h-10 w-10 rounded-lg object-contain"
-          unoptimized
-          priority
-        />
-        <span className="text-sm font-black tracking-tight text-[#0a2e2c]">CareerBridge</span>
-      </Link>
+      <BrandLogo href="/dashboard" size="sm" priority />
     </header>
   );
 }

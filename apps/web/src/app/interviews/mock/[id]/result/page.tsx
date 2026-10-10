@@ -255,7 +255,7 @@ export default function MockInterviewResultPage() {
       time: formatClock(session.startAt),
       duration,
       questionsAnswered: `${answeredQuestions.length}/${session.totalQuestions || answeredQuestions.length || report.totalPlanned || 0}`,
-      assessedBy: 'Career Bridge AI',
+      assessedBy: 'CareerBridge AI',
       overallScore: overallOutOf10,
       status: statusFromScore(overallOutOf10),
       joiningTime: formatClock(session.startAt),

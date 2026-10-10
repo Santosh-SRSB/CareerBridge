@@ -1,7 +1,7 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { SOCIAL_LINKS as SOCIAL } from '@/lib/social-links';
 
 function IconFacebook() {
@@ -65,17 +65,9 @@ export function Footer() {
       </svg>
       <div className="day-orbit-foot__base">
         <div className="day-orbit-foot__main">
-          <Link href="/" className="day-orbit-foot__logo" aria-label="SRSB Career Bridge">
-            <Image
-              src="/srsb-mark.png"
-              alt="SRSB Career Bridge"
-              width={160}
-              height={58}
-              className="h-[50px] w-auto max-w-[140px] object-contain sm:h-[62px]"
-              unoptimized
-              priority
-            />
-          </Link>
+          <div className="flex items-start">
+            <BrandLogo href="/" tone="dark" size="lg" />
+          </div>
           <div>
             <h4>Candidate</h4>
             <Link href="/login?role=candidate">Candidate Login</Link>

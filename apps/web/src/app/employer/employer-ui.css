@@ -66,16 +66,11 @@
   display: block;
   padding: 2px 12px 10px;
   color: #fff;
-  text-decoration: none;
-}
-
-.ev-brand b {
-  display: block;
-  font-size: 22px;
-  letter-spacing: -0.01em;
 }
 
 .ev-brand small {
+  display: block;
+  margin-top: 6px;
   font-size: 14px;
   opacity: 0.85;
 }
@@ -215,10 +210,6 @@
 .ev-topbar button:hover,
 .ev-topbar button:active {
   background: #2a2ee0;
-}
-
-.ev-topbar b {
-  font-size: 19px;
 }
 
 .ev-ovl {

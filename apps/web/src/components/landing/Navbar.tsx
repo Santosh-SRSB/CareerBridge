@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { logout } from "@/lib/api";
@@ -66,20 +66,7 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
   return (
     <header className="site-navbar sticky top-0 z-50">
       <nav className="mx-auto flex h-[72px] max-w-[1280px] items-center justify-between gap-6 px-5 sm:h-[84px] sm:px-10">
-        <Link href={signedIn ? homeHref : "/"} className="logo-mark shrink-0 inline-flex items-center gap-2.5 no-underline">
-          <Image
-            src="/srsb-mark.png"
-            alt="SRSB"
-            width={280}
-            height={80}
-            className="h-10 w-auto max-w-[120px] object-contain bg-transparent sm:h-11 md:h-12"
-            unoptimized
-            priority
-          />
-          <span className="translate-y-5 font-[family-name:var(--font-poppins),system-ui,sans-serif] text-[clamp(13px,3.2vw,17px)] font-extrabold leading-none tracking-tight text-[#e0a100]">
-            Career Bridge
-          </span>
-        </Link>
+        <BrandLogo href={signedIn ? homeHref : "/"} tone="dark" priority />
 
         {landingLinks ? (
           <div

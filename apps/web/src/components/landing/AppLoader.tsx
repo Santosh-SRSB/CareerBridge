@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { BRAND_LOGO_HEIGHT, BRAND_LOGO_SRC, BRAND_LOGO_WIDTH, BRAND_NAME } from "@/components/brand/BrandLogo";
 
 /** Full-bleed SRSB mark for route-level loading only (not the early landing gate). */
 export function BrandSplash() {
@@ -10,10 +11,10 @@ export function BrandSplash() {
       <div className="app-loader-row app-loader-row--wide">
         <div className="app-loader-logo app-loader-logo--wide">
           <Image
-            src="/srsb-mark.png"
-            alt="SRSB"
-            width={640}
-            height={160}
+            src={BRAND_LOGO_SRC}
+            alt={BRAND_NAME}
+            width={BRAND_LOGO_WIDTH}
+            height={BRAND_LOGO_HEIGHT}
             className="app-loader-wordmark h-auto w-[90vw] max-w-[520px] object-contain"
             unoptimized
             priority

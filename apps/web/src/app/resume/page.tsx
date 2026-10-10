@@ -59,6 +59,7 @@ import { SummaryAiAssist } from '@/components/resume/SummaryAiAssist';
 import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { OB } from '@/components/OnboardingFrame';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { goToReturnTo, clearReturnStack } from '@/lib/nav-return';
 import {
   getCandidateMe,
@@ -1906,7 +1907,9 @@ function ResumePageInner() {
       ) : (
       <div className="cbw-app">
         <aside className="cbw-side">
-          <div className="cbw-brand">CareerBridge</div>
+          <div className="cbw-brand">
+            <BrandLogo tone="dark" size="sm" />
+          </div>
           {!atsEditStep ? (
             <nav className="cbw-nav" aria-label="Profile sections">
               {WIZARD_GROUPS.map((group, i) => (

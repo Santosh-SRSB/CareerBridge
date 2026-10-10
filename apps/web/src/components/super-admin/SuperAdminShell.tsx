@@ -1,10 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { canOpenAdminTab, roleLabel, type SuperAdminNavId } from '@/lib/admin-portal';
+import { canOpenAdminTab, type SuperAdminNavId } from '@/lib/admin-portal';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { AdminNavIcon } from '@/components/super-admin/admin-icons';
 import { logout } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
@@ -32,12 +32,12 @@ const NAV: Array<{ id: SuperAdminNavId; label: string; href: string }> = [
 
 function shellMeta(role?: string | null) {
   if (role === 'SUPER_ADMIN') {
-    return { brand: 'SRSB Super Admin', tag: 'Command bridge', shell: 'role-shell role-shell--super' };
+    return { brandRole: 'Super Admin', tag: 'Command bridge', shell: 'role-shell role-shell--super' };
   }
   if (role === 'PLATFORM_OPERATOR') {
-    return { brand: 'SRSB Operations', tag: 'Ops floor', shell: 'role-shell role-shell--ops' };
+    return { brandRole: 'Operator', tag: 'Ops floor', shell: 'role-shell role-shell--ops' };
   }
-  return { brand: 'SRSB Admin', tag: 'Admin console', shell: 'role-shell role-shell--admin' };
+  return { brandRole: 'Admin', tag: 'Admin console', shell: 'role-shell role-shell--admin' };
 }
 
 export function SuperAdminShell({
@@ -71,30 +71,14 @@ export function SuperAdminShell({
         }`}
       >
         <div className="role-shell__brand flex h-14 items-center border-b px-3">
-          <Link
+          <BrandLogo
             href="/adminsrsb/dashboard"
-            className="flex min-w-0 items-center gap-2"
+            role={meta.brandRole}
+            tone="dark"
+            size="sm"
+            priority
             onClick={() => setOpen(false)}
-          >
-            <Image
-              src="/srsb-mark.png"
-              alt="SRSB"
-              width={36}
-              height={36}
-              className="h-9 w-9 shrink-0 object-contain"
-              unoptimized
-              priority
-            />
-            <div className="min-w-0 leading-tight">
-              <p className="role-shell__brand-title truncate text-sm font-semibold">{meta.brand}</p>
-              <p className="role-shell__brand-role truncate text-[10px] uppercase tracking-wide">
-                {roleLabel(role)}
-              </p>
-              {user?.email ? (
-                <p className="role-shell__brand-email truncate text-[10px]">{user.email}</p>
-              ) : null}
-            </div>
-          </Link>
+          />
         </div>
 
         <nav className="flex-1 overflow-y-auto py-2">

@@ -966,7 +966,7 @@ export default function LiveInterviewPage() {
           <div className="ai-world-lobby">
           {lobbyStep === 'camera' ? (
             <>
-              <h1>Career Bridge AI Interview</h1>
+              <h1>CareerBridge AI Interview</h1>
               <p>First, test your camera.</p>
               <p className={camOk ? 'ai-world-ok' : 'ai-world-status'}>{lobbyHint}</p>
               {!camOn ? <video ref={videoRef} className="ai-world-preview" autoPlay muted playsInline /> : null}
@@ -994,7 +994,7 @@ export default function LiveInterviewPage() {
 
           {lobbyStep === 'mic' ? (
             <>
-              <h1>Career Bridge AI Interview</h1>
+              <h1>CareerBridge AI Interview</h1>
               <p>When you are ready, click Test audio and say:</p>
               <blockquote className="ai-world-phrase">Hey Bridge AI, my mic is working?</blockquote>
               <p className={micOk ? 'ai-world-ok' : micTesting ? 'ai-world-listening' : 'ai-world-status'}>
@@ -1015,9 +1015,9 @@ export default function LiveInterviewPage() {
 
           {lobbyStep === 'welcome' ? (
             <>
-              <h1>Career Bridge AI Interview</h1>
+              <h1>CareerBridge AI Interview</h1>
               <p className="ai-world-hello">
-                {greetingForHour()}. Welcome to your Career Bridge interview. Be relaxed, and once you are ready, click Start to begin.
+                {greetingForHour()}. Welcome to your CareerBridge interview. Be relaxed, and once you are ready, click Start to begin.
               </p>
               <div className="ai-world-start-pop">
                 <button type="button" className="is-start" disabled={busy} onClick={() => void begin()}>
@@ -1064,7 +1064,7 @@ export default function LiveInterviewPage() {
             <div className="ai-world-turns" ref={transRef}>
               {(session.transcript || []).map((item, index) => (
                 <article key={`${item.at}-${index}`} className={item.role === 'ai' ? 'is-ai' : 'is-you'}>
-                  <strong>{item.role === 'ai' ? 'Career Bridge AI' : 'You'}</strong>
+                  <strong>{item.role === 'ai' ? 'CareerBridge AI' : 'You'}</strong>
                   <span className="ai-world-para">{item.text}</span>
                 </article>
               ))}
@@ -1076,7 +1076,7 @@ export default function LiveInterviewPage() {
               ) : null}
               {confirming ? (
                 <article className="is-ai">
-                  <strong>Career Bridge AI</strong>
+                  <strong>CareerBridge AI</strong>
                   <span className="ai-world-para">
                     Did you complete that? Should I take this as your final answer, or do you want to add more?
                   </span>
@@ -1084,7 +1084,7 @@ export default function LiveInterviewPage() {
               ) : null}
               {listening ? (
                 <article className="is-ai is-listening">
-                  <strong>Career Bridge AI</strong>
+                  <strong>CareerBridge AI</strong>
                   <span>I am listening</span>
                   <span className="ai-world-wave" aria-hidden="true">
                     <i />

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { EmployerProfile, EmployerVerificationStatus } from '@careerbridge/shared';
 import { getEmployerMe, logout } from '@/lib/api';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { EvPageHead, EvPageSkeleton, useEmployerUnreadCount } from '@/components/employer/ui';
 import {
   endEmployerImpersonation,
@@ -157,10 +158,10 @@ function EmployerSidebar({
 
   return (
     <aside className="ev-side" id="ev-sidebar" aria-label="Employer navigation">
-      <Link href="/employer" className="ev-brand" onClick={onNavigate}>
-        <b>CareerBridge</b>
+      <div className="ev-brand">
+        <BrandLogo href="/employer" tone="dark" size="sm" priority onClick={onNavigate} />
         <small>For employers</small>
-      </Link>
+      </div>
       {impersonating ? <p className="ev-impersonation">Admin view of this employer</p> : null}
       <div className="ev-lab">MAIN</div>
       <nav className="ev-nav" aria-label="Primary">
@@ -190,13 +191,13 @@ export function EmployerShellSkeleton() {
   return (
     <div className="ev-app">
       <header className="ev-topbar">
-        <b>CareerBridge</b>
+        <BrandLogo tone="dark" size="sm" />
       </header>
       <aside className="ev-side" aria-hidden>
-        <span className="ev-brand">
-          <b>CareerBridge</b>
+        <div className="ev-brand">
+          <BrandLogo tone="dark" size="sm" />
           <small>For employers</small>
-        </span>
+        </div>
       </aside>
       <main className="ev-main">
         <EvPageSkeleton />
@@ -282,7 +283,7 @@ function EmployerLayout({
               {menuOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
             </svg>
           </button>
-          <b>CareerBridge</b>
+          <BrandLogo href="/employer" tone="dark" size="sm" />
         </header>
         <div className="ev-ovl" aria-hidden onClick={() => setMenuOpen(false)} />
         <EmployerSidebar

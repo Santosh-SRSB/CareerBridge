@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import '@/components/landing/home/home-landing.css';
 import '@/components/auth/auth-screen.css';
 
@@ -58,8 +59,8 @@ export function AuthScreen({
           <div className="au-portrait">
             <Image src={portrait.src} alt="" width={portrait.width} height={portrait.height} priority />
           </div>
-          <div className="au-logo">
-            <Image src="/auth/srsb-logo-round.png" alt="SRSB" width={108} height={108} />
+          <div className="mb-4 flex justify-center">
+            <BrandLogo tone="dark" size="lg" priority />
           </div>
           <span className="au-kicker">{who}</span>
           <p className="au-hero__title">Welcome, {who}</p>

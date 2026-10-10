@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { completeHumanMock, joinHumanMock, peekHumanSignal, postHumanSignal } from '@/lib/api';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
@@ -369,7 +370,7 @@ export function HumanMockRoom({
 
       <header className="cb-meet-bar">
         <div className="cb-meet-brand">
-          <small>CareerBridge</small>
+          <BrandLogo tone="dark" size="sm" />
           <p>{jobRole}</p>
         </div>
         <b>

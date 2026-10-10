@@ -1,8 +1,8 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { usePathname, useRouter } from 'next/navigation';
 import { listApplications, logout, getCandidateMe } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
@@ -442,17 +442,13 @@ export function CandidateAppShell({
                 </svg>
               </button>
             ) : null}
-            <Link href="/dashboard" className="flex shrink-0 items-center">
-              <Image
-                src="/srsb-mark.png"
-                alt="SRSB"
-                width={44}
-                height={44}
-                className="h-11 w-11 object-contain"
-                unoptimized
-                priority
-              />
-            </Link>
+            <BrandLogo
+              href="/dashboard"
+              tone="dark"
+              size="sm"
+              priority
+              className={simpleMobileHeader ? 'cb-brand--title-beside' : ''}
+            />
             {simpleMobileHeader ? (
               <h1 className="truncate text-base font-extrabold text-white">{title}</h1>
             ) : null}
@@ -500,17 +496,7 @@ export function CandidateAppShell({
                 </svg>
               </button>
             ) : null}
-            <Link href="/dashboard" className="flex shrink-0 items-center">
-              <Image
-                src="/srsb-mark.png"
-                alt="SRSB"
-                width={84}
-                height={56}
-                className="h-14 w-[84px] object-contain"
-                unoptimized
-                priority
-              />
-            </Link>
+            <BrandLogo href="/dashboard" tone="dark" priority />
           </div>
 
           <nav

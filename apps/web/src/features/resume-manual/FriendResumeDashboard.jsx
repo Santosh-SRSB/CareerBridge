@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { api } from '@/features/resume-manual/manual-resume-api';
 import '@/features/resume-manual/manual-editor.css';
 
@@ -79,9 +80,10 @@ export default function FriendResumeDashboard() {
     <div className="cb-manual-resume-root">
       <div className="app-shell">
         <header className="topbar">
-          <Link href="/resume/builder" className="brand">
-            <span className="brand-mark">RB</span> Resume Builder
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <BrandLogo href="/resume/builder" label="Resume Builder" size="sm" priority />
+            <span className="border-l border-slate-300 pl-2.5 text-sm font-semibold text-slate-600">Resume Builder</span>
+          </div>
           <nav className="topbar-nav">
             <Link href="/resume/builder">Resumes</Link>
             <Link href="/interviews">Interviews</Link>

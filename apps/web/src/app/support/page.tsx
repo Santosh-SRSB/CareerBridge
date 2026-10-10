@@ -1,8 +1,8 @@
 'use client';
 
 import { FormEvent, useMemo, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { SUPPORT_FAQS, type FaqItem } from '@/data/support-faqs';
 
 type FaqTab = 'candidate' | 'employer' | 'general';
@@ -38,25 +38,10 @@ export default function SupportPage() {
     <div className="support-page min-h-screen bg-[#F6F5F1] text-[#1B2027]">
       <header className="border-b-4 border-[#A9812F] bg-[#0a2e2c] text-white">
         <div className="mx-auto flex max-w-[960px] flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-7">
-          <Link href="/" className="flex items-center gap-3 text-white no-underline" aria-label="SRSB Career Bridge">
-            <Image
-              src="/srsb-mark.png"
-              alt=""
-              width={200}
-              height={56}
-              className="h-11 w-auto max-w-[160px] object-contain sm:h-12 sm:max-w-[180px]"
-              unoptimized
-              priority
-            />
-            <span className="flex flex-col leading-tight">
-              <span className="font-[family-name:var(--font-poppins),system-ui,sans-serif] text-base font-bold tracking-tight text-white sm:text-lg">
-                Career Bridge
-              </span>
-              <span className="text-[11px] font-medium tracking-wide text-[#c8e6d4] sm:text-xs">
-                Support Centre
-              </span>
-            </span>
-          </Link>
+          <div className="flex flex-col gap-1">
+            <BrandLogo href="/" tone="dark" priority />
+            <span className="text-[11px] font-medium tracking-wide text-[#c8e6d4] sm:text-xs">Support Centre</span>
+          </div>
           <nav className="flex gap-5 text-sm">
             <a href="#faq" className="text-[#d5e0d9] no-underline hover:border-b hover:border-[#A9812F]">
               FAQ
@@ -257,7 +242,7 @@ export default function SupportPage() {
                   For any query, contact us
                 </h2>
                 <p className="mt-3 max-w-[42ch] text-[15px] leading-relaxed text-[#4A5262]">
-                  Reach the SRSB Career Bridge team by email. We typically respond within one
+                  Reach the SRSB CareerBridge team by email. We typically respond within one
                   business day.
                 </p>
                 <a
@@ -299,7 +284,7 @@ export default function SupportPage() {
 
       <footer className="bg-[#0a2e2c] py-9 text-[13px] text-[#c8e6d4]">
         <div className="mx-auto flex max-w-[960px] flex-wrap justify-between gap-4 px-5 sm:px-7">
-          <div>© {new Date().getFullYear()} SRSB Career Bridge. Member Support Office.</div>
+          <div>© {new Date().getFullYear()} SRSB CareerBridge. Member Support Office.</div>
           <div className="flex flex-wrap gap-3">
             <a
               href="https://srsbworkforcesolutions.com/"

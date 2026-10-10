@@ -1,8 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Image from 'next/image';
-import { SRSB_LOGO_SRC } from '@/components/Logo';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import './FeedbackReport.css';
 
 export type FeedbackReportSkill = {
@@ -126,18 +125,7 @@ export function FeedbackReport({
       <article className="fr-card">
         {/* Top bar */}
         <header className="fr-topbar">
-          <div className="fr-brand">
-            <Image
-              src={SRSB_LOGO_SRC}
-              alt="Career Bridge"
-              width={40}
-              height={40}
-              className="fr-brand__mark"
-              unoptimized
-              priority
-            />
-            <span className="fr-brand__name">Career Bridge</span>
-          </div>
+          <BrandLogo size="sm" priority />
           <p className="fr-topbar__label">Feedback Report</p>
         </header>
 

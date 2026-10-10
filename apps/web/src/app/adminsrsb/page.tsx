@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Logo } from '@/components/AuthShell';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { loginAdminPortal } from '@/lib/api';
@@ -67,11 +67,8 @@ export default function SrsbAdminLoginPage() {
         }}
       />
       <div className="relative w-full max-w-md rounded-[var(--sa-radius-lg)] border border-white/10 bg-white/95 p-7 shadow-2xl backdrop-blur">
-        <div className="mb-6 flex items-center justify-between">
-          <Logo />
-          <span className="rounded-full bg-[var(--sa-brand)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
-            Staff Login
-          </span>
+        <div className="mb-6 flex items-center">
+          <BrandLogo href="/" role="Admin" priority />
         </div>
         <h1 className="sa-ink text-2xl font-extrabold tracking-tight">SRSB Admin Portal</h1>
         <p className="sa-muted mt-1 text-sm">

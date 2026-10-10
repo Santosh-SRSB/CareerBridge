@@ -1,8 +1,7 @@
-import Image from "next/image";
-import Link from "next/link";
+import { BRAND_LOGO_SRC, BrandLogo } from "@/components/brand/BrandLogo";
 
-/** Canonical SRSB mark used across CareerBridge (candidate dashboard logo). */
-export const SRSB_LOGO_SRC = "/srsb-mark.png";
+/** Canonical SRSB mark used across CareerBridge. */
+export const SRSB_LOGO_SRC = BRAND_LOGO_SRC;
 
 export function Logo({
   inverted = false,
@@ -13,17 +12,5 @@ export function Logo({
   href?: string;
   className?: string;
 }) {
-  return (
-    <Link href={href} className={`inline-flex items-center gap-2 ${className}`.trim()}>
-      <Image
-        src={SRSB_LOGO_SRC}
-        alt="SRSB CareerBridge"
-        width={88}
-        height={88}
-        className={`h-10 w-10 object-contain sm:h-11 sm:w-11 ${inverted ? "brightness-0 invert" : ""}`}
-        unoptimized
-        priority
-      />
-    </Link>
-  );
+  return <BrandLogo href={href} tone={inverted ? "dark" : "light"} className={className} priority />;
 }

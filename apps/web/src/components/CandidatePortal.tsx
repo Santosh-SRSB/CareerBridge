@@ -1,8 +1,8 @@
 'use client';
 
 import { type ReactNode, useEffect, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { usePathname, useRouter } from 'next/navigation';
 import { PassportPreview } from '@/components/PassportPreview';
 import { HoverTilt } from '@/components/HoverTilt';
@@ -53,17 +53,9 @@ export function CandidateTopBar({
       <ActiveInterviewTimerBanner compact />
       <div className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 py-3 sm:h-[84px] sm:px-10">
         <BackButton fallback="/dashboard" light />
-        <Link href="/dashboard" className="logo-mark hidden shrink-0 sm:inline-flex">
-          <Image
-            src="/srsb-mark.png"
-            alt="SRSB"
-            width={88}
-            height={88}
-            className="h-10 w-10 object-contain bg-transparent sm:h-11 sm:w-11"
-            unoptimized
-            priority
-          />
-        </Link>
+        <span className="hidden shrink-0 sm:inline-flex">
+          <BrandLogo href="/dashboard" tone="dark" priority />
+        </span>
         <div className="min-w-0 flex-1" />
 
         <div className="ml-auto flex min-w-0 items-center justify-end gap-3">

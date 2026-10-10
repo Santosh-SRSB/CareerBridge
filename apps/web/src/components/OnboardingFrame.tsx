@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import type { OnboardingIconName } from '@/lib/onboarding-category-icon';
 import './onboarding-shell.css';
 
@@ -74,16 +75,6 @@ export const onboardingLabelClass =
 export const obxPrimaryButtonClass = 'obx-btn obx-btn--primary';
 export const obxGhostButtonClass = 'obx-btn obx-btn--ghost';
 
-function BrandMark() {
-  return (
-    <i aria-hidden>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 17c4-9 14-9 18 0M7 17v3M17 17v3" />
-      </svg>
-    </i>
-  );
-}
-
 function OnboardingSteps({ step }: { step: number }) {
   const current = Math.min(Math.max(step, 1), ONBOARDING_TOTAL_STEPS);
   const percent = Math.round((current / ONBOARDING_TOTAL_STEPS) * 100);
@@ -142,10 +133,7 @@ export function OnboardingFrame({
     <main className="obx-page">
       <div className="obx-shell">
         <header className="obx-top">
-          <span className="obx-brand">
-            <BrandMark />
-            CareerBridge
-          </span>
+          <BrandLogo tone="dark" size="sm" />
           {onSkip ? (
             <button type="button" className="obx-skip" onClick={onSkip} disabled={skipDisabled}>
               {skipLabel}

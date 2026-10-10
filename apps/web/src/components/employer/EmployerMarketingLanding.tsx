@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 const REGISTER_HREF = '/employer/register';
 const LOGIN_HREF = '/login?role=employer';
@@ -339,22 +340,10 @@ export function EmployerMarketingLanding() {
     <div className="cb-emkt">
       <header className="cb-emkt-nav">
         <div className="cb-emkt-nav__inner">
-          <Link
-          href="/employer/welcome"
-            className="cb-emkt-nav__brand"
-            aria-label="CareerBridge for Employers"
-          >
-            <Image
-              src="/srsb-mark.png"
-              alt="SRSB CareerBridge"
-              width={88}
-              height={88}
-              className="cb-emkt-nav__logo h-10 w-10 object-contain"
-              unoptimized
-              priority
-            />
-            <span>For Employers</span>
-          </Link>
+          <div className="flex shrink-0 items-center gap-2.5">
+            <BrandLogo href="/employer/welcome" tone="dark" size="sm" priority />
+            <span className="border-l border-white/35 pl-2.5 text-xs font-bold text-white/85">For Employers</span>
+          </div>
 
           <nav className="cb-emkt-nav__links" aria-label="Employer marketing">
             <a href="#post">Post a job</a>
