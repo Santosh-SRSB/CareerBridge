@@ -1297,40 +1297,40 @@ export default function SuperAdminDashboardInner() {
             )}
 
             {tab === 'candidates' && !listLoading && rows.length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {sortedRows.map((row) => {
-                  const id = String(row.id ?? '');
-                  const status = String(row.accountStatus ?? '');
-                  const name = String(row.name ?? '—');
-                  const skills = Array.isArray(row.primarySkills) ? row.primarySkills.map(String) : [];
-                  const completion = Number(row.profileCompletion ?? 0);
-                  return (
-                    <article key={id} className="sa-ccard">
-                      <div className="sa-ccard-h flex items-center gap-3 px-4 py-3">
-                        <span className="sa-avatar flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm">
+              <div className="sa-clist">
+                <div className="sa-clist-grid">
+                  {sortedRows.map((row) => {
+                    const id = String(row.id ?? '');
+                    const status = String(row.accountStatus ?? '');
+                    const name = String(row.name ?? '—');
+                    const skills = Array.isArray(row.primarySkills) ? row.primarySkills.map(String) : [];
+                    const completion = Number(row.profileCompletion ?? 0);
+                    return (
+                      <article key={id} className="sa-crow" aria-label={name}>
+                        <span className="sa-crow-av" aria-hidden="true">
                           {name.slice(0, 1).toUpperCase()}
                         </span>
-                        <div className="min-w-0">
-                          <p className="truncate font-bold">{name}</p>
-                          <p className="truncate text-xs opacity-90">{cell(row.email)}</p>
+                        <div className="sa-crow-id">
+                          <p className="sa-crow-name">{name}</p>
+                          <p className="sa-crow-sub">{cell(row.email)}</p>
+                          <p className="sa-crow-sub sa-crow-skills">
+                            Skills: {skills.length ? skills.join(', ') : '—'}
+                          </p>
                         </div>
-                      </div>
-                      <div className="space-y-2 p-4 text-sm">
-                        <p className="sa-ink">{cell(row.location)}</p>
-                        <div className="sa-meter h-2 overflow-hidden">
-                          <span style={{ width: `${Math.min(100, completion)}%` }} />
+                        <p className="sa-crow-loc">{cell(row.location)}</p>
+                        <div className="sa-crow-prog">
+                          <p className="sa-crow-sub font-semibold">Profile {completion}%</p>
+                          <div className="sa-meter sa-crow-meter overflow-hidden">
+                            <span style={{ width: `${Math.min(100, completion)}%` }} />
+                          </div>
                         </div>
-                        <p className="sa-muted text-[11px] font-semibold">Profile {completion}%</p>
-                        <p className="sa-muted line-clamp-2 text-xs">
-                          Skills: {skills.length ? skills.join(', ') : '—'}
-                        </p>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="sa-crow-stat">
                           <StatusPill status={status} />
-                          <span className="sa-brand-text text-xs font-semibold">
+                          <span className="sa-crow-sub">
                             {cell(row.applications)} apps · {cell(row.resumeCount)} resumes
                           </span>
                         </div>
-                        <div className="flex flex-wrap gap-1.5 pt-1">
+                        <div className="sa-crow-act">
                           <ActionBtn onClick={() => void openDetail('candidates', id)}>View</ActionBtn>
                           <ActionBtn
                             disabled={!id || busyId === id || status === 'ACTIVE'}
@@ -1368,10 +1368,10 @@ export default function SuperAdminDashboardInner() {
                             </ActionBtn>
                           ) : null}
                         </div>
-                      </div>
-                    </article>
-                  );
-                })}
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
