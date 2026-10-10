@@ -5,7 +5,7 @@ import '@/components/landing/home/home-landing.css';
 import '@/components/auth/auth-screen.css';
 
 type AuthRole = 'candidate' | 'employer';
-type AuthVariant = 'login' | 'register' | 'forgot';
+type AuthVariant = 'login' | 'register' | 'forgot' | 'verify';
 
 const LEDE: Record<AuthVariant, Record<AuthRole, string>> = {
   login: {
@@ -20,6 +20,10 @@ const LEDE: Record<AuthVariant, Record<AuthRole, string>> = {
     candidate: 'Sign in to continue your applications, saved roles, and messages.',
     employer: 'Sign in to manage your openings and connect with the right talent.',
   },
+  verify: {
+    candidate: 'One quick check to confirm it is really you, then your candidate account is ready.',
+    employer: 'One quick check to confirm it is really you, then your company account is ready.',
+  },
 };
 
 const PORTRAIT: Record<AuthRole, { src: string; width: number; height: number }> = {
@@ -28,7 +32,7 @@ const PORTRAIT: Record<AuthRole, { src: string; width: number; height: number }>
 };
 
 /**
- * Split layout for the login, registration and forgot-password screens: welcome panel on
+ * Split layout for the login, registration, OTP verification and forgot-password screens: welcome panel on
  * the left, form panel on the right. Form behaviour lives entirely in the children.
  */
 export function AuthScreen({

@@ -99,6 +99,14 @@ test('"Change mobile number" records the abandoned OTP request and keeps the oth
   assert.equal(draft.national, '9800000001');
 });
 
+test('WhatsApp updates stay on by default but a candidate opt-out survives the round trip', () => {
+  const storage = memoryStorage();
+  saveRegistrationDraft({ ...candidate, whatsappOptIn: false }, storage, 1_000);
+  assert.equal(loadRegistrationDraft('CANDIDATE', storage, 2_000)!.whatsappOptIn, false);
+
+  assert.equal(sanitizeRegistrationDraft({ ...candidate, whatsappOptIn: undefined })!.whatsappOptIn, true);
+});
+
 test('clearing after successful verification (or Start over) removes the draft', () => {
   const storage = memoryStorage();
   saveRegistrationDraft(candidate, storage);

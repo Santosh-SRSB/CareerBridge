@@ -63,7 +63,7 @@ export function RegistrationForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [otpChannel, setOtpChannel] = useState<'MOBILE' | 'EMAIL' | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(true);
   const [whatsappNotice, setWhatsappNotice] = useState(false);
   const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -85,7 +85,7 @@ export function RegistrationForm() {
     setLocation(draft.location || '');
     setOtpChannel(draft.otpChannel);
     setAgreedToTerms(draft.agreedToTerms);
-    setWhatsappOptIn(Boolean(draft.whatsappOptIn));
+    setWhatsappOptIn(draft.whatsappOptIn !== false);
     const pendingPassword = getPendingPassword();
     if (pendingPassword) {
       setPassword(pendingPassword);
@@ -110,7 +110,7 @@ export function RegistrationForm() {
     setConfirmPassword('');
     setOtpChannel(null);
     setAgreedToTerms(false);
-    setWhatsappOptIn(false);
+    setWhatsappOptIn(true);
     setTouched({});
     setSubmitAttempted(false);
     setSubmitError('');

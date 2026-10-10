@@ -3,7 +3,7 @@
 import { FormEvent, type MouseEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AuthShell } from '@/components/AuthShell';
+import { AuthScreen } from '@/components/auth/AuthScreen';
 import { OtpInput } from '@/components/OtpInput';
 import { Button } from '@/components/ui/Button';
 import { clearOtpFlow, getOtpFlow, saveOtpFlow } from '@/lib/otp-flow';
@@ -37,6 +37,8 @@ export default function VerifyOtpPage() {
   const [email, setEmail] = useState('');
   const [channel, setChannel] = useState<OtpChannel>('MOBILE');
   const [backHref, setBackHref] = useState('/login');
+  const [role, setRole] = useState<'candidate' | 'employer'>('candidate');
+  const [registering, setRegistering] = useState(false);
   const [ready, setReady] = useState(false);
   const [expiryKey, setExpiryKey] = useState(0);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -58,6 +60,8 @@ export default function VerifyOtpPage() {
           ? '/register?role=candidate'
           : '/login',
     );
+    setRole(flow.registration?.accountType === 'EMPLOYER' ? 'employer' : 'candidate');
+    setRegistering(flow.purpose === 'REGISTER');
     setSecondsLeft(Math.max(0, Math.ceil((flow.expiresAt - Date.now()) / 1000)));
     setReady(true);
 
@@ -108,9 +112,6 @@ export default function VerifyOtpPage() {
 
   const isEmailChannel = channel === 'EMAIL';
   const verifyTitle = isEmailChannel ? 'Verify your email' : 'Verify your mobile number';
-  const panelCopy = isEmailChannel
-    ? 'Enter the 6-digit OTP sent to your email to confirm your account.'
-    : 'Enter the 6-digit OTP sent to your phone to confirm your account.';
   const destination = isEmailChannel ? email : maskMobileNumber(phone);
   const changeLabel = isEmailChannel ? 'Change email' : 'Change mobile number';
 
@@ -242,81 +243,83 @@ export default function VerifyOtpPage() {
   const expired = secondsLeft <= 0 || errorCode === 'OTP_EXPIRED';
 
   return (
-    <AuthShell
-      title={verifyTitle}
-      subtitle={`OTP sent to ${destination}`}
+    <AuthScreen
+      variant={registering ? 'verify' : 'login'}
+      role={role}
+      switchHref={`/login?role=${role}`}
       backHref={backHref}
-      scene="verify"
-      mode="register"
-      panelTitle={verifyTitle}
-      panelCopy={panelCopy}
     >
-      <form ref={formRef} onSubmit={onSubmit} className="space-y-5" aria-busy={loading || undefined}>
-        <OtpInput
-          value={otp}
-          onChange={(value) => {
-            setOtp(value);
-            if (errorCode === 'INVALID_OTP') {
-              setError('');
-              setErrorCode('');
-            }
-          }}
-          disabled={loading || resending || expired}
-          invalid={Boolean(error) && errorCode !== 'OTP_EXPIRED'}
-          describedBy={error ? 'otp-error' : undefined}
-        />
+      <h1 className="au-title">{verifyTitle}</h1>
+      <p className="au-sub">
+        Enter the 6-digit OTP sent to <strong>{destination}</strong>
+      </p>
 
-        <div className="text-center">
-          <span className="font-mono text-base font-bold text-slate-700" aria-live="off">
-            {Math.floor(secondsLeft / 60).toString().padStart(2, '0')}:{(secondsLeft % 60).toString().padStart(2, '0')}
+      <form
+        ref={formRef}
+        onSubmit={onSubmit}
+        className="cb-auth-form-stack"
+        aria-busy={loading || undefined}
+        noValidate
+      >
+        <div className="cb-auth-field">
+          <span id="otp-label" className="cb-auth-field__label">
+            OTP
           </span>
+          <OtpInput
+            value={otp}
+            onChange={(value) => {
+              setOtp(value);
+              if (errorCode === 'INVALID_OTP') {
+                setError('');
+                setErrorCode('');
+              }
+            }}
+            disabled={loading || resending || expired}
+            invalid={Boolean(error) && errorCode !== 'OTP_EXPIRED'}
+            labelledBy="otp-label"
+            describedBy={error ? 'otp-error' : undefined}
+          />
         </div>
 
+        <p className="au-timer" aria-live="off">
+          {Math.floor(secondsLeft / 60).toString().padStart(2, '0')}:{(secondsLeft % 60).toString().padStart(2, '0')}
+        </p>
+
         {error ? (
-          <p id="otp-error" role="alert" className="text-center text-xs font-semibold text-error">
+          <div id="otp-error" role="alert" className="cb-auth-alert">
             {error}
-          </p>
+          </div>
         ) : null}
 
-        <Button
-          type="submit"
-          loading={loading}
-          loadingLabel="Verifying..."
-          disabled={expired}
-          className="w-full py-3.5 text-sm font-bold bg-[#0a2e2c] hover:bg-[#072422] text-white shadow-md hover:shadow-lg transition rounded-xl disabled:opacity-50"
-        >
+        <Button type="submit" loading={loading} loadingLabel="Verifying..." disabled={expired} className="w-full">
           Verify
         </Button>
       </form>
 
-      <div className="mt-5 space-y-2 text-center text-xs">
-        <p className="text-slate-500 font-medium">Didn&apos;t receive OTP?</p>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={resend}
-          loading={resending}
-          loadingLabel="Sending..."
-          disabled={!expired && secondsLeft > 0}
-          className="w-full rounded-xl border-slate-200 py-2.5 text-xs font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-        >
-          Resend OTP
-        </Button>
-        <div>
-          <Link href={backHref} onClick={changeContact} className="text-slate-500 hover:text-slate-800 text-xs transition">
+      <div className="au-resend">
+        <p>Didn&apos;t receive OTP?</p>
+        <div className="au-alt">
+          <button
+            type="button"
+            className="au-link"
+            onClick={resend}
+            disabled={resending || (!expired && secondsLeft > 0)}
+            aria-busy={resending || undefined}
+          >
+            {resending ? 'Sending...' : 'Resend OTP'}
+          </button>
+          <Link href={backHref} onClick={changeContact} className="au-link">
             {changeLabel}
           </Link>
         </div>
       </div>
       {isDevOtpEnabled() && !isEmailChannel ? (
-        <p className="mt-8 rounded-md bg-primary-soft p-3 text-sm text-primary">
+        <p className="au-hint">
           Local OTP mode is on. Use code <strong>123456</strong>.
         </p>
       ) : isEmailChannel ? (
-        <p className="mt-8 rounded-md bg-accent-soft p-3 text-sm text-primary">
-          Check your email inbox (and spam) for the 6-digit CareerBridge code.
-        </p>
+        <p className="au-hint">Check your email inbox (and spam) for the 6-digit CareerBridge code.</p>
       ) : null}
-    </AuthShell>
+    </AuthScreen>
   );
 }

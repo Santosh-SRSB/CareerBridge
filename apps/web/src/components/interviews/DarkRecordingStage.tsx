@@ -48,6 +48,7 @@ export function DarkRecordingStage({
   isLast,
   onIntroComplete,
   onStopAndSubmit,
+  onRetake,
   onSwitchToTyping,
 }: {
   mode: 'intro' | 'recording';
@@ -63,6 +64,7 @@ export function DarkRecordingStage({
   isLast: boolean;
   onIntroComplete: () => void;
   onStopAndSubmit: () => void;
+  onRetake?: () => void;
   onSwitchToTyping?: () => void;
 }) {
   const [introStep, setIntroStep] = useState<IntroStep>('three');
@@ -260,15 +262,29 @@ export function DarkRecordingStage({
               {error}
             </p>
           ) : null}
-          {error && onSwitchToTyping && mode === 'recording' && !isRecording ? (
-            <button
-              type="button"
-              disabled={loading}
-              onClick={onSwitchToTyping}
-              className="min-h-12 w-full rounded-full border border-[#1A1FC4] bg-white px-4 py-3 text-[15px] font-bold text-[#1A1FC4] transition enabled:hover:bg-[#eef0ff] disabled:opacity-50"
-            >
-              Type your answer instead
-            </button>
+          {mode === 'recording' && (onRetake || onSwitchToTyping) ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {onRetake ? (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={onRetake}
+                  className="min-h-12 w-full rounded-full border border-[#1A1FC4] bg-white px-4 py-3 text-[15px] font-bold text-[#1A1FC4] transition enabled:hover:bg-[#eef0ff] disabled:opacity-50"
+                >
+                  {error && !isRecording ? 'Try recording again' : 'Record again'}
+                </button>
+              ) : null}
+              {onSwitchToTyping ? (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={onSwitchToTyping}
+                  className="min-h-12 w-full rounded-full border border-[#1A1FC4] bg-white px-4 py-3 text-[15px] font-bold text-[#1A1FC4] transition enabled:hover:bg-[#eef0ff] disabled:opacity-50"
+                >
+                  Type your answer instead
+                </button>
+              ) : null}
+            </div>
           ) : null}
           <button
             type="button"

@@ -1,7 +1,7 @@
 'use client';
 
 import { userFacingError } from '@/lib/client-errors';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { AI_INTERVIEW_QUESTION_FALLBACK_MESSAGE, type InterviewSession } from '@careerbridge/shared';
@@ -30,6 +30,7 @@ import {
   type AnswerMethod,
   type GuidedPhase,
 } from '@/features/mock-interview/guided-states';
+import { buildAnswerSubmission, canRecordAudio, defaultAnswerMethod } from '@/features/mock-interview/answer-mode';
 import { cancelGuidedSpeech, speakGuided } from '@/features/mock-interview/guided-voice';
 import {
   answerLiveInterview,
@@ -53,6 +54,10 @@ function interviewTypeLabel(type: string) {
   return type;
 }
 
+const subscribeNever = () => () => undefined;
+const MIC_DENIED = 'Microphone access is needed to record your answer. You can still type your answer.';
+const MIC_UNSUPPORTED = 'This browser cannot record audio. You can still type your answer.';
+
 /** Block paste / drop so answers must be typed (or spoken), not copied in. */
 function blockClipboardPaste(event: { preventDefault: () => void }) {
   event.preventDefault();
@@ -70,6 +75,11 @@ export default function MockInterviewQuestionPage() {
   const answerMethodRef = useRef<AnswerMethod | null>(null);
   const skippedRef = useRef(false);
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod | null>(null);
+  const recordingSupported = useSyncExternalStore(subscribeNever, () => canRecordAudio(), () => true);
+  const preferredMethod = defaultAnswerMethod(recordingSupported);
+  // Each recording attempt gets a fresh recorder; late callbacks from a discarded take are ignored.
+  const [take, setTake] = useState(0);
+  const takeRef = useRef(0);
   const savePromiseRef = useRef<Promise<{
     ok: true;
     session: InterviewSession;
@@ -165,12 +175,37 @@ export default function MockInterviewQuestionPage() {
     setAnswerMethod(method);
     cancelGuidedSpeech();
     if (method === 'recording') {
+      takeRef.current += 1;
+      setTake(takeRef.current);
+      setHasAudio(false);
+      hasAudioRef.current = false;
+      setAudioDurationSec(undefined);
+      audioDurationRef.current = undefined;
+      setIsRecording(false);
+      setError('');
+      recordingArmedForIndex.current = null;
       amplitudeRef.current = 0;
       setRecordElapsedSec(0);
       setPhase('RECORDING_COUNTDOWN');
     } else {
       setPhase('TYPING_ACTIVE');
     }
+  }
+
+  function retakeRecording() {
+    if (loading) return;
+    setAnswer('');
+    answerRef.current = '';
+    chooseAnswerMethod('recording');
+    recorderRef.current?.stop();
+  }
+
+  function switchToTyping() {
+    if (loading) return;
+    recorderRef.current?.stop();
+    recordingArmedForIndex.current = null;
+    setError('');
+    chooseAnswerMethod('typing');
   }
 
   const finishRecordingIntro = useCallback(() => {
@@ -212,7 +247,7 @@ export default function MockInterviewQuestionPage() {
       const ok = await recorderRef.current?.startImmediate();
       if (runId !== armRunId.current) return;
       if (!ok) {
-        setError('Microphone access is needed to record your answer. You can still type your answer.');
+        setError(canRecordAudio() ? MIC_DENIED : MIC_UNSUPPORTED);
       }
     }
 
@@ -244,7 +279,7 @@ export default function MockInterviewQuestionPage() {
     };
   }, [phase, session?.questionIndex]);
 
-  // After think time ends, default into typing unless they already chose recording.
+  // After think time ends, start the default method (recording when the browser supports it) unless they already chose.
   useEffect(() => {
     if (phase !== 'QUESTION_THINKING') return;
     if (thinkRemaining > 0) return;
@@ -254,10 +289,10 @@ export default function MockInterviewQuestionPage() {
     thinkAutoStartedRef.current = qIndex;
     const t = window.setTimeout(() => {
       if (answerMethodRef.current) return;
-      chooseAnswerMethod('typing');
+      chooseAnswerMethod(preferredMethod);
     }, 350);
     return () => window.clearTimeout(t);
-  }, [phase, thinkRemaining, session?.questionIndex]);
+  }, [phase, thinkRemaining, session?.questionIndex, preferredMethod]);
 
   // Dedicated think-time countdown — keeps the bar decreasing smoothly.
   useEffect(() => {
@@ -434,10 +469,13 @@ export default function MockInterviewQuestionPage() {
       await new Promise((r) => setTimeout(r, 280));
     }
 
-    const textAnswer = answerRef.current.trim();
-    const audioReady = hasAudioRef.current || Boolean(audioDurationRef.current);
-    if (textAnswer.length < ANSWER_MIN && !audioReady) {
-      setError(`Type your answer or record an audio response before continuing (minimum ${ANSWER_MIN} characters).`);
+    const submission = buildAnswerSubmission(
+      answerMethodRef.current ?? 'typing',
+      { text: answerRef.current, hasAudio: hasAudioRef.current, audioDurationSec: audioDurationRef.current },
+      ANSWER_MIN,
+    );
+    if (!submission.ok) {
+      setError(submission.error);
       return;
     }
 
@@ -461,14 +499,15 @@ export default function MockInterviewQuestionPage() {
     setCaption(celebrate.primary);
     void speakGuided(celebrate.primary).catch(() => undefined);
 
-    const answerMode: 'TEXT' | 'AUDIO' = textAnswer.length >= 8 ? 'TEXT' : 'AUDIO';
-    const payloadText = textAnswer || '(audio answer recorded)';
-    const duration = audioDurationRef.current;
-
     // Start save in background, show cherish UI immediately.
     savePromiseRef.current = (async () => {
       try {
-        const next = await answerLiveInterview(params.id, payloadText, duration, answerMode);
+        const next = await answerLiveInterview(
+          params.id,
+          submission.answer,
+          submission.durationSec,
+          submission.answerMode,
+        );
         if (next.conductWarning && !next.conductTerminated) {
           return {
             ok: false as const,
@@ -722,26 +761,32 @@ export default function MockInterviewQuestionPage() {
                     <div className="ms-methods">
                       <button
                         type="button"
-                        onClick={() => chooseAnswerMethod('typing')}
-                        className="ms-method ms-method--default"
-                      >
-                        <span className="ms-method-badge">Default</span>
-                        <span className="ms-method-ic">
-                          <KeyboardIcon className="h-4 w-4" />
-                        </span>
-                        <span className="ms-method-l">Typing</span>
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => chooseAnswerMethod('recording')}
-                        className="ms-method"
+                        className={`ms-method${preferredMethod === 'recording' ? ' ms-method--default' : ''}`}
                       >
+                        {preferredMethod === 'recording' ? <span className="ms-method-badge">Default</span> : null}
                         <span className="ms-method-ic">
                           <MicIcon className="h-4 w-4" />
                         </span>
                         <span className="ms-method-l">Recording</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => chooseAnswerMethod('typing')}
+                        className={`ms-method${preferredMethod === 'typing' ? ' ms-method--default' : ''}`}
+                      >
+                        {preferredMethod === 'typing' ? <span className="ms-method-badge">Default</span> : null}
+                        <span className="ms-method-ic">
+                          <KeyboardIcon className="h-4 w-4" />
+                        </span>
+                        <span className="ms-method-l">Typing</span>
+                      </button>
                     </div>
+                    <p className="iv-meta ms-method-note" role="note">
+                      {recordingSupported
+                        ? 'Recording starts when think time ends. Prefer to type? Choose Typing.'
+                        : 'This browser cannot record audio, so you will type your answer.'}
+                    </p>
                     <button
                       type="button"
                       onClick={skipQuestion}
@@ -794,7 +839,7 @@ export default function MockInterviewQuestionPage() {
                       type="button"
                       title="Switch to recording"
                       aria-label="Switch to recording"
-                      disabled={loading}
+                      disabled={loading || !recordingSupported}
                       onClick={() => chooseAnswerMethod('recording')}
                       className="ms-mic"
                     >
@@ -863,14 +908,11 @@ export default function MockInterviewQuestionPage() {
             isLast={questionNumber >= totalQuestions}
             onIntroComplete={finishRecordingIntro}
             onStopAndSubmit={() => void submitAnswer()}
-            onSwitchToTyping={() => {
-              recordingArmedForIndex.current = null;
-              setError('');
-              chooseAnswerMethod('typing');
-            }}
+            onRetake={recordingSupported ? retakeRecording : undefined}
+            onSwitchToTyping={switchToTyping}
           />
           <AudioAnswerRecorder
-            key={`recorder-q-${session.questionIndex}`}
+            key={`recorder-q-${session.questionIndex}-${take}`}
             ref={recorderRef}
             disabled={loading}
             hideUi
@@ -882,6 +924,7 @@ export default function MockInterviewQuestionPage() {
             }}
             onElapsedChange={setRecordElapsedSec}
             onRecorded={({ durationSec, transcript }) => {
+              if (take !== takeRef.current) return;
               setHasAudio(true);
               hasAudioRef.current = true;
               setAudioDurationSec(durationSec);
@@ -898,6 +941,7 @@ export default function MockInterviewQuestionPage() {
               audioDurationRef.current = undefined;
             }}
             onLiveTranscript={(text) => {
+              if (take !== takeRef.current) return;
               setAnswer(text);
               answerRef.current = text;
             }}

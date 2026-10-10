@@ -15,7 +15,7 @@ export type RegistrationFormDraft = {
   agreedToTerms: boolean;
   /** Candidate: "State|City" option value. */
   location?: string;
-  /** Candidate: WhatsApp interview-notification consent. */
+  /** Candidate: WhatsApp interview-notification consent; on unless the candidate turned it off. */
   whatsappOptIn?: boolean;
   /** Employer: company name as typed. */
   companyName?: string;
@@ -51,7 +51,7 @@ export function sanitizeRegistrationDraft(input: unknown): RegistrationFormDraft
   };
   if (raw.accountType === 'CANDIDATE') {
     draft.location = text(raw.location, 120);
-    draft.whatsappOptIn = raw.whatsappOptIn === true;
+    draft.whatsappOptIn = raw.whatsappOptIn !== false;
   } else {
     draft.companyName = text(raw.companyName, 200);
   }

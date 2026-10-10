@@ -436,6 +436,10 @@
   color: var(--iv-navy);
 }
 
+.ms-method-note {
+  margin: 10px 0 0;
+}
+
 .ms-skip {
   margin-top: 12px;
 }
