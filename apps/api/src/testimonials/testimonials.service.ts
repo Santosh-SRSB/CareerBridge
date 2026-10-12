@@ -56,7 +56,52 @@ const SOURCE_COPY: Record<
     title: 'Share your CareerBridge experience',
     subtitle: 'Your words may appear on our testimonials page after review.',
   },
+  EMPLOYER_DASHBOARD_SOFT_PROMPT: {
+    audience: 'EMPLOYER',
+    title: 'Got 30 seconds for feedback?',
+    subtitle: 'Tell other employers how hiring with CareerBridge is going.',
+  },
 };
+
+export const TESTIMONIAL_SOURCES = Object.keys(SOURCE_COPY) as TestimonialSource[];
+
+/** A user sees at most one feedback prompt per window, counted from the last time one was shown. */
+export const FEEDBACK_PROMPT_INTERVAL_MS = 360 * 60 * 60 * 1000;
+
+/**
+ * Prompt chosen when a window opens: the first ELIGIBLE milestone in this order (furthest along the
+ * hiring journey first), otherwise the audience's generic dashboard prompt.
+ */
+const MILESTONE_PRIORITY: Record<TestimonialAudience, TestimonialSource[]> = {
+  CANDIDATE: ['AFTER_5_APPLICATIONS', 'AFTER_FIRST_MOCK_INTERVIEW', 'PROFILE_80_COMPLETE'],
+  EMPLOYER: ['AFTER_HIRE_OR_SELECT', 'AFTER_SHORTLIST_OR_INTERVIEW', 'FIRST_JOB_PUBLISHED'],
+};
+
+const DASHBOARD_SOURCE: Record<TestimonialAudience, TestimonialSource> = {
+  CANDIDATE: 'DASHBOARD_SOFT_PROMPT',
+  EMPLOYER: 'EMPLOYER_DASHBOARD_SOFT_PROMPT',
+};
+
+function audienceForUserType(userType: string): TestimonialAudience | null {
+  if (userType === 'CANDIDATE') return 'CANDIDATE';
+  if (userType === 'EMPLOYER_ADMIN' || userType === 'EMPLOYER_RECRUITER') return 'EMPLOYER';
+  return null;
+}
+
+function isTestimonialSource(value: unknown): value is TestimonialSource {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(SOURCE_COPY, value);
+}
+
+function isUniqueViolation(err: unknown) {
+  return (err as { code?: unknown } | null)?.code === 'P2002';
+}
+
+function unknownSourceError() {
+  return new BadRequestException({
+    code: ErrorCode.VALIDATION_ERROR,
+    message: 'Unknown feedback source.',
+  });
+}
 
 @Injectable()
 export class TestimonialsService {
@@ -64,6 +109,9 @@ export class TestimonialsService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  /** Scheduling clock. Always the API server's time, never the browser's; replaced in tests. */
+  now: () => Date = () => new Date();
 
   async listPublic(audience?: TestimonialAudience) {
     const rows = await this.prisma.testimonial.findMany({
@@ -86,60 +134,45 @@ export class TestimonialsService {
     return rows.map((row) => this.toPublic(row));
   }
 
+  /**
+   * Returns a prompt only when this request claims the user's feedback window; every other call within
+   * FEEDBACK_PROMPT_INTERVAL_MS of the last shown prompt returns null.
+   */
   async getActivePrompt(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { userType: true },
     });
-    if (!user) return null;
+    const audience = user ? audienceForUserType(user.userType) : null;
+    if (!audience) return null;
 
-    // Soft dashboard prompt for candidates who never submitted (once / 30 days).
-    if (user.userType === 'CANDIDATE') {
-      await this.ensureDashboardSoftPrompt(userId);
-    }
+    const now = this.now();
+    if (!(await this.claimPromptWindow(userId, now))) return null;
 
-    const prompts = await this.prisma.testimonialPrompt.findMany({
-      where: { userId, status: 'ELIGIBLE' },
-      orderBy: { eligibleAt: 'desc' },
-    });
-
-    for (const prompt of prompts) {
-      const copy = SOURCE_COPY[prompt.source as TestimonialSource];
-      if (!copy) continue;
-      if (user.userType === 'CANDIDATE' && copy.audience !== 'CANDIDATE') continue;
-      if (
-        (user.userType === 'EMPLOYER_ADMIN' || user.userType === 'EMPLOYER_RECRUITER') &&
-        copy.audience !== 'EMPLOYER'
-      ) {
-        continue;
-      }
-      if (prompt.source === 'DASHBOARD_SOFT_PROMPT' && prompt.dismissedAt) {
-        const days =
-          (Date.now() - new Date(prompt.dismissedAt).getTime()) / (1000 * 60 * 60 * 24);
-        if (days < 20) continue;
-      }
-      return {
-        source: prompt.source as TestimonialSource,
-        audience: copy.audience,
-        title: copy.title,
-        subtitle: copy.subtitle,
-      };
-    }
-    return null;
+    const source = await this.selectPromptSource(userId, audience, now);
+    const copy = SOURCE_COPY[source];
+    return {
+      source,
+      audience: copy.audience,
+      title: copy.title,
+      subtitle: copy.subtitle,
+    };
   }
 
   async dismissPrompt(userId: string, source: TestimonialSource) {
+    if (!isTestimonialSource(source)) throw unknownSourceError();
+    const now = this.now();
     await this.prisma.testimonialPrompt.upsert({
       where: { userId_source: { userId, source } },
       create: {
         userId,
         source,
         status: 'DISMISSED',
-        dismissedAt: new Date(),
+        dismissedAt: now,
       },
       update: {
         status: 'DISMISSED',
-        dismissedAt: new Date(),
+        dismissedAt: now,
       },
     });
     return { dismissed: true };
@@ -193,8 +226,9 @@ export class TestimonialsService {
     const isEmployer =
       user.userType === 'EMPLOYER_ADMIN' || user.userType === 'EMPLOYER_RECRUITER';
     const audience: TestimonialAudience = isEmployer ? 'EMPLOYER' : 'CANDIDATE';
-    const source = (payload.source || 'MANUAL') as TestimonialSource;
-    const copy = SOURCE_COPY[source] || SOURCE_COPY.MANUAL;
+    const source = payload.source || 'MANUAL';
+    if (!isTestimonialSource(source)) throw unknownSourceError();
+    const copy = SOURCE_COPY[source];
     if (copy.audience !== audience && source !== 'MANUAL') {
       throw new ForbiddenException({
         code: ErrorCode.FORBIDDEN,
@@ -229,17 +263,18 @@ export class TestimonialsService {
       },
     });
 
+    const submittedAt = this.now();
     await this.prisma.testimonialPrompt.upsert({
       where: { userId_source: { userId, source } },
       create: {
         userId,
         source,
         status: 'SUBMITTED',
-        submittedAt: new Date(),
+        submittedAt,
       },
       update: {
         status: 'SUBMITTED',
-        submittedAt: new Date(),
+        submittedAt,
       },
     });
 
@@ -252,44 +287,41 @@ export class TestimonialsService {
     };
   }
 
+  /**
+   * Records that a milestone was reached. Eligibility only queues a source for the next feedback window;
+   * whether a prompt is shown is decided by getActivePrompt. A milestone notifies the user once when first
+   * reached, and again only when a dismissed milestone is re-armed outside the user's current window.
+   * Submitted milestones stay closed: the generic dashboard prompt carries the recurring cadence.
+   */
   async markEligible(userId: string, source: TestimonialSource, notifyUser = true) {
     const existing = await this.prisma.testimonialPrompt.findUnique({
       where: { userId_source: { userId, source } },
     });
-    if (existing?.status === 'SUBMITTED') return { created: false };
+    const now = this.now();
 
-    const row = await this.prisma.testimonialPrompt.upsert({
-      where: { userId_source: { userId, source } },
-      create: {
-        userId,
-        source,
-        status: 'ELIGIBLE',
-        eligibleAt: new Date(),
-      },
-      update:
-        existing?.status === 'ELIGIBLE'
-          ? {}
-          : {
-              status: 'ELIGIBLE',
-              eligibleAt: new Date(),
-              dismissedAt: null,
-            },
-    });
-
-    if (notifyUser && (!existing || existing.status !== 'ELIGIBLE')) {
-      const copy = SOURCE_COPY[source];
-      await this.notifications
-        .create({
-          userId,
-          title: copy.title,
-          body: copy.subtitle,
-          type: 'TESTIMONIAL_PROMPT',
-          link: `/feedback?source=${encodeURIComponent(source)}`,
-        })
-        .catch(() => undefined);
+    if (!existing) {
+      try {
+        const row = await this.prisma.testimonialPrompt.create({
+          data: { userId, source, status: 'ELIGIBLE', eligibleAt: now },
+        });
+        if (notifyUser) await this.notifyPromptEligible(userId, source);
+        return { created: true, id: row.id };
+      } catch (err) {
+        if (isUniqueViolation(err)) return { created: false };
+        throw err;
+      }
     }
 
-    return { created: true, id: row.id };
+    if (existing.status !== 'DISMISSED') return { created: false };
+    if (await this.isWithinPromptWindow(userId, now)) return { created: false };
+
+    const rearmed = await this.prisma.testimonialPrompt.updateMany({
+      where: { id: existing.id, status: 'DISMISSED' },
+      data: { status: 'ELIGIBLE', eligibleAt: now },
+    });
+    if (rearmed.count !== 1) return { created: false };
+    if (notifyUser) await this.notifyPromptEligible(userId, source);
+    return { created: true, id: existing.id };
   }
 
   async adminList(status?: string) {
@@ -384,46 +416,67 @@ export class TestimonialsService {
     };
   }
 
-  private async ensureDashboardSoftPrompt(userId: string) {
-    const submittedAny = await this.prisma.testimonial.count({ where: { userId } });
-    if (submittedAny > 0) return;
-
-    const existing = await this.prisma.testimonialPrompt.findUnique({
-      where: { userId_source: { userId, source: 'DASHBOARD_SOFT_PROMPT' } },
+  private async isWithinPromptWindow(userId: string, now: Date) {
+    const schedule = await this.prisma.testimonialPromptSchedule.findUnique({
+      where: { userId },
+      select: { lastShownAt: true },
     });
-    if (existing?.status === 'SUBMITTED') return;
+    const lastShownAt = schedule?.lastShownAt;
+    return Boolean(lastShownAt && now.getTime() - lastShownAt.getTime() < FEEDBACK_PROMPT_INTERVAL_MS);
+  }
 
-    // First login/register: create once. After dismiss, only re-show after 20 days.
-    if (existing?.status === 'DISMISSED' && existing.dismissedAt) {
-      const days =
-        (Date.now() - new Date(existing.dismissedAt).getTime()) / (1000 * 60 * 60 * 24);
-      if (days < 20) return;
-      await this.prisma.testimonialPrompt.update({
-        where: { userId_source: { userId, source: 'DASHBOARD_SOFT_PROMPT' } },
-        data: {
-          status: 'ELIGIBLE',
-          eligibleAt: new Date(),
-          dismissedAt: null,
-        },
-      });
-      return;
+  /**
+   * Atomically moves the user's lastShownAt to `now` when no prompt was shown in the last
+   * FEEDBACK_PROMPT_INTERVAL_MS. At most one concurrent caller gets true: the conditional UPDATE is
+   * re-evaluated by Postgres under the row lock, and the first-ever claim relies on the primary key.
+   */
+  private async claimPromptWindow(userId: string, now: Date) {
+    if (await this.isWithinPromptWindow(userId, now)) return false;
+    const cutoff = new Date(now.getTime() - FEEDBACK_PROMPT_INTERVAL_MS);
+    const claimed = await this.prisma.testimonialPromptSchedule.updateMany({
+      where: { userId, OR: [{ lastShownAt: null }, { lastShownAt: { lte: cutoff } }] },
+      data: { lastShownAt: now },
+    });
+    if (claimed.count === 1) return true;
+    try {
+      await this.prisma.testimonialPromptSchedule.create({ data: { userId, lastShownAt: now } });
+      return true;
+    } catch (err) {
+      if (isUniqueViolation(err)) return false;
+      throw err;
     }
+  }
 
-    if (existing?.status === 'ELIGIBLE') return;
-
-    await this.prisma.testimonialPrompt.upsert({
-      where: { userId_source: { userId, source: 'DASHBOARD_SOFT_PROMPT' } },
-      create: {
-        userId,
-        source: 'DASHBOARD_SOFT_PROMPT',
-        status: 'ELIGIBLE',
-        eligibleAt: new Date(),
-      },
-      update: {
-        status: 'ELIGIBLE',
-        eligibleAt: new Date(),
-      },
+  private async selectPromptSource(userId: string, audience: TestimonialAudience, now: Date) {
+    const milestones = MILESTONE_PRIORITY[audience];
+    const eligible = await this.prisma.testimonialPrompt.findMany({
+      where: { userId, status: 'ELIGIBLE', source: { in: milestones } },
+      select: { source: true },
     });
+    const eligibleSources = new Set<string>(eligible.map((row) => row.source));
+    const milestone = milestones.find((source) => eligibleSources.has(source));
+    if (milestone) return milestone;
+
+    const source = DASHBOARD_SOURCE[audience];
+    await this.prisma.testimonialPrompt.upsert({
+      where: { userId_source: { userId, source } },
+      create: { userId, source, status: 'ELIGIBLE', eligibleAt: now },
+      update: { status: 'ELIGIBLE', eligibleAt: now },
+    });
+    return source;
+  }
+
+  private async notifyPromptEligible(userId: string, source: TestimonialSource) {
+    const copy = SOURCE_COPY[source];
+    await this.notifications
+      .create({
+        userId,
+        title: copy.title,
+        body: copy.subtitle,
+        type: 'TESTIMONIAL_PROMPT',
+        link: `/feedback?source=${encodeURIComponent(source)}`,
+      })
+      .catch(() => undefined);
   }
 
   private async notifyAdminsOfPending(testimonialId: string, audience: TestimonialAudience, name: string) {

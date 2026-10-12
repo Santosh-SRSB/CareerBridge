@@ -54,6 +54,7 @@ model User {
   deviceTokens  DeviceToken[]
   testimonials  Testimonial[]
   testimonialPrompts TestimonialPrompt[]
+  testimonialPromptSchedule TestimonialPromptSchedule?
 
   @@unique([email, userType])
   @@unique([phone, userType])
@@ -1176,6 +1177,7 @@ enum TestimonialSource {
   AFTER_SHORTLIST_OR_INTERVIEW
   AFTER_HIRE_OR_SELECT
   MANUAL
+  EMPLOYER_DASHBOARD_SOFT_PROMPT
 }
 
 enum TestimonialPromptStatus {
@@ -1223,5 +1225,18 @@ model TestimonialPrompt {
   @@unique([userId, source])
   @@index([userId, status])
   @@map("testimonial_prompts")
+}
+
+/// One feedback-prompt cadence per user, shared by every prompt source.
+model TestimonialPromptSchedule {
+  userId      String    @id @map("user_id")
+  /// API server time when a dashboard feedback prompt was last shown; null when never shown.
+  lastShownAt DateTime? @map("last_shown_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("testimonial_prompt_schedules")
 }
 

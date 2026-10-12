@@ -8,7 +8,8 @@ export type TestimonialSource =
   | 'FIRST_JOB_PUBLISHED'
   | 'AFTER_SHORTLIST_OR_INTERVIEW'
   | 'AFTER_HIRE_OR_SELECT'
-  | 'MANUAL';
+  | 'MANUAL'
+  | 'EMPLOYER_DASHBOARD_SOFT_PROMPT';
 
 export type PublicTestimonial = {
   id: string;

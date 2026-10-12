@@ -8,7 +8,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserType } from '../prisma/client';
-import { TestimonialsService } from './testimonials.service';
+import { TESTIMONIAL_SOURCES, TestimonialsService } from './testimonials.service';
 
 class SubmitTestimonialDto {
   @Type(() => Number)
@@ -23,7 +23,7 @@ class SubmitTestimonialDto {
   quote: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn(TESTIMONIAL_SOURCES)
   source?: TestimonialSource;
 
   @IsOptional()
@@ -38,7 +38,7 @@ class SubmitTestimonialDto {
 }
 
 class DismissPromptDto {
-  @IsString()
+  @IsIn(TESTIMONIAL_SOURCES)
   source: TestimonialSource;
 }
 
