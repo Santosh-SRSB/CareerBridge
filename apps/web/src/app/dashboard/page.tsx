@@ -10,13 +10,12 @@ import {
   formatLocationLabel,
   ONBOARDING_STEP_LABELS,
 } from '@careerbridge/shared';
-import type { ApplicationRecord, CandidateProfile, EmployabilityScore, JobCard } from '@careerbridge/shared';
+import type { ApplicationRecord, CandidateProfile, JobCard } from '@careerbridge/shared';
 import { ErrorState, Skeleton, SkeletonList } from '@/components/ui/StateViews';
 import { isUnauthorizedError } from '@/lib/client-errors';
 import { formatAnnualSalaryLpa } from '@/lib/match';
 import {
   getCandidateMe,
-  getEmployabilityScore,
   getProfileCompletion,
   listApplications,
   listJobs,
@@ -271,7 +270,6 @@ export default function DashboardPage() {
   const [name, setName] = useState('there');
   const [city, setCity] = useState('');
   const [completionPercent, setCompletionPercent] = useState(0);
-  const [employability, setEmployability] = useState<EmployabilityScore | null>(null);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [bio, setBio] = useState('');
   const [jobs, setJobs] = useState<JobCard[]>([]);
@@ -401,13 +399,6 @@ export default function DashboardPage() {
         setDataState('error');
       });
   }, [router, reloadKey]);
-
-  useEffect(() => {
-    if (dataState !== 'ready') return;
-    getEmployabilityScore()
-      .then(setEmployability)
-      .catch(() => setEmployability(null));
-  }, [dataState, reloadKey]);
 
   useEffect(() => {
     const onPhoto = (event: Event) => {
@@ -747,11 +738,6 @@ export default function DashboardPage() {
             <button type="button" className="cd-btn cd-btn--orange" onClick={() => router.push('/profile/details')}>
               View Profile
             </button>
-            {employability ? (
-              <Link href="/passport#employability" className="cd-employability" data-testid="dashboard-employability">
-                Employability score: {employability.score}/100 ({employability.band})
-              </Link>
-            ) : null}
           </aside>
         </section>
 
