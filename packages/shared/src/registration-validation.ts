@@ -1,4 +1,5 @@
 import { registrationPasswordError } from './auth';
+import { CITIES_BY_STATE } from './india-locations';
 import { validateEmailAddress } from './validation';
 
 export type RegistrationOtpChannel = 'MOBILE' | 'EMAIL' | null;
@@ -61,12 +62,24 @@ export function validateCandidateRegistration(input: CandidateRegistrationInput)
   return errors;
 }
 
+/** State and city must both come from the shared India location list, and the city must belong to the state. */
+export function businessLocationError(state: string | null | undefined, city: string | null | undefined): string | undefined {
+  const stateName = (state ?? '').trim();
+  const cityName = (city ?? '').trim();
+  if (!stateName || !cityName) return 'Select your business location.';
+  const cities = Object.prototype.hasOwnProperty.call(CITIES_BY_STATE, stateName) ? CITIES_BY_STATE[stateName] : null;
+  if (!cities || !cities.includes(cityName)) return 'Select a city from the list.';
+  return undefined;
+}
+
 export type EmployerRegistrationInput = {
   yourName: string;
   companyName: string;
   workEmail: string;
   national: string;
   mobileLength: number;
+  state: string;
+  city: string;
   password: string;
   confirmPassword: string;
   otpChannel: RegistrationOtpChannel;
@@ -75,7 +88,15 @@ export type EmployerRegistrationInput = {
 
 export type EmployerRegistrationErrors = Partial<
   Record<
-    'yourName' | 'companyName' | 'workEmail' | 'mobile' | 'password' | 'confirmPassword' | 'otpChannel' | 'terms',
+    | 'yourName'
+    | 'companyName'
+    | 'workEmail'
+    | 'mobile'
+    | 'location'
+    | 'password'
+    | 'confirmPassword'
+    | 'otpChannel'
+    | 'terms',
     string
   >
 >;
@@ -98,6 +119,8 @@ export function validateEmployerRegistration(input: EmployerRegistrationInput): 
     `Please enter a valid ${input.mobileLength}-digit mobile number`,
   );
   if (mobile) errors.mobile = mobile;
+  const location = businessLocationError(input.state, input.city);
+  if (location) errors.location = location;
   const password = registrationPasswordError(input.password);
   if (password) errors.password = password;
   if (!input.confirmPassword) errors.confirmPassword = 'Please confirm your password.';

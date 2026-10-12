@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PiiCryptoService } from '../common/crypto/pii-crypto.service';
 import { GstConfigService, type GstRuntimeConfig } from './gst.config';
 import { GstConfigError, GstProviderError, gstValidationException } from './gst.errors';
 import { IrisIrpGstProvider } from './gst.provider';
@@ -36,6 +37,7 @@ export class GstService {
     private readonly gstConfig: GstConfigService,
     private readonly provider: IrisIrpGstProvider,
     private readonly prisma: PrismaService,
+    private readonly pii: PiiCryptoService,
   ) {}
 
   health() {
@@ -155,10 +157,15 @@ export class GstService {
     responseCode: string | null;
     userId?: string;
   }) {
+    if (!this.pii.isConfigured()) {
+      this.logger.warn('GST audit row skipped: PII encryption is not configured.');
+      return;
+    }
     try {
       await this.prisma.gstVerificationAudit.create({
         data: {
-          gstin: input.gstin,
+          gstin: this.pii.encrypt('gst_verification_audits.gstin', input.gstin),
+          gstinHash: this.pii.lookupHash('gstin', input.gstin),
           verificationStatus: input.verificationStatus,
           verified: input.verified,
           provider: input.provider,

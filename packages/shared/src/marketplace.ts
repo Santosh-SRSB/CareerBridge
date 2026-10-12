@@ -1000,10 +1000,14 @@ export type EmployerProfile = {
   companyName: string;
   industry: string | null;
   city: string | null;
+  state?: string | null;
   contactName: string | null;
+  /** Masked for display (e.g. 29ABCPE*****1Z5); the full value never leaves the API. */
   gstNumber: string | null;
+  /** Masked for display. */
   cin: string | null;
   website: string | null;
+  /** Masked for display (e.g. ABCPE****F). */
   panNumber: string | null;
   workEmail: string | null;
   designation: string | null;
@@ -1082,6 +1086,7 @@ export type EmployerPaymentRecord = {
 
 export type EmployerKycPayload = {
   gstNumber: string;
+  /** Omit to keep the saved CIN; send '' to remove it. */
   cin?: string;
   website: string;
   panNumber: string;

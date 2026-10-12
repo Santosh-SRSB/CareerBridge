@@ -27,6 +27,7 @@ function errorCode(err: unknown) {
 function harness(users: Row[] = []) {
   const otpRequests: Row[] = [];
   const updateManyCalls: Row[] = [];
+  const createdUsers: Row[] = [];
   let seq = 0;
   const matches = (row: Row, where: Row) =>
     Object.entries(where).every(([key, cond]) => {
@@ -41,6 +42,17 @@ function harness(users: Row[] = []) {
     user: {
       findFirst: async ({ where }: Row) => users.find((u) => matches(u, where)) ?? null,
       update: async ({ where, data }: Row) => Object.assign(users.find((u) => u.id === where.id)!, data),
+      create: async ({ data }: Row) => {
+        createdUsers.push(data);
+        const row = {
+          id: randomUUID(),
+          ...data,
+          employer: data.employer?.create ?? null,
+          candidate: data.candidate?.create ?? null,
+        };
+        users.push(row);
+        return row;
+      },
     },
     refreshToken: { create: async ({ data }: Row) => data },
     otpRequest: {
@@ -77,7 +89,7 @@ function harness(users: Row[] = []) {
   const firebase = { isConfigured: () => false };
   const email = { isConfigured: () => false };
   const svc = new AuthService(prisma, jwt as any, config as any, firebase as any, email as any);
-  return { svc, otpRequests, updateManyCalls };
+  return { svc, otpRequests, updateManyCalls, createdUsers };
 }
 
 const register = (extra: Row = {}) => ({
@@ -155,6 +167,51 @@ describe('Registration "Change mobile number"', () => {
       assert.ok(!row.payloadJson.includes('replacesRequestId'));
       assert.ok(JSON.parse(row.payloadJson).passwordHash);
     }
+  });
+});
+
+describe('Employer registration business location', () => {
+  const employerRegister = (extra: Row = {}) =>
+    register({
+      accountType: 'EMPLOYER',
+      email: 'hr@acme.test',
+      fullName: 'Priya Rao',
+      companyName: 'Acme Pvt Ltd',
+      location: 'Bengaluru, Karnataka',
+      state: 'Karnataka',
+      city: 'Bengaluru',
+      ...extra,
+    });
+
+  it('is required for an employer registration OTP; nothing is stored without it', async () => {
+    const { svc, otpRequests } = harness();
+    for (const extra of [
+      { location: undefined, state: undefined, city: undefined },
+      { state: 'Karnataka', city: undefined },
+      { state: 'Maharashtra', city: 'Bengaluru' },
+    ]) {
+      await assert.rejects(svc.requestOtp(employerRegister(extra)), (err) => {
+        assert.equal(errorCode(err), 'VALIDATION_ERROR');
+        return true;
+      });
+    }
+    assert.equal(otpRequests.length, 0);
+  });
+
+  it('candidate registration keeps location optional', async () => {
+    const { svc } = harness();
+    await svc.requestOtp(register());
+  });
+
+  it('the verified employer account is created with the business city and state', async () => {
+    const { svc, createdUsers } = harness();
+    const { requestId } = await svc.requestOtp(employerRegister());
+    const result = await svc.verifyOtp({ requestId, otp: '123456' } as any);
+    assert.deepEqual(result, { registered: true, signInRequired: true });
+    const employer = createdUsers[0]?.employer?.create;
+    assert.equal(employer.city, 'Bengaluru');
+    assert.equal(employer.state, 'Karnataka');
+    assert.equal(employer.companyName, 'Acme Pvt Ltd');
   });
 });
 

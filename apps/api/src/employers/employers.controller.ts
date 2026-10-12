@@ -102,9 +102,10 @@ class SaveEmployerKycDto {
   @MinLength(1)
   gstNumber: string;
 
+  /** Omitted: the saved CIN is kept. Empty string or null: the saved CIN is removed. */
   @IsOptional()
   @IsString()
-  cin?: string;
+  cin?: string | null;
 
   @IsString()
   @MinLength(1)

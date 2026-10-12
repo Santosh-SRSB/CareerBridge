@@ -2264,6 +2264,28 @@
   color: #b42318;
 }
 
+.ep-kyc__saved {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-style: normal;
+  color: #5a6864;
+}
+
+.ep-kyc__remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #3f4b48;
+}
+
+.ep-kyc__remove input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
 .ep-kyc__verify-btn {
   border: 1px solid #e2e8f0 !important;
   background: #f8fafc !important;

@@ -114,7 +114,7 @@ test('clearing after successful verification (or Start over) removes the draft',
   assert.equal(loadRegistrationDraft('CANDIDATE', storage), null);
 });
 
-test('employer drafts keep the company name and drop candidate-only fields', () => {
+test('employer drafts keep the company name and business location and drop candidate-only fields', () => {
   const draft = sanitizeRegistrationDraft({
     accountType: 'EMPLOYER',
     fullName: 'Ravi',
@@ -129,7 +129,7 @@ test('employer drafts keep the company name and drop candidate-only fields', () 
   })!;
   assert.equal(draft.companyName, 'Acme Pvt Ltd');
   assert.equal(draft.national, '9800000003');
-  assert.equal('location' in draft, false);
+  assert.equal(draft.location, 'Maharashtra|Pune');
   assert.equal('whatsappOptIn' in draft, false);
 });
 

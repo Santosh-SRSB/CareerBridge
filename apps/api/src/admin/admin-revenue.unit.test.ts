@@ -63,7 +63,7 @@ function fakePrisma(payments: Row[]) {
 }
 
 const revenue = (payments: Row[]) =>
-  new AdminService(fakePrisma(payments) as never, {} as never, {} as never).revenue(NOW);
+  new AdminService(fakePrisma(payments) as never, {} as never, {} as never, {} as never).revenue(NOW);
 
 describe('Revenue — canonical calculation', () => {
   it('zero revenue when there are no payments', async () => {

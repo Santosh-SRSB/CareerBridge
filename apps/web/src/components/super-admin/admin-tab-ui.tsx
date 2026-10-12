@@ -405,6 +405,7 @@ export function DetailPanel({
               <Field label="Hires" value={counts?.hires} />
               <Field label="Verification" value={data.verificationStatus} />
               <Field label="City" value={data.city} />
+              {kind === 'employers' ? <Field label="GSTIN" value={data.gstinMasked} /> : null}
             </div>
           </Section>
         )}

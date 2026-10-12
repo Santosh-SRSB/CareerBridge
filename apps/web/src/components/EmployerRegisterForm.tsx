@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { PhoneField } from '@/components/PhoneField';
 import { AuthField, authFieldDescribedBy } from '@/components/auth/AuthField';
-import { BuildingIcon, EyeIcon, LockIcon, MailIcon, PhoneIcon, UserIcon } from '@/components/auth/AuthIcons';
+import { BuildingIcon, EyeIcon, LockIcon, MailIcon, MapPinIcon, PhoneIcon, UserIcon } from '@/components/auth/AuthIcons';
 import { COUNTRIES, DEFAULT_COUNTRY, toE164 } from '@/lib/phone';
 import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
@@ -13,6 +13,7 @@ import { clearPendingPassword, getPendingPassword, setPendingPassword } from '@/
 import { clearRegistrationDraft, loadRegistrationDraft, saveRegistrationDraft } from '@/lib/registration-draft';
 import { authErrorMessage } from '@/lib/auth-errors';
 import {
+  CITIES_BY_STATE,
   COMPANY_NAME_MAX,
   hasRegistrationErrors,
   REGISTRATION_PASSWORD_HINT,
@@ -33,11 +34,14 @@ const FIELD_ORDER: Array<[Field, string]> = [
   ['companyName', 'emp-company-name'],
   ['workEmail', 'emp-work-email'],
   ['mobile', 'emp-mobile'],
+  ['location', 'emp-location'],
   ['password', 'emp-password'],
   ['confirmPassword', 'emp-confirm-password'],
   ['otpChannel', 'emp-otp-mobile'],
   ['terms', 'emp-terms'],
 ];
+
+const LOCATION_GROUPS = Object.entries(CITIES_BY_STATE).sort(([a], [b]) => a.localeCompare(b));
 
 export function EmployerRegisterForm() {
   const router = useRouter();
@@ -46,6 +50,8 @@ export function EmployerRegisterForm() {
   const [workEmail, setWorkEmail] = useState('');
   const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
+  /** "State|City" option value. */
+  const [location, setLocation] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -70,6 +76,7 @@ export function EmployerRegisterForm() {
     setWorkEmail(draft.email);
     setDial(draft.dial || DEFAULT_COUNTRY.dial);
     setNational(draft.national);
+    setLocation(draft.location || '');
     setOtpChannel(draft.otpChannel);
     setAgreeTerms(draft.agreedToTerms);
     const pendingPassword = getPendingPassword();
@@ -92,6 +99,7 @@ export function EmployerRegisterForm() {
     setWorkEmail('');
     setDial(DEFAULT_COUNTRY.dial);
     setNational('');
+    setLocation('');
     setPassword('');
     setConfirmPassword('');
     setOtpChannel(null);
@@ -103,12 +111,15 @@ export function EmployerRegisterForm() {
   }
 
   const country = COUNTRIES.find((item) => item.dial === dial) || DEFAULT_COUNTRY;
+  const [locationState = '', locationCity = ''] = location ? location.split('|') : [];
   const errors = validateEmployerRegistration({
     yourName,
     companyName,
     workEmail,
     national,
     mobileLength: country.maxLength,
+    state: locationState,
+    city: locationCity,
     password,
     confirmPassword,
     otpChannel,
@@ -131,6 +142,11 @@ export function EmployerRegisterForm() {
     }
 
     const phone = toE164(dial, national);
+    const businessLocation = {
+      location: `${locationCity}, ${locationState}`,
+      city: locationCity,
+      state: locationState,
+    };
     setLoading(true);
     try {
       const result = await requestOtp({
@@ -141,6 +157,7 @@ export function EmployerRegisterForm() {
         email: workEmail.trim(),
         fullName: yourName.trim(),
         companyName: companyName.trim(),
+        ...businessLocation,
         password,
         ...(replacesRequestId.current ? { replacesRequestId: replacesRequestId.current } : {}),
       });
@@ -160,6 +177,7 @@ export function EmployerRegisterForm() {
         email: workEmail,
         dial,
         national,
+        location,
         otpChannel,
         agreedToTerms: agreeTerms,
         pendingRequestId: result.requestId,
@@ -177,6 +195,7 @@ export function EmployerRegisterForm() {
           phone,
           accountType: 'EMPLOYER',
           companyName: companyName.trim(),
+          ...businessLocation,
         },
       });
       router.push('/verify-otp');
@@ -190,6 +209,7 @@ export function EmployerRegisterForm() {
   const nameError = shown('yourName');
   const companyError = shown('companyName');
   const emailError = shown('workEmail');
+  const locationError = shown('location');
   const passwordError = shown('password');
   const confirmError = shown('confirmPassword');
   const otpError = shown('otpChannel');
@@ -286,6 +306,41 @@ export function EmployerRegisterForm() {
               hint=""
             />
           </div>
+        </AuthField>
+
+        <AuthField
+          id="emp-location"
+          label="Business Location"
+          required
+          icon={<MapPinIcon />}
+          error={locationError}
+        >
+          <select
+            id="emp-location"
+            name="location"
+            required
+            aria-required
+            aria-invalid={locationError ? true : undefined}
+            aria-describedby={authFieldDescribedBy('emp-location', locationError)}
+            value={location}
+            onChange={(event) => {
+              setLocation(event.target.value);
+              touch('location');
+            }}
+            onBlur={() => touch('location')}
+            className="cb-auth-field__input"
+          >
+            <option value="">Select your city</option>
+            {LOCATION_GROUPS.map(([state, cities]) => (
+              <optgroup key={state} label={state}>
+                {cities.map((city) => (
+                  <option key={`${state}|${city}`} value={`${state}|${city}`}>
+                    {city}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         </AuthField>
 
         <AuthField

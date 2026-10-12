@@ -185,7 +185,7 @@ function harness(opts: { candidates?: number; employers?: number } = {}) {
       },
     },
   };
-  const service = new AdminService(prisma as never, {} as never, {} as never);
+  const service = new AdminService(prisma as never, {} as never, {} as never, {} as never);
   // The summary sheet reuses the Reports blocks; stub them so the fake stays small.
   (service as any).reports = async () => ({
     candidate: { profilesCompleted: 3, resumesCreated: 9, avgAtsScore: 71.5 },

@@ -11,6 +11,7 @@ import {
   ErrorCode,
   aiBudgetStatus,
   aiUsageDayStart,
+  maskGstinForDisplay,
   parseAiSettings,
   registrationPasswordError,
 } from '@careerbridge/shared';
@@ -19,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { hashPlatformPassword, verifyPassword } from '../auth/password.util';
 import { EmployersService } from '../employers/employers.service';
+import { PiiCryptoService } from '../common/crypto/pii-crypto.service';
 import { employerPlanUsage, usagePeriod } from '../employers/employer-plan';
 import { closedAtForStatusChange } from '../employers/job-lifecycle';
 import { ACTIVE_INTERVIEW_STATUSES, INTERVIEW_RESCHEDULED_AUDIT_ACTION } from '../employers/employer-policy';
@@ -191,6 +193,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
     private readonly employerService: EmployersService,
+    private readonly pii: PiiCryptoService,
   ) {}
 
   private async writeAudit(input: {
@@ -837,6 +840,7 @@ export class AdminService {
     const updated = await this.prisma.employer.update({
       where: { id },
       data: { verified: true, verificationStatus: 'VERIFIED' },
+      select: { id: true, companyName: true, verified: true, verificationStatus: true },
     });
     await this.writeAudit({
       userId: actorId,
@@ -976,7 +980,9 @@ export class AdminService {
       accountStatus: row.user.status,
       verified: row.verified,
       verificationStatus: row.verificationStatus,
+      gstinMasked: this.pii.mask('employers.gst_number', row.gstNumber, maskGstinForDisplay),
       city: row.city,
+      state: row.state,
       createdAt: row.createdAt.toISOString(),
       counts: {
         jobs: row._count.jobs,

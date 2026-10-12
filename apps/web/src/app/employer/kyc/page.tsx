@@ -5,12 +5,36 @@ import { useRouter } from 'next/navigation';
 import { EmployerOnboardingFrame } from '@/components/EmployerOnboardingFrame';
 import { Button } from '@/components/ui/Button';
 import { getEmployerMe, saveEmployerKyc, verifyGstin } from '@/lib/api';
+import { kycCinPayload } from '@/lib/kyc-identifiers';
+import {
+  cinFormatError,
+  gstinFormatError,
+  normalizeBusinessIdentifier,
+  panFormatError,
+} from '@careerbridge/shared';
+
+type SavedIdentifiers = { gstNumber: string; panNumber: string; cin: string };
+
+function SavedHint({ value, keepWhenBlank = false }: { value: string; keepWhenBlank?: boolean }) {
+  if (!value) return null;
+  return (
+    <em className="ep-kyc__saved" data-testid="kyc-saved-identifier">
+      Saved: {value}.{' '}
+      {keepWhenBlank
+        ? 'Leave blank to keep it, or enter a new number to replace it.'
+        : 'Enter the full number again to keep or change it.'}
+    </em>
+  );
+}
 
 export default function EmployerKycPage() {
   const router = useRouter();
+  /** Masked values from the server; the full identifiers are never sent back to the browser. */
+  const [saved, setSaved] = useState<SavedIdentifiers>({ gstNumber: '', panNumber: '', cin: '' });
   const [gstNumber, setGstNumber] = useState('');
   const [trademark, setTrademark] = useState('');
   const [cin, setCin] = useState('');
+  const [removeSavedCin, setRemoveSavedCin] = useState(false);
   const [website, setWebsite] = useState('');
   const [panNumber, setPanNumber] = useState('');
   const [gstVerified, setGstVerified] = useState(false);
@@ -32,10 +56,12 @@ export default function EmployerKycPage() {
           router.replace('/employer/verify');
           return;
         }
-        setGstNumber(profile.gstNumber || '');
-        setCin(profile.cin || '');
+        setSaved({
+          gstNumber: profile.gstNumber || '',
+          panNumber: profile.panNumber || '',
+          cin: profile.cin || '',
+        });
         setWebsite(profile.website?.replace(/^https?:\/\//, '') || '');
-        setPanNumber(profile.panNumber || '');
         setReady(true);
       })
       .catch(() => router.replace('/login?role=employer'));
@@ -46,9 +72,10 @@ export default function EmployerKycPage() {
     setGstVerified(false);
     setGstStatus('');
     setTrademark('');
-    const gstin = gstNumber.trim().toUpperCase();
-    if (gstin.length !== 15) {
-      setError('Enter a valid 15-character GSTIN before verifying.');
+    const gstin = normalizeBusinessIdentifier(gstNumber);
+    const formatError = gstinFormatError(gstin);
+    if (formatError) {
+      setError(formatError);
       return;
     }
     setVerifying(true);
@@ -87,10 +114,18 @@ export default function EmployerKycPage() {
       setError('GSTIN, trademark, PAN, and website are required. CIN is optional.');
       return;
     }
+    const gstin = normalizeBusinessIdentifier(gstNumber);
+    const pan = normalizeBusinessIdentifier(panNumber);
+    const cinValue = normalizeBusinessIdentifier(cin);
+    const formatError = gstinFormatError(gstin) || panFormatError(pan) || cinFormatError(cinValue);
+    if (formatError) {
+      setError(formatError);
+      return;
+    }
 
     setLoading(true);
     try {
-      const result = await verifyGstin(gstNumber.trim().toUpperCase());
+      const result = await verifyGstin(gstin);
       if (!result.verified || result.status !== 'ACTIVE') {
         setError(
           result.message ||
@@ -105,10 +140,10 @@ export default function EmployerKycPage() {
       const mark = (result.trademark || result.tradeName || '').trim();
       if (mark) setTrademark(mark);
       await saveEmployerKyc({
-        gstNumber: gstNumber.trim().toUpperCase(),
-        ...(cin.trim() ? { cin: cin.trim().toUpperCase() } : {}),
+        gstNumber: gstin,
+        ...kycCinPayload(cinValue, removeSavedCin && Boolean(saved.cin)),
         website: website.trim(),
-        panNumber: panNumber.trim().toUpperCase(),
+        panNumber: pan,
         trademark: (mark || trademark).trim(),
       });
       router.push('/employer/verify');
@@ -172,6 +207,7 @@ export default function EmployerKycPage() {
               Verify GSTIN
             </Button>
           </div>
+          <SavedHint value={saved.gstNumber} />
         </div>
 
         <label className="ep-kyc__field">
@@ -193,12 +229,14 @@ export default function EmployerKycPage() {
             <input
               name="cin"
               autoComplete="off"
-              placeholder="U72900MH2015PTC12345"
+              placeholder="U72900MH2015PTC123456"
+              maxLength={25}
               value={cin}
               onChange={(event) => setCin(event.target.value.toUpperCase())}
               className="ep-kyc__input"
             />
             <em>Corporate identification number</em>
+            <SavedHint value={saved.cin} keepWhenBlank />
           </label>
           <label className="ep-kyc__field">
             <span>PAN</span>
@@ -206,14 +244,29 @@ export default function EmployerKycPage() {
               name="panNumber"
               required
               autoComplete="off"
-              placeholder="ABCDE1234F"
+              placeholder="ABCPE1234F"
+              maxLength={14}
               value={panNumber}
               onChange={(event) => setPanNumber(event.target.value.toUpperCase())}
               className="ep-kyc__input"
             />
             <em>Permanent account number (required)</em>
+            <SavedHint value={saved.panNumber} />
           </label>
         </div>
+
+        {saved.cin ? (
+          <label className="ep-kyc__remove">
+            <input
+              type="checkbox"
+              name="removeSavedCin"
+              checked={removeSavedCin}
+              disabled={Boolean(cin.trim())}
+              onChange={(event) => setRemoveSavedCin(event.target.checked)}
+            />
+            <span>Remove the saved CIN</span>
+          </label>
+        ) : null}
 
         <label className="ep-kyc__field">
           <span>Company website</span>

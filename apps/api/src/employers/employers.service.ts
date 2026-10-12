@@ -22,12 +22,19 @@ import {
   meetsEducationFilter,
   normalizeHttpUrl,
   COMPANY_ABOUT_MAX,
+  cinFormatError,
   isCompanySize,
   jobSalaryRequiredError,
+  maskGstinForDisplay,
+  normalizeBusinessIdentifier,
+  panFormatError,
   parseLinkedinUrl,
 } from '@careerbridge/shared';
 import { GstService } from '../gst/gst.service';
 import { normalizeGstin, validateGstinFormat } from '../gst/gst.validator';
+import { PiiCryptoService } from '../common/crypto/pii-crypto.service';
+import { isPiiCiphertext } from '../common/crypto/pii-crypto';
+import { maskedBusinessIdentifiers } from './employer-identifiers';
 import {
   ACTIVE_INTERVIEW_STATUSES,
   applicationTransitionError,
@@ -131,6 +138,7 @@ export class EmployersService {
     private readonly testimonials: TestimonialsService,
     private readonly gst: GstService,
     private readonly catalog: CatalogService,
+    private readonly pii: PiiCryptoService,
   ) {}
 
   private async assertJobCategory(category: string, existingCategory?: string | null) {
@@ -231,12 +239,15 @@ export class EmployersService {
       if (!parsed.ok) throw invalid(parsed.message);
       linkedinUrl = parsed.value;
     }
+    // The profile form edits the city only; a state recorded for a different city would be wrong.
+    const cityChanged = dto.city !== undefined && dto.city.trim() !== (employer.city || '').trim();
     const updated = await this.prisma.employer.update({
       where: { id: employer.id },
       data: {
         ...(dto.companyName ? { companyName: dto.companyName.trim() } : {}),
         ...(dto.industry !== undefined ? { industry: dto.industry } : {}),
         ...(dto.city !== undefined ? { city: dto.city } : {}),
+        ...(cityChanged ? { state: null } : {}),
         ...(dto.contactName !== undefined ? { contactName: dto.contactName } : {}),
         ...(website !== undefined ? { website } : {}),
         ...(dto.workEmail !== undefined ? { workEmail: dto.workEmail.trim() || null } : {}),
@@ -253,7 +264,7 @@ export class EmployersService {
     userId: string,
     dto: {
       gstNumber: string;
-      cin?: string;
+      cin?: string | null;
       website: string;
       panNumber: string;
       trademark?: string;
@@ -261,15 +272,16 @@ export class EmployersService {
   ) {
     const employer = await this.requireEmployer(userId);
     const gst = normalizeGstin(dto.gstNumber || '');
-    const cin = (dto.cin || '').trim().toUpperCase();
-    const pan = (dto.panNumber || '').trim().toUpperCase();
+    const cinSupplied = dto.cin !== undefined;
+    const cin = normalizeBusinessIdentifier(dto.cin);
+    const pan = normalizeBusinessIdentifier(dto.panNumber);
     if (![gst, pan, (dto.website || '').trim()].every((value) => value.length > 0)) {
       throw new HttpException(
         { code: SharedError.VALIDATION_ERROR, message: 'GSTIN, PAN, and website are required.' },
         HttpStatus.BAD_REQUEST,
       );
     }
-    const formatError = validateGstinFormat(gst);
+    const formatError = validateGstinFormat(gst) || panFormatError(pan) || cinFormatError(cin);
     if (formatError) {
       throw new BadRequestException({ code: SharedError.VALIDATION_ERROR, message: formatError });
     }
@@ -280,6 +292,8 @@ export class EmployersService {
         message: site.ok ? 'GSTIN, PAN, and website are required.' : site.message,
       });
     }
+    // Checked before the GST lookup so a missing key never costs a provider call or stores plaintext.
+    this.pii.assertConfigured();
 
     const verification = await this.gst.verify(gst, userId);
     if (verification.status === 'UNKNOWN') {
@@ -303,7 +317,8 @@ export class EmployersService {
       gst,
       verifiedTradeName.length >= 2 ? verifiedTradeName : employer.companyName,
     );
-    const gstChanged = (employer.gstNumber || '').trim().toUpperCase() !== gst;
+    const previousGst = this.pii.decrypt('employers.gst_number', employer.gstNumber);
+    const gstChanged = normalizeGstin(previousGst || '') !== gst;
     const current = employer.verificationStatus;
     const nextStatus =
       current === 'UNVERIFIED' || (gstChanged && ['PENDING', 'VERIFIED', 'REJECTED'].includes(current))
@@ -313,11 +328,11 @@ export class EmployersService {
     const updated = await this.prisma.employer.update({
       where: { id: employer.id },
       data: {
-        gstNumber: gst,
+        gstNumber: this.pii.encrypt('employers.gst_number', gst),
         companyId: company.id,
-        cin: cin || null,
+        ...this.kycCinUpdate(cinSupplied, cin, employer.cin),
         website: site.value,
-        panNumber: pan,
+        panNumber: this.pii.encrypt('employers.pan_number', pan),
         ...(verifiedTradeName.length >= 2 ? { companyName: verifiedTradeName } : {}),
         verificationStatus: nextStatus as typeof employer.verificationStatus,
         verified: nextStatus === 'VERIFIED',
@@ -326,23 +341,40 @@ export class EmployersService {
     return {
       ...(await this.profile(updated)),
       gstVerification: { status: verification.status, provider: verification.provider, mock: verification.mock },
-      company: { id: company.id, name: company.name, gstin: company.gstin, existing: !created },
+      company: { id: company.id, name: company.name, gstinMasked: maskGstinForDisplay(gst), existing: !created },
     };
   }
 
   /**
-   * One company per GSTIN (UNIQUE on companies.gstin). A later staff account links to the existing row and
-   * never overwrites its canonical details; a concurrent first registration that loses the insert race
-   * re-reads the winner's row.
+   * The KYC form cannot show the saved CIN (only a mask), so an omitted CIN keeps the saved one; an explicit
+   * empty value or null removes it. A kept legacy plaintext CIN is encrypted in place; kept ciphertext is not touched.
+   */
+  private kycCinUpdate(supplied: boolean, cin: string, stored: string | null): { cin?: string | null } {
+    if (supplied) return { cin: cin ? this.pii.encrypt('employers.cin', cin) : null };
+    const legacy = stored && !isPiiCiphertext(stored) ? normalizeBusinessIdentifier(stored) : '';
+    return legacy ? { cin: this.pii.encrypt('employers.cin', legacy) } : {};
+  }
+
+  /**
+   * One company per GSTIN, keyed by the GSTIN blind index (UNIQUE on companies.gstin_hash). A later staff
+   * account links to the existing row and never overwrites its canonical details; a concurrent first
+   * registration that loses the insert race re-reads the winner's row. Rows created before encryption are
+   * found by their plaintext gstin until the backfill script encrypts them.
    */
   private async companyForGstin(gstin: string, name: string) {
-    const existing = await this.prisma.company.findUnique({ where: { gstin } });
+    const gstinHash = this.pii.lookupHash('gstin', gstin);
+    const existing =
+      (await this.prisma.company.findUnique({ where: { gstinHash } })) ??
+      (await this.prisma.company.findUnique({ where: { gstin } }));
     if (existing) return { company: existing, created: false };
     try {
-      return { company: await this.prisma.company.create({ data: { gstin, name } }), created: true };
+      const company = await this.prisma.company.create({
+        data: { gstin: this.pii.encrypt('companies.gstin', gstin), gstinHash, name },
+      });
+      return { company, created: true };
     } catch (err) {
       if (!(err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002')) throw err;
-      const winner = await this.prisma.company.findUnique({ where: { gstin } });
+      const winner = await this.prisma.company.findUnique({ where: { gstinHash } });
       if (!winner) throw err;
       return { company: winner, created: false };
     }
@@ -2075,6 +2107,7 @@ export class EmployersService {
     companyName: string;
     industry: string | null;
     city: string | null;
+    state?: string | null;
     contactName: string | null;
     gstNumber: string | null;
     cin: string | null;
@@ -2090,6 +2123,7 @@ export class EmployersService {
     verified: boolean;
   }) {
     const { verificationStatus, verified } = withEffectiveVerification(employer);
+    const identifiers = maskedBusinessIdentifiers(this.pii, employer);
     return {
       companySize: employer.companySize ?? null,
       about: employer.about ?? null,
@@ -2098,11 +2132,12 @@ export class EmployersService {
       companyName: employer.companyName,
       industry: employer.industry,
       city: employer.city,
+      state: employer.state ?? null,
       contactName: employer.contactName,
-      gstNumber: employer.gstNumber,
-      cin: employer.cin,
+      gstNumber: identifiers.gstNumber,
+      cin: identifiers.cin,
       website: employer.website,
-      panNumber: employer.panNumber,
+      panNumber: identifiers.panNumber,
       workEmail: employer.workEmail,
       designation: employer.designation,
       logoUrl: employer.logoUrl || null,

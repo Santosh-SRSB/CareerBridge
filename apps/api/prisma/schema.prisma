@@ -336,7 +336,10 @@ enum PaymentStatus {
 /// One row per GSTIN. Several employer (staff) accounts may link to the same company.
 model Company {
   id        String   @id @default(uuid())
+  /// AES-256-GCM ciphertext (pii:v1:...); rows not yet backfilled may still hold the plaintext GSTIN.
   gstin     String   @unique
+  /// HMAC-SHA256 blind index of the normalised GSTIN; the uniqueness and lookup key for new rows.
+  gstinHash String?  @unique @map("gstin_hash")
   name      String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -353,7 +356,10 @@ model Employer {
   companyName        String                     @map("company_name")
   industry           String?
   city               String?
+  /// Business location state, captured at registration; null for accounts created before it was collected.
+  state              String?
   contactName        String?                    @map("contact_name")
+  /// gstNumber, cin and panNumber hold AES-256-GCM ciphertext (pii:v1:...); legacy rows may hold plaintext until backfilled.
   gstNumber          String?                    @map("gst_number")
   cin                String?
   website            String?
@@ -992,7 +998,10 @@ model RefreshToken {
 /// Optional audit trail for GSTIN verification attempts (no secrets / raw provider payloads).
 model GstVerificationAudit {
   id                   String   @id @default(uuid())
+  /// AES-256-GCM ciphertext (pii:v1:...); legacy rows may hold plaintext until backfilled.
   gstin                String
+  /// HMAC-SHA256 blind index of the normalised GSTIN, for finding attempts for one GSTIN.
+  gstinHash            String?  @map("gstin_hash")
   verificationStatus   String   @map("verification_status")
   verified             Boolean  @default(false)
   provider             String   @default("IRIS_IRP")
@@ -1004,6 +1013,7 @@ model GstVerificationAudit {
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@index([gstin])
+  @@index([gstinHash])
   @@index([userId])
   @@index([createdAt])
   @@map("gst_verification_audits")

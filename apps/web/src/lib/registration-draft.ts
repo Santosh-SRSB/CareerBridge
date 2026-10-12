@@ -13,7 +13,7 @@ export type RegistrationFormDraft = {
   national: string;
   otpChannel: 'MOBILE' | 'EMAIL' | null;
   agreedToTerms: boolean;
-  /** Candidate: "State|City" option value. */
+  /** "State|City" option value: optional for candidates, the business location for employers. */
   location?: string;
   /** Candidate: WhatsApp interview-notification consent; on unless the candidate turned it off. */
   whatsappOptIn?: boolean;
@@ -48,9 +48,9 @@ export function sanitizeRegistrationDraft(input: unknown): RegistrationFormDraft
     national: text(raw.national, 15).replace(/\D/g, ''),
     otpChannel: raw.otpChannel === 'MOBILE' || raw.otpChannel === 'EMAIL' ? raw.otpChannel : null,
     agreedToTerms: raw.agreedToTerms === true,
+    location: text(raw.location, 120),
   };
   if (raw.accountType === 'CANDIDATE') {
-    draft.location = text(raw.location, 120);
     draft.whatsappOptIn = raw.whatsappOptIn !== false;
   } else {
     draft.companyName = text(raw.companyName, 200);

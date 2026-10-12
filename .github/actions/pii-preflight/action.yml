@@ -1,0 +1,42 @@
+name: PII keyring deploy preflight
+description: >
+  Fails unless the API service template and its latest ready revision reference the PII keyring secrets at the
+  pinned version (.github/scripts/pii-deploy-preflight.mjs). Reads Cloud Run service and revision descriptions
+  only (roles/run.developer); never reads Secret Manager or prints secret payloads or plain env values.
+  Requires a prior Google Cloud login and gcloud, plus PII_KEYS_SECRET, PII_LOOKUP_SECRET, PII_SECRET_VERSION and
+  PII_ACTIVE_KEY_ID in the environment.
+
+inputs:
+  service:
+    description: "Cloud Run service name"
+    required: true
+  region:
+    description: "Cloud Run region"
+    required: true
+  project:
+    description: "Google Cloud project id"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check PII keyring binding
+      shell: bash
+      env:
+        SERVICE: ${{ inputs.service }}
+        REGION: ${{ inputs.region }}
+        PROJECT: ${{ inputs.project }}
+      run: |
+        set -euo pipefail
+        dir=$(mktemp -d "$RUNNER_TEMP/pii-preflight.XXXXXX")
+        trap 'rm -rf "$dir"' EXIT
+        gcloud run services describe "$SERVICE" --region="$REGION" --project="$PROJECT" \
+          --format=json > "$dir/service.json"
+        ready=$(jq -r '.status.latestReadyRevisionName // empty' "$dir/service.json")
+        if [ -n "$ready" ]; then
+          gcloud run revisions describe "$ready" --region="$REGION" --project="$PROJECT" \
+            --format=json > "$dir/revision.json"
+        else
+          echo '{}' > "$dir/revision.json"
+        fi
+        node "$GITHUB_ACTION_PATH/../../scripts/pii-deploy-preflight.mjs" "$dir/service.json" "$dir/revision.json"
