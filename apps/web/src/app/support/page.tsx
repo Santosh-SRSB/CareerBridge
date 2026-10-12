@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { SUPPORT_FAQS, type FaqItem } from '@/data/support-faqs';
+import { SUPPORT_EMAIL } from '@/lib/social-links';
 
 type FaqTab = 'candidate' | 'employer' | 'general';
 
@@ -45,7 +46,7 @@ export default function SupportPage() {
     const body = encodeURIComponent(
       `Name: ${name}\nEmail: ${email}\nTopic: ${topic}\n\n${message}`,
     );
-    window.location.href = `mailto:Srsbhr25@gmail.com?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
     setSent(true);
   }
 
@@ -171,8 +172,8 @@ export default function SupportPage() {
                 className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success-light)] p-4 text-sm font-semibold text-[var(--color-success-dark)]"
               >
                 Your mail client should open with the request. If it doesn&apos;t, email{' '}
-                <a className={`rounded-sm underline ${focusRing}`} href="mailto:Srsbhr25@gmail.com">
-                  Srsbhr25@gmail.com
+                <a className={`rounded-sm underline ${focusRing}`} href={`mailto:${SUPPORT_EMAIL}`}>
+                  {SUPPORT_EMAIL}
                 </a>
                 .
               </p>
@@ -256,7 +257,7 @@ export default function SupportPage() {
                   business day.
                 </p>
                 <a
-                  href="mailto:Srsbhr25@gmail.com"
+                  href={`mailto:${SUPPORT_EMAIL}`}
                   className={`mt-6 inline-flex max-w-full items-center gap-3 rounded-full bg-[var(--color-primary)] px-5 py-3 text-sm font-bold text-white no-underline transition hover:-translate-y-0.5 hover:bg-[var(--color-primary-hover)] ${focusRing}`}
                 >
                   <span
@@ -268,7 +269,7 @@ export default function SupportPage() {
                       <path d="M3 7l9 7 9-7" />
                     </svg>
                   </span>
-                  Srsbhr25@gmail.com
+                  {SUPPORT_EMAIL}
                 </a>
               </div>
               <div className="relative flex flex-col justify-center gap-4 border-t border-[var(--color-border)] bg-[var(--color-primary-dark)] p-7 text-white sm:p-9 md:border-l md:border-t-0">
@@ -281,7 +282,7 @@ export default function SupportPage() {
                   We&apos;ll route it to the right team.
                 </p>
                 <a
-                  href="mailto:Srsbhr25@gmail.com?subject=CareerBridge%20query"
+                  href={`mailto:${SUPPORT_EMAIL}?subject=CareerBridge%20query`}
                   className={`relative inline-flex w-fit items-center gap-2 rounded-sm text-sm font-semibold text-white underline-offset-4 hover:underline ${focusRingOnNavy}`}
                 >
                   Open mail app →

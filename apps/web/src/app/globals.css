@@ -1913,10 +1913,13 @@ body {
   position: fixed;
   inset: 0;
   z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #0a2e2c, #062120);
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  overflow: hidden;
+  background: #f7f8ff;
+  color: #10137c;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
   transition: opacity 0.5s ease, visibility 0.5s ease;
 }
 
@@ -1926,79 +1929,71 @@ body {
   pointer-events: none;
 }
 
-.app-loader-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.35rem;
+.app-loader-card {
+  width: min(420px, 92vw);
+  text-align: center;
 }
 
-.app-loader-row {
-  display: flex;
-  align-items: center;
-  gap: 1.15rem;
-}
-
-.app-loader-logo {
-  position: relative;
-  overflow: hidden;
-  width: 188px;
-}
-
-.app-loader-wordmark {
+.app-loader-mark {
   display: block;
-  height: 56px;
-  width: 56px;
-  object-fit: contain;
-  background: transparent;
+  width: 220px;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  animation: app-loader-rise 0.8s ease both;
 }
 
-.app-loader-shine {
-  position: absolute;
-  inset: -20% -40%;
-  background: linear-gradient(
-    105deg,
-    transparent 0%,
-    transparent 32%,
-    rgba(255, 255, 255, 0.18) 42%,
-    rgba(234, 179, 8, 0.7) 50%,
-    rgba(255, 255, 255, 0.18) 58%,
-    transparent 68%,
-    transparent 100%
-  );
-  animation: app-loader-shine 1.6s ease-in-out infinite;
-}
-
-.app-loader-ring {
-  width: 34px;
-  height: 34px;
-  border: 3px solid rgba(234, 179, 8, 0.22);
-  border-top-color: #eab308;
-  border-right-color: #ca8a04;
-  border-radius: 50%;
-  animation: app-loader-spin 0.85s linear infinite;
-}
-
-.app-loader-text {
-  font-size: 0.78rem;
+.app-loader-title {
+  margin: 18px 0 6px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(234, 179, 8, 0.85);
+  line-height: normal;
+  color: #10137c;
 }
 
-@keyframes app-loader-spin {
-  to {
-    transform: rotate(360deg);
-  }
+.app-loader-status {
+  margin: 0;
+  font-size: 14px;
+  line-height: normal;
+  color: #4b4f8f;
 }
 
-@keyframes app-loader-shine {
+.app-loader-bar {
+  width: 180px;
+  max-width: 100%;
+  height: 4px;
+  margin: 28px auto 0;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #dde1ff;
+}
+
+.app-loader-bar span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: #1a1fc4;
+  animation: app-loader-load 1.2s ease-in-out infinite;
+}
+
+@keyframes app-loader-load {
   0% {
-    transform: translateX(-80%);
+    transform: translateX(-120%);
   }
   100% {
-    transform: translateX(80%);
+    transform: translateX(320%);
+  }
+}
+
+@keyframes app-loader-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -3208,8 +3203,8 @@ button.resume-drop-tip {
   .feat-shine,
   .feat-icon,
   .feat-bar-fill,
-  .app-loader-ring,
-  .app-loader-shine,
+  .app-loader-mark,
+  .app-loader-bar span,
   .eagle-fly,
   .eagle-stand,
   .eagle-fetch,

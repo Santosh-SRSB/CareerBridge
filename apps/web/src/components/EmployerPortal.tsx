@@ -7,6 +7,7 @@ import type { EmployerProfile, EmployerVerificationStatus } from '@careerbridge/
 import { getEmployerMe, logout } from '@/lib/api';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { EvPageHead, EvPageSkeleton, useEmployerUnreadCount } from '@/components/employer/ui';
+import { SupportIconLink } from '@/components/SupportIconLink';
 import {
   endEmployerImpersonation,
   getEmployerImpersonation,
@@ -161,6 +162,7 @@ function EmployerSidebar({
       <div className="ev-brand">
         <BrandLogo href="/employer" tone="dark" size="sm" priority onClick={onNavigate} />
         <small>For employers</small>
+        <SupportIconLink className="ev-support ev-support--side" iconSize={18} onClick={onNavigate} />
       </div>
       {impersonating ? <p className="ev-impersonation">Admin view of this employer</p> : null}
       <div className="ev-lab">MAIN</div>
@@ -284,6 +286,7 @@ function EmployerLayout({
             </svg>
           </button>
           <BrandLogo href="/employer" tone="dark" size="sm" />
+          <SupportIconLink className="ev-support ev-support--top" iconSize={20} />
         </header>
         <div className="ev-ovl" aria-hidden onClick={() => setMenuOpen(false)} />
         <EmployerSidebar
