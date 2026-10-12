@@ -7,7 +7,7 @@ import {
   buildInvitationText,
   buildReminderText,
   confirmPayload,
-  formatInterviewWhen,
+  invitationTemplateParams,
   RESCHEDULE_BUTTON_TEXT,
   RESCHEDULE_REQUEST_TEXT,
   reschedulePayload,
@@ -361,6 +361,8 @@ export class WhatsAppService {
     to: string;
     candidateName: string;
     jobTitle: string;
+    /** Display name of the employer that owns the interview's job. */
+    companyName: string | null | undefined;
     scheduledAt: Date;
     durationMin: number;
     interviewId: string;
@@ -370,11 +372,10 @@ export class WhatsAppService {
   }) {
     const text = buildInvitationText(input);
     if (input.preferTemplate || this.config.get('WHATSAPP_USE_TEMPLATES') === 'true') {
-      const { dateLabel, timeLabel } = formatInterviewWhen(input.scheduledAt, input.timeZone);
       const sent = await this.sendTemplate({
         to: input.to,
         logicalTemplate: 'INTERVIEW_INVITATION',
-        bodyParams: [input.candidateName, input.jobTitle, dateLabel, timeLabel],
+        bodyParams: invitationTemplateParams(input),
         candidateId: input.candidateId,
         interviewId: input.interviewId,
         messageType: 'interview_invitation',

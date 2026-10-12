@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { UserType } from '../prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -32,6 +32,11 @@ class SendInviteDto {
   @IsString()
   @MinLength(2)
   jobTitle!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  companyName?: string;
 
   @IsString()
   interviewDate!: string;
@@ -137,6 +142,7 @@ export class WhatsAppAdminController {
       to: dto.to,
       candidateName: dto.candidateName,
       jobTitle: dto.jobTitle,
+      companyName: dto.companyName,
       scheduledAt,
       durationMin: dto.durationMin || 20,
       interviewId: persistedId,
