@@ -358,7 +358,6 @@ export function DetailPanel({
               value={data.profileCompletion != null ? `${data.profileCompletion}%` : null}
             />
             <Field label="Created" value={data.createdAt} />
-            {data.verified != null ? <Field label="Verified" value={data.verified} /> : null}
             {data.matchScore != null || data.match ? (
               <Field
                 label="Match score"
@@ -405,7 +404,7 @@ export function DetailPanel({
               <Field label="Hires" value={counts?.hires} />
               <Field label="Verification" value={data.verificationStatus} />
               <Field label="City" value={data.city} />
-              {kind === 'employers' ? <Field label="GSTIN" value={data.gstinMasked} /> : null}
+              {kind === 'employers' ? <Field label="GSTIN" value={data.gstin} /> : null}
             </div>
           </Section>
         )}
