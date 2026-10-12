@@ -20,9 +20,9 @@ import {
 import { DatePicker } from '@/features/candidate/passport/DatePicker';
 
 const MODES = [
-  { value: 'VIDEO', label: 'Video call', hint: 'Meet / Zoom link' },
-  { value: 'IN_PERSON', label: 'In person', hint: 'Office venue' },
-  { value: 'PHONE', label: 'Phone', hint: 'Dial-in number' },
+  { value: 'VIDEO', label: 'Video Call', hint: 'Google Meet or Zoom' },
+  { value: 'IN_PERSON', label: 'In-Person', hint: 'Office or venue address' },
+  { value: 'PHONE', label: 'Phone Call', hint: 'Dial-in number' },
 ] as const;
 
 const MODE_ICONS: Record<(typeof MODES)[number]['value'], string> = {
@@ -102,41 +102,45 @@ export default function EmployerScheduleInterviewPage() {
 
   const timingPreview = formatTimingPreview(interviewDate, interviewTime);
   const locationLabel =
-    mode === 'IN_PERSON' ? 'Venue address' : mode === 'PHONE' ? 'Phone / dial-in' : 'Meeting link';
+    mode === 'IN_PERSON' ? 'Venue Address' : mode === 'PHONE' ? 'Contact Number' : 'Meeting Link';
   const locationPlaceholder =
-    mode === 'IN_PERSON' ? 'Office address, floor, landmark' : mode === 'PHONE' ? '+91 …' : 'https://meet.google.com/…';
+    mode === 'IN_PERSON'
+      ? 'Enter the office address or venue details'
+      : mode === 'PHONE'
+        ? 'Enter the phone number or dial-in details'
+        : 'Paste the Google Meet or Zoom link';
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!applicationId) {
-      setError('Select a candidate.');
+      setError('Please select a candidate.');
       return;
     }
     if (!interviewDate || !interviewTime) {
-      setError('Select interview date and time.');
+      setError(!interviewDate ? 'Please select an interview date.' : 'Please select a start time.');
       return;
     }
     const scheduledAt = new Date(`${interviewDate}T${interviewTime}`);
     if (Number.isNaN(scheduledAt.getTime())) {
-      setError('Invalid date or time.');
+      setError('Please select a valid interview date and start time.');
       return;
     }
     if (scheduledAt.getTime() < Date.now() - 60_000) {
-      setError('Interview time must be in the future.');
+      setError('Please select an interview date and start time in the future.');
       return;
     }
 
     const locationTrimmed = location.trim();
     if (mode === 'VIDEO') {
       if (!normalizeHttpUrl(locationTrimmed)) {
-        setError('Enter a valid meeting link (Google Meet, Zoom, etc.) before continuing.');
+        setError('Please enter a valid meeting link.');
         return;
       }
     } else if (!locationTrimmed) {
       setError(
         mode === 'IN_PERSON'
-          ? 'Enter the venue address before continuing.'
-          : 'Enter the phone / dial-in details before continuing.',
+          ? 'Please enter the venue address.'
+          : 'Please enter a contact number or dial-in details.',
       );
       return;
     }
@@ -159,7 +163,7 @@ export default function EmployerScheduleInterviewPage() {
       if (created.delivery?.email) params.set('email', created.delivery.email.toLowerCase());
       router.push(`/employer/interviews?${params.toString()}`);
     } catch (err) {
-      const text = userFacingError(err, 'schedule interview');
+      const text = userFacingError(err, 'schedule the interview');
       setError(text);
       toast.error(text);
     } finally {
@@ -173,11 +177,11 @@ export default function EmployerScheduleInterviewPage() {
   const modeLabel = MODES.find((item) => item.value === mode)?.label || mode;
 
   return (
-    <EmployerShellFallback title="Schedule interview">
+    <EmployerShellFallback title="Schedule an Interview">
       <EvPageHead
         eyebrow="Scheduling"
-        title="Schedule interview"
-        subtitle="Pick a candidate, set a time, and we notify them with the details."
+        title="Schedule an Interview"
+        subtitle="Select a candidate, set the interview date and time, and configure candidate notifications."
         actions={
           <Link href="/employer/interviews" className="ev-btn ev-btn--ghost">
             ← Interviews
@@ -188,10 +192,10 @@ export default function EmployerScheduleInterviewPage() {
       <form onSubmit={(e) => void onSubmit(e)} className="ev-sch ev-mt">
         <div className="ev-sch-col">
           <section className="ev-card ev-form">
-            <EvStepHead n={1} title="Who" hint="Choose the role and an applicant to interview" />
+            <EvStepHead n={1} title="Candidate & Role" hint="Select the job and the applicant you want to interview" />
             <div className="ev-f">
               <label>
-                Job
+                Job Role
                 <select
                   value={jobId}
                   onChange={(e) => {
@@ -200,7 +204,7 @@ export default function EmployerScheduleInterviewPage() {
                   }}
                   disabled={loading}
                 >
-                  {jobs.length === 0 ? <option value="">No jobs yet</option> : null}
+                  {jobs.length === 0 ? <option value="">No job roles available</option> : null}
                   {jobs.map((job) => (
                     <option key={job.id} value={job.id}>
                       {job.title}
@@ -213,7 +217,7 @@ export default function EmployerScheduleInterviewPage() {
                 Candidate
                 <select value={applicationId} onChange={(e) => setApplicationId(e.target.value)} required>
                   <option value="">
-                    {applications.length || appsLoadedFor !== jobId ? 'Select applicant' : 'No applicants yet'}
+                    {applications.length || appsLoadedFor !== jobId ? 'Select candidate' : 'No applicants available'}
                   </option>
                   {applications.map((app) => (
                     <option key={app.id} value={app.id}>
@@ -224,7 +228,7 @@ export default function EmployerScheduleInterviewPage() {
               </label>
             </div>
             {jobId && appsLoadedFor === jobId && !applications.length ? (
-              <p className="ev-hint">This job has no applicants yet. Shortlist someone from Candidates first.</p>
+              <p className="ev-hint">This job role has no applicants yet. Shortlist an applicant from Candidates first.</p>
             ) : null}
             {selectedApp ? (
               <p className="ev-hint">
@@ -234,21 +238,21 @@ export default function EmployerScheduleInterviewPage() {
           </section>
 
           <section className="ev-card ev-form">
-            <EvStepHead n={2} title="When" hint="Select a date, a start time and how long it runs" />
+            <EvStepHead n={2} title="Interview Schedule" hint="Set the interview date, start time, and duration" />
             <div className="ev-f">
               <label>
-                Date
+                Interview Date
                 <DatePicker
                   value={interviewDate}
                   onChange={setInterviewDate}
-                  placeholder="Select date"
+                  placeholder="Select interview date"
                   confirmLabel="Set interview date"
                 />
               </label>
               <label>
-                Start time
+                Start Time
                 <select value={interviewTime} onChange={(e) => setInterviewTime(e.target.value)} required>
-                  <option value="">Select time</option>
+                  <option value="">Select start time</option>
                   {INTERVIEW_TIME_SLOTS.map((slot) => (
                     <option key={slot.value} value={slot.value}>
                       {slot.label}
@@ -257,7 +261,7 @@ export default function EmployerScheduleInterviewPage() {
                 </select>
               </label>
             </div>
-            <div className="ev-sub2">DURATION</div>
+            <div className="ev-sub2">Duration</div>
             <div className="ev-chips2" role="radiogroup" aria-label="Duration">
               {DURATION_OPTIONS.map((mins) => (
                 <button
@@ -277,12 +281,16 @@ export default function EmployerScheduleInterviewPage() {
                 Scheduled for <b>{timingPreview}</b> · {durationMin} minutes
               </p>
             ) : (
-              <p className="ev-hint">Choose a date and time for the interview.</p>
+              <p className="ev-hint">Select a date and start time to continue.</p>
             )}
           </section>
 
           <section className="ev-card ev-form">
-            <EvStepHead n={3} title="How and where" hint="The candidate sees this in their invite" />
+            <EvStepHead
+              n={3}
+              title="Interview Mode & Location"
+              hint="Choose how the interview will be conducted. This will be shared with the candidate in the invite."
+            />
             <div className="ev-seg" role="radiogroup" aria-label="Interview mode">
               {MODES.map((item) => (
                 <button
@@ -312,35 +320,39 @@ export default function EmployerScheduleInterviewPage() {
           </section>
 
           <section className="ev-card ev-form">
-            <EvStepHead n={4} title="Message and alerts" hint="Tell them what to prepare and how to reach them" />
+            <EvStepHead
+              n={4}
+              title="Candidate Communication"
+              hint="Add preparation notes and choose how the candidate is notified"
+            />
             <label style={{ marginTop: 0 }}>
-              Notes for candidate
+              Instructions for Candidate
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="What to prepare, documents to bring, dress code…"
+                placeholder="Add preparation instructions, required documents, or dress code (optional)"
                 rows={3}
               />
             </label>
             <div className="ev-mt-sm">
               <EvSwitch checked={notifyWhatsApp} onChange={setNotifyWhatsApp}>
-                Notify candidate on WhatsApp
+                Notify Candidate via WhatsApp
               </EvSwitch>
               <EvSwitch checked={notifyEmail} onChange={setNotifyEmail}>
-                Send email notification
+                Notify Candidate via Email
               </EvSwitch>
             </div>
           </section>
         </div>
 
-        <aside className="ev-card ev-sum" aria-label="Interview summary">
-          <h2>Interview summary</h2>
+        <aside className="ev-card ev-sum" aria-label="Interview Summary">
+          <h2>Interview Summary</h2>
           <div className="ev-sum-who">
             <EvAvatar name={selectedName || null} />
             <div>
-              <b>{selectedName || 'No candidate yet'}</b>
+              <b>{selectedName || 'No candidate selected'}</b>
               <span className="ev-sub ev-block">
-                {selectedApp?.job.title || jobs.find((job) => job.id === jobId)?.title || 'Select a job'}
+                {selectedApp?.job.title || jobs.find((job) => job.id === jobId)?.title || 'No job role selected'}
               </span>
             </div>
           </div>
@@ -370,7 +382,7 @@ export default function EmployerScheduleInterviewPage() {
             <b>{modeLabel}</b>
           </div>
           <div className="ev-r">
-            <span>Notify</span>
+            <span>Notification Channels</span>
             <b>{notifyLabel}</b>
           </div>
 
@@ -382,7 +394,7 @@ export default function EmployerScheduleInterviewPage() {
 
           <div className="ev-sum-actions">
             <button type="submit" className="ev-btn ev-btn--block" disabled={saving} aria-busy={saving || undefined}>
-              {saving ? 'Scheduling…' : 'Schedule interview'}
+              {saving ? 'Scheduling…' : 'Schedule Interview'}
             </button>
             <Link href="/employer/interviews" className="ev-btn ev-btn--ghost ev-btn--block">
               Cancel
