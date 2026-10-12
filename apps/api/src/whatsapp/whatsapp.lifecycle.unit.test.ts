@@ -8,8 +8,13 @@ import { describe, it } from 'node:test';
 import { consentedWhatsAppNumber, isReminderStillValid, phonesMatch } from './interview-lifecycle.util.ts';
 import {
   buildConfirmationText,
+  buildInvitationText,
   CONFIRMATION_LINK_NOTE,
   confirmPayload,
+  formatInterviewWhen,
+  INVITATION_COMPANY_FALLBACK,
+  invitationCompanyName,
+  invitationTemplateParams,
   RESCHEDULE_REQUEST_TEXT,
   uniqueButtonTitles,
   parseInteractivePayload,
@@ -37,6 +42,60 @@ describe('WhatsApp template names', () => {
       }),
       'custom_15m',
     );
+  });
+});
+
+describe('interview_invitation body variables', () => {
+  // 10 Oct 2026, 5:00 pm IST
+  const scheduledAt = new Date('2026-10-10T11:30:00.000Z');
+  const base = { candidateName: 'Harsh', jobTitle: 'Backend Developer', scheduledAt, timeZone: 'Asia/Kolkata' };
+
+  it('sends five variables in template order {{1}}–{{5}}', () => {
+    const params = invitationTemplateParams({ ...base, companyName: 'SRSB Workforce Solutions' });
+    assert.deepEqual(params, ['Harsh', 'Backend Developer', '10 October 2026', '5:00 pm', 'SRSB Workforce Solutions']);
+  });
+
+  it('keeps {{1}}–{{4}} identical to the previous four-variable mapping', () => {
+    const { dateLabel, timeLabel } = formatInterviewWhen(scheduledAt, 'Asia/Kolkata');
+    const params = invitationTemplateParams({ ...base, companyName: 'Acme Hiring' });
+    assert.deepEqual(params.slice(0, 4), ['Harsh', 'Backend Developer', dateLabel, timeLabel]);
+  });
+
+  it('uses each interview’s own company', () => {
+    const a = invitationTemplateParams({ ...base, companyName: 'SRSB Workforce Solutions' });
+    const b = invitationTemplateParams({ ...base, companyName: 'Acme Hiring Pvt Ltd' });
+    assert.equal(a[4], 'SRSB Workforce Solutions');
+    assert.equal(b[4], 'Acme Hiring Pvt Ltd');
+  });
+
+  it('falls back to the neutral label when the company name is missing or blank', () => {
+    for (const missing of [null, undefined, '', '   ', '\n\t']) {
+      assert.equal(invitationCompanyName(missing), INVITATION_COMPANY_FALLBACK);
+      assert.equal(invitationTemplateParams({ ...base, companyName: missing })[4], 'Employer');
+    }
+  });
+
+  it('collapses whitespace Meta would reject in a template parameter', () => {
+    assert.equal(invitationCompanyName('  SRSB \n Workforce\t\tSolutions  '), 'SRSB Workforce Solutions');
+  });
+
+  it('interactive fallback text names the company', () => {
+    const text = buildInvitationText({ ...base, companyName: 'SRSB Workforce Solutions', durationMin: 20 });
+    assert.equal(
+      text,
+      [
+        'Hi Harsh',
+        '',
+        'You have been invited for an interview for Backend Developer from SRSB Workforce Solutions.',
+        '',
+        'Date: 10 October 2026',
+        'Time: 5:00 pm',
+        'Duration: 20 minutes',
+        '',
+        'Please confirm your availability.',
+      ].join('\n'),
+    );
+    assert.match(buildInvitationText({ ...base, companyName: null, durationMin: 20 }), /Backend Developer from Employer\./);
   });
 });
 

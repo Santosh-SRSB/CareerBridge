@@ -41,7 +41,12 @@ export class InterviewWhatsAppService {
     const interview = await this.prisma.employerInterview.findUnique({
       where: { id: interviewId },
       include: {
-        application: { include: { candidate: { include: { user: true } }, job: true } },
+        application: {
+          include: {
+            candidate: { include: { user: true } },
+            job: { include: { employer: { select: { companyName: true } } } },
+          },
+        },
       },
     });
     if (!interview) {
@@ -79,6 +84,7 @@ export class InterviewWhatsAppService {
       to: phone,
       candidateName: interview.application.candidate.firstName || 'there',
       jobTitle: interview.application.job.title,
+      companyName: interview.application.job.employer?.companyName,
       scheduledAt: interview.scheduledAt,
       durationMin: interview.durationMin,
       interviewId: interview.id,

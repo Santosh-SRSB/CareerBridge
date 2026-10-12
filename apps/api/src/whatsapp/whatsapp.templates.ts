@@ -59,9 +59,30 @@ export function uniqueButtonTitles(titles: string[]) {
   });
 }
 
+/** Stands in for a missing company name, matching the interview emails. */
+export const INVITATION_COMPANY_FALLBACK = 'Employer';
+
+/** Meta rejects template parameters containing newlines, tabs or runs of more than four spaces. */
+export function invitationCompanyName(raw: string | null | undefined) {
+  return (raw || '').replace(/\s+/g, ' ').trim() || INVITATION_COMPANY_FALLBACK;
+}
+
+/** Body variables {{1}}–{{5}} of the approved `interview_invitation` template, in order. */
+export function invitationTemplateParams(input: {
+  candidateName: string;
+  jobTitle: string;
+  scheduledAt: Date;
+  companyName: string | null | undefined;
+  timeZone?: string;
+}) {
+  const { dateLabel, timeLabel } = formatInterviewWhen(input.scheduledAt, input.timeZone);
+  return [input.candidateName, input.jobTitle, dateLabel, timeLabel, invitationCompanyName(input.companyName)];
+}
+
 export function buildInvitationText(input: {
   candidateName: string;
   jobTitle: string;
+  companyName: string | null | undefined;
   scheduledAt: Date;
   durationMin: number;
   timeZone?: string;
@@ -70,7 +91,7 @@ export function buildInvitationText(input: {
   return [
     `Hi ${input.candidateName}`,
     '',
-    `You have been invited for an interview for ${input.jobTitle}.`,
+    `You have been invited for an interview for ${input.jobTitle} from ${invitationCompanyName(input.companyName)}.`,
     '',
     `Date: ${dateLabel}`,
     `Time: ${timeLabel}`,

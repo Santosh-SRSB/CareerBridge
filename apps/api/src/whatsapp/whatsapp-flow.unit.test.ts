@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 import { WhatsAppWebhookService } from './whatsapp.webhook.service';
 import { WhatsAppService } from './whatsapp.service';
+import { InterviewWhatsAppService } from './interview-whatsapp.service';
+import { WhatsAppAdminController } from './whatsapp.admin.controller';
 import { InterviewAvailabilityService } from '../interview-availability/interview-availability.service';
 import {
   availabilityTimeOptions,
@@ -435,5 +437,148 @@ describe('Website form still uses the same rules', () => {
     assert.equal(row.whatsappStatus, 'AVAILABILITY_SUBMITTED_VIA_PORTAL');
     const wrongOwner = await availability.submitAvailability({ interviewId: IV, candidateId: 'cand-2', body: {}, source: 'PORTAL' });
     assert.deepEqual(wrongOwner, { ok: false, reason: 'not_found', message: 'Interview was not found' });
+  });
+});
+
+describe('Interview invitation carries the job employer’s company as {{5}}', () => {
+  // 10 Oct 2026, 5:00 pm IST
+  const AT = new Date('2026-10-10T11:30:00.000Z');
+  let sent: Row[];
+  let failTemplates: boolean;
+
+  function waService(config: Record<string, string> = { WHATSAPP_USE_TEMPLATES: 'true' }) {
+    const wa = new WhatsAppService({ get: (k: string, d?: string) => config[k] ?? d } as any, {} as any);
+    (wa as any).sendAndPersist = async (input: Row) => {
+      sent.push(input);
+      if (failTemplates && input.payload.type === 'template') return { ok: false, messageId: null, error: { error: { code: 132000 } } };
+      return { ok: true, messageId: `wamid.inv.${sent.length}`, recordId: `r${sent.length}` };
+    };
+    return wa;
+  }
+
+  const bodyTexts = (msg: Row) => msg.payload.template.components[0].parameters.map((p: Row) => p.text);
+  const invitations = () => sent.filter((m) => m.messageType === 'interview_invitation');
+
+  function interview(id: string, firstName: string, jobTitle: string, employer: Row | null): Row {
+    return {
+      id,
+      candidateId: `cand-${id}`,
+      status: 'SCHEDULED',
+      notes: null,
+      scheduledAt: AT,
+      durationMin: 20,
+      timezone: 'Asia/Kolkata',
+      location: 'https://meet.example/x',
+      application: {
+        candidate: { firstName, user: { phone: PHONE } },
+        job: { title: jobTitle, ...(employer ? { employer } : {}) },
+      },
+    };
+  }
+
+  function bridge(rows: Row[], queries: Row[]) {
+    const prisma = {
+      employerInterview: {
+        findUnique: async (args: Row) => (queries.push(args), rows.find((r) => r.id === args.where.id) ?? null),
+        update: async () => ({}),
+      },
+    };
+    const webhook = { resolveNotifyPhone: () => PHONE };
+    const cfg = { get: (_k: string, d?: string) => d };
+    return new InterviewWhatsAppService(prisma as any, waService(), webhook as any, {} as any, cfg as any);
+  }
+
+  beforeEach(() => {
+    sent = [];
+    failTemplates = false;
+  });
+
+  it('sends the approved interview_invitation template with five body variables in order', async () => {
+    const res = await waService().sendInterviewInvitation({
+      to: PHONE,
+      candidateName: 'Harsh',
+      jobTitle: 'Backend Developer',
+      companyName: 'SRSB Workforce Solutions',
+      scheduledAt: AT,
+      durationMin: 20,
+      interviewId: IV,
+      candidateId: CAND,
+      timeZone: 'Asia/Kolkata',
+    });
+    assert.ok(res.ok);
+    assert.equal(sent.length, 1);
+    const msg = sent[0];
+    assert.equal(msg.templateName, 'interview_invitation');
+    assert.equal(msg.payload.template.name, 'interview_invitation');
+    assert.equal(msg.payload.template.language.code, 'en');
+    assert.equal(msg.payload.template.components.length, 1, 'no extra components: quick-reply buttons are static in the template');
+    assert.deepEqual(bodyTexts(msg), ['Harsh', 'Backend Developer', '10 October 2026', '5:00 pm', 'SRSB Workforce Solutions']);
+  });
+
+  it('keeps the Confirm Interview / Choose Another Time buttons when the template send fails', async () => {
+    failTemplates = true;
+    await waService().sendInterviewInvitation({
+      to: PHONE,
+      candidateName: 'Harsh',
+      jobTitle: 'Backend Developer',
+      companyName: 'SRSB Workforce Solutions',
+      scheduledAt: AT,
+      durationMin: 20,
+      interviewId: IV,
+      timeZone: 'Asia/Kolkata',
+    });
+    assert.equal(sent.length, 2);
+    const fallback = sent[1].payload.interactive;
+    assert.equal(fallback.type, 'button');
+    assert.deepEqual(
+      fallback.action.buttons.map((b: Row) => b.reply),
+      [
+        { id: `CONFIRM:${IV}`, title: 'Confirm Interview' },
+        { id: `RESCHEDULE:${IV}`, title: 'Choose Another Time' },
+      ],
+    );
+    assert.match(fallback.body.text, /for Backend Developer from SRSB Workforce Solutions\./);
+  });
+
+  it('sendInvitationNow resolves each interview’s own job employer in the same query', async () => {
+    const queries: Row[] = [];
+    const svc = bridge(
+      [
+        interview(IV, 'Harsh', 'Backend Developer', { companyName: 'SRSB Workforce Solutions' }),
+        interview(OTHER_IV, 'Priya', 'Sales Executive', { companyName: 'Acme Hiring Pvt Ltd' }),
+      ],
+      queries,
+    );
+    await svc.sendInvitationNow(IV);
+    await svc.sendInvitationNow(OTHER_IV, 'reschedule');
+
+    assert.equal(queries.length, 2, 'one interview lookup per send');
+    for (const q of queries) {
+      assert.deepEqual(q.include.application.include.job, { include: { employer: { select: { companyName: true } } } });
+    }
+    const [a, b] = invitations();
+    assert.deepEqual(bodyTexts(a), ['Harsh', 'Backend Developer', '10 October 2026', '5:00 pm', 'SRSB Workforce Solutions']);
+    assert.deepEqual(bodyTexts(b), ['Priya', 'Sales Executive', '10 October 2026', '5:00 pm', 'Acme Hiring Pvt Ltd']);
+  });
+
+  it('sendInvitationNow falls back to "Employer" rather than another company when the name is missing', async () => {
+    const svc = bridge(
+      [interview(IV, 'Harsh', 'Backend Developer', { companyName: '  ' }), interview(OTHER_IV, 'Priya', 'Sales Executive', null)],
+      [],
+    );
+    await svc.sendInvitationNow(IV);
+    await svc.sendInvitationNow(OTHER_IV);
+    assert.deepEqual(invitations().map((m) => bodyTexts(m)[4]), ['Employer', 'Employer']);
+  });
+
+  it('admin test invitation also sends the fifth variable', async () => {
+    const wa = waService();
+    const admin = new WhatsAppAdminController(wa, {} as any, {} as any, {} as any);
+    const base = { candidateName: 'Harsh', to: PHONE, jobTitle: 'Backend Developer', interviewDate: '2026-10-10', interviewTime: '5:00 PM' };
+    await admin.sendInvitation({ ...base, companyName: 'SRSB Workforce Solutions' } as any);
+    await admin.sendInvitation(base as any);
+    assert.deepEqual(bodyTexts(sent[0]), ['Harsh', 'Backend Developer', '10 October 2026', '5:00 pm', 'SRSB Workforce Solutions']);
+    assert.equal(bodyTexts(sent[1]).length, 5);
+    assert.equal(bodyTexts(sent[1])[4], 'Employer');
   });
 });
