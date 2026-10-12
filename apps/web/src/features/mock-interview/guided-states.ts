@@ -29,7 +29,8 @@ export const GUIDED_PHASE_LABELS: Record<GuidedPhase, string> = {
   ERROR: 'Error',
 };
 
-export const THINK_SECONDS = 15;
+/** Preparation time before a candidate answers each mock-interview question. */
+export const THINK_SECONDS = 30;
 
 export type AnswerMethod = 'recording' | 'typing';
 

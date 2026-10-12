@@ -19,6 +19,7 @@ import {
   buildIntroStartLine,
   buildQuestionCompletedLines,
   buildQuestionSkippedLines,
+  buildQuestionTimedOutLines,
   buildRecordStartLine,
   buildThinkLine,
   buildThinkSpokenLine,
@@ -31,6 +32,21 @@ import {
   type GuidedPhase,
 } from '@/features/mock-interview/guided-states';
 import { buildAnswerSubmission, canRecordAudio, defaultAnswerMethod } from '@/features/mock-interview/answer-mode';
+import {
+  advanceAction,
+  answerClockShouldRun,
+  beginExpiryAdvance,
+  beginManualAdvance,
+  createAdvanceGate,
+  isAnswerPhase,
+  isLastMockQuestion,
+  phaseAfterSavedAnswer,
+  releaseAdvance,
+  releaseAfterFailedSubmit,
+  resetAdvanceGate,
+  syncAnswerTimer,
+} from '@/features/mock-interview/answer-countdown';
+import { AnswerCountdownBar } from '@/components/interviews/AnswerCountdownBar';
 import { cancelGuidedSpeech, speakGuided } from '@/features/mock-interview/guided-voice';
 import {
   answerLiveInterview,
@@ -58,6 +74,14 @@ const subscribeNever = () => () => undefined;
 const MIC_DENIED = 'Microphone access is needed to record your answer. You can still type your answer.';
 const MIC_UNSUPPORTED = 'This browser cannot record audio. You can still type your answer.';
 
+type SkipReason = 'skipped' | 'timedOut';
+
+function skipLines(reason: SkipReason, questionNumber: number, totalQuestions: number) {
+  return reason === 'timedOut'
+    ? buildQuestionTimedOutLines(questionNumber, totalQuestions)
+    : buildQuestionSkippedLines(questionNumber, totalQuestions);
+}
+
 /** Block paste / drop so answers must be typed (or spoken), not copied in. */
 function blockClipboardPaste(event: { preventDefault: () => void }) {
   event.preventDefault();
@@ -73,7 +97,7 @@ export default function MockInterviewQuestionPage() {
   const completedQuestionNumber = useRef(0);
   const pendingNextPhase = useRef<'QUESTION_DISPLAY' | 'FINAL_PROCESSING'>('QUESTION_DISPLAY');
   const answerMethodRef = useRef<AnswerMethod | null>(null);
-  const skippedRef = useRef(false);
+  const skippedRef = useRef<SkipReason | null>(null);
   const [answerMethod, setAnswerMethod] = useState<AnswerMethod | null>(null);
   const recordingSupported = useSyncExternalStore(subscribeNever, () => canRecordAudio(), () => true);
   const preferredMethod = defaultAnswerMethod(recordingSupported);
@@ -118,6 +142,25 @@ export default function MockInterviewQuestionPage() {
   const [recordElapsedSec, setRecordElapsedSec] = useState(0);
   const thinkAutoStartedRef = useRef<number | null>(null);
   const amplitudeRef = useRef(0);
+  const advanceGateRef = useRef(createAdvanceGate());
+  const answerQuestionRef = useRef<number | null>(null);
+  const answerDeadlineRef = useRef<number | null>(null);
+  const submitAnswerRef = useRef<(source?: 'manual' | 'expiry') => Promise<void>>(async () => {});
+  const answerTimer = session
+    ? syncAnswerTimer(
+        answerQuestionRef.current === session.questionIndex
+          ? { questionIndex: session.questionIndex, deadlineMs: answerDeadlineRef.current }
+          : null,
+        session.questionIndex,
+        phase,
+        performance.now(),
+      )
+    : null;
+  if (answerTimer) {
+    answerQuestionRef.current = answerTimer.questionIndex;
+    answerDeadlineRef.current = answerTimer.deadlineMs;
+  }
+  const answerDeadline = answerTimer?.deadlineMs ?? null;
 
   useEffect(() => subscribeAiSpeech((s) => setAiSpeaking(s.speaking)), []);
 
@@ -171,6 +214,7 @@ export default function MockInterviewQuestionPage() {
   }, []);
 
   function chooseAnswerMethod(method: AnswerMethod) {
+    if (advanceGateRef.current.inFlight) return;
     answerMethodRef.current = method;
     setAnswerMethod(method);
     cancelGuidedSpeech();
@@ -193,7 +237,7 @@ export default function MockInterviewQuestionPage() {
   }
 
   function retakeRecording() {
-    if (loading) return;
+    if (loading || advanceGateRef.current.inFlight) return;
     setAnswer('');
     answerRef.current = '';
     chooseAnswerMethod('recording');
@@ -201,7 +245,7 @@ export default function MockInterviewQuestionPage() {
   }
 
   function switchToTyping() {
-    if (loading) return;
+    if (loading || advanceGateRef.current.inFlight) return;
     recorderRef.current?.stop();
     recordingArmedForIndex.current = null;
     setError('');
@@ -323,6 +367,33 @@ export default function MockInterviewQuestionPage() {
     };
   }, [phase, session?.questionIndex]);
 
+  // Expiry follows the deadline itself. Hidden tabs cannot add time by delaying ticks.
+  useEffect(() => {
+    if (answerDeadline == null || !answerClockShouldRun(phase, answerDeadline)) return;
+    let cancelled = false;
+    const fire = () => {
+      if (!cancelled) void submitAnswerRef.current('expiry');
+    };
+    const delay = Math.max(0, answerDeadline - performance.now());
+    const timeout = window.setTimeout(fire, delay);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && performance.now() >= answerDeadline) fire();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [answerDeadline, phase]);
+
+  // A new question starts with a clear advance lock. Failures stay on the answer phase and keep the lock history.
+  useEffect(() => {
+    if (phase === 'QUESTION_DISPLAY' || phase === 'QUESTION_THINKING') {
+      advanceGateRef.current = resetAdvanceGate();
+    }
+  }, [phase, session?.questionIndex]);
+
   // Phase orchestration
   useEffect(() => {
     if (!session) return;
@@ -395,7 +466,7 @@ export default function MockInterviewQuestionPage() {
         if (phase === 'QUESTION_COMPLETED') {
           const doneNum = completedQuestionNumber.current || qNum;
           const lines = skippedRef.current
-            ? buildQuestionSkippedLines(doneNum, total)
+            ? skipLines(skippedRef.current, doneNum, total)
             : buildQuestionCompletedLines(name, doneNum, total);
           // Caption + primary TTS already kicked off in submitAnswer — keep copy visible.
           setCaption(lines.primary);
@@ -405,27 +476,35 @@ export default function MockInterviewQuestionPage() {
             ? await savePromise
             : ({ ok: false, error: 'Could not save your answer. Please try again.' } as const);
 
-          if (!alive()) return;
+          if (!alive()) {
+            advanceGateRef.current = releaseAdvance(advanceGateRef.current);
+            return;
+          }
 
-          skippedRef.current = false;
+          skippedRef.current = null;
           if (!saveResult.ok) {
             if ('session' in saveResult && saveResult.session) setSession(saveResult.session);
             setError(saveResult.error);
             setLoading(false);
             recordingArmedForIndex.current = null;
+            advanceGateRef.current = releaseAfterFailedSubmit(
+              advanceGateRef.current,
+              qIndex,
+              performance.now(),
+              answerDeadlineRef.current,
+            );
             setPhase(answerMethodRef.current === 'recording' ? 'RECORDING_ACTIVE' : 'TYPING_ACTIVE');
             return;
           }
 
+          advanceGateRef.current = resetAdvanceGate();
           setSession(saveResult.session);
           resetAnswerFields();
           questionSpokenForIndex.current = null;
           thinkSpokenForIndex.current = null;
           setLoading(false);
 
-          const finished =
-            saveResult.session.status === 'COMPLETED' || Boolean(saveResult.session.conductTerminated);
-          pendingNextPhase.current = finished ? 'FINAL_PROCESSING' : 'QUESTION_DISPLAY';
+          pendingNextPhase.current = phaseAfterSavedAnswer(saveResult.session);
 
           setCaption(lines.secondary);
           await speakGuided(lines.secondary);
@@ -461,75 +540,115 @@ export default function MockInterviewQuestionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRecording, recordElapsedSec]);
 
-  async function submitAnswer() {
-    if (!session?.currentQuestion || loading) return;
-    if (isRecording) {
-      recorderRef.current?.stop();
-      // Allow MediaRecorder onstop to flush duration/transcript briefly.
-      await new Promise((r) => setTimeout(r, 280));
-    }
+  async function submitAnswer(source: 'manual' | 'expiry' = 'manual') {
+    if (!session?.currentQuestion || !isAnswerPhase(phase)) return;
+    const begun =
+      source === 'expiry'
+        ? beginExpiryAdvance(advanceGateRef.current, session.questionIndex)
+        : beginManualAdvance(advanceGateRef.current);
+    if (!begun.accepted) return;
+    advanceGateRef.current = begun.gate;
+    const questionIndex = session.questionIndex;
+    const releaseFailed = () => {
+      advanceGateRef.current = releaseAfterFailedSubmit(
+        advanceGateRef.current,
+        questionIndex,
+        performance.now(),
+        answerDeadlineRef.current,
+      );
+    };
 
-    const submission = buildAnswerSubmission(
-      answerMethodRef.current ?? 'typing',
-      { text: answerRef.current, hasAudio: hasAudioRef.current, audioDurationSec: audioDurationRef.current },
-      ANSWER_MIN,
-    );
-    if (!submission.ok) {
-      setError(submission.error);
-      return;
-    }
+    try {
+      if (isRecording) {
+        recorderRef.current?.stop();
+        // Allow MediaRecorder onstop to flush duration/transcript briefly.
+        await new Promise((r) => setTimeout(r, 280));
+      }
 
-    cancelGuidedSpeech();
-    setError('');
-    setLoading(true);
+      const submission = buildAnswerSubmission(
+        answerMethodRef.current ?? 'typing',
+        { text: answerRef.current, hasAudio: hasAudioRef.current, audioDurationSec: audioDurationRef.current },
+        ANSWER_MIN,
+      );
+      if (!submission.ok) {
+        if (advanceAction(source, false) === 'skip') {
+          startSkip('timedOut');
+          return;
+        }
+        setError(submission.error);
+        releaseFailed();
+        return;
+      }
 
-    const justFinishedNumber = session.questionIndex + 1;
-    completedQuestionNumber.current = justFinishedNumber;
-    // Provisional — confirmed after save returns.
-    pendingNextPhase.current =
-      justFinishedNumber >= session.totalQuestions ? 'FINAL_PROCESSING' : 'QUESTION_DISPLAY';
+      cancelGuidedSpeech();
+      setError('');
+      setLoading(true);
 
-    // Celebrate immediately (no silent wait after leaving dark mode).
-    const celebrate = buildQuestionCompletedLines(
-      session.candidateName,
-      justFinishedNumber,
-      session.totalQuestions,
-    );
-    cancelGuidedSpeech();
-    setCaption(celebrate.primary);
-    void speakGuided(celebrate.primary).catch(() => undefined);
+      const justFinishedNumber = session.questionIndex + 1;
+      completedQuestionNumber.current = justFinishedNumber;
+      // Provisional — confirmed after save returns.
+      pendingNextPhase.current = isLastMockQuestion(justFinishedNumber, session.totalQuestions)
+        ? 'FINAL_PROCESSING'
+        : 'QUESTION_DISPLAY';
 
-    // Start save in background, show cherish UI immediately.
-    savePromiseRef.current = (async () => {
-      try {
-        const next = await answerLiveInterview(
-          params.id,
-          submission.answer,
-          submission.durationSec,
-          submission.answerMode,
-        );
-        if (next.conductWarning && !next.conductTerminated) {
+      // Celebrate immediately (no silent wait after leaving dark mode).
+      const celebrate = buildQuestionCompletedLines(
+        session.candidateName,
+        justFinishedNumber,
+        session.totalQuestions,
+      );
+      cancelGuidedSpeech();
+      setCaption(celebrate.primary);
+      void speakGuided(celebrate.primary).catch(() => undefined);
+
+      // Start save in background, show cherish UI immediately.
+      savePromiseRef.current = (async () => {
+        try {
+          const next = await answerLiveInterview(
+            params.id,
+            submission.answer,
+            submission.durationSec,
+            submission.answerMode,
+            questionIndex,
+          );
+          if (next.conductWarning && !next.conductTerminated) {
+            return {
+              ok: false as const,
+              error: next.conductWarning,
+              session: next,
+              conductWarning: true,
+            };
+          }
+          return { ok: true as const, session: next };
+        } catch (err) {
           return {
             ok: false as const,
-            error: next.conductWarning,
-            session: next,
-            conductWarning: true,
+            error: err instanceof Error ? err.message : 'Could not save your answer. Please try again.',
           };
         }
-        return { ok: true as const, session: next };
-      } catch (err) {
-        return {
-          ok: false as const,
-          error: err instanceof Error ? err.message : 'Could not save your answer. Please try again.',
-        };
-      }
-    })();
+      })();
 
-    setPhase('QUESTION_COMPLETED');
+      setPhase('QUESTION_COMPLETED');
+    } catch (err) {
+      releaseFailed();
+      setLoading(false);
+      setError(err instanceof Error ? err.message : 'Could not save your answer. Please try again.');
+    }
   }
 
+  submitAnswerRef.current = submitAnswer;
+
   function skipQuestion() {
-    if (!session?.currentQuestion || loading) return;
+    if (!session?.currentQuestion) return;
+    const begun = beginManualAdvance(advanceGateRef.current);
+    if (!begun.accepted) return;
+    advanceGateRef.current = begun.gate;
+    startSkip('skipped');
+  }
+
+  /** Caller must already hold the advance gate. */
+  function startSkip(reason: SkipReason) {
+    if (!session?.currentQuestion) return;
     if (isRecording) recorderRef.current?.stop();
     cancelGuidedSpeech();
     setError('');
@@ -537,9 +656,11 @@ export default function MockInterviewQuestionPage() {
     const skippedNumber = session.questionIndex + 1;
     const questionIndex = session.questionIndex;
     completedQuestionNumber.current = skippedNumber;
-    pendingNextPhase.current = skippedNumber >= session.totalQuestions ? 'FINAL_PROCESSING' : 'QUESTION_DISPLAY';
-    skippedRef.current = true;
-    const lines = buildQuestionSkippedLines(skippedNumber, session.totalQuestions);
+    pendingNextPhase.current = isLastMockQuestion(skippedNumber, session.totalQuestions)
+      ? 'FINAL_PROCESSING'
+      : 'QUESTION_DISPLAY';
+    skippedRef.current = reason;
+    const lines = skipLines(reason, skippedNumber, session.totalQuestions);
     setCaption(lines.primary);
     void speakGuided(lines.primary).catch(() => undefined);
     savePromiseRef.current = (async () => {
@@ -784,8 +905,8 @@ export default function MockInterviewQuestionPage() {
                     </div>
                     <p className="iv-meta ms-method-note" role="note">
                       {recordingSupported
-                        ? 'Recording starts when think time ends. Prefer to type? Choose Typing.'
-                        : 'This browser cannot record audio, so you will type your answer.'}
+                        ? `You have ${THINK_SECONDS} seconds to think. Recording starts when that time ends. Prefer to type? Choose Typing.`
+                        : `You have ${THINK_SECONDS} seconds to think. This browser cannot record audio, so you will type your answer.`}
                     </p>
                     <button
                       type="button"
@@ -801,6 +922,7 @@ export default function MockInterviewQuestionPage() {
 
               {phase === 'TYPING_ACTIVE' ? (
                 <>
+                  {answerDeadline != null ? <AnswerCountdownBar deadlineMs={answerDeadline} /> : null}
                   {/* Big reflection box */}
                   <div className="ms-preview" aria-live="polite">
                     <p className="ms-eyebrow">Your answer</p>
@@ -871,7 +993,7 @@ export default function MockInterviewQuestionPage() {
                         <span aria-hidden data-testid="button-spinner" className="iv-spin" />
                         Saving…
                       </>
-                    ) : questionNumber >= totalQuestions ? (
+                    ) : isLastMockQuestion(questionNumber, totalQuestions) ? (
                       'Finish'
                     ) : (
                       'Next'
@@ -901,13 +1023,14 @@ export default function MockInterviewQuestionPage() {
             transcript={answer}
             amplitudeRef={amplitudeRef}
             elapsedSec={recordElapsedSec}
-            maxSec={RECORD_MAX_SEC}
             isRecording={isRecording}
             loading={loading}
             error={error || undefined}
-            isLast={questionNumber >= totalQuestions}
+            isLast={isLastMockQuestion(questionNumber, totalQuestions)}
+            answerDeadlineMs={answerClockShouldRun(phase, answerDeadline) ? answerDeadline : null}
             onIntroComplete={finishRecordingIntro}
-            onStopAndSubmit={() => void submitAnswer()}
+            onStopAndSubmit={() => void submitAnswer('manual')}
+            onNextQuestion={() => void submitAnswer('manual')}
             onRetake={recordingSupported ? retakeRecording : undefined}
             onSwitchToTyping={switchToTyping}
           />

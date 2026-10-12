@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type MutableRefObject } from 'react';
 import { AiInterviewerOrb } from '@/components/interviews/AiInterviewerOrb';
+import { AnswerCountdownBar } from '@/components/interviews/AnswerCountdownBar';
 import { AudioWaveformVisualizer } from '@/components/interviews/AudioWaveformVisualizer';
 import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 
@@ -46,8 +47,10 @@ export function DarkRecordingStage({
   loading,
   error,
   isLast,
+  answerDeadlineMs,
   onIntroComplete,
   onStopAndSubmit,
+  onNextQuestion,
   onRetake,
   onSwitchToTyping,
 }: {
@@ -62,8 +65,10 @@ export function DarkRecordingStage({
   loading: boolean;
   error?: string;
   isLast: boolean;
+  answerDeadlineMs?: number | null;
   onIntroComplete: () => void;
   onStopAndSubmit: () => void;
+  onNextQuestion?: () => void;
   onRetake?: () => void;
   onSwitchToTyping?: () => void;
 }) {
@@ -188,7 +193,7 @@ export function DarkRecordingStage({
           </span>
         </header>
 
-        <div className="grid min-h-0 flex-1 gap-4 px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6 lg:grid-cols-[1.15fr_0.85fr]">
           <section className="flex min-h-0 flex-col gap-4 rounded-2xl border border-[#d7e1fa] bg-white p-4 shadow-[0_8px_24px_rgba(16,19,124,0.06)] sm:p-5">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#4a5fa8]">
@@ -198,6 +203,7 @@ export function DarkRecordingStage({
                 {questionText}
               </h2>
             </div>
+            {answerDeadlineMs != null ? <AnswerCountdownBar deadlineMs={answerDeadlineMs} /> : null}
             <div className="mt-auto min-h-[140px] flex-1 overflow-hidden rounded-xl border border-[#d7e1fa] bg-[#f4f6ff] sm:min-h-[180px]">
               <AudioWaveformVisualizer
                 amplitudeRef={amplitudeRef}
@@ -256,7 +262,7 @@ export function DarkRecordingStage({
           </section>
         </div>
 
-        <footer className="relative z-10 space-y-2 border-t border-[#d7e1fa] bg-white px-4 py-3 sm:px-6 sm:py-4">
+        <footer className="relative z-10 shrink-0 space-y-2 border-t border-[#d7e1fa] bg-white px-4 py-3 sm:px-6 sm:py-4">
           {error ? (
             <p className="text-center text-xs font-semibold text-red-700 sm:text-sm" role="alert">
               {error}
@@ -285,6 +291,16 @@ export function DarkRecordingStage({
                 </button>
               ) : null}
             </div>
+          ) : null}
+          {mode === 'recording' && onNextQuestion ? (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={onNextQuestion}
+              className="min-h-12 w-full rounded-full border border-[#1A1FC4] bg-white px-4 py-3 text-[15px] font-bold text-[#1A1FC4] transition enabled:hover:bg-[#eef0ff] disabled:opacity-50"
+            >
+              Next Question
+            </button>
           ) : null}
           <button
             type="button"

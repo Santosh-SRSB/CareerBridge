@@ -1,4 +1,5 @@
 import { greetingForHour } from '@/features/interview/ai-speech';
+import { THINK_SECONDS } from './guided-states';
 
 export function firstNameFromFullName(fullName: string | null | undefined) {
   const raw = (fullName || '').trim();
@@ -22,11 +23,11 @@ export function buildIntroStartLine() {
 }
 
 export function buildThinkLine() {
-  return 'Take a moment to think, then choose how you want to answer — by recording or by typing.';
+  return `You have ${THINK_SECONDS} seconds to think, then choose how you want to answer — by recording or by typing.`;
 }
 
 export function buildThinkSpokenLine() {
-  return 'Take a moment to think about your answer. Then choose whether you want to record or type your answer.';
+  return `You have ${THINK_SECONDS} seconds to think about your answer. Then choose whether you want to record or type your answer.`;
 }
 
 export function buildRecordStartLine() {
@@ -58,6 +59,14 @@ export function buildQuestionSkippedLines(questionNumber: number, totalQuestions
     return { primary: 'Question skipped. That was the last question.', secondary: 'Analyzing your interview...' };
   }
   return { primary: `Question ${questionNumber} skipped.`, secondary: "Let's move on to the next question." };
+}
+
+export function buildQuestionTimedOutLines(questionNumber: number, totalQuestions: number) {
+  const primary = `Time's up. Your answer was too short to submit, so question ${questionNumber} was skipped.`;
+  if (questionNumber >= totalQuestions) {
+    return { primary, secondary: 'Analyzing your interview...' };
+  }
+  return { primary, secondary: "Let's move on to the next question." };
 }
 
 export function buildAnalyzingLine() {
