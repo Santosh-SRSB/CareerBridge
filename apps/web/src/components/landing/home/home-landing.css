@@ -388,38 +388,45 @@
   background: color-mix(in srgb, var(--color-white) 14%, transparent);
 }
 
-/* Testimonial straddles the curved panel, so the white mirror copy would split the word.
-   Keep that copy the same blue as the other links and back it with the nav tint. */
-.hl-hero .hl-nav--mirror .hl-nav__link[href="/testimonials"] {
-  color: var(--color-primary);
-  background: var(--color-primary-light);
-}
-
-.hl-hero .hl-nav--mirror .hl-nav__link[href="/testimonials"].is-active,
-.hl-hero .hl-nav--mirror .hl-nav__link[href="/testimonials"].is-hover {
-  border-bottom-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-light);
-}
-
-/* Login sits on the curve. The mirror paints it white, and the ghost hover fills a light
-   background behind that white text. Keep a white control with blue text in every state. */
+/* Sit Testimonial against the actions so the whole word is on the navy curve.
+   The clipped mirror then paints it white, with no light plate behind the label. */
 @media (min-width: 901px) {
+  .hl-hero .hl-nav__links {
+    flex: 1;
+    margin: 0;
+  }
+
+  .hl-hero .hl-nav__links li:last-child {
+    margin-left: auto;
+  }
+
   .hl-hero .hl-nav__login,
-  .hl-hero .hl-nav__login:hover,
   .hl-hero .hl-nav__login:focus-visible,
-  .hl-hero .hl-nav__login:active {
+  .hl-hero .hl-nav__login:active,
+  .hl-hero .hl-nav--mirror .hl-nav__login,
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus {
     background: var(--color-white);
     border-color: transparent;
     color: var(--color-primary);
   }
 
-  .hl-hero .hl-nav--mirror .hl-nav__login,
-  .hl-hero .hl-nav--mirror .hl-nav__login.is-hover,
-  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus {
-    background: var(--color-white);
-    border-color: transparent;
+  .hl-hero .hl-nav__login,
+  .hl-hero .hl-nav--mirror .hl-nav__login {
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s,
+      box-shadow 0.15s,
+      transform 0.15s;
+  }
+
+  .hl-hero .hl-nav__login:hover,
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-hover {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
     color: var(--color-primary);
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary-dark) 32%, transparent);
+    transform: translateY(-1px);
   }
 
   .hl-hero .hl-nav--mirror .hl-nav__login.is-focus {
