@@ -8,6 +8,7 @@ import { listApplications, logout, getCandidateMe } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { browserReadablePhotoUrl } from '@/lib/photo-url';
 import { NotificationBell } from '@/components/NotificationBell';
+import { SupportIconLink } from '@/components/SupportIconLink';
 
 export type CandidateTab =
   | 'home'
@@ -213,6 +214,9 @@ const ACCOUNT_MENU_LINKS = [
   { href: '/ats', label: 'ATS Score' },
   { href: '/notifications', label: 'Notifications' },
 ];
+
+const HEADER_ICON_LINK =
+  'flex shrink-0 items-center justify-center rounded-full border border-white/45 text-white transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
 
 const ACCOUNT_MENU_ITEM =
   'block rounded-lg px-3 py-2.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]';
@@ -454,6 +458,7 @@ export function CandidateAppShell({
             ) : null}
           </div>
           <div className="relative flex items-center gap-2.5">
+            <SupportIconLink className={`${HEADER_ICON_LINK} h-9 w-9`} iconSize={18} />
             <NotificationBell variant="candidate-pill" className="!h-9 !w-9" />
             <button
               type="button"
@@ -562,6 +567,7 @@ export function CandidateAppShell({
           </nav>
 
           <div className="relative flex shrink-0 items-center gap-3">
+            <SupportIconLink className={`${HEADER_ICON_LINK} h-10 w-10`} iconSize={20} />
             <NotificationBell variant="candidate-pill" className="!h-10 !w-10" />
             <button
               type="button"

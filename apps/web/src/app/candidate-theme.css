@@ -27,33 +27,6 @@ html:has(.cb-cand) .cb-portal-page {
     var(--color-background);
 }
 
-html:has(.cb-cand) .app-loader {
-  background: linear-gradient(135deg, #1a1fc4, #10137c);
-}
-
-html:has(.cb-cand) .app-loader-shine {
-  background: linear-gradient(
-    105deg,
-    transparent 0%,
-    transparent 32%,
-    rgba(255, 255, 255, 0.18) 42%,
-    rgba(255, 255, 255, 0.6) 50%,
-    rgba(255, 255, 255, 0.18) 58%,
-    transparent 68%,
-    transparent 100%
-  );
-}
-
-html:has(.cb-cand) .app-loader-ring {
-  border-color: rgba(255, 255, 255, 0.25);
-  border-top-color: #ffffff;
-  border-right-color: #c9d3ff;
-}
-
-html:has(.cb-cand) .app-loader-text {
-  color: rgba(255, 255, 255, 0.85);
-}
-
 html:has(.cb-cand) .date-picker-trigger {
   min-height: 48px;
 }
