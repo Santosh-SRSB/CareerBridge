@@ -156,11 +156,9 @@ function PassportOverviewPage() {
 
   const shellProps = {
     activeTab: 'profile' as const,
-    showBack: true,
     title: 'Career Passport',
     headerVariant: 'simple' as const,
     maxWidth: 'max-w-lg',
-    onBack: () => router.push('/dashboard'),
   };
 
   if (error) {
