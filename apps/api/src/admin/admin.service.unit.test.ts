@@ -91,7 +91,7 @@ describe('ST-23: admin approve/reject stays available for historical PENDING_REV
         calls.rejections += 1;
       },
     };
-    return { service: new AdminService(prisma as never, {} as never, employers as never), job, audits, calls };
+    return { service: new AdminService(prisma as never, {} as never, employers as never, {} as never), job, audits, calls };
   }
 
   it('approving a historical PENDING_REVIEW job publishes it, audits it and runs the go-live follow-ups', async () => {
@@ -136,7 +136,7 @@ describe('Job closedAt on admin status changes (Employer Report "Closed Date")',
       auditLog: { create: async () => undefined },
     };
     const employers = { completeJobApproval: async () => null, notifyJobRejected: async () => undefined };
-    return { service: new AdminService(prisma as never, {} as never, employers as never), job, updates };
+    return { service: new AdminService(prisma as never, {} as never, employers as never, {} as never), job, updates };
   }
   const original = new Date('2026-10-02T05:00:00.000Z');
 
@@ -227,7 +227,7 @@ describe('AdminService.mergeSkill', () => {
       $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
       auditLog: { create: async (row: unknown) => audits.push(row) },
     };
-    const service = new AdminService(prisma as never, {} as never, {} as never);
+    const service = new AdminService(prisma as never, {} as never, {} as never, {} as never);
     return { service, skills, jobs, audits, get candidateSkills() { return candidateSkills; } };
   }
 

@@ -231,7 +231,7 @@ function listHarness() {
     user: { findMany: async () => [{ id: 'u-emp', email: 'emp@example.test', userType: 'EMPLOYER' }] },
     whatsAppMessage: { findMany: async () => [] },
   };
-  const service = new AdminService(prisma as never, {} as never, {} as never);
+  const service = new AdminService(prisma as never, {} as never, {} as never, {} as never);
   return { service, calls, interviews };
 }
 

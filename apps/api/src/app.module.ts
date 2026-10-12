@@ -22,6 +22,7 @@ import { GstModule } from './gst/gst.module';
 import { CoursesModule } from './courses/courses.module';
 import { AiModule } from './ai/ai.module';
 import { StorageModule } from './common/storage/storage.module';
+import { PiiCryptoModule } from './common/crypto/pii-crypto.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
@@ -43,6 +44,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
       },
     ]),
     PrismaModule,
+    PiiCryptoModule,
     AuthModule,
     CandidatesModule,
     JobsModule,

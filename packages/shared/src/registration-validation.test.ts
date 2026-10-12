@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  businessLocationError,
   hasRegistrationErrors,
   validateCandidateRegistration,
   validateEmployerRegistration,
@@ -52,6 +53,8 @@ const employer = {
   workEmail: 'john@abcservices.com',
   national: '9876543210',
   mobileLength: 10,
+  state: 'Karnataka',
+  city: 'Bengaluru',
   password: 'SecurePass@1',
   confirmPassword: 'SecurePass@1',
   otpChannel: 'EMAIL' as const,
@@ -93,4 +96,18 @@ test('employer field rules', () => {
   assert.equal(errors.workEmail, 'Please enter a valid work email address');
   assert.match(errors.companyName || '', /100 characters/);
   assert.equal(errors.password, 'Password must contain uppercase, number, and special character');
+});
+
+test('employer business location is required and the city must belong to the state', () => {
+  assert.equal(validateEmployerRegistration({ ...employer, state: '', city: '' }).location, 'Select your business location.');
+  assert.equal(validateEmployerRegistration({ ...employer, city: '' }).location, 'Select your business location.');
+  assert.equal(validateEmployerRegistration({ ...employer, city: 'Pune' }).location, 'Select a city from the list.');
+  assert.equal(validateEmployerRegistration({ ...employer, state: 'Atlantis', city: 'Bengaluru' }).location, 'Select a city from the list.');
+  assert.equal(validateEmployerRegistration({ ...employer, state: 'constructor', city: 'Bengaluru' }).location, 'Select a city from the list.');
+  assert.equal(validateEmployerRegistration({ ...employer, state: 'Maharashtra', city: 'Pune' }).location, undefined);
+});
+
+test('businessLocationError matches the employer form rule', () => {
+  assert.equal(businessLocationError(' Karnataka ', ' Bengaluru '), undefined);
+  assert.equal(businessLocationError(undefined, 'Bengaluru'), 'Select your business location.');
 });

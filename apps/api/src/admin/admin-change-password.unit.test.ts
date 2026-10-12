@@ -89,7 +89,7 @@ async function harness(opts: { userType?: string; adminStatus?: string; withAdmi
       })[key],
   };
   const auth = new AuthService(prisma as never, new JwtService({}), config as never, {} as never, {} as never);
-  const service = new AdminService(prisma as never, auth, {} as never);
+  const service = new AdminService(prisma as never, auth, {} as never, {} as never);
   return { service, auth, admin, user, other, audits, adminLookups, adminUpdates };
 }
 

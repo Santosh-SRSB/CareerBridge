@@ -1,9 +1,9 @@
 name: Deploy DEV
 
 # DEV only: careerbridge-api-dev / careerbridge-web-dev in careerbridge-f7b72 (asia-south1).
-# Runs CI first, then builds both images tagged with the commit SHA, then deploys the API
-# (health-checked) before the Web. Only the container image is changed on each service;
-# env vars, Secret Manager refs, Cloud SQL, scaling and probes are left as configured.
+# Checks the API's PII keyring binding first, then runs CI, builds both images tagged with the commit SHA,
+# then deploys the API (health-checked) before the Web. Only the container image is changed on each
+# service; env vars, Secret Manager refs, Cloud SQL, scaling and probes are left as configured.
 on:
   push:
     branches: [dev]
@@ -23,16 +23,59 @@ env:
   IMAGE_REPO: asia-south1-docker.pkg.dev/careerbridge-f7b72/careerbridge-dev
   API_SERVICE: careerbridge-api-dev
   WEB_SERVICE: careerbridge-web-dev
+  # PII keyring the API must already be bound to (docs/pii-encryption-dev-runbook.md). Names and versions only.
+  PII_KEYS_SECRET: careerbridge-pii-encryption-keys
+  PII_LOOKUP_SECRET: careerbridge-pii-lookup-key
+  PII_SECRET_VERSION: '1'
+  PII_ACTIVE_KEY_ID: dev1
 
 jobs:
+  # Fails closed before any build, deploy, migration or traffic change. The API code refuses KYC (503)
+  # without the keyring, so an unbound service blocks every DEV deploy until it is bound.
+  pii-preflight:
+    name: PII keyring preflight · careerbridge-api-dev
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Workload Identity Federation settings
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOY_SA: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SA" ]; then
+            echo "::error::Set GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT as variables on the 'dev' GitHub environment (see docs/ci-cd-dev.md)."
+            exit 1
+          fi
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/pii-preflight
+        with:
+          service: ${{ env.API_SERVICE }}
+          region: ${{ env.GCP_REGION }}
+          project: ${{ env.GCP_PROJECT_ID }}
+
   ci:
     name: CI
+    needs: pii-preflight
     if: github.ref == 'refs/heads/dev'
     uses: ./.github/workflows/ci.yml
 
   build:
     name: Build + push · ${{ matrix.image }}
-    needs: ci
+    needs: [pii-preflight, ci]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dev
@@ -90,6 +133,8 @@ jobs:
     env:
       IMAGE: asia-south1-docker.pkg.dev/careerbridge-f7b72/careerbridge-dev/api:${{ github.sha }}
     steps:
+      - uses: actions/checkout@v4
+
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -101,6 +146,14 @@ jobs:
         run: |
           gcloud run services describe "$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
             --format='value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)'
+
+      # Re-checked here: the binding could have changed while CI and the image builds ran.
+      - name: PII keyring preflight (re-check before deploy)
+        uses: ./.github/actions/pii-preflight
+        with:
+          service: ${{ env.API_SERVICE }}
+          region: ${{ env.GCP_REGION }}
+          project: ${{ env.GCP_PROJECT_ID }}
 
       # `services update` fails if the service does not exist (never creates one) and only
       # shifts traffic once the new revision passes its startup probe. The API entrypoint runs

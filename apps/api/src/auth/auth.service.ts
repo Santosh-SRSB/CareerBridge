@@ -9,7 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomUUID } from 'crypto';
-import { ErrorCode, OTP_EXPIRED_MESSAGE, registrationPasswordError } from '@careerbridge/shared';
+import { ErrorCode, OTP_EXPIRED_MESSAGE, businessLocationError, registrationPasswordError } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { FirebaseService } from './firebase.service';
 import { EmailService } from './email.service';
@@ -170,6 +170,17 @@ export class AuthService {
           message: 'Mobile verification is temporarily unavailable. Please try again later.',
         },
         HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    const locationError =
+      dto.purpose === 'REGISTER' && dto.accountType === 'EMPLOYER'
+        ? businessLocationError(dto.state, dto.city)
+        : undefined;
+    if (locationError) {
+      throw new HttpException(
+        { code: ErrorCode.VALIDATION_ERROR, message: locationError },
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -467,6 +478,7 @@ export class AuthService {
                       contactName: registration?.fullName || null,
                       industry: registration?.industry || null,
                       city: registration?.city || registration?.location || null,
+                      state: stateName,
                     },
                   },
                 }

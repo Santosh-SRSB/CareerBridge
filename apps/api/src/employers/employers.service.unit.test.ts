@@ -25,6 +25,16 @@ import { consentedWhatsAppNumber } from '../whatsapp/interview-lifecycle.util';
 import { companyLogoUrl } from './company-logo.util';
 import { withNotifyPrefs } from './employer-policy';
 import { closedAtForStatusChange } from './job-lifecycle';
+import { PiiCryptoService } from '../common/crypto/pii-crypto.service';
+
+/** Test-only keys; never used outside this file. */
+const TEST_PII_ENV: Record<string, string> = {
+  PII_ENCRYPTION_KEYS: `t1:${Buffer.alloc(32, 7).toString('base64')}`,
+  PII_LOOKUP_KEY: Buffer.alloc(32, 9).toString('base64'),
+};
+const testPii = (env: Record<string, string> = TEST_PII_ENV) =>
+  new PiiCryptoService({ get: (key: string) => env[key] ?? '' } as any);
+const PII = testPii();
 
 const BUCKET = 'srsbbucket';
 const EMP_A = '6d318eed-780b-4ee3-9027-5827611b6d55';
@@ -166,6 +176,7 @@ type Opts = {
   sendTextResult?: { ok: boolean };
   /** Runs before company.create's unique check, to simulate a concurrent registration winning the race. */
   beforeCompanyCreate?: (db: Db) => void;
+  pii?: PiiCryptoService;
 };
 
 function harness(opts: Opts = {}) {
@@ -195,11 +206,14 @@ function harness(opts: Opts = {}) {
 
   const prisma: any = {
     company: {
-      findUnique: async ({ where }: Row) => db.companies.find((c) => c.gstin === where.gstin) ?? null,
+      findUnique: async ({ where }: Row) => {
+        const [key, value] = Object.entries(where)[0] as [string, unknown];
+        return db.companies.find((c) => c[key] !== undefined && c[key] === value) ?? null;
+      },
       create: async ({ data }: Row) => {
         opts.beforeCompanyCreate?.(db);
-        if (db.companies.some((c) => c.gstin === data.gstin)) {
-          throw Object.assign(new Error('Unique constraint failed on the fields: (`gstin`)'), { code: 'P2002' });
+        if (db.companies.some((c) => c.gstin === data.gstin || (data.gstinHash && c.gstinHash === data.gstinHash))) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (`gstin_hash`)'), { code: 'P2002' });
         }
         calls.companyCreates.push(data);
         const row = { id: `CO${++seq}`, ...data };
@@ -430,6 +444,7 @@ function harness(opts: Opts = {}) {
     testimonials as any,
     gst as any,
     catalog as any,
+    opts.pii ?? PII,
   );
   return { svc, db, calls, prisma };
 }
@@ -559,7 +574,7 @@ describe('Fix 3 — PATCH /employers/me/kyc validates GSTIN on the server', () =
     const { svc, calls } = harness();
     const res = await svc.saveKyc('uU', kyc({ trademark: 'Totally Real Corp' }));
     const saved = calls.employerUpdates.at(-1)!;
-    assert.equal(saved.gstNumber, VALID_GSTIN);
+    assert.equal(PII.decrypt('employers.gst_number', saved.gstNumber), VALID_GSTIN);
     assert.equal(saved.verificationStatus, 'KYC_COMPLETE');
     assert.equal(saved.verified, false);
     assert.equal('companyName' in saved, false);
@@ -598,9 +613,19 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
     const { svc, db, calls } = harness();
     const res = await svc.saveKyc('uU', kyc());
     assert.equal(db.companies.length, 1);
-    assert.deepEqual(calls.companyCreates, [{ gstin: VALID_GSTIN, name: 'Acme Pvt Ltd' }]);
+    assert.equal(calls.companyCreates.length, 1);
+    const created = calls.companyCreates[0];
+    assert.equal(created.name, 'Acme Pvt Ltd');
+    assert.equal(created.gstinHash, PII.lookupHash('gstin', VALID_GSTIN));
+    assert.equal(PII.decrypt('companies.gstin', created.gstin), VALID_GSTIN);
+    assert.ok(!JSON.stringify(created).includes(VALID_GSTIN), 'company row holds no plaintext GSTIN');
     assert.equal(employer(db, EMP_U).companyId, db.companies[0].id);
-    assert.deepEqual(res.company, { id: db.companies[0].id, name: 'Acme Pvt Ltd', gstin: VALID_GSTIN, existing: false });
+    assert.deepEqual(res.company, {
+      id: db.companies[0].id,
+      name: 'Acme Pvt Ltd',
+      gstinMasked: '27AAPFU*****1ZV',
+      existing: false,
+    });
   });
 
   it('second account with the same GSTIN is linked to the existing company instead of a 409', async () => {
@@ -611,8 +636,13 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
     assert.equal(db.companies.length, 1, 'no duplicate company');
     assert.equal(calls.companyCreates.length, 1);
     assert.equal(employer(db, EMP_B).companyId, employer(db, EMP_U).companyId);
-    assert.equal(employer(db, EMP_B).gstNumber, VALID_GSTIN);
-    assert.deepEqual(res.company, { id: db.companies[0].id, name: 'Acme Pvt Ltd', gstin: VALID_GSTIN, existing: true });
+    assert.equal(PII.decrypt('employers.gst_number', employer(db, EMP_B).gstNumber), VALID_GSTIN);
+    assert.deepEqual(res.company, {
+      id: db.companies[0].id,
+      name: 'Acme Pvt Ltd',
+      gstinMasked: '27AAPFU*****1ZV',
+      existing: true,
+    });
   });
 
   it("a later account never overwrites the company's canonical details", async () => {
@@ -653,7 +683,12 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
   });
 
   it('losing the insert race (unique violation) re-reads and links to the winning company', async () => {
-    const winner = { id: 'CO-WINNER', gstin: VALID_GSTIN, name: 'Winner Pvt Ltd' };
+    const winner = {
+      id: 'CO-WINNER',
+      gstin: PII.encrypt('companies.gstin', VALID_GSTIN),
+      gstinHash: PII.lookupHash('gstin', VALID_GSTIN),
+      name: 'Winner Pvt Ltd',
+    };
     const { svc, db } = harness({
       beforeCompanyCreate: (state) => {
         if (!state.companies.length) state.companies.push({ ...winner });
@@ -662,7 +697,18 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
     const res = await svc.saveKyc('uU', kyc());
     assert.deepEqual(db.companies, [winner]);
     assert.equal(employer(db, EMP_U).companyId, 'CO-WINNER');
-    assert.deepEqual(res.company, { ...winner, existing: true });
+    assert.deepEqual(res.company, { id: 'CO-WINNER', name: 'Winner Pvt Ltd', gstinMasked: '27AAPFU*****1ZV', existing: true });
+  });
+
+  it('a legacy company row (plaintext GSTIN, no hash yet) is reused, not duplicated', async () => {
+    const legacy = { id: 'CO-LEGACY', gstin: VALID_GSTIN, name: 'Legacy Pvt Ltd' };
+    const { svc, db, calls } = harness();
+    db.companies.push({ ...legacy });
+    const res = await svc.saveKyc('uU', kyc());
+    assert.equal(calls.companyCreates.length, 0);
+    assert.deepEqual(db.companies, [legacy], 'legacy row is left for the backfill, not rewritten at request time');
+    assert.equal(employer(db, EMP_U).companyId, 'CO-LEGACY');
+    assert.equal(res.company.existing, true);
   });
 
   it('invalid GSTIN is still rejected and creates no company', async () => {
@@ -682,6 +728,214 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
   });
 });
 
+describe('GSTIN / PAN / CIN: validation, encryption at rest and masked responses', () => {
+  const kyc = (extra: Row = {}) => ({
+    gstNumber: VALID_GSTIN,
+    panNumber: 'AAPFU0939F',
+    cin: 'U72900MH2015PTC123456',
+    website: 'https://acme.in',
+    ...extra,
+  });
+  const PLAINTEXT = [VALID_GSTIN, 'AAPFU0939F', 'U72900MH2015PTC123456'];
+
+  it('invalid PAN or CIN → 400 before any provider call, nothing stored', async () => {
+    const { svc, calls } = harness();
+    await assert.rejects(svc.saveKyc('uU', kyc({ panNumber: 'ABCDE12345' })), (err) => {
+      assert.ok(err instanceof BadRequestException);
+      assert.match(httpMessage(err), /valid PAN/);
+      return true;
+    });
+    await assert.rejects(svc.saveKyc('uU', kyc({ cin: 'U72900MH2015PTC12345' })), (err) => {
+      assert.match(httpMessage(err), /21 characters/);
+      return true;
+    });
+    assert.equal(calls.gst.length, 0);
+    assert.equal(calls.employerUpdates.length, 0);
+  });
+
+  it('values are normalised, stored only as ciphertext, and decrypt for authorised backend use', async () => {
+    const { svc, db, calls } = harness();
+    await svc.saveKyc('uU', kyc({ gstNumber: ' 27aapfu0939f1zv ', panNumber: 'aapfu 0939f', cin: ' u72900mh2015ptc123456' }));
+    assert.deepEqual(calls.gst, [VALID_GSTIN]);
+    const stored = db.employers.find((e) => e.id === EMP_U)!;
+    for (const field of ['gstNumber', 'panNumber', 'cin']) assert.match(stored[field], /^pii:v1:t1:/);
+    const serialized = JSON.stringify({ employers: db.employers, companies: db.companies });
+    for (const value of PLAINTEXT) assert.ok(!serialized.includes(value), 'no plaintext identifier in storage');
+    assert.equal(PII.decrypt('employers.gst_number', stored.gstNumber), VALID_GSTIN);
+    assert.equal(PII.decrypt('employers.pan_number', stored.panNumber), 'AAPFU0939F');
+    assert.equal(PII.decrypt('employers.cin', stored.cin), 'U72900MH2015PTC123456');
+    assert.equal(PII.decrypt('employers.pan_number', stored.gstNumber), null, 'ciphertext is bound to its column');
+  });
+
+  it('KYC and profile responses carry masked identifiers only', async () => {
+    const { svc } = harness();
+    const saved = await svc.saveKyc('uU', kyc());
+    const profile = await svc.me('uU');
+    for (const body of [saved, profile]) {
+      assert.equal(body.gstNumber, '27AAPFU*****1ZV');
+      assert.equal(body.panNumber, 'AAPFU****F');
+      assert.equal(body.cin, 'U72900************456');
+      const json = JSON.stringify(body);
+      for (const value of PLAINTEXT) assert.ok(!json.includes(value));
+      assert.ok(!json.includes('pii:v1'), 'no ciphertext or key metadata in responses');
+    }
+  });
+
+  it('legacy plaintext rows still load, masked, and an empty CIN stays null', async () => {
+    const { svc, db } = harness();
+    Object.assign(db.employers.find((e) => e.id === EMP_B)!, { gstNumber: VALID_GSTIN, panNumber: 'AAPFU0939F', cin: null });
+    const profile = await svc.me('uB');
+    assert.equal(profile.gstNumber, '27AAPFU*****1ZV');
+    assert.equal(profile.panNumber, 'AAPFU****F');
+    assert.equal(profile.cin, null);
+  });
+
+  it('tampered or foreign-key ciphertext is never echoed back', async () => {
+    const { svc, db } = harness();
+    const row = db.employers.find((e) => e.id === EMP_B)!;
+    const parts = PII.encrypt('employers.gst_number', VALID_GSTIN).split(':');
+    parts[4] = `${parts[4][0] === 'A' ? 'B' : 'A'}${parts[4].slice(1)}`;
+    row.gstNumber = parts.join(':');
+    row.panNumber = testPii({
+      PII_ENCRYPTION_KEYS: `other:${Buffer.alloc(32, 3).toString('base64')}`,
+      PII_LOOKUP_KEY: Buffer.alloc(32, 4).toString('base64'),
+    }).encrypt('employers.pan_number', 'AAPFU0939F');
+    const profile = await svc.me('uB');
+    assert.equal(profile.gstNumber, 'Unavailable');
+    assert.equal(profile.panNumber, 'Unavailable');
+  });
+
+  describe('CIN on a KYC update: omitted keeps it, explicit empty removes it', () => {
+    const CIN = 'U72900MH2015PTC123456';
+    const withoutCin = () => {
+      const { cin: _omit, ...rest } = kyc();
+      return rest;
+    };
+
+    it('an omitted CIN keeps the saved encrypted CIN untouched', async () => {
+      const { svc, db, calls } = harness();
+      const row = db.employers.find((e) => e.id === EMP_U)!;
+      row.cin = PII.encrypt('employers.cin', CIN);
+      const before = row.cin;
+      const saved = await svc.saveKyc('uU', withoutCin());
+      assert.equal('cin' in calls.employerUpdates.at(-1)!, false, 'cin is not part of the update');
+      assert.equal(row.cin, before);
+      assert.equal(saved.cin, 'U72900************456');
+    });
+
+    it('an omitted CIN keeps a legacy plaintext CIN and encrypts it in place', async () => {
+      const { svc, db } = harness();
+      const row = db.employers.find((e) => e.id === EMP_U)!;
+      row.cin = CIN;
+      const saved = await svc.saveKyc('uU', withoutCin());
+      assert.match(row.cin, /^pii:v1:t1:/);
+      assert.equal(PII.decrypt('employers.cin', row.cin), CIN);
+      assert.equal(saved.cin, 'U72900************456');
+    });
+
+    it('an omitted CIN never overwrites a saved value this server cannot decrypt', async () => {
+      const { svc, db, calls } = harness();
+      const row = db.employers.find((e) => e.id === EMP_U)!;
+      row.cin = testPii({
+        PII_ENCRYPTION_KEYS: `other:${Buffer.alloc(32, 3).toString('base64')}`,
+        PII_LOOKUP_KEY: Buffer.alloc(32, 4).toString('base64'),
+      }).encrypt('employers.cin', CIN);
+      const before = row.cin;
+      await svc.saveKyc('uU', withoutCin());
+      assert.equal('cin' in calls.employerUpdates.at(-1)!, false);
+      assert.equal(row.cin, before);
+    });
+
+    it('an omitted CIN with nothing saved stays empty', async () => {
+      const { svc, db } = harness();
+      const row = db.employers.find((e) => e.id === EMP_U)!;
+      row.cin = null;
+      const saved = await svc.saveKyc('uU', withoutCin());
+      assert.equal(row.cin, null);
+      assert.equal(saved.cin, null);
+    });
+
+    it('an explicit empty string or null removes the saved CIN', async () => {
+      for (const cleared of ['', '   ', null]) {
+        const { svc, db } = harness();
+        const row = db.employers.find((e) => e.id === EMP_U)!;
+        row.cin = PII.encrypt('employers.cin', CIN);
+        const saved = await svc.saveKyc('uU', kyc({ cin: cleared }));
+        assert.equal(row.cin, null, `cin ${JSON.stringify(cleared)} clears`);
+        assert.equal(saved.cin, null);
+      }
+    });
+
+    it('a new full CIN is validated, then replaces the saved one encrypted', async () => {
+      const { svc, db } = harness();
+      const row = db.employers.find((e) => e.id === EMP_U)!;
+      row.cin = PII.encrypt('employers.cin', CIN);
+      const next = 'L65999KA2010PLC054321';
+      const saved = await svc.saveKyc('uU', kyc({ cin: next.toLowerCase() }));
+      assert.match(row.cin, /^pii:v1:t1:/);
+      assert.equal(PII.decrypt('employers.cin', row.cin), next);
+      assert.equal(saved.cin, 'L65999************321');
+      assert.ok(!JSON.stringify(saved).includes(next));
+    });
+  });
+
+  it('masked or partial identifiers are rejected and never overwrite stored values', async () => {
+    const { svc, db, calls } = harness();
+    const row = db.employers.find((e) => e.id === EMP_U)!;
+    Object.assign(row, {
+      gstNumber: PII.encrypt('employers.gst_number', VALID_GSTIN),
+      panNumber: PII.encrypt('employers.pan_number', 'AAPFU0939F'),
+      cin: PII.encrypt('employers.cin', 'U72900MH2015PTC123456'),
+    });
+    const before = { gstNumber: row.gstNumber, panNumber: row.panNumber, cin: row.cin };
+    const attempts: Row[] = [
+      { gstNumber: '27AAPFU*****1ZV' },
+      { panNumber: 'AAPFU****F' },
+      { cin: 'U72900************456' },
+      { gstNumber: 'Unavailable' },
+      { panNumber: 'Unavailable' },
+      { cin: 'Unavailable' },
+      { panNumber: 'AAPFU' },
+      { cin: 'U72900MH' },
+    ];
+    for (const extra of attempts) {
+      await assert.rejects(svc.saveKyc('uU', kyc(extra)), BadRequestException, JSON.stringify(extra));
+    }
+    assert.equal(calls.gst.length, 0);
+    assert.equal(calls.employerUpdates.length, 0);
+    assert.deepEqual({ gstNumber: row.gstNumber, panNumber: row.panNumber, cin: row.cin }, before);
+  });
+
+  it('without encryption keys KYC fails closed: 503, no provider call, nothing stored', async () => {
+    const { svc, calls, db } = harness({ pii: testPii({}) });
+    await assert.rejects(svc.saveKyc('uU', kyc()), (err) => {
+      assert.equal(httpStatus(err), 503);
+      assert.ok(!httpMessage(err).includes('PII_'), 'no configuration details in the client message');
+      return true;
+    });
+    assert.equal(calls.gst.length, 0);
+    assert.equal(calls.employerUpdates.length, 0);
+    assert.equal(db.companies.length, 0);
+  });
+
+  it('existing employers without a location keep loading', async () => {
+    const { svc, db } = harness();
+    Object.assign(db.employers.find((e) => e.id === EMP_U)!, { city: null });
+    const profile = await svc.me('uU');
+    assert.equal(profile.city, null);
+    assert.equal(profile.state, null);
+  });
+
+  it('changing the city from the profile clears a state recorded for the old city', async () => {
+    const { svc, db, calls } = harness();
+    Object.assign(db.employers.find((e) => e.id === EMP_U)!, { city: 'Bengaluru', state: 'Karnataka' });
+    await svc.updateMe('uU', { city: 'Bengaluru' });
+    assert.equal('state' in calls.employerUpdates.at(-1)!, false);
+    await svc.updateMe('uU', { city: 'Pune' });
+    assert.equal(calls.employerUpdates.at(-1)!.state, null);
+  });
+});
+
 describe('Fix 3 — GstService reports MOCK truthfully', () => {
   const make = (cfg: Row, details: Row) => {
     const audits: Row[] = [];
@@ -689,6 +943,7 @@ describe('Fix 3 — GstService reports MOCK truthfully', () => {
       { get: () => cfg } as any,
       { getGstinDetails: async () => details } as any,
       { gstVerificationAudit: { create: async ({ data }: Row) => audits.push(data) } } as any,
+      PII,
     );
     return { svc, audits };
   };
@@ -702,6 +957,9 @@ describe('Fix 3 — GstService reports MOCK truthfully', () => {
     assert.equal(r.message, GST_MOCK_ACTIVE_MESSAGE);
     assert.doesNotMatch(String(r.message), /GSTINAPI_KEY|GST_MOCK|IRIS/);
     assert.equal(audits[0]?.provider, 'MOCK');
+    assert.equal(PII.decrypt('gst_verification_audits.gstin', audits[0]?.gstin), VALID_GSTIN);
+    assert.equal(audits[0]?.gstinHash, PII.lookupHash('gstin', VALID_GSTIN));
+    assert.ok(!JSON.stringify(audits).includes(VALID_GSTIN), 'audit rows hold no plaintext GSTIN');
   });
   it('mock NOT_ACTIVE message has no env-var names', async () => {
     const { svc } = make(mockCfg, { status: 'NOT_ACTIVE', tradeName: null });

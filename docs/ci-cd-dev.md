@@ -5,7 +5,7 @@ DEV only. UAT and PROD are not wired up.
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `.github/workflows/ci.yml` | Pull request into `dev` (and called by `deploy-dev.yml`) | API production build + unit tests, shared tests, web typecheck + unit tests, gitleaks secret scan, npm audit (report-only), Docker build of both images without pushing (PRs only). Never deploys. |
-| `.github/workflows/deploy-dev.yml` | Push to `dev`, or manual run on `dev` | Runs CI, builds and pushes `api:<sha>` and `web:<sha>` to `asia-south1-docker.pkg.dev/careerbridge-f7b72/careerbridge-dev`, deploys the API, checks `/api/v1/health`, then deploys the Web and checks `/`. |
+| `.github/workflows/deploy-dev.yml` | Push to `dev`, or manual run on `dev` | Checks the API's PII keyring binding (fails closed, `docs/pii-encryption-dev-runbook.md`), runs CI, builds and pushes `api:<sha>` and `web:<sha>` to `asia-south1-docker.pkg.dev/careerbridge-f7b72/careerbridge-dev`, deploys the API, checks `/api/v1/health`, then deploys the Web and checks `/`. |
 
 Deploys change only the container image of `careerbridge-api-dev` and `careerbridge-web-dev`
 (`gcloud run services update --image`). Env vars, Secret Manager refs, the Cloud SQL connection,
@@ -97,6 +97,9 @@ gcloud run services update careerbridge-api-dev --region=asia-south1 --project=c
 ```
 
 Prisma migrations are forward-only; rolling back the image does not roll back the schema.
+
+Once employer GSTIN/PAN/CIN ciphertext exists, do not roll the API back to an image from before PII encryption;
+see `docs/pii-encryption-dev-runbook.md` (Rollback limitation).
 
 ## Known gaps
 
