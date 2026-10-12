@@ -1376,75 +1376,81 @@ export default function SuperAdminDashboardInner() {
             )}
 
             {tab === 'employers' && !listLoading && rows.length > 0 && (
-              <div className="grid gap-3 md:grid-cols-2">
-                {sortedRows.map((row) => {
-                  const id = String(row.id ?? '');
-                  const status = String(row.accountStatus ?? '');
-                  const verified = Boolean(row.verified);
-                  return (
-                    <article key={id} className="sa-ccard flex">
-                      <div className={`w-1.5 shrink-0 ${verified ? 'sa-strip--ok' : 'sa-strip--warn'}`} />
-                      <div className="min-w-0 flex-1 p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <h3 className="sa-ink font-bold [overflow-wrap:anywhere]">{cell(row.companyName)}</h3>
-                            <p className="sa-muted text-xs [overflow-wrap:anywhere]">{cell(row.email)}</p>
-                          </div>
-                          <StatusPill status={status} />
+              <div className="sa-elist">
+                <div className="sa-elist-grid">
+                  {sortedRows.map((row) => {
+                    const id = String(row.id ?? '');
+                    const status = String(row.accountStatus ?? '');
+                    const verified = Boolean(row.verified);
+                    const company = String(row.companyName ?? '').trim();
+                    const label = company || 'Employer';
+                    return (
+                      <article key={id} className="sa-erow" aria-label={label}>
+                        <span className="sa-erow-av" aria-hidden="true">
+                          {label.slice(0, 1).toUpperCase()}
+                        </span>
+                        <div className="sa-erow-id">
+                          <p className="sa-erow-name">{cell(row.companyName)}</p>
+                          <p className="sa-erow-sub">{cell(row.email)}</p>
+                          <p className="sa-erow-sub">
+                            {verified ? 'Verified employer' : 'Pending verification'} · {cell(row.jobs)} jobs
+                          </p>
                         </div>
-                        <p className="sa-muted mt-2 text-xs">
-                          {verified ? 'Verified employer' : 'Pending verification'} · {cell(row.jobs)} jobs
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          <ActionBtn onClick={() => void openDetail('employers', id)}>View</ActionBtn>
-                          <ActionBtn
-                            disabled={!id || verified || busyId === id}
-                            onClick={() => void runAction(id, () => verifyEmployer(id), 'Employer verified.')}
-                          >
-                            Verify
-                          </ActionBtn>
-                          <ActionBtn
-                            disabled={!id || busyId === id || status === 'ACTIVE'}
-                            onClick={() =>
-                              void runAction(id, () => setAdminEmployerStatus(id, 'ACTIVE'), 'Employer activated.')
-                            }
-                          >
-                            Activate
-                          </ActionBtn>
-                          <ActionBtn
-                            tone="secondary"
-                            disabled={!id || busyId === id || status === 'INACTIVE'}
-                            onClick={() =>
-                              void runAction(id, () => setAdminEmployerStatus(id, 'INACTIVE'), 'Employer deactivated.')
-                            }
-                          >
-                            Deactivate
-                          </ActionBtn>
-                          <ActionBtn
-                            tone="strong"
-                            disabled={!id || busyId === id || status === 'SUSPENDED'}
-                            onClick={() =>
-                              void runAction(id, () => setAdminEmployerStatus(id, 'SUSPENDED'), 'Employer suspended.')
-                            }
-                          >
-                            Suspend
-                          </ActionBtn>
-                          {canOfferAccountDeletion({ viewerRole: staffRole, kind: 'employers', status }) ? (
+                        <div className="sa-erow-side">
+                          <div className="sa-erow-stat">
+                            <StatusPill status={status} />
+                          </div>
+                          <div className="sa-erow-act">
+                            <ActionBtn onClick={() => void openDetail('employers', id)}>View</ActionBtn>
                             <ActionBtn
-                              tone="danger"
-                              disabled={!id || busyId === id}
+                              disabled={!id || verified || busyId === id}
+                              onClick={() => void runAction(id, () => verifyEmployer(id), 'Employer verified.')}
+                            >
+                              Verify
+                            </ActionBtn>
+                            <ActionBtn
+                              disabled={!id || busyId === id || status === 'ACTIVE'}
                               onClick={() =>
-                                setDeleteTarget({ kind: 'employers', id, name: String(row.companyName ?? 'Employer') })
+                                void runAction(id, () => setAdminEmployerStatus(id, 'ACTIVE'), 'Employer activated.')
                               }
                             >
-                              Delete
+                              Activate
                             </ActionBtn>
-                          ) : null}
+                            <ActionBtn
+                              tone="secondary"
+                              disabled={!id || busyId === id || status === 'INACTIVE'}
+                              onClick={() =>
+                                void runAction(id, () => setAdminEmployerStatus(id, 'INACTIVE'), 'Employer deactivated.')
+                              }
+                            >
+                              Deactivate
+                            </ActionBtn>
+                            <ActionBtn
+                              tone="strong"
+                              disabled={!id || busyId === id || status === 'SUSPENDED'}
+                              onClick={() =>
+                                void runAction(id, () => setAdminEmployerStatus(id, 'SUSPENDED'), 'Employer suspended.')
+                              }
+                            >
+                              Suspend
+                            </ActionBtn>
+                            {canOfferAccountDeletion({ viewerRole: staffRole, kind: 'employers', status }) ? (
+                              <ActionBtn
+                                tone="danger"
+                                disabled={!id || busyId === id}
+                                onClick={() =>
+                                  setDeleteTarget({ kind: 'employers', id, name: String(row.companyName ?? 'Employer') })
+                                }
+                              >
+                                Delete
+                              </ActionBtn>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    </article>
-                  );
-                })}
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
