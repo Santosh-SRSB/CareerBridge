@@ -1,0 +1,288 @@
+# Manual local image verification. The Docker context is the commit GitHub
+# selected for this workflow run. The operator must type that full SHA.
+# A commit cannot contain its own hash, so this file does not hardcode one.
+# Nothing is published or deployed.
+name: Security image verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_sha:
+        description: 'Type the full SHA of the commit selected for this run'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  # Required only so the redacted scan reports can be downloaded.
+  actions: write
+
+concurrency:
+  group: security-image-verification
+  cancel-in-progress: false
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.75.0
+
+jobs:
+  verify:
+    name: Build and scan local images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the selected commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Confirm the requested commit
+        env:
+          CONFIRM_SHA: ${{ inputs.confirm_sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$CONFIRM_SHA" != "$GITHUB_SHA" ] || [ "$actual" != "$GITHUB_SHA" ]; then
+            echo "::error::This workflow builds only the commit selected for the run. Type that full SHA."
+            exit 1
+          fi
+          test -f infrastructure/docker/pack-prisma-cli.mjs
+          test -f .github/scripts/verify-web-release.mjs
+          test -f .github/scripts/redact-trivy-report.mjs
+          grep -q 'careerbridge-release' infrastructure/docker/Dockerfile.web
+          grep -q 'pack-prisma-cli.mjs' infrastructure/docker/Dockerfile.api
+          if grep -q 'npm install prisma@' infrastructure/docker/Dockerfile.api; then
+            echo "::error::The API image still installs a floating Prisma package."
+            exit 1
+          fi
+          short="$(printf '%s' "$GITHUB_SHA" | cut -c1-12)"
+          echo "API_TAG=careerbridge-api:verification-$short" >> "$GITHUB_ENV"
+          echo "WEB_TAG=careerbridge-web:verification-$short" >> "$GITHUB_ENV"
+          mkdir -p reports
+          date -u +%Y-%m-%dT%H:%M:%SZ | tee reports/started-at.txt
+          printf 'commit=%s\ncontext=github.sha\n' "$actual" | tee reports/source.txt
+          docker buildx version | tee reports/buildx-version.txt
+
+      - name: Build the API image locally
+        run: |
+          set -euo pipefail
+          docker buildx build --load --provenance=false \
+            --metadata-file reports/api-metadata.json \
+            --iidfile reports/api-image-id.txt \
+            -f infrastructure/docker/Dockerfile.api \
+            -t "$API_TAG" \
+            .
+
+      - name: Build the verification web image locally
+        run: |
+          set -euo pipefail
+          # Reserved .invalid names exercise the production Dockerfile guard.
+          # They are not a Firebase project and this image is not for deployment.
+          docker buildx build --load --provenance=false \
+            --metadata-file reports/web-metadata.json \
+            --iidfile reports/web-image-id.txt \
+            -f infrastructure/docker/Dockerfile.web \
+            --build-arg CAREERBRIDGE_RELEASE=production \
+            --build-arg NEXT_PUBLIC_API_URL=https://verification.invalid/api/v1 \
+            --build-arg NEXT_PUBLIC_AUTH_DEV_OTP=false \
+            --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=not-a-firebase-api-key \
+            --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=verification.invalid \
+            --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID=verification-not-a-project \
+            --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=verification-not-a-bucket \
+            --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=0 \
+            --build-arg NEXT_PUBLIC_FIREBASE_APP_ID=not-a-firebase-app-id \
+            --build-arg NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID= \
+            --build-arg NEXT_PUBLIC_FIREBASE_VAPID_KEY= \
+            -t "$WEB_TAG" \
+            .
+
+      - name: Record image identity and runtime users
+        if: success()
+        run: |
+          set -euo pipefail
+          {
+            echo "api_image_id=$(docker image inspect "$API_TAG" --format '{{.Id}}')"
+            echo "web_image_id=$(docker image inspect "$WEB_TAG" --format '{{.Id}}')"
+            echo "api_user=$(docker image inspect "$API_TAG" --format '{{.Config.User}}')"
+            echo "web_user=$(docker image inspect "$WEB_TAG" --format '{{.Config.User}}')"
+            echo "api_registry_digests=$(docker image inspect "$API_TAG" --format '{{json .RepoDigests}}')"
+            echo "web_registry_digests=$(docker image inspect "$WEB_TAG" --format '{{json .RepoDigests}}')"
+          } | tee reports/image-identity.txt
+          node --input-type=module -e '
+            import fs from "node:fs";
+            for (const name of ["api", "web"]) {
+              const file = `reports/${name}-metadata.json`;
+              const meta = JSON.parse(fs.readFileSync(file, "utf8"));
+              const digest = meta["containerimage.digest"] || "absent";
+              fs.appendFileSync("reports/image-identity.txt", `${name}_local_buildx_digest=${digest} local-manifest-digest-not-a-registry-digest\n`);
+              fs.unlinkSync(file);
+            }
+          '
+
+      - name: Inspect the API image
+        if: success()
+        run: |
+          set +e
+          user="$(docker image inspect "$API_TAG" --format '{{.Config.User}}')"
+          env_names="$(docker image inspect "$API_TAG" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1)"
+          prisma_out="$(docker run --rm --entrypoint /app/node_modules/.bin/prisma "$API_TAG" --version 2>&1)"
+          prisma_status=$?
+          entry_out="$(docker run --rm --entrypoint /bin/sh "$API_TAG" -c 'test -x ./docker-entrypoint.sh && echo entrypoint-present' 2>&1)"
+          entry_status=$?
+          secret_files="$(docker run --rm --user root --entrypoint /bin/sh "$API_TAG" -c 'find /app \( -name ".env" -o -name ".env.*" -o -name "*service-account*.json" -o -name "credentials.json" -o -name "id_rsa" -o -name "*.pem" \) -print | sort' 2>&1)"
+          engine_count="$(docker run --rm --user root --entrypoint /bin/sh "$API_TAG" -c 'find /app/node_modules/@prisma/engines -maxdepth 1 -type f -name "schema-engine-debian-openssl-3.0.x" -size +100k | wc -l' | tr -d '[:space:]')"
+          engine_count="${engine_count:-0}"
+          {
+            echo "api_user=$user"
+            echo "api_env_names<<EOF"
+            printf '%s\n' "$env_names"
+            echo "EOF"
+            echo "api_prisma_status=$prisma_status"
+            echo "api_prisma_version<<EOF"
+            printf '%s\n' "$prisma_out"
+            echo "EOF"
+            echo "api_schema_engine_count=$engine_count"
+            echo "api_entrypoint_status=$entry_status"
+            echo "api_entrypoint=$entry_out"
+            echo "api_secret_files<<EOF"
+            printf '%s\n' "$secret_files"
+            echo "EOF"
+          } > reports/api-inspection.txt
+          if [ "$user" = "api" ] \
+            && [ "$prisma_status" -eq 0 ] \
+            && printf '%s\n' "$prisma_out" | grep -Eq '^prisma[[:space:]]+:[[:space:]]+6\.19\.3$' \
+            && [ "$engine_count" -ge 1 ] \
+            && [ "$entry_status" -eq 0 ] \
+            && [ "$entry_out" = "entrypoint-present" ] \
+            && [ -z "$secret_files" ]; then
+            echo "api_inspection=pass" | tee -a reports/checks.txt
+          else
+            echo "api_inspection=fail" | tee -a reports/checks.txt
+          fi
+
+      - name: Inspect the web image
+        if: success()
+        run: |
+          set +e
+          user="$(docker image inspect "$WEB_TAG" --format '{{.Config.User}}')"
+          # The mounted script reads compiled string literals. The .invalid
+          # values are verification placeholders, not deployable configuration.
+          docker run --rm --user root \
+            -v "$GITHUB_WORKSPACE/.github/scripts:/verify:ro" \
+            --entrypoint node \
+            "$WEB_TAG" \
+            /verify/verify-web-release.mjs /app > reports/web-release.json
+          release_status=$?
+          secret_files="$(docker run --rm --user root --entrypoint /bin/sh "$WEB_TAG" -c 'find /app \( -name ".env" -o -name ".env.*" -o -name "*service-account*.json" -o -name "credentials.json" -o -name "id_rsa" -o -name "*.pem" \) -print | sort')"
+          WEB_USER="$user" WEB_RELEASE_STATUS="$release_status" WEB_SECRET_FILES="$secret_files" node --input-type=module -e '
+            import fs from "node:fs";
+            const user = process.env.WEB_USER || "";
+            const secretFiles = process.env.WEB_SECRET_FILES || "";
+            const status = Number(process.env.WEB_RELEASE_STATUS || "1");
+            let report = null;
+            try {
+              report = JSON.parse(fs.readFileSync("reports/web-release.json", "utf8"));
+            } catch {
+              report = null;
+            }
+            const lines = [
+              `web_user=${user}`,
+              `web_release_status=${status}`,
+              `web_placeholders=${report ? report.placeholders : "missing"}`,
+              `web_dev_hosts=${report ? report.devHosts : "unknown"}`,
+              `web_release_behavior=${report ? report.releaseBehavior : "not-verified"}`,
+              `web_release_value=${report ? report.releaseValue : "absent"}`,
+              "web_deployable=false",
+              "web_placeholder_note=verification-only .invalid names, not a deployment configuration",
+            ];
+            fs.writeFileSync("reports/web-inspection.txt", `${lines.join("\n")}\nweb_secret_files<<EOF\n${secretFiles}\nEOF\n`);
+            const literalsOk = report && report.placeholders === "present" && report.devHosts === "absent";
+            const releaseOk = report && report.releaseBehavior === "production" && report.releaseValue === "production" && report.deployable === false;
+            const structuralOk = user === "nextjs" && status === 0 && literalsOk && releaseOk && secretFiles.trim() === "";
+            fs.appendFileSync("reports/checks.txt", structuralOk ? "web_literals=pass\n" : "web_literals=fail\n");
+            fs.appendFileSync("reports/checks.txt", `web_release_behavior=${report ? report.releaseBehavior : "not-verified"}\n`);
+            fs.appendFileSync("reports/checks.txt", structuralOk ? "web_inspection=pass\n" : "web_inspection=fail\n");
+          '
+          web_record=$?
+          if [ "$web_record" -ne 0 ]; then
+            echo "web_inspection=fail" | tee -a reports/checks.txt
+          fi
+
+      - name: Record the scanner version
+        if: always()
+        run: |
+          set -euo pipefail
+          docker run --rm "$TRIVY_IMAGE" --version | tee reports/trivy-version.txt
+
+      - name: Scan both local images
+        if: always()
+        run: |
+          set +e
+          mkdir -p /tmp/image-tars reports
+          trap 'rm -f /tmp/image-tars/api.tar /tmp/image-tars/web.tar /tmp/image-tars/api-trivy.json /tmp/image-tars/web-trivy.json' EXIT
+          docker save "$API_TAG" -o /tmp/image-tars/api.tar
+          api_save=$?
+          docker save "$WEB_TAG" -o /tmp/image-tars/web.tar
+          web_save=$?
+          docker run --rm -v /tmp/image-tars:/work "$TRIVY_IMAGE" image --input /work/api.tar --scanners vuln,secret --format json --output /work/api-trivy.json --exit-code 1
+          api_scan=$?
+          docker run --rm -v /tmp/image-tars:/work "$TRIVY_IMAGE" image --input /work/web.tar --scanners vuln,secret --format json --output /work/web-trivy.json --exit-code 1
+          web_scan=$?
+          rm -f /tmp/image-tars/api.tar /tmp/image-tars/web.tar
+          node .github/scripts/redact-trivy-report.mjs /tmp/image-tars/api-trivy.json reports/api-trivy.json > reports/api-trivy-counts.json
+          api_redact=$?
+          node .github/scripts/redact-trivy-report.mjs /tmp/image-tars/web-trivy.json reports/web-trivy.json > reports/web-trivy-counts.json
+          web_redact=$?
+          rm -f /tmp/image-tars/api-trivy.json /tmp/image-tars/web-trivy.json
+          {
+            echo "api_save=$api_save"
+            echo "web_save=$web_save"
+            echo "api_scan_exit=$api_scan"
+            echo "web_scan_exit=$web_scan"
+            echo "api_redact_exit=$api_redact"
+            echo "web_redact_exit=$web_redact"
+            echo "scanned_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } | tee reports/scan-status.txt
+          findings=0
+          if [ "$api_redact" -eq 0 ] && [ "$web_redact" -eq 0 ]; then
+            findings="$(node --input-type=module -e '
+              import fs from "node:fs";
+              let n = 0;
+              for (const name of ["api", "web"]) {
+                const counts = JSON.parse(fs.readFileSync(`reports/${name}-trivy-counts.json`, "utf8"));
+                n += (counts.HIGH || 0) + (counts.CRITICAL || 0) + (counts.secrets || 0);
+              }
+              process.stdout.write(String(n));
+            ')"
+          else
+            findings=1
+          fi
+          if [ "$api_save" -eq 0 ] && [ "$web_save" -eq 0 ] && [ "$api_redact" -eq 0 ] && [ "$web_redact" -eq 0 ] && [ "$api_scan" -eq 0 ] && [ "$web_scan" -eq 0 ] && [ "$findings" -eq 0 ]; then
+            echo "scan=pass" | tee -a reports/checks.txt
+          else
+            echo "scan=fail" | tee -a reports/checks.txt
+          fi
+
+      - name: Remove build metadata
+        if: always()
+        run: rm -f reports/api-metadata.json reports/web-metadata.json
+
+      - name: Upload redacted reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-image-verification-${{ github.sha }}
+          path: reports/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Fail the run when a prepared check did not pass
+        if: always()
+        run: |
+          set -euo pipefail
+          echo "This image is a verification build. It is not a deployment artifact."
+          test -f reports/checks.txt
+          cat reports/checks.txt
+          grep -q '^api_inspection=pass$' reports/checks.txt
+          grep -q '^web_inspection=pass$' reports/checks.txt
+          grep -q '^scan=pass$' reports/checks.txt

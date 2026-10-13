@@ -69,7 +69,9 @@ COPY apps/web ./apps/web
 # --include=dev: Cloud Build/Docker often inherit NODE_ENV=production, which would
 # skip Tailwind/PostCSS without this flag. Install Linux optional natives after ci
 # because Windows lockfiles omit them.
-RUN npm ci --include=dev --ignore-scripts \
+RUN test "$NEXT_PUBLIC_CAREERBRIDGE_RELEASE" = "$CAREERBRIDGE_RELEASE" \
+  && printf '%s\n' "$CAREERBRIDGE_RELEASE" > /tmp/careerbridge-release \
+  && npm ci --include=dev --ignore-scripts \
   && npm install --no-save --include=optional lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu \
   && test -e apps/web/node_modules/@tailwindcss/postcss/package.json \
   && NODE_ENV=production npm run build -w @careerbridge/shared \
@@ -90,6 +92,9 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends ca-certifica
 COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+# Records the release argument used for NEXT_PUBLIC_CAREERBRIDGE_RELEASE.
+# Verification reads this file. It is not a deployment configuration.
+COPY --from=builder /tmp/careerbridge-release ./careerbridge-release
 
 USER nextjs
 EXPOSE 8080

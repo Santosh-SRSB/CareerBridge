@@ -851,19 +851,55 @@ Record, before step 5, the revisions and digests in the table above and the Comp
 
 Firebase Admin SDK project roles and its bucket `objectAdmin` binding stay out of this change.
 
-Status of the plan: ready for implementation review as of the planning pass. The implementation attempt on 2026-10-13 stopped at preflight. See the checkpoint below.
+The first implementation attempt on 2026-10-13 stopped because Cloud SQL `careerbridge-dev-db` was `STOPPED`. That attempt created nothing. The resume below is the migration that ran after the instance was started again.
 
-### Implementation checkpoint — 2026-10-13 preflight stop
+### Implementation result — 2026-10-13
 
-Branch `security/dev-remediation` at `567d544` in `C:\Users\ADMIN\Desktop\CareerBridge-security`. No service account, IAM binding, Cloud Run revision, or database setting was changed.
+Branch `security/dev-remediation` at `567d544`. Project `careerbridge-f7b72`, region `asia-south1`. No application image, source file, Terraform state, invoker binding, or ingress setting was changed. `roles/editor` remains on `601892050765-compute@developer.gserviceaccount.com`. No secret value was printed. No WhatsApp message was sent. No rollback was required.
 
-Revisions still match the review: API `careerbridge-api-dev-00084-8xb` at 100% traffic, digest `api@sha256:b3bae4876cf1465b45b7668f813a75e7b4722ba18875b723cecc3b0608b23fdd`, identity `601892050765-compute@developer.gserviceaccount.com`. Web `careerbridge-web-dev-00067-ctj` at 100% traffic, digest `web@sha256:082ed356c869ae8cc06781154253f0d93dd8d74f3ba1a604a69b8a19fafa9016`, same identity. Ingress remains `all`. Both dedicated runtime accounts are absent. Project `roles/editor` remains on the Compute Engine account. The 15 secret mounts, processor `CareerBridgeOCR` (`ENABLED`), bucket `objectAdmin` for the Compute Engine account, and both empty queue policies match the review.
+Preflight after the restart: Cloud SQL `careerbridge-dev-db` was `RUNNABLE` with `activationPolicy=ALWAYS`. Revision `careerbridge-api-dev-00084-8xb` logged `No pending migrations to apply.` and `GET /api/v1/health` returned HTTP 200 with `data.status=ok`. Web revision `careerbridge-web-dev-00067-ctj` was the rollback revision. Both were on the Compute Engine identity, digests unchanged from section 19.
 
-Material difference: Cloud SQL `careerbridge-dev-db` is `state=STOPPED` and `settings.activationPolicy=NEVER`. The reviewed plan treated that instance as the API's startup database. `GET https://careerbridge-api-dev-yo5h6bqrha-el.a.run.app/api/v1/health` returned HTTP 503. The web root returned HTTP 200. A new API revision runs `prisma migrate deploy` and would not become a healthy replacement while the instance is stopped. Starting the instance would change a database resource, which this migration does not authorize.
+| Service | Revision | Traffic | Digest | Runtime identity |
+|---|---|---|---|---|
+| API | `careerbridge-api-dev-00085-n7q` | 100% | `api@sha256:b3bae4876cf1465b45b7668f813a75e7b4722ba18875b723cecc3b0608b23fdd` | `careerbridge-api-runtime-dev@careerbridge-f7b72.iam.gserviceaccount.com` |
+| Web | `careerbridge-web-dev-00068-b67` | 100% | `web@sha256:082ed356c869ae8cc06781154253f0d93dd8d74f3ba1a604a69b8a19fafa9016` | `careerbridge-web-runtime-dev@careerbridge-f7b72.iam.gserviceaccount.com` |
 
-No rollback was required. `roles/editor` was not removed.
+Rollback revisions, still present and not receiving traffic: API `careerbridge-api-dev-00084-8xb` and web `careerbridge-web-dev-00067-ctj`, both on the Compute Engine identity.
 
-Implementation status: **BLOCKED** until `careerbridge-dev-db` is running under a separate approval and the current API health check succeeds. Then re-run this preflight before creating the runtime accounts.
+Grants added, then read back:
+
+| Principal | Role | Scope |
+|---|---|---|
+| both runtime accounts | `roles/logging.logWriter` | project |
+| API runtime account | `roles/cloudsql.client` | project, condition `api-runtime-dev-cloudsql`: `resource.name == 'projects/careerbridge-f7b72/instances/careerbridge-dev-db' && resource.service == 'sqladmin.googleapis.com'` |
+| API runtime account | `roles/documentai.apiUser` | project |
+| API runtime account | `roles/firebasecloudmessaging.admin` | project |
+| API runtime account | `roles/secretmanager.secretAccessor` | each of the 15 API secrets |
+| API runtime account | `roles/storage.objectUser` | `gs://srsbbucket` |
+| API runtime account | `roles/cloudtasks.enqueuer` | `resume-processing` and `whatsapp-notifications` |
+| `github-deploy-dev` | `roles/iam.serviceAccountUser` | each new runtime account |
+
+The web account has no other project role. The Compute Engine account still has its previous project roles, including `roles/editor`, and its bucket `objectAdmin` binding. Both services still grant `allUsers` `roles/run.invoker`. Ingress remains `all`.
+
+The new API revision logged `No pending migrations to apply.` and became Ready. Health returned HTTP 200. Startup logs did not show `PERMISSION_DENIED`.
+
+Tests that ran and passed:
+
+- Synthetic employer registration, login, refresh, and logout against the new API identity. A wrong password returned 401. Refresh after logout returned 401.
+- Employer token received 403 from `/resumes` and `/candidates/me`.
+- Logo upload wrote `Images/company-logo-<synthetic-id>.png` (70 bytes) and deleted the absent `.jpg` and `.webp` siblings. The profile response was an inline image, which is the signed-URL fallback after a successful download. Both PNG objects were then deleted. A follow-up `gcloud storage ls` of those two names matched no objects.
+- Web `/`, `/login`, `/register?role=candidate`, and `/register?role=employer` returned HTTP 200. The browser loaded candidate login, employer login, both registration forms, and redirected `/dashboard` and `/employer` to the matching login page. A browser employer login with an unknown example.com address returned `Incorrect email, mobile number, or password.` Web revision logs showed no permission error.
+
+Tests not run, so they are not passes:
+
+- Candidate resume upload, download, and delete. Candidate registration would send an OTP. That was not started.
+- A Document AI `processDocument` call. The processor grant is present and was not exercised.
+- A Cloud Tasks create. The enqueuer binding was read back. No task was created, because a created task would dispatch to the worker and the queue retries up to 100 times.
+- The `_iam-probe/` object. Impersonating the API runtime account from the operator user failed with `iam.serviceAccounts.getAccessToken` denied. The logo upload above is the storage evidence instead. No `_iam-probe/` object was created.
+
+The deployed task callbacks are still the `d014a458` fail-open checks. That remains a production blocker. `roles/editor` was not removed.
+
+Implementation status: **DEV IDENTITY MIGRATION VERIFIED** for the identity switch, health, synthetic employer auth, employer/candidate isolation, storage upload and stale-object delete, and the public web flows above. Document AI processing, resume file handling, and a live Cloud Tasks enqueue remain unverified.
 
 ## 20. Production isolation verification
 
@@ -949,4 +985,366 @@ PROD Artifact Registry has no application image. All 17 PROD secret containers h
 
 ### Go / no-go
 
-**No-go for deployment.** Source tests and both production builds passed. They do not establish container or live-environment security. Production deployment stays blocked until the fail-closed code is what gets built, a production web image is built with `CAREERBRIDGE_RELEASE=production` and non-DEV configuration, the API image is built and scanned, secret versions exist, and private networking plus Cloud SQL are approved separately. DEV IAM migration in sections 18 and 19 remains blocked. A later read-only check found `careerbridge-dev-db` RUNNABLE with activation policy ALWAYS, and the API health endpoint returned 200, but revision `careerbridge-api-dev-00084-8xb` logs through 2026-10-13T05:28:25Z still show `prisma migrate deploy` failing and the process refusing to start. No IAM or Cloud Run change was made.
+**No-go for deployment.** Source tests and both production builds passed. They do not establish container or live-environment security. Production deployment stays blocked until the fail-closed code is what gets built, a production web image is built with `CAREERBRIDGE_RELEASE=production` and non-DEV configuration, the API image is built and scanned, secret versions exist, and private networking plus Cloud SQL are approved separately. That no-go predates the DEV identity migration in section 19. Section 21 is the later verification. It does not clear this production no-go.
+
+## 21. Remaining DEV verification — 2026-10-13
+
+Worktree `C:\Users\ADMIN\Desktop\CareerBridge-security`, branch `security/dev-remediation`, HEAD `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. The original checkout was not edited. No commit, push, image deploy, Cloud Run change, IAM change, Terraform apply, WhatsApp send, Cloud Task create, or `roles/editor` removal. Secret values were not printed.
+
+### Live state — passed
+
+Commands used `--project=careerbridge-f7b72` and `--region=asia-south1` (Cloud Tasks location `asia-south1`).
+
+| Check | Result |
+|---|---|
+| API revision | `careerbridge-api-dev-00085-n7q`, Ready, 100% traffic |
+| API image | tag `d014a4585a813417efa4967da3f4e3c900aa70ae`, digest `api@sha256:b3bae4876cf1465b45b7668f813a75e7b4722ba18875b723cecc3b0608b23fdd` |
+| API identity | `careerbridge-api-runtime-dev@careerbridge-f7b72.iam.gserviceaccount.com`, account not disabled |
+| Web revision | `careerbridge-web-dev-00068-b67`, Ready, 100% traffic |
+| Web image | same tag, digest `web@sha256:082ed356c869ae8cc06781154253f0d93dd8d74f3ba1a604a69b8a19fafa9016` |
+| Web identity | `careerbridge-web-runtime-dev@careerbridge-f7b72.iam.gserviceaccount.com`, account not disabled |
+| Ingress | `all` on both services |
+| Invoker | both services still grant `allUsers` `roles/run.invoker` and `github-deploy-dev` `roles/run.developer` |
+| API health | `GET /api/v1/health` HTTP 200, `data.status=ok` |
+| Web root | `GET /` HTTP 200 |
+| Editor | `601892050765-compute@developer.gserviceaccount.com` still has project `roles/editor` and bucket `roles/storage.objectAdmin` on `gs://srsbbucket` |
+
+Project roles read back for the runtime accounts: both have `roles/logging.logWriter`; the API account also has conditional `roles/cloudsql.client` (`api-runtime-dev-cloudsql`), `roles/documentai.apiUser`, and `roles/firebasecloudmessaging.admin`. The web account has no other project role. The API account still has `roles/storage.objectUser` on `gs://srsbbucket` and `roles/cloudtasks.enqueuer` on `resume-processing` and `whatsapp-notifications`. No IAM binding was added or removed.
+
+The live image is still `d014a458`, not security commit `5e9a099`. That is expected. This pass did not deploy the security commit.
+
+### Resume file operations — not run, blocked
+
+`AUTH_DEV_OTP` on the live API is `false` and `NODE_ENV` is `production`. Candidate registration sends an email or mobile OTP. No designated test candidate could be used without querying stored accounts or sending that OTP. The database was not queried and no account was registered.
+
+`uploadFile` in `resumes.service.ts` always calls `enqueueResumeProcessing`. The live service sets `CLOUD_TASKS_RESUME_QUEUE=resume-processing` and a non-empty `RESUME_WORKER_URL`. Queue `resume-processing` is `RUNNING`, with `maxAttempts` 100. A file upload would create a task that the queue can dispatch and retry. That upload was not started. No existing resume object was read or deleted.
+
+Safest alternative: a synthetic candidate that can log in with a password and no OTP, plus a queue whose dispatch is paused or a separate approved test queue, before any upload.
+
+### Document AI — processor verified, `processDocument` not run
+
+A regional processor read returned `displayName=CareerBridgeOCR`, `type=OCR_PROCESSOR`, `state=ENABLED`, location `asia-south1`. The processor id was not printed. IAM was not changed.
+
+`processDocument` is reached from resume processing. That path enqueues `resume-processing`. Calling it as the operator would not prove the API runtime identity. Impersonation of that identity was already denied for `iam.serviceAccounts.getAccessToken`, and this pass did not grant Token Creator. No document was submitted. No temporary object was created.
+
+### Cloud Tasks — unit test only
+
+Both live queues are `RUNNING` with `maxDispatchesPerSecond` 500, `maxConcurrentDispatches` 1000, `maxBurstSize` 100, and `maxAttempts` 100. No task was created in either queue. No callback was sent to the deployed API.
+
+`node -r ts-node/register/transpile-only --test src/resumes/security-hardening.unit.test.ts` from `apps/api`: 7 passed, 0 failed. That covers `cloudTaskSecretStatus` in commit `5e9a099`: an empty secret is `missing_secret` when `NODE_ENV` is `production` or `GCP_PROJECT_ID` is set, and a missing or wrong header is `mismatch`.
+
+The running image is still `d014a458`. In that commit, `resumes.service.ts` uses `if (expected && providedSecret !== expected)` and `whatsapp.controller.ts` uses `if (expected && secret !== expected)`. An empty expected secret still allows the callback. That fail-open check remains a production blocker until `5e9a099` is the image that is deployed and verified. This pass did not deploy it.
+
+### Dependency audit — not clean
+
+Commands, from this worktree, against the committed lockfile: `npm audit --omit=dev --json` exit 1, and `npm audit --json` exit 1. Critical is 0 in both.
+
+Production (`--omit=dev`): high 4, moderate 14, low 2, total 20.
+
+| Severity | Package | Advisory | npm fix | Risk |
+|---|---|---|---|---|
+| high | `firebase@11.10.0`, `@firebase/firestore@4.8.0`, `@firebase/firestore-compat@0.3.53`, `@grpc/grpc-js@1.9.16` | GHSA-m9gg-hp2v-232j, GHSA-f596-whhp-79r4 | `firebase@9.14.0`, major downgrade | One chain. Firestore 4.8.0 depends on `@grpc/grpc-js` `~1.9.0` |
+| moderate | `@nestjs/core` | GHSA-36xv-jgw5-4q75 | `@nestjs/core@12.1.3`, major | Not applied |
+| moderate | `qs` | GHSA-q8mj-m7cp-5q26, GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g | available | Not applied |
+| moderate | `file-type` | GHSA-5v7r-6r5c-r473, GHSA-j47w-4g3g-c36v | available | Not applied |
+| moderate | `@fastify/busboy` | GHSA-gxm5-99cw-xjw9 | available | Not applied |
+| moderate | `uuid` | GHSA-w5hq-g745-h8pq | `exceljs@3.4.0`, major downgrade | Not applied |
+| low | `body-parser` | GHSA-v422-hmwv-36x6 | Nest platform-express 12, major | Not applied |
+
+The other production moderates (`@google-cloud/firestore`, `@google-cloud/storage`, `exceljs`, `firebase-admin`, `gaxios`, `google-gax`, `retry-request`, `teeny-request`, `@nestjs/common`) are transitive and were not changed. npm's fixes for several of them are major upgrades or the same Firebase downgrade.
+
+Full audit: high 17, moderate 19, low 5, total 41. The extra findings are development tooling: `@nestjs/cli`, `eslint-config-next`, `prisma` / `@prisma/config`, `braces` (GHSA-vfj7-8cjw-p6xm), `picomatch` (GHSA-3v7f-55p6-f55p, GHSA-c2c7-rcm5-vvqj), `tmp` (GHSA-52f5-9888-hmc6, GHSA-ph9p-34f9-6g65), `webpack`, `ajv` (GHSA-2g4f-4pwh-qvx6), `deepmerge-ts` (GHSA-ggr8-5vv4-36mx), and their transitive highs. They are not in the production omit set.
+
+Firebase compatibility: registry `firebase@13.0.0` still depends on `@firebase/firestore@4.18.0`, and that release still depends on `@grpc/grpc-js` `~1.9.0`. Current `@grpc/grpc-js` is 1.14.6, outside that range. An upgrade from 11 to 13 does not clear the advisory. The only npm fix is the major downgrade to `firebase@9.14.0`. No downgrade and no `@grpc/grpc-js` override was applied.
+
+### Container verification — tools absent, checks not run
+
+`Get-Command` found no `docker`, `podman`, `nerdctl`, `trivy`, `syft`, `grype`, or `gitleaks`. Nothing was installed. No image was built or published. These checks remain required and are not passes:
+
+- The API image builds from `infrastructure/docker/Dockerfile.api`.
+- The runtime user is `USER api` (declared in that Dockerfile, not observed in a running container from this commit).
+- `apps/api/docker-entrypoint.sh` runs the image-local Prisma CLI at `/app/node_modules/.bin/prisma` and exits if that binary is missing. Startup download was not observed in a new image.
+- Image layers contain no secret values.
+- A vulnerability scan and a runtime smoke test of that image pass.
+
+The live DEV image was not rebuilt, so it does not contain commit `5e9a099`.
+
+### Production blockers
+
+- Live task callbacks in image `d014a458` fail open when the expected secret is empty. Commit `5e9a099` fails closed and is not deployed.
+- Resume upload, download, delete, and Document AI `processDocument` were not exercised on the API runtime identity.
+- Production dependency audit is not clean. The Firebase/gRPC high chain has no compatible non-breaking fix in current or latest Firebase.
+- The API container for `5e9a099` has not been built or scanned.
+- `roles/editor` remains on the Compute Engine account until a separate approval.
+
+Status of this pass: **PARTIALLY VERIFIED — TESTS REMAIN BLOCKED**.
+
+## 22. Isolated verification path — 2026-10-13
+
+Worktree `C:\Users\ADMIN\Desktop\CareerBridge-security`, branch `security/dev-remediation`, HEAD `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. Before this pass the only dirty file was this assessment. No cloud command was run. No account, bucket object, Document AI request, queue task, callback, IAM grant, or deployment was created.
+
+### Side effects that a live test would cause
+
+Candidate registration writes an `otpRequest` row. With live `AUTH_DEV_OTP=false` and `NODE_ENV=production`, an email channel sends the code through SMTP, and a mobile channel uses Firebase phone verification. The response does not reveal the code.
+
+`POST /resumes/upload-file` creates a resume row, uploads the object to `gs://srsbbucket`, then calls `enqueueResumeProcessing`. On the live service the Cloud Tasks client, project, `resume-processing` queue, and worker URL are all set, and that queue is `RUNNING` with `maxAttempts` 100. A successful create dispatches `POST` to the resume worker. If create fails, the same process falls back to in-process `processUploadedResume`.
+
+`processUploadedResume` reads and updates the resume row, downloads the object when no buffer is present, and `ParseResumePipeline` calls `ResumeExtractorService.extract`, which calls Document AI `processDocument`. It can also call Gemini, write the candidate profile, and update the document index.
+
+`POST /whatsapp/tasks/run` with a body of `interview_invitation` or `interview_reminder` calls the WhatsApp send path, which posts to `graph.facebook.com`. An unknown task type returns `{ ok: false, reason: 'unknown_task' }` and does not send.
+
+There is no existing paused test queue. Both live queues remain `RUNNING`. No impersonation grant was added.
+
+### Isolated tests that ran
+
+Command, from `apps/api`:
+
+`node -r ts-node/register/transpile-only --test src/resumes/security-hardening.unit.test.ts`
+
+Result: 12 passed, 0 failed, 0 skipped. The five new handler tests call `ResumesService.processWorker` and `WhatsAppController.runTask` with in-memory mocks. Missing, empty, whitespace, and wrong secrets throw `ForbiddenException` before Prisma, the resume processor, or the WhatsApp invitation and reminder methods. An exact secret reaches only the mock processor, or the mock invitation method. An unknown WhatsApp task with the correct secret returns `unknown_task` and does not call either send method. `NODE_ENV=development` together with `GCP_PROJECT_ID` still rejects an empty secret, and `NODE_ENV=production` rejects a whitespace resume secret. No live URL was called.
+
+These tests prove the fail-closed source in commit `5e9a099`. They do not prove the Cloud Run runtime identity, and they are not in the deployed image `d014a458`.
+
+### What is still required before a live identity check
+
+Do not upload, call Document AI, or enqueue until all of these exist:
+
+- A synthetic candidate session that can be created without SMTP or Firebase OTP.
+- A queue that is not `resume-processing` or `whatsapp-notifications`, with dispatch paused, and an approved cleanup step. Pausing either live queue would stop real DEV processing and was not done.
+- No new `iam.serviceAccounts.getAccessToken` grant. The operator still cannot impersonate `careerbridge-api-runtime-dev`.
+
+Until then, Storage, Document AI, and Cloud Tasks on that identity stay unverified.
+
+### Dependency audit, re-run
+
+`npm audit --omit=dev --json` exit 1: critical 0, high 4, moderate 14, low 2, total 20.
+
+`npm audit --json` exit 1: critical 0, high 17, moderate 19, low 5, total 41.
+
+`npm ls --omit=dev --all` for the four highs:
+
+`web` → `firebase@11.10.0` → `@firebase/firestore@4.8.0` and `@firebase/firestore-compat@0.3.53` → `@grpc/grpc-js@1.9.16`.
+
+The advisory on that copy is range `<=1.13.5`: GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4. `firebase@13.0.0` still depends on `@firebase/firestore@4.18.0`, which still depends on `@grpc/grpc-js` `~1.9.0`. Current `@grpc/grpc-js` is 1.14.6. No non-breaking upgrade clears the finding. Firebase 9.14.0 was not installed, and no override was added.
+
+The API production tree does not use that 1.9.16 copy. `firebase-admin@13.10.0`, `@google-cloud/documentai@9.6.2`, and `@google-cloud/tasks@7.1.0` resolve nested `@grpc/grpc-js` 1.14.5 or 1.14.6, which is outside the advisory range. Web source imports `firebase/app`, `firebase/auth`, and `firebase/messaging`. It does not import Firestore. This is a dependency-tree finding for the installed web package. It was not demonstrated as exploitable in the API or web Cloud Run process. No image was rebuilt to re-check the bundle.
+
+### Container sequence, not run
+
+`Get-Command` still finds no `docker`, `podman`, `nerdctl`, `trivy`, `syft`, `grype`, or `gitleaks`. Nothing was installed. The Dockerfile was not built, so `USER api` and the Prisma CLI path are source declarations only.
+
+When a local engine and scanner are available, from this worktree at `5e9a099`, without publishing:
+
+1. `docker build -f infrastructure/docker/Dockerfile.api -t careerbridge-api:5e9a099 .`
+2. Record `docker image inspect careerbridge-api:5e9a099 --format "{{.Id}}"`. A local image has no registry digest until it is pushed. Do not push in that step.
+3. Confirm `docker image inspect careerbridge-api:5e9a099 --format "{{.Config.User}}"` is `api`.
+4. Confirm `docker run --rm --entrypoint /app/node_modules/.bin/prisma careerbridge-api:5e9a099 --version` runs the binary already in the image.
+5. Inspect `Config.Env` for secret names and confirm none are set to values. Do not print values.
+6. `trivy image --scanners vuln careerbridge-api:5e9a099`, or Syft plus Grype if Trivy is the tool that is installed.
+7. Do not deploy the tag. The live DEV digests stay on `d014a458` until a separate approval.
+
+Status of this pass: **ISOLATED SECURITY TESTS PASS — LIVE VERIFICATION STILL BLOCKED**.
+
+## 23. Local verification and image readiness — 2026-10-13
+
+Worktree `C:\Users\ADMIN\Desktop\CareerBridge-security`, branch `security/dev-remediation`, HEAD `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. Dirty files at the start of this pass were the isolated callback test and this assessment. No image was built or published. No cloud resource was read or changed.
+
+### Tests run
+
+From `apps/api`:
+
+`node -r ts-node/register/transpile-only --test src/resumes/security-hardening.unit.test.ts src/resumes/upload-limits.unit.test.ts src/auth/jwt-secrets.unit.test.ts src/common/storage/gcs-bucket.unit.test.ts src/common/filters/http-exception.filter.unit.test.ts`
+
+26 passed, 0 failed, 0 skipped. That includes the 12 callback and header tests.
+
+From `apps/web`, two invocations with `node --experimental-strip-types` and plain `ts-node/register` did not load `release-config.unit.test.ts` because the web TypeScript config emits ESM without a file extension. They are loader failures, not assertion failures. The run that passed was:
+
+`TS_NODE_COMPILER_OPTIONS={"module":"commonjs","moduleResolution":"node"} node -r ts-node/register/transpile-only --test src/lib/release-config.unit.test.ts`
+
+4 passed, 0 failed. Production release handling drops a DEV or non-HTTPS API URL and rejects the DEV Firebase project. A non-production release still allows the local default.
+
+### Container tooling
+
+`docker`, `podman`, `nerdctl`, `buildkitd`, `buildctl`, `trivy`, `syft`, `grype`, and `gitleaks` are absent. Nothing was installed. No image id or registry digest exists for commit `5e9a099`. `infrastructure/cloudbuild.api.yaml` and `infrastructure/cloudbuild.web.yaml` push to Artifact Registry and also tag `:dev`. They are not a local scan path.
+
+Approved future procedure, still not run, from this worktree at `5e9a099`:
+
+1. Install or approve a local Docker-compatible engine and one scanner, such as Trivy, or Syft plus Grype.
+2. `docker build -f infrastructure/docker/Dockerfile.api -t careerbridge-api:5e9a099 .`
+3. Record `docker image inspect careerbridge-api:5e9a099 --format "{{.Id}}"`. That is a local image id. A registry digest exists only after a push, and this procedure does not push.
+4. Confirm `{{.Config.User}}` is `api`.
+5. Run `/app/node_modules/.bin/prisma --version` with that image's entrypoint override. The source entrypoint refuses to start when that binary is missing. This has not been observed in an image.
+6. Inspect image environment names only. Runtime secrets are injected by Cloud Run, not copied from `.env`. `.dockerignore` excludes `.env`, `.env.*`, `apps/api/secrets`, service-account JSON, and Terraform.
+7. Scan the local image. Repeat the web build only with `CAREERBRIDGE_RELEASE=production` and non-DEV build args. The DEV Cloud Build file is not that build: its default release is `dev`, and its Firebase client settings are the DEV project.
+
+The API runner installs only the `api` and `@careerbridge/shared` workspaces with `npm ci --omit=dev`, then runs `npm install prisma@6 --no-save`. That Prisma install is outside the lockfile pin. The final stage declares `USER api` (uid 1001). The builder stage installs the whole workspace, including the web Firebase client, and that builder tree is not copied into the runner. None of this was confirmed inside a built image.
+
+The web runner declares `USER nextjs` (uid 1001) and copies the Next standalone output. `NEXT_PUBLIC_*` build args are compiled into the client bundle. The runner stage does not redeclare them as image environment variables. The Dockerfile's production guard runs only when `CAREERBRIDGE_RELEASE=production`; the default is `dev`.
+
+### Dependency evidence
+
+`npm audit --omit=dev --json` exit 1: critical 0, high 4, moderate 14, low 2, total 20.
+
+`npm audit --json` exit 1: critical 0, high 17, moderate 19, low 5, total 41.
+
+The four production highs remain `firebase@11.10.0` → `@firebase/firestore@4.8.0` and `@firebase/firestore-compat@0.3.53` → hoisted `@grpc/grpc-js@1.9.16`, advisory range `<=1.13.5` (GHSA-m9gg-hp2v-232j, GHSA-f596-whhp-79r4). The API workspace resolves nested `@grpc/grpc-js` 1.14.5 and 1.14.6 for Document AI, Cloud Tasks, and `firebase-admin`. Those versions are outside that range.
+
+An existing `apps/web/.next` tree, not built in this pass and not tied to a verified commit, contains 2,669 JavaScript files. Zero contain `@grpc/grpc-js` or `grpc-js-1.9.16`. The standalone tree has no `grpc-js` package. Three files contain the text `@firebase/firestore`; they are Firebase app chunks, and zero files contain `getFirestore`. Application source imports `firebase/app`, `firebase/auth`, and `firebase/messaging` only. That is static evidence about this local output and the source imports. It does not prove the finding is absent from every future bundle, and it does not prove the advisory is exploitable in Cloud Run.
+
+### Blockers still open
+
+- Deployed image `d014a458` still fails open on an empty task secret. Commit `5e9a099` fails closed in the tests above and is not deployed.
+- The Compute Engine account still has project `roles/editor`.
+- Both DEV services still allow `allUsers` `roles/run.invoker` with ingress `all`. Removing that without a separate OIDC design stops browsers and the current task callbacks.
+- Storage, Document AI, and live task creation on the API runtime identity remain untested. The prerequisites in section 22 are unchanged.
+- No scanned image exists for `5e9a099`.
+
+Status of this pass: **LOCAL SECURITY VERIFICATION PASS — IMAGE SCAN STILL REQUIRED**.
+
+## 24. Container build plan — 2026-10-13
+
+Worktree `C:\Users\ADMIN\Desktop\CareerBridge-security`, branch `security/dev-remediation`, HEAD `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. Dirty files remain the callback test and this assessment. No image was built, tagged, or pushed. No tool was installed. No cloud resource was changed.
+
+### Tooling recheck
+
+Local commands found no `docker`, `podman`, `nerdctl`, `buildkitd`, `buildctl`, `trivy`, `syft`, `grype`, `gitleaks`, `crane`, `skopeo`, or `hadolint`. A local build is not possible until one engine is approved and installed.
+
+`.github/workflows/ci.yml` has a pull-request-only `docker` job that calls `.github/actions/docker-image` with `push: false`. That job uses GitHub-hosted Docker Buildx. It does not run on this machine, it does not scan vulnerabilities, and its web path reads DEV substitutions from `infrastructure/cloudbuild.web.yaml` and sets `CAREERBRIDGE_RELEASE=dev`. The action exits if `release` is `production`. The CI secret job downloads Gitleaks 8.30.1 inside the runner and scans git commits. It does not scan image layers. `infrastructure/cloudbuild.api.yaml` and `infrastructure/cloudbuild.web.yaml` push to Artifact Registry. They are not the local plan.
+
+### Prisma reproducibility
+
+`package-lock.json` pins `prisma` and `@prisma/client` to `6.19.3`. `prisma` is a dev dependency, so the runner's `npm ci --omit=dev -w api -w @careerbridge/shared` does not install the CLI. The next Dockerfile line, `npm install prisma@6 --no-save`, resolves whatever `prisma@6` is current at build time and does not check the lockfile. That can install a CLI other than `6.19.3` beside the locked client.
+
+Smallest remediation, not applied: stop that second install. The builder stage already runs `npm ci`, which installs locked `prisma@6.19.3`. Copy `node_modules/prisma`, `node_modules/@prisma/config`, `node_modules/@prisma/engines`, and `node_modules/.bin/prisma` from the builder into the runner. Do not edit the Dockerfile in this pass.
+
+### Future local commands, not run
+
+From this worktree, after `git rev-parse HEAD` is `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. Build context is the worktree root. `.dockerignore` excludes `.env`, `.env.*`, `apps/api/secrets`, service-account JSON, and `infrastructure/terraform`. Do not pass a secret as a build arg. Do not use the Cloud Build files or the composite action for the production web image.
+
+API:
+
+`docker buildx build --load --provenance=false --metadata-file api-build-metadata.json -f infrastructure/docker/Dockerfile.api -t careerbridge-api:5e9a099 --iidfile api-image-id.txt .`
+
+Web, with non-DEV placeholders supplied at build time and not taken from the DEV Cloud Build file:
+
+`docker buildx build --load --provenance=false --metadata-file web-build-metadata.json -f infrastructure/docker/Dockerfile.web --build-arg CAREERBRIDGE_RELEASE=production --build-arg NEXT_PUBLIC_API_URL=https://api.example.invalid/api/v1 --build-arg NEXT_PUBLIC_AUTH_DEV_OTP=false --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID=prod-project-placeholder --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=auth.example.invalid --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=prod-bucket-placeholder --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=prod-client-key-placeholder --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=0 --build-arg NEXT_PUBLIC_FIREBASE_APP_ID=prod-app-placeholder --build-arg NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID= --build-arg NEXT_PUBLIC_FIREBASE_VAPID_KEY= -t careerbridge-web:5e9a099 --iidfile web-image-id.txt .`
+
+The Dockerfile rejects that production build if the API URL is not HTTPS or contains `careerbridge-api-dev`, `careerbridge-f7b72`, `localhost`, `127.0.0.1`, or `srsbbucket`, or if the Firebase project, auth domain, or storage bucket contains those DEV markers, or if `NEXT_PUBLIC_AUTH_DEV_OTP=true`. Replace the placeholders with the approved production values in the shell at build time. Do not write those values into the assessment or the Cloud Build DEV file.
+
+Record, without pushing:
+
+- `docker image inspect careerbridge-api:5e9a099 --format "{{.Id}}"` and the same for the web tag. These are local image IDs.
+- `containerimage.digest` from each metadata file. That is a local manifest digest. `RepoDigests` stays empty until a registry push. Do not push to obtain one.
+- API: `{{.Config.User}}` must be `api`. `docker run --rm --entrypoint /app/node_modules/.bin/prisma careerbridge-api:5e9a099 --version` must run the binary in the image. `docker run --rm --entrypoint /bin/sh careerbridge-api:5e9a099 -c "test -x ./docker-entrypoint.sh && echo entrypoint-present"` from `/app/apps/api`. Confirm image `Config.Env` has no secret names set to values. Do not print values.
+- Web: `{{.Config.User}}` must be `nextjs`. Search the image filesystem for `NEXT_PUBLIC_CAREERBRIDGE_RELEASE` and confirm the compiled value is `production`, and that the bundle does not contain the DEV project id or `srsbbucket`. Do not print client keys.
+- `trivy --version`, then `trivy image --scanners vuln,secret --format json --output` a file outside the repo for each tag. Record the UTC time, Trivy version, and severity counts. If Trivy is not the approved scanner, use Grype after Syft on the same local image id. Gitleaks remains a git-history scan, not an image scan.
+
+None of these commands was run. No image-level check is a pass.
+
+### Audit recheck
+
+`npm audit --omit=dev --json` exit 1: critical 0, high 4, moderate 14, low 2, total 20.
+
+`npm audit --json` exit 1: critical 0, high 17, moderate 19, low 5, total 41.
+
+The four highs are still the installed web chain `firebase@11.10.0` → Firestore `4.8.0` / `firestore-compat@0.3.53` → `@grpc/grpc-js@1.9.16`, range `<=1.13.5`. No production image of this commit exists, so this remains an installed-tree finding, not a finding demonstrated inside an image. Dependencies were not changed.
+
+Status of this pass: **BUILD PLAN READY — TOOLING APPROVAL REQUIRED**.
+
+## 25. Isolated CI image workflow — 2026-10-13
+
+Worktree `C:\Users\ADMIN\Desktop\CareerBridge-security`, branch `security/dev-remediation`, HEAD `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. The Dockerfile was not changed. No image was built and the new workflow was not dispatched.
+
+### Prisma CLI
+
+The builder stage runs `npm ci`, and the installed lockfile copy is `prisma@6.19.3`. The CLI also loads `@prisma/engines` and `@prisma/config`. `@prisma/config` depends on `effect`, `c12`, `deepmerge-ts`, and `empathic`. `@prisma/engines` depends on `@prisma/debug`, `@prisma/fetch-engine`, `@prisma/get-platform`, and `@prisma/engines-version`, and its engine binaries are produced by a postinstall download. Copying only `prisma`, `@prisma/config`, `@prisma/engines`, and the `.bin` shim would leave that tree behind. That copy was not made. `infrastructure/docker/Dockerfile.api` still runs `npm install prisma@6 --no-save`.
+
+Local `node node_modules/prisma/build/index.js --version` printed `prisma : 6.19.3`. That is the workspace install, not an image.
+
+### Workflow prepared, not run
+
+`.github/workflows/security-image-verification.yml` triggers only on `workflow_dispatch`. The operator must type the full SHA. The job checks out that exact commit as the Docker context and checks `git rev-parse HEAD`. Permissions are `contents: read` and `actions: write`. The second permission is there so redacted reports can be uploaded. There is no registry login, image publication, Cloud Build step, or deployment step.
+
+The web build passes `CAREERBRIDGE_RELEASE=production` and placeholder values on the reserved `.invalid` domain (`verification.invalid`, `verification-not-a-project`, `not-a-firebase-api-key`). Those values are not a Firebase project. The image tag is `careerbridge-web:verification-5e9a099`. The API tag is `careerbridge-api:verification-5e9a099`. Both use `docker buildx build --load` and are not pushed.
+
+The workflow records local image IDs, `RepoDigests` (expected to stay empty), and Buildx `containerimage.digest` labeled as a local manifest digest. It checks runtime users `api` and `nextjs`, the API entrypoint, and that `prisma --version` contains the line `prisma : 6.19.3`. It looks for filenames such as `.env`, service-account JSON, and private keys, and does not print file contents. The web check requires the placeholder host and project to be present in `/app/apps/web`, and it rejects the concrete DEV API host and DEV Firebase domains from the Cloud Build file. The application source still contains those strings as a denylist, so a blanket search for `careerbridge-f7b72` or `localhost` is not the check.
+
+Scanner image `aquasec/trivy:0.75.0` is pinned. The workflow writes `trivy --version` to the report. It scans saved image tarballs for `vuln` and `secret`, then deletes the tarballs. `.github/scripts/redact-trivy-report.mjs` removes `Match`, `Code`, and related fields before the JSON is uploaded. A local fixture run confirmed a sample secret string was removed and the counts stayed HIGH 1 and secrets 1. Artifact `security-image-verification-5e9a099` keeps reports for 14 days. The job fails after that upload if any prepared check did not pass. None of these image checks has run.
+
+`actionlint` and `yamllint` are not installed. `js-yaml` parsed the workflow: the only trigger is `workflow_dispatch`, and the permissions are only `contents` and `actions`. API security tests: 26 passed, 0 failed. Web `release-config.unit.test.ts`: 4 passed, 0 failed. `git diff --check` reported no whitespace errors.
+
+The security commit is not on a remote-tracking branch (`git branch -r --contains` was empty). A dispatch also needs this workflow file on the selected branch. Both require a later push. This pass did not push.
+
+A review on the same day corrected three workflow gaps before any run. Full Buildx metadata files are deleted after the local manifest digest is copied out, so build arguments are not uploaded. Image tarballs and raw scanner JSON are removed by an `EXIT` trap, including when a later command fails. Trivy is invoked with `--exit-code 1`, and the job still uploads reports before it fails on a non-zero scanner exit, a high or critical finding, or a secret finding. `actions: write` stays because a workflow that sets `contents: read` cannot upload artifacts without it. The web release check from that review was replaced in section 26.
+
+No image was built during the review. The floating Prisma install was still present at that point. Section 27 replaces it in the working tree. None of the image checks is a pass.
+
+Status of this review: **REVIEW COMPLETE — BLOCKERS REMAIN**.
+
+## 26. Web release check and Prisma install — 2026-10-13
+
+Worktree `C:\Users\ADMIN\Desktop\CareerBridge-security`, branch `security/dev-remediation`, HEAD `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. No image was built. `infrastructure/docker/Dockerfile.api` was not edited.
+
+### Web check
+
+Next.js replaces each `process.env.NEXT_PUBLIC_*` access with its own JSON string (`node_modules/next/dist/lib/inline-static-env.js` and `define-env.js`). `.github/scripts/verify-web-release.mjs` scans compiled `.js` files for those complete string literals. The placeholder URL, `.invalid` auth domain, Firebase project, bucket, API key, and app id are accepted only as exact literals. They do not have to share a file or sit within any character distance. Concrete DEV hosts `careerbridge-api-dev-601892050765.asia-south1.run.app`, `careerbridge-f7b72.firebaseapp.com`, and `careerbridge-f7b72.firebasestorage.app` fail the scan. The short denylist inside `apps/web/src/lib/release-config.ts` (`careerbridge-f7b72`, `localhost`, `127.0.0.1`, `srsbbucket`, `careerbridge-api-dev`) is part of the compiled helper, so the scan does not treat those exact marker strings as baked endpoints.
+
+The `.invalid` names remain verification-only. They are not a Firebase project and not a deployment configuration. The workflow records `web_deployable=false`.
+
+`CAREERBRIDGE_RELEASE=production` is not proven by those literals. `clientApiUrl` returns the same URL for `production` and for any other release when the URL is already `https` and contains no DEV marker. `firebaseConfigAllowed` likewise returns true for both when the Firebase fields are non-empty and non-DEV. A production build also inlines `NODE_ENV` as `production`, and `isProductionRelease` compares against that same word. The Dockerfile refuses a production build that contains a DEV API URL, so the rejection branch cannot appear in an image that built successfully. Real production public values would be required before any deployable image, and they were not invented here:
+
+- `NEXT_PUBLIC_API_URL`: an `https` URL that is not a DEV host, not localhost, and not a `.invalid` name
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+
+Those values still would not prove the release flag, because a non-production build can inline the same clean URL. The workflow therefore records `web_release_behavior=not-verified` and does not write `web_inspection=pass`. This image-level check has not run.
+
+### Prisma CLI
+
+A one-line change to `prisma@6.19.3` would still resolve a dependency tree at build time. `effect@3.21.0` depends on `@standard-schema/spec@^1.0.0` and `fast-check@^3.23.1`. `c12@3.1.0` depends on ranged packages including `jiti`, `confbox`, and `pathe`. The runner uses `npm ci --omit=dev`, and `prisma` is a dev dependency, so that command cannot install the locked CLI without also installing the dev tree or changing `apps/api/package.json`. The current `npm install prisma@6 --no-save --ignore-scripts` also skips the `@prisma/engines` postinstall that downloads the schema engine. Copying only `prisma`, `@prisma/config`, `@prisma/engines`, and the `.bin` shim leaves out `effect`, `c12`, `deepmerge-ts`, `empathic`, and the engines packages' own dependencies. A safe fix is a later builder-stage pack of the full lockfile closure, including postinstall binaries, then a copy into the runner. That is a Docker install redesign and was not applied. The Dockerfile is unchanged.
+
+Image-level Prisma and web results remain **NOT VERIFIED**.
+
+Status of this pass: **BLOCKERS REMAIN — DOCKERFILE CHANGE NOT SAFE**.
+
+## 27. Prisma closure pack and release marker — 2026-10-13
+
+Worktree `C:\Users\ADMIN\Desktop\CareerBridge-security`, branch `security/dev-remediation`, HEAD `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. These edits are in the working tree. They are not part of commit `5e9a099`. At the time this section was written, the verification workflow still checked out that commit as the Docker context. Section 28 replaces that checkout. No image was built.
+
+### Prisma
+
+`infrastructure/docker/pack-prisma-cli.mjs` walks `package-lock.json` from `node_modules/prisma` through `dependencies` and `optionalDependencies`. It keeps nested packages such as `node_modules/c12/node_modules/chokidar`. It does not follow devDependencies of those packages. A local `--check` printed `prisma-closure-ok version=6.19.3 packages=35 overlap=0 engines_version=c2990dca591cba766e3b7ef5d9e8a84796e47ab7 schema_engine=present`. `require.resolve` from the Prisma package found `@prisma/config` and `@prisma/engines`. The local schema engine file is the Windows binary already in this workspace (`schema-engine-windows.exe`). It is not the Debian engine the image build downloads, and this check did not download one.
+
+The API builder runs that script with `--download` after `prisma generate`. Download uses `@prisma/fetch-engine` with `failSilent: false` and the lockfile's `enginesVersion`. The build stops unless both the schema engine and the query engine library exist and are larger than 100 KB. The runner no longer runs `npm install prisma@6`. It extracts the packed closure, links `node_modules/.bin/prisma` at `prisma/build/index.js`, and refuses the build if that package's version is not `6.19.3`. `USER api` and `docker-entrypoint.sh` are unchanged. The download cache under `@prisma/engines/node_modules/.cache` is excluded from the archive.
+
+This is source-level packaging. The CLI version and engine binaries are **NOT VERIFIED** inside an image.
+
+### Web release
+
+`infrastructure/docker/Dockerfile.web` writes `/tmp/careerbridge-release` from `$CAREERBRIDGE_RELEASE` in the same `RUN` as `next build`, after checking that `NEXT_PUBLIC_CAREERBRIDGE_RELEASE` equals that argument. The runner copies it to `/app/careerbridge-release`. `.github/scripts/verify-web-release.mjs` accepts release behavior `production` only when that file is exactly `production` or `production\n`. A compiled `"production"` string, including `NODE_ENV`, does not. `dev` fails. A missing file stays `not-verified`. Placeholder literals are still required as exact strings, and the concrete DEV hosts still fail the scan. `deployable` stays false because the `.invalid` names are not a Firebase project and not a deployment configuration.
+
+The workflow writes `web_inspection=pass` only when the runtime user is `nextjs`, the script exits 0, the placeholders are present, the DEV hosts are absent, the release file is `production`, and no secret filenames are present. The final gate still requires `api_inspection=pass`, `web_inspection=pass`, and `scan=pass`. The API check requires `schema-engine-debian-openssl-3.0.x` larger than 100 KB in `@prisma/engines`. A Windows engine name does not satisfy that check. None of those image checks has run.
+
+### Tests in this pass
+
+`node infrastructure/docker/pack-prisma-cli.mjs --check`, `node .github/scripts/verify-web-release.mjs --self-test`, the redaction fixture, `js-yaml` parsing of the workflow, `release-config.unit.test.ts`, and `git diff --check` are recorded with the command results for this pass. Image build, engine download, and workflow dispatch were not run.
+
+Status of this pass: **SOURCE FIXES READY FOR REVIEW — IMAGE VERIFICATION STILL REQUIRED**.
+
+## 28. Exact-commit review — 2026-10-13
+
+Worktree `C:\Users\ADMIN\Desktop\CareerBridge-security`, branch `security/dev-remediation`, HEAD `5e9a0995f9917225d5d554ee58b8d89cc328d7ab`. No commit, push, workflow dispatch, image build, image publication, or cloud change was made.
+
+The workflow no longer checks out `5e9a099` and no longer uses a second checkout. A commit cannot contain its own hash, so the file does not hardcode the future SHA. `workflow_dispatch` checks out `github.sha`, which is the commit selected for that run. The operator must type that full SHA. The job fails unless the typed value, `github.sha`, and `git rev-parse HEAD` are the same, and unless that tree contains the Prisma pack script, the web release-file copy, and no `npm install prisma@` line. Image tags and the artifact name are derived from that SHA. Dispatching the old commit cannot run this workflow, because that commit does not contain it. Dispatching a later branch tip builds that tip only when the operator types its SHA.
+
+`pack-prisma-cli.mjs --download` continues only when `@prisma/get-platform` reports `debian-openssl-3.0.x`. It asks `@prisma/fetch-engine` for the schema engine and query engine library, then requires both platform filenames to exist and exceed 100 KB. `failSilent: false` in that library still returns on some non-`EACCES` write errors, so the file-size check is the fail-closed gate. `schema-engine-windows.exe` and `query_engine-windows.dll.node` are refused before the archive is created. The runner deletes the archive, links `/app/node_modules/.bin/prisma` to `prisma/build/index.js` (`#!/usr/bin/env node`), marks that file and `schema-engine-debian-openssl-3.0.x` executable, and exits if the CLI version is not `6.19.3`. Local `--check` can still report `schema_engine=present` because this Windows workspace already has `schema-engine-windows.exe`. That result is not a Debian engine check.
+
+The web verifier exits 1 unless the exact placeholder literals are present, the DEV hosts are absent, and `/app/careerbridge-release` is exactly `production` or `production\n`. `deployable` remains false. The production Dockerfile guard still rejects a non-HTTPS API URL, DEV API markers, the DEV Firebase project id, the DEV auth domain, a DEV storage bucket, and `NEXT_PUBLIC_AUTH_DEV_OTP=true` when `CAREERBRIDGE_RELEASE=production`.
+
+Permissions remain `contents: read` and `actions: write`. The job uses `docker buildx build --load` and does not log in, push, or call gcloud. Trivy `aquasec/trivy:0.75.0` scans saved tarballs with `--exit-code 1`. An `EXIT` trap removes the tarballs and raw reports. Build-metadata JSON is removed before upload. The artifact is `reports/` only.
+
+Image build, Debian engine download, Trivy, and workflow execution remain **NOT VERIFIED**. The live Cloud Run image is unchanged.
