@@ -1,4 +1,7 @@
-# Cloud Build — CareerBridge Web → Artifact Registry (DEV)
+# Cloud Build — CareerBridge Web → Artifact Registry (DEV only).
+# Do not use these substitutions for a production image. A production build must pass
+# CAREERBRIDGE_RELEASE=production and its own API URL and Firebase project to
+# infrastructure/docker/Dockerfile.web. The Dockerfile rejects DEV hosts in that mode.
 # Example:
 # gcloud builds submit --config=infrastructure/cloudbuild.web.yaml \
 #   --substitutions=_TAG=dev,_API_URL=https://careerbridge-api-dev-601892050765.asia-south1.run.app/api/v1 .

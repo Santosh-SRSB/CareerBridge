@@ -14,6 +14,10 @@ inputs:
   push:
     description: "Push the image (requires a prior registry login)"
     required: true
+  release:
+    description: "dev or production. production refuses this action's DEV substitutions."
+    required: false
+    default: "dev"
 
 runs:
   using: composite
@@ -23,8 +27,13 @@ runs:
       shell: bash
       env:
         IMAGE: ${{ inputs.image }}
+        RELEASE: ${{ inputs.release }}
       run: |
         set -euo pipefail
+        if [ "$RELEASE" = "production" ]; then
+          echo "::error::This action bakes DEV substitutions from infrastructure/cloudbuild.web.yaml. A production image must be built with infrastructure/docker/Dockerfile.web and CAREERBRIDGE_RELEASE=production plus an explicit non-DEV API URL and Firebase project."
+          exit 1
+        fi
         case "$IMAGE" in
           api) echo "build-args=" >> "$GITHUB_OUTPUT"; exit 0 ;;
           web) ;;
@@ -61,6 +70,7 @@ runs:
           echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$fb_sender"
           echo "NEXT_PUBLIC_FIREBASE_APP_ID=$fb_app_id"
           echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$fb_measurement"
+          echo "CAREERBRIDGE_RELEASE=dev"
           echo '__CB_BUILD_ARGS__'
         } >> "$GITHUB_OUTPUT"
 

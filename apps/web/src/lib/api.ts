@@ -51,14 +51,10 @@ import type { AdminProgressReport } from './admin-progress';
 import type { AdminAccountDeletionPreview, AdminDeletableKind } from './admin-account-deletion';
 import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE } from './client-errors';
 import { fitAvoidList, fitExperienceBullets } from './improve-payload';
+import { clientApiUrl } from './release-config';
 
 function resolveApiUrl(): string {
-  const fromEnv = (process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV !== 'production') {
-    return 'http://localhost:3001/api/v1';
-  }
-  return '';
+  return clientApiUrl(process.env.NEXT_PUBLIC_API_URL, process.env.NEXT_PUBLIC_CAREERBRIDGE_RELEASE, process.env.NODE_ENV);
 }
 
 const API_URL = resolveApiUrl();

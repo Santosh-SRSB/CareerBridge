@@ -7,6 +7,7 @@ import {
   signInWithCredential,
   signInWithPhoneNumber,
 } from 'firebase/auth';
+import { firebaseConfigAllowed } from './release-config';
 
 let recaptcha: RecaptchaVerifier | null = null;
 let confirmation: ConfirmationResult | null = null;
@@ -46,7 +47,7 @@ function getClientAuth() {
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   };
-  if (!config.apiKey || !config.projectId || !config.authDomain || !config.appId) {
+  if (!config.apiKey || !config.projectId || !config.authDomain || !config.appId || !firebaseConfigAllowed(config, process.env.NEXT_PUBLIC_CAREERBRIDGE_RELEASE)) {
     throw Object.assign(
       new Error('Mobile verification is temporarily unavailable. Please try again later.'),
       { code: 'FIREBASE_NOT_CONFIGURED' },
@@ -63,7 +64,15 @@ export function isFirebaseConfigured() {
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
       process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
       process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
-      process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+      process.env.NEXT_PUBLIC_FIREBASE_APP_ID &&
+      firebaseConfigAllowed(
+        {
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+          authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        },
+        process.env.NEXT_PUBLIC_CAREERBRIDGE_RELEASE,
+      ),
   );
 }
 

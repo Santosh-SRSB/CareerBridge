@@ -25,7 +25,13 @@ if [ "${RUN_PRISMA_MIGRATE:-true}" = "true" ]; then
     exit 1
   fi
   echo "Running prisma migrate deploy..."
-  if ! npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma; then
+  # Use the Prisma CLI installed in the image. Do not download a CLI at startup.
+  PRISMA_BIN="/app/node_modules/.bin/prisma"
+  if [ ! -x "$PRISMA_BIN" ]; then
+    echo "Prisma CLI is missing from the image; refusing to start." >&2
+    exit 1
+  fi
+  if ! "$PRISMA_BIN" migrate deploy --schema=./prisma/schema.prisma; then
     echo "prisma migrate deploy failed; refusing to start. The database schema was not modified by this script." >&2
     exit 1
   fi

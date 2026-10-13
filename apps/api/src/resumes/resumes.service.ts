@@ -28,6 +28,7 @@ import { readOwnedProfilePhotoDataUrl } from '../candidates/profile-photo.util';
 import { ResumeOptimizeAi } from './resume-optimize-ai';
 import { ResumeProcessorService } from './resume-processor.service';
 import { publicProcessingError } from './resume-eligibility';
+import { resumeWorkerAuth } from './resume-worker-auth';
 import { readableResumeUrl } from './resume-view-url.util';
 import { analyzeRoleResume, rewriteRoleResume, recommendCareerRoles } from './ats-engine';
 import {
@@ -505,11 +506,14 @@ export class ResumesService {
 
   async processWorker(payload: { resumeId: string; userId: string }, providedSecret?: string) {
     const expected = (this.config.get<string>('RESUME_TASK_SECRET') || process.env.RESUME_TASK_SECRET || '').trim();
-    // When secret is configured (DEV/prod Cloud Run), reject missing/wrong values.
-    if (expected && providedSecret !== expected) {
+    const auth = resumeWorkerAuth(expected, providedSecret, process.env);
+    if (auth !== 'ok') {
       throw new ForbiddenException({
         code: ErrorCode.UNAUTHORIZED,
-        message: 'Invalid resume worker credentials.',
+        message:
+          auth === 'missing_secret'
+            ? 'Resume worker credentials are not configured.'
+            : 'Invalid resume worker credentials.',
       });
     }
     if (!payload?.resumeId || !payload?.userId) {

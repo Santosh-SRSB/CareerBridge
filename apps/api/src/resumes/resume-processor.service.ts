@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { DocumentIndexService } from '../ai/document-index.service';
+import { resolveGcsBucket } from '../common/storage/gcs-bucket';
 import { StorageService } from '../common/storage/storage.service';
 import { applyContentGroundingGate } from './content-grounding-gate';
 import { attachComputedExperienceYears } from './experience-years';
@@ -324,7 +325,7 @@ export class ResumeProcessorService {
       return this.storage.downloadFile(path);
     }
     const { Storage } = await import('@google-cloud/storage');
-    const bucketName = process.env.GCS_BUCKET || 'srsbbucket';
+    const bucketName = resolveGcsBucket(process.env.GCS_BUCKET, process.env);
     const storage = new Storage({
       projectId: process.env.GCP_PROJECT_ID || undefined,
       keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS || undefined,

@@ -17,6 +17,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Public } from '../common/decorators/public.decorator';
+import { cloudTaskSecretStatus } from '../common/tasks/task-secret';
 import { WhatsAppService } from './whatsapp.service';
 import { WhatsAppWebhookService } from './whatsapp.webhook.service';
 import { InterviewWhatsAppService } from './interview-whatsapp.service';
@@ -82,8 +83,9 @@ export class WhatsAppController {
     @Body() body: { type?: string; interviewId?: string; kind?: string },
   ) {
     const expected = process.env.WHATSAPP_TASK_SECRET || '';
-    if (expected && secret !== expected) {
-      throw new ForbiddenException('Invalid task secret.');
+    const auth = cloudTaskSecretStatus(expected, secret, process.env);
+    if (auth !== 'ok') {
+      throw new ForbiddenException(auth === 'missing_secret' ? 'Task secret is not configured.' : 'Invalid task secret.');
     }
     if (body.type === 'interview_invitation' && body.interviewId) {
       return this.interviewNotify.sendInvitationNow(

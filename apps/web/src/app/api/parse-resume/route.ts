@@ -2,20 +2,15 @@
  * Next.js proxy for POST /api/parse-resume → Nest /api/v1/parse-resume
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { clientApiUrl, isProductionRelease } from '@/lib/release-config';
 
 function resolveApiBase(): string {
-  const fromEnv = (
-    process.env.API_INTERNAL_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    ''
-  )
-    .trim()
-    .replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV !== 'production') {
+  const configured = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || '';
+  const release = process.env.NEXT_PUBLIC_CAREERBRIDGE_RELEASE;
+  if (!configured.trim() && process.env.NODE_ENV !== 'production' && !isProductionRelease(release)) {
     return 'http://127.0.0.1:3001/api/v1';
   }
-  return '';
+  return clientApiUrl(configured, release, process.env.NODE_ENV);
 }
 
 const API_BASE = resolveApiBase();

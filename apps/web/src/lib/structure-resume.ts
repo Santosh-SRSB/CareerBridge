@@ -1,14 +1,17 @@
 import type { PassportDraft } from "@/types/passport";
 import { toPassportDraft } from "@/lib/parse-resume";
+import { clientApiUrl } from "@/lib/release-config";
 
 /**
  * Structure resume text via Nest AI Gateway (Gemini only).
  * Never calls OpenAI or any local heuristic LLM substitute from the Next.js layer.
  */
 export async function structureResumeText(rawText: string): Promise<PassportDraft> {
-  const apiUrl =
-    (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/$/, "") ||
-    (process.env.NODE_ENV !== "production" ? "http://localhost:3001/api/v1" : "");
+  const apiUrl = clientApiUrl(
+    process.env.NEXT_PUBLIC_API_URL,
+    process.env.NEXT_PUBLIC_CAREERBRIDGE_RELEASE,
+    process.env.NODE_ENV,
+  );
   if (!apiUrl) {
     throw new Error("Something went wrong. Please try again.");
   }

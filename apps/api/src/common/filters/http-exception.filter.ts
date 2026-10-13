@@ -24,21 +24,28 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let message = 'Something went wrong. Please try again.';
 
     if (!(exception instanceof HttpException)) {
-      // Surface unexpected errors in API logs (Prisma schema drift, etc.)
-      // eslint-disable-next-line no-console
-      console.error(
-        `[HttpExceptionFilter] requestId=${requestId} ${request.method} ${request.originalUrl || request.url}`,
-        exception,
-      );
+      const upload = uploadRejection(exception);
+      if (upload) {
+        status = upload.status;
+        code = ErrorCode.VALIDATION_ERROR;
+        message = upload.message;
+      } else {
+        // Surface unexpected errors in API logs (Prisma schema drift, etc.)
+        // eslint-disable-next-line no-console
+        console.error(
+          `[HttpExceptionFilter] requestId=${requestId} ${request.method} ${request.originalUrl || request.url}`,
+          exception,
+        );
 
-      const prismaCode =
-        exception && typeof exception === 'object' && 'code' in exception
-          ? String((exception as { code?: string }).code)
-          : '';
-      if (prismaCode === 'P2002') {
-        status = HttpStatus.CONFLICT;
-        code = ErrorCode.DUPLICATE_RESOURCE;
-        message = 'An account already exists with this email or mobile. Please sign in.';
+        const prismaCode =
+          exception && typeof exception === 'object' && 'code' in exception
+            ? String((exception as { code?: string }).code)
+            : '';
+        if (prismaCode === 'P2002') {
+          status = HttpStatus.CONFLICT;
+          code = ErrorCode.DUPLICATE_RESOURCE;
+          message = 'An account already exists with this email or mobile. Please sign in.';
+        }
       }
     }
 
@@ -85,4 +92,32 @@ export class HttpExceptionFilter implements ExceptionFilter {
       requestId,
     });
   }
+}
+
+/**
+ * Multer 2.4 identifies errors by `code`. Nest 10 maps the older human messages,
+ * and "Unexpected field" became "Unexpected file field", so an unmapped MulterError
+ * would otherwise become a 500. File-size and malformed-upload codes stay 4xx.
+ */
+function uploadRejection(exception: unknown): { status: number; message: string } | null {
+  if (!exception || typeof exception !== 'object' || !('code' in exception)) return null;
+  const multerCode = String((exception as { code?: string }).code);
+  const raw = exception instanceof Error ? exception.message : '';
+  if (multerCode === 'LIMIT_FILE_SIZE') {
+    return { status: HttpStatus.PAYLOAD_TOO_LARGE, message: raw || 'File too large' };
+  }
+  const rejected = new Set([
+    'LIMIT_PART_COUNT',
+    'LIMIT_FILE_COUNT',
+    'LIMIT_FIELD_KEY',
+    'LIMIT_FIELD_VALUE',
+    'LIMIT_FIELD_COUNT',
+    'LIMIT_FIELD_NESTING',
+    'LIMIT_FIELD_ARRAY_INDEX',
+    'LIMIT_UNEXPECTED_FILE',
+    'MISSING_FIELD_NAME',
+    'INVALID_FIELD_NAME',
+  ]);
+  if (!rejected.has(multerCode)) return null;
+  return { status: HttpStatus.BAD_REQUEST, message: raw || 'Upload was rejected.' };
 }

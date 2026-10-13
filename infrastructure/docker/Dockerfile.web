@@ -17,6 +17,7 @@ ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ARG NEXT_PUBLIC_FIREBASE_APP_ID
 ARG NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 ARG NEXT_PUBLIC_FIREBASE_VAPID_KEY=
+ARG CAREERBRIDGE_RELEASE=dev
 
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_AUTH_DEV_OTP=$NEXT_PUBLIC_AUTH_DEV_OTP
@@ -28,7 +29,32 @@ ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SEN
 ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 ENV NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 ENV NEXT_PUBLIC_FIREBASE_VAPID_KEY=$NEXT_PUBLIC_FIREBASE_VAPID_KEY
+ENV NEXT_PUBLIC_CAREERBRIDGE_RELEASE=$CAREERBRIDGE_RELEASE
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# DEV builds leave CAREERBRIDGE_RELEASE unset or "dev" and may use the DEV Cloud Build file.
+# A production image must pass CAREERBRIDGE_RELEASE=production plus its own API URL and Firebase project.
+RUN set -eu; \
+  if [ "$CAREERBRIDGE_RELEASE" = "production" ]; then \
+    case "$NEXT_PUBLIC_API_URL" in \
+      https://*) ;; \
+      *) echo "production web build requires https NEXT_PUBLIC_API_URL"; exit 1 ;; \
+    esac; \
+    printf '%s' "$NEXT_PUBLIC_API_URL" | grep -Eqi 'careerbridge-api-dev|careerbridge-f7b72|localhost|127\.0\.0\.1|srsbbucket' \
+      && { echo "production web build refuses a DEV or local API URL"; exit 1; }; \
+    if [ -z "$NEXT_PUBLIC_FIREBASE_PROJECT_ID" ] || printf '%s' "$NEXT_PUBLIC_FIREBASE_PROJECT_ID" | grep -Eqi 'careerbridge-f7b72'; then \
+      echo "production web build requires a non-DEV NEXT_PUBLIC_FIREBASE_PROJECT_ID"; exit 1; \
+    fi; \
+    if printf '%s' "$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" | grep -Eqi 'careerbridge-f7b72'; then \
+      echo "production web build refuses the DEV Firebase auth domain"; exit 1; \
+    fi; \
+    if printf '%s' "$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" | grep -Eqi 'careerbridge-f7b72|srsbbucket'; then \
+      echo "production web build refuses a DEV storage bucket"; exit 1; \
+    fi; \
+    if [ "$NEXT_PUBLIC_AUTH_DEV_OTP" = "true" ]; then \
+      echo "production web build refuses NEXT_PUBLIC_AUTH_DEV_OTP=true"; exit 1; \
+    fi; \
+  fi
 # Do NOT set NODE_ENV=development here. Next.js 16 prerender of /_global-error
 # crashes with "Cannot read properties of null (reading 'useContext')" when
 # NODE_ENV=development is forced during `next build`.

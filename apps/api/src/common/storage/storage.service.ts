@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { gcpClientOptions } from '../gcp/gcp-credentials';
+import { resolveGcsBucket } from './gcs-bucket';
 
 export interface UploadOptions {
   contentType?: string;
@@ -27,7 +28,10 @@ export class StorageService implements OnModuleInit {
   private projectId: string;
 
   constructor(private readonly config: ConfigService) {
-    this.bucketName = this.config.get<string>('GCS_BUCKET', 'srsbbucket');
+    this.bucketName = resolveGcsBucket(this.config.get<string>('GCS_BUCKET'), {
+      NODE_ENV: process.env.NODE_ENV,
+      GCP_PROJECT_ID: this.config.get<string>('GCP_PROJECT_ID') || process.env.GCP_PROJECT_ID,
+    });
     this.projectId = this.config.get<string>('GCP_PROJECT_ID', '');
   }
 

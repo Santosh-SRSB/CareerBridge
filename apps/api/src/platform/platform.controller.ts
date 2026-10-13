@@ -26,7 +26,6 @@ class ClientErrorReportDto {
   path?: string;
 }
 
-@SkipThrottle()
 @Controller('platform')
 export class PlatformController {
   private readonly logger = new Logger('ClientError');

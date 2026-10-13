@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { json, urlencoded, type Request, type Response } from 'express';
 import { AppModule } from './app.module';
+import { apiSecurityHeaders, exposeApiDocs } from './common/http/security-headers';
 import { CloudJsonLogger } from './common/logger/cloud-json-logger';
 
 process.on('uncaughtException', (err) => {
@@ -24,6 +25,12 @@ async function bootstrap() {
   // Cloud Run's front end is the only proxy; trusting exactly one hop makes req.ip the real client
   // (used by the rate limiter) without accepting client-supplied X-Forwarded-For entries.
   app.set('trust proxy', 1);
+  app.use((_req: Request, res: Response, next: () => void) => {
+    for (const header of apiSecurityHeaders(process.env.NODE_ENV)) {
+      res.setHeader(header.key, header.value);
+    }
+    next();
+  });
 
   // Profile photos may be sent as compressed JPEG data URLs — keep limit high.
   // Also preserve rawBody for WhatsApp signature verification.
@@ -55,13 +62,15 @@ async function bootstrap() {
     res.status(200).json({ status: 'ok' });
   });
 
-  const swagger = new DocumentBuilder()
-    .setTitle('CareerBridge API')
-    .setDescription('Youth Employability & Talent Platform')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swagger));
+  if (exposeApiDocs(process.env.NODE_ENV)) {
+    const swagger = new DocumentBuilder()
+      .setTitle('CareerBridge API')
+      .setDescription('Youth Employability & Talent Platform')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swagger));
+  }
 
   const port = Number(process.env.PORT) || 3001;
   await app.listen(port, '0.0.0.0');

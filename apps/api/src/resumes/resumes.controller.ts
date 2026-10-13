@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Patch, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
@@ -236,6 +237,7 @@ class ImproveExperienceDto {
 class StructureResumeTextDto {
   @IsString()
   @MinLength(20)
+  @MaxLength(20_000)
   rawText!: string;
 }
 
@@ -255,6 +257,7 @@ export class ResumesController {
   /** Public: structure resume text through Nest AI Gateway (Gemini only). */
   @Public()
   @Roles()
+  @Throttle({ default: { limit: 8, ttl: 60000 } })
   @Post('structure-text')
   structureText(@Body() dto: StructureResumeTextDto) {
     return this.resumes.structureText(dto.rawText);

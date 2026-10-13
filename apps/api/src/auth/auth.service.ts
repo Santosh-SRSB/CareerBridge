@@ -19,6 +19,7 @@ import { JwtPayload } from './jwt.strategy';
 import { hashPassword, verifyPassword } from './password.util';
 import { requireJwtAccessSecret, requireJwtRefreshSecret } from './jwt-secrets';
 import { isSafeInlinePhoto, ownedProfilePhotoPath } from '../candidates/profile-photo.util';
+import { resolveGcsBucket } from '../common/storage/gcs-bucket';
 
 const OTP_TTL_SECONDS = 300;
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -871,7 +872,10 @@ export class AuthService {
     const stored = candidate?.photoUrl;
     if (!stored || !candidate?.id) return null;
     if (isSafeInlinePhoto(stored)) return stored;
-    const bucket = this.config.get<string>('GCS_BUCKET', 'srsbbucket');
+    const bucket = resolveGcsBucket(this.config.get<string>('GCS_BUCKET'), {
+      NODE_ENV: process.env.NODE_ENV,
+      GCP_PROJECT_ID: this.config.get<string>('GCP_PROJECT_ID') || process.env.GCP_PROJECT_ID,
+    });
     return ownedProfilePhotoPath(stored, candidate.id, bucket) ? stored : null;
   }
 

@@ -1,5 +1,6 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getMessaging, getToken, isSupported, onMessage, type Messaging } from 'firebase/messaging';
+import { firebaseConfigAllowed } from './release-config';
 
 function getFirebaseWebConfig() {
   return {
@@ -19,7 +20,8 @@ export function isFirebaseMessagingConfigured() {
       config.projectId &&
       config.appId &&
       config.messagingSenderId &&
-      process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+      process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY &&
+      firebaseConfigAllowed(config, process.env.NEXT_PUBLIC_CAREERBRIDGE_RELEASE),
   );
 }
 
