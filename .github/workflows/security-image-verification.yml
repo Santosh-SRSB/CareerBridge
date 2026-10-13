@@ -14,8 +14,6 @@ on:
 
 permissions:
   contents: read
-  # Required only so the redacted scan reports can be downloaded.
-  actions: write
 
 concurrency:
   group: security-image-verification
