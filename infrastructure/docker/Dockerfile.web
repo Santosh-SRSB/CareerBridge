@@ -84,7 +84,11 @@ ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Stay on Debian 12. Install only the bookworm-security perl-base pin.
+# apt-get fails if 5.36.0-7+deb12u4 is not in the image's bookworm-security index.
 RUN apt-get update -y && apt-get install -y --no-install-recommends ca-certificates \
+  && apt-get install -y --no-install-recommends perl-base=5.36.0-7+deb12u4 \
+  && test "$(dpkg-query -W -f='$${Version}' perl-base)" = "5.36.0-7+deb12u4" \
   && rm -rf /var/lib/apt/lists/* \
   && addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
@@ -95,6 +99,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/
 # Records the release argument used for NEXT_PUBLIC_CAREERBRIDGE_RELEASE.
 # Verification reads this file. It is not a deployment configuration.
 COPY --from=builder /tmp/careerbridge-release ./careerbridge-release
+
+# The builder stage still has npm. This removes only the runtime image's CLI,
+# after the standalone build and file copy have finished.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx \
+  && if command -v npm >/dev/null 2>&1 || command -v npx >/dev/null 2>&1; then echo "npm CLI remains in the runtime image"; exit 1; fi \
+  && test -x /usr/local/bin/node \
+  && test -f apps/web/server.js \
+  && test -f careerbridge-release
 
 USER nextjs
 EXPOSE 8080

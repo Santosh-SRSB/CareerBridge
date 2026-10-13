@@ -37,7 +37,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV HOME=/home/api
+# Stay on Debian 12. Install only the bookworm-security perl-base pin.
+# apt-get fails if 5.36.0-7+deb12u4 is not in the image's bookworm-security index.
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends perl-base=5.36.0-7+deb12u4 \
+  && test "$(dpkg-query -W -f='$${Version}' perl-base)" = "5.36.0-7+deb12u4" \
   && rm -rf /var/lib/apt/lists/* \
   && addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 --ingroup nodejs --home /home/api api
@@ -68,8 +72,16 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 COPY apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
 # The process can read the image and write only its home directory.
 # Application code and node_modules stay owned by root.
+# npm ci has already finished. Remove only the base image npm CLI.
+# Keep node, the production node_modules tree, and the packed Prisma CLI.
 RUN sed -i 's/\r$//' ./apps/api/docker-entrypoint.sh && chmod +x ./apps/api/docker-entrypoint.sh \
-  && chown -R api:nodejs /home/api
+  && chown -R api:nodejs /home/api \
+  && rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx \
+  && if command -v npm >/dev/null 2>&1 || command -v npx >/dev/null 2>&1; then echo "npm CLI remains in the runtime image"; exit 1; fi \
+  && test -x /usr/local/bin/node \
+  && test -x /app/node_modules/.bin/prisma \
+  && test -s /app/node_modules/@prisma/engines/schema-engine-debian-openssl-3.0.x
 
 WORKDIR /app/apps/api
 USER api
