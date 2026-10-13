@@ -216,22 +216,44 @@ jobs:
         if: always()
         run: |
           set +e
-          mkdir -p /tmp/image-tars reports
-          trap 'rm -f /tmp/image-tars/api.tar /tmp/image-tars/web.tar /tmp/image-tars/api-trivy.json /tmp/image-tars/web-trivy.json' EXIT
-          docker save "$API_TAG" -o /tmp/image-tars/api.tar
+          mkdir -p image-tars /tmp/trivy-raw reports
+          trap 'rm -f /tmp/trivy-raw/api-trivy.json /tmp/trivy-raw/web-trivy.json' EXIT
+          docker save "$API_TAG" -o image-tars/api.tar
           api_save=$?
-          docker save "$WEB_TAG" -o /tmp/image-tars/web.tar
+          docker save "$WEB_TAG" -o image-tars/web.tar
           web_save=$?
-          docker run --rm -v /tmp/image-tars:/work "$TRIVY_IMAGE" image --input /work/api.tar --scanners vuln,secret --format json --output /work/api-trivy.json --exit-code 1
+          record_tarball() {
+            key="$1"
+            path="$2"
+            reason="missing"
+            if [ -f "$path" ] && [ ! -L "$path" ] && [ -s "$path" ]; then
+              echo "${key}=pass" | tee -a reports/checks.txt
+              return 0
+            fi
+            if [ -L "$path" ]; then
+              reason="symlink"
+            elif [ -d "$path" ]; then
+              reason="directory"
+            elif [ -f "$path" ]; then
+              reason="empty"
+            elif [ -e "$path" ]; then
+              reason="not-regular-file"
+            fi
+            echo "::error::${key} is ${reason}: ${path}"
+            echo "${key}=fail" | tee -a reports/checks.txt
+            return 0
+          }
+          record_tarball api_tarball image-tars/api.tar
+          record_tarball web_tarball image-tars/web.tar
+          docker run --rm -v "$GITHUB_WORKSPACE/image-tars:/work:ro" -v /tmp/trivy-raw:/raw "$TRIVY_IMAGE" image --input /work/api.tar --scanners vuln,secret --format json --output /raw/api-trivy.json --exit-code 1
           api_scan=$?
-          docker run --rm -v /tmp/image-tars:/work "$TRIVY_IMAGE" image --input /work/web.tar --scanners vuln,secret --format json --output /work/web-trivy.json --exit-code 1
+          docker run --rm -v "$GITHUB_WORKSPACE/image-tars:/work:ro" -v /tmp/trivy-raw:/raw "$TRIVY_IMAGE" image --input /work/web.tar --scanners vuln,secret --format json --output /raw/web-trivy.json --exit-code 1
           web_scan=$?
-          rm -f /tmp/image-tars/api.tar /tmp/image-tars/web.tar
-          node .github/scripts/redact-trivy-report.mjs /tmp/image-tars/api-trivy.json reports/api-trivy.json > reports/api-trivy-counts.json
+          node .github/scripts/redact-trivy-report.mjs /tmp/trivy-raw/api-trivy.json reports/api-trivy.json > reports/api-trivy-counts.json
           api_redact=$?
-          node .github/scripts/redact-trivy-report.mjs /tmp/image-tars/web-trivy.json reports/web-trivy.json > reports/web-trivy-counts.json
+          node .github/scripts/redact-trivy-report.mjs /tmp/trivy-raw/web-trivy.json reports/web-trivy.json > reports/web-trivy-counts.json
           web_redact=$?
-          rm -f /tmp/image-tars/api-trivy.json /tmp/image-tars/web-trivy.json
+          rm -f /tmp/trivy-raw/api-trivy.json /tmp/trivy-raw/web-trivy.json
           {
             echo "api_save=$api_save"
             echo "web_save=$web_save"
@@ -274,6 +296,53 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+      - name: Confirm both image tarballs before upload
+        id: confirm_image_tarballs
+        if: always()
+        run: |
+          set -euo pipefail
+          failed=0
+          confirm_tarball() {
+            path="$1"
+            if [ -L "$path" ]; then
+              echo "::error::${path} is a symlink"
+              return 1
+            fi
+            if [ ! -e "$path" ]; then
+              echo "::error::${path} is missing"
+              return 1
+            fi
+            if [ ! -f "$path" ]; then
+              echo "::error::${path} is not a regular file"
+              return 1
+            fi
+            if [ ! -s "$path" ]; then
+              echo "::error::${path} is empty"
+              return 1
+            fi
+          }
+          confirm_tarball image-tars/api.tar || failed=1
+          confirm_tarball image-tars/web.tar || failed=1
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload image tarballs
+        id: upload_image_tarballs
+        if: steps.confirm_image_tarballs.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-image-tarballs-${{ github.sha }}
+          path: |
+            image-tars/api.tar
+            image-tars/web.tar
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Remove image tarballs
+        if: always()
+        run: rm -f image-tars/api.tar image-tars/web.tar
+
       - name: Fail the run when a prepared check did not pass
         if: always()
         run: |
@@ -284,3 +353,9 @@ jobs:
           grep -q '^api_inspection=pass$' reports/checks.txt
           grep -q '^web_inspection=pass$' reports/checks.txt
           grep -q '^scan=pass$' reports/checks.txt
+          grep -q '^api_tarball=pass$' reports/checks.txt
+          grep -q '^web_tarball=pass$' reports/checks.txt
+          if [ "${{ steps.upload_image_tarballs.outcome }}" != "success" ]; then
+            echo "::error::Image tarball upload outcome is ${{ steps.upload_image_tarballs.outcome }}."
+            exit 1
+          fi
