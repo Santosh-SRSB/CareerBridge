@@ -86,9 +86,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Stay on Debian 12. Install only the bookworm-security perl-base pin.
 # apt-get fails if 5.36.0-7+deb12u4 is not in the image's bookworm-security index.
+# BuildKit passes this RUN text to the shell unchanged. dpkg-query only starts a
+# field at ${. A doubled dollar would be printed as a literal $ before the version.
 RUN apt-get update -y && apt-get install -y --no-install-recommends ca-certificates \
   && apt-get install -y --no-install-recommends perl-base=5.36.0-7+deb12u4 \
-  && test "$(dpkg-query -W -f='$${Version}' perl-base)" = "5.36.0-7+deb12u4" \
+  && perl_base_version="$(dpkg-query -W -f='${Version}' perl-base)" \
+  && if [ "$perl_base_version" != "5.36.0-7+deb12u4" ]; then printf 'perl-base version mismatch: observed=%s expected=%s\n' "$perl_base_version" "5.36.0-7+deb12u4"; exit 1; fi \
   && rm -rf /var/lib/apt/lists/* \
   && addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
