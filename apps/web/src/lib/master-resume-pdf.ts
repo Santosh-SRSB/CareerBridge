@@ -9,7 +9,7 @@ import { PDFDocument, PDFString, StandardFonts, rgb, type PDFFont, type PDFPage 
 import {
   contactNodes,
   dateRange,
-  projectBulletTexts,
+  projectBodyBullets,
   projectTechnologies,
   visibleBullets,
 } from '@/components/resume-templates/helpers.js';
@@ -566,25 +566,16 @@ function layoutResume(
   // —— Projects ——
   if (Array.isArray(data.projects) && data.projects.length) {
     const projects = data.projects.filter((p: Record<string, unknown>) => {
-      const bullets = projectBulletTexts(p);
+      const bullets = projectBodyBullets(p);
       const techs = projectTechnologies(p);
-      return p.name || p.title || p.description || bullets.length || techs.length;
+      return p.name || p.title || bullets.length || techs.length;
     });
     if (projects.length) {
       section('Projects');
       for (const p of projects) {
-        const bullets = projectBulletTexts(p);
+        const bullets = projectBodyBullets(p);
         const techs = projectTechnologies(p);
         const title = String(p.name || p.title || '').trim();
-        let overview = String(p.description || '').trim();
-        if (techs.length && overview) {
-          overview = overview
-            .replace(
-              /(?:^|\n)\s*(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*.+$/gim,
-              '',
-            )
-            .trim();
-        }
         if (title) {
           ensure(density.lineAdvance);
           const boldPart = winAnsi(title);
@@ -610,7 +601,6 @@ function layoutResume(
           }
           advance(density.lineAdvance);
         }
-        if (overview) drawLines(overview);
         for (const bullet of bullets) {
           drawBullet(String(bullet));
         }

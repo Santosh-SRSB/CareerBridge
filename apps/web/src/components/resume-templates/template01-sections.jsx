@@ -3,7 +3,7 @@ import {
   contactNodes,
   dateRange,
   nonEmptyList,
-  projectBulletTexts,
+  projectBodyBullets,
   projectTechnologies,
   visibleBullets,
 } from "./helpers.js";
@@ -145,31 +145,18 @@ export function Template01Education({ data }) {
 export function Template01Projects({ data }) {
   if (!nonEmptyList(data.projects)) return null;
   const projects = data.projects.filter((p) => {
-    const bullets = projectBulletTexts(p);
+    const bullets = projectBodyBullets(p);
     const techs = projectTechnologies(p);
-    return p.name || p.title || p.description || bullets.length || techs.length;
+    return p.name || p.title || bullets.length || techs.length;
   });
   if (!projects.length) return null;
   return (
     <section>
       <h2>Projects</h2>
       {projects.map((p, i) => {
-        const bullets = projectBulletTexts(p);
+        const bullets = projectBodyBullets(p);
         const techs = projectTechnologies(p);
         const title = p.name || p.title;
-        let overview = String(p.description || "").trim();
-        if (techs.length && overview) {
-          overview = overview
-            .replace(
-              /(?:^|\n)\s*(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*.+$/gim,
-              "",
-            )
-            .replace(
-              /\b(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*[^.]+$/i,
-              "",
-            )
-            .trim();
-        }
         return (
           <div className="rt01-entry" key={p.id || i}>
             {title && (
@@ -183,7 +170,6 @@ export function Template01Projects({ data }) {
                 )}
               </p>
             )}
-            {overview ? <p className="rt01-project-desc">{overview}</p> : null}
             {bullets.length > 0 ? (
               <ul>
                 {bullets.map((b, j) => (

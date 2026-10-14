@@ -466,9 +466,34 @@ export class ResumesService {
   }
 
   /** Signed Cloud Storage URL for viewing the original uploaded file (or generated PDF). */
+  /** Signed Cloud Storage URL for viewing the CareerBridge-formatted PDF (or original file). */
   async getViewUrl(userId: string, id: string) {
     const resume = await this.requireResume(userId, id);
-    const objectPath = resume.sourceStoragePath || resume.pdfStoragePath;
+    const content = parseContent(resume.contentJson);
+    // Prefer regenerating the formatted PDF so project bullets match Experience style.
+    if (content.projects?.length || content.summary || content.experiences?.length) {
+      try {
+        const storage = await this.syncPdfForResume(resume.id, userId);
+        const url = await this.storage.getSignedUrl(storage.pdfStoragePath, {
+          action: 'read',
+          expiresInMinutes: 30,
+        });
+        return {
+          id: resume.id,
+          url,
+          source: 'signed' as const,
+          fileName: `${resume.title.replace(/\s+/g, '-')}.pdf`,
+          mimeType: 'application/pdf',
+          storagePath: storage.pdfStoragePath,
+          expiresInMinutes: 30,
+        };
+      } catch (err) {
+        this.logger.warn(
+          `Formatted view PDF failed for ${resume.id}, falling back to stored file: ${(err as Error).message}`,
+        );
+      }
+    }
+    const objectPath = resume.pdfStoragePath || resume.sourceStoragePath;
     if (!objectPath) {
       throw new NotFoundException({
         code: ErrorCode.RESOURCE_NOT_FOUND,
@@ -481,7 +506,7 @@ export class ResumesService {
         message: this.storage.getConfigurationError() || 'Cloud Storage is not configured.',
       });
     }
-    const mimeType = (resume.sourceStoragePath && resume.sourceMimeType) || 'application/pdf';
+    const mimeType = 'application/pdf';
     let view: Awaited<ReturnType<typeof readableResumeUrl>>;
     try {
       view = await readableResumeUrl(this.storage, objectPath, mimeType, 30);
@@ -1513,6 +1538,36 @@ function asString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/** Coerce string or `{ text }` / `{ value }` bullet rows used by ATS templates. */
+function asBulletText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    const row = value as { text?: unknown; value?: unknown };
+    return asString(row.text) || asString(row.value);
+  }
+  return '';
+}
+
+function asBulletList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of value) {
+    const text = asBulletText(item);
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out;
+}
+
+function asTechList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => asString(item)).filter(Boolean))];
+}
+
 function cleanAvoidList(avoid: string[] | undefined): string[] {
   return (avoid || []).map((s) => s.trim()).filter(Boolean).slice(0, 5);
 }
@@ -1585,7 +1640,15 @@ function sanitizeUploadedContent(
     ? data.projects
         .map((row) => {
           const item = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
-          return { name: asString(item.name), description: asString(item.description) || null };
+          const bullets = asBulletList(item.bullets);
+          const technologies = asTechList(item.technologies);
+          return {
+            name: asString(item.name),
+            description: asString(item.description) || null,
+            ...(bullets.length ? { bullets } : {}),
+            ...(technologies.length ? { technologies } : {}),
+            url: asString(item.url) || null,
+          };
         })
         .filter((row) => row.name)
     : [];
@@ -1735,9 +1798,14 @@ function friendDataToContent(data: Record<string, unknown>, includePhoto?: boole
       .filter((row): row is { name: string; issuer: string | null; date: string | null } => Boolean(row)),
     projects: projects.map((item) => {
       const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      const bullets = asBulletList(row.bullets ?? row.bulletPoints);
+      const technologies = asTechList(row.technologies);
       return {
         name: String(row.name || row.title || ''),
         description: row.description ? String(row.description) : null,
+        ...(bullets.length ? { bullets } : {}),
+        ...(technologies.length ? { technologies } : {}),
+        url: row.url || row.link ? String(row.url || row.link) : null,
       };
     }),
   };
@@ -1815,20 +1883,30 @@ function toRoleAtsResume(content: ResumeContent & { _manual?: boolean; data?: Re
       const peeled = extractProjectTechnologies(bodyLines);
       const technologies = [...new Set([...existingTech, ...peeled.technologies])];
       const description = peeled.description || item.description || '';
+      const explicitBullets = asBulletList(item.bullets ?? fromData?.bullets);
+      const descLines = description
+        ? description
+            .split(/\n+|•/)
+            .map((line) => line.replace(/^[-*]\s*/, '').trim())
+            .filter(Boolean)
+        : [];
+      // Keep overview + bullets separate when bullets exist; otherwise treat extra lines as bullets.
+      const bullets = explicitBullets.length
+        ? explicitBullets
+        : descLines.length > 1
+          ? descLines.slice(1)
+          : [];
       return {
         name: item.name,
         title: item.name,
-        description,
+        description: explicitBullets.length
+          ? description
+          : descLines.length > 1
+            ? descLines[0] || ''
+            : description,
         technologies,
-        bullets: Array.isArray(item.bullets)
-          ? item.bullets.map((b) => String(b || '').trim()).filter(Boolean)
-          : description
-            ? description
-                .split(/\n|•/)
-                .map((line) => line.trim())
-                .filter(Boolean)
-                .slice(1)
-            : [],
+        bullets,
+        bulletPoints: bullets,
         url: item.url || '',
       };
     }),

@@ -194,19 +194,29 @@ async function renderCareerBridgeTemplatePdf(content: ResumeContent) {
     for (const proj of content.projects) {
       if (!proj.name?.trim()) continue;
       drawLines(proj.name, bold, 10.5);
-      const projBullets =
-        proj.bullets?.length
-          ? proj.bullets.map((b) => b.trim()).filter(Boolean)
-          : (proj.description || '')
-              .split(/\n+/)
-              .map((b) => b.trim())
-              .filter(Boolean)
-              .filter((line) => /^[-•*]/.test(line));
+      const explicit = (proj.bullets || [])
+        .map((b) => (typeof b === 'string' ? b : String((b as { text?: string })?.text || '')).trim())
+        .filter(Boolean);
+      const descLines = (proj.description || '')
+        .split(/\n+/)
+        .flatMap((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return [];
+          if (/[•●▪▸]/.test(trimmed)) {
+            return trimmed
+              .split(/\s*[•●▪▸]\s*/)
+              .map((part) => part.replace(/^[-*]\s*/, '').trim())
+              .filter(Boolean);
+          }
+          const cleaned = trimmed.replace(/^[-•*●▪▸]\s*/, '').trim();
+          return cleaned ? [cleaned] : [];
+        });
+      const leftover = explicit.length
+        ? descLines.filter((line) => !explicit.some((b) => b.toLowerCase() === line.toLowerCase()))
+        : [];
+      const projBullets = explicit.length ? [...leftover, ...explicit] : descLines;
       for (const line of projBullets) {
         drawLines(`• ${line.replace(/^[-•*]\s*/, '')}`);
-      }
-      if (!projBullets.length && proj.description?.trim()) {
-        drawLines(proj.description.trim());
       }
       y -= 2;
     }
@@ -382,7 +392,26 @@ export async function renderResumePdf(
     section('Projects');
     for (const item of content.projects) {
       para(item.name, bold, 10);
-      if (item.description) para(item.description);
+      const explicit = (item.bullets || []).map((b) => String(b || '').trim()).filter(Boolean);
+      const descLines = (item.description || '')
+        .split(/\n+|•/)
+        .map((line) => line.replace(/^[-*]\s*/, '').trim())
+        .filter(Boolean);
+      const bullets = explicit.length
+        ? [
+            ...descLines.filter(
+              (line) => !explicit.some((b) => b.toLowerCase() === line.toLowerCase()),
+            ),
+            ...explicit,
+          ]
+        : descLines;
+      if (bullets.length) {
+        for (const line of bullets) {
+          para(`• ${line}`);
+        }
+      } else if (item.description) {
+        para(item.description);
+      }
     }
   }
 

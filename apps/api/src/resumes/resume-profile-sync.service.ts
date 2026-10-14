@@ -102,6 +102,7 @@ export class ResumeProfileSyncService {
           description: p.description,
           url: p.url,
           technologies: p.technologies || [],
+          ...(Array.isArray(p.bullets) && p.bullets.length ? { bullets: [...p.bullets] } : {}),
         })),
       );
       synced.push('projects');

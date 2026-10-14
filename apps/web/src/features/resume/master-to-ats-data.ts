@@ -1,4 +1,5 @@
 import type { MasterResumeDocument } from './master-resume.types';
+import { projectResumeBullets, splitProjectFields } from './project-fields';
 
 function normalizeCompanyKey(company: string) {
   return company.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -111,19 +112,24 @@ export function masterResumeToAtsData(doc: MasterResumeDocument) {
       grade: item.gradeType && item.grade ? `${item.gradeType}: ${item.grade}` : item.grade,
       gpa: item.gradeType && item.grade ? `${item.gradeType}: ${item.grade}` : item.grade,
     })),
-    projects: doc.projects.map((item, index) => ({
-      id: `project-${index}`,
-      name: item.name,
-      title: item.name,
-      description: item.description,
-      link: item.url,
-      url: item.url,
-      technologies: item.technologies,
-      bullets: item.bullets,
-      bulletPoints: item.bullets,
-      startDate: '',
-      endDate: '',
-    })),
+    projects: doc.projects.map((item, index) => {
+      const split = splitProjectFields(item);
+      const points = projectResumeBullets(item);
+      return {
+        id: `project-${index}`,
+        name: item.name,
+        title: item.name,
+        // Presentation is Experience-style: title + tech + bullets (no separate overview block).
+        description: '',
+        link: item.url,
+        url: item.url,
+        technologies: split.technologies,
+        bullets: points,
+        bulletPoints: points,
+        startDate: '',
+        endDate: '',
+      };
+    }),
     certifications: doc.certifications.map((item, index) => ({
       id: `cert-${index}`,
       name: item.name,

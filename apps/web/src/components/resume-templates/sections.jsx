@@ -8,7 +8,7 @@ import {
   nonEmptyList,
   normalizeCertificateUrl,
   normalizeProjectUrl,
-  projectBulletTexts,
+  projectBodyBullets,
   projectTechnologies,
   visibleBullets,
 } from "./helpers.js";
@@ -231,16 +231,16 @@ export function AchievementsCertificationsSection({
 export function ProjectsSection({ data, title = "Projects" }) {
   if (!nonEmptyList(data.projects)) return null;
   const projects = data.projects.filter((p) => {
-    const bullets = projectBulletTexts(p);
+    const bullets = projectBodyBullets(p);
     const techs = projectTechnologies(p);
-    return p.name || p.title || p.description || bullets.length || techs.length || p.url || p.link;
+    return p.name || p.title || bullets.length || techs.length || p.url || p.link;
   });
   if (!projects.length) return null;
   return (
     <section>
       <h2>{title}</h2>
       {projects.map((p, i) => {
-        const bullets = projectBulletTexts(p);
+        const bullets = projectBodyBullets(p);
         const techs = projectTechnologies(p);
         const urlInfo = normalizeProjectUrl(p.url || p.link || "");
         const href = urlInfo.ok ? urlInfo.href : "";
@@ -254,7 +254,6 @@ export function ProjectsSection({ data, title = "Projects" }) {
                 {dates ? <span>{dates}</span> : null}
               </div>
             ) : null}
-            {p.description ? <p className="project-desc">{p.description}</p> : null}
             {bullets.length > 0 && (
               <ul>
                 {bullets.map((b, j) => (

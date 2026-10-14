@@ -4,12 +4,30 @@
  * and then splits them back into both fields (causing 2x/3x duplication).
  */
 
+function coerceBulletText(raw: unknown): string {
+  if (raw && typeof raw === 'object') {
+    const row = raw as { text?: unknown; value?: unknown };
+    return String(row.text || row.value || '').trim();
+  }
+  return String(raw ?? '').trim();
+}
+
 function splitLines(text: string | null | undefined): string[] {
   if (!text?.trim()) return [];
   return text
     .split(/\n+/)
-    .map((line) => line.replace(/^[-•*]\s*/, '').trim())
-    .filter(Boolean);
+    .flatMap((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return [];
+      if (/[•●▪▸]/.test(trimmed)) {
+        return trimmed
+          .split(/\s*[•●▪▸]\s*/)
+          .map((part) => part.replace(/^[-*]\s*/, '').trim())
+          .filter(Boolean);
+      }
+      const cleaned = trimmed.replace(/^[-•*●▪▸]\s*/, '').trim();
+      return cleaned ? [cleaned] : [];
+    });
 }
 
 function normalizeKey(value: string) {
@@ -104,7 +122,7 @@ export function splitProjectFields(project: {
   technologies?: string[] | null;
 }): { description: string; bullets: string[]; technologies: string[] } {
   const explicitBullets = dedupeBulletList(
-    Array.isArray(project.bullets) ? project.bullets.map((b) => String(b || '')) : [],
+    Array.isArray(project.bullets) ? project.bullets.map((b) => coerceBulletText(b)) : [],
   );
 
   let description = '';
@@ -151,6 +169,34 @@ export function splitProjectFields(project: {
     bullets: bullets.filter((b) => !techKeys.has(normalizeKey(b)) && !TECH_LABEL.test(b.trim())),
     technologies: peeled.technologies,
   };
+}
+
+/**
+ * Resume view/PDF presentation: after the project title, leftover body lines
+ * render as bullets (same pattern as Experience responsibilities).
+ */
+export function projectResumeBullets(project: {
+  description?: string | null;
+  bullets?: string[] | null;
+  bulletPoints?: string[] | null;
+  responsibilities?: string[] | null;
+  technologies?: string[] | null;
+}): string[] {
+  const extra = dedupeBulletList([
+    ...(Array.isArray(project.bulletPoints) ? project.bulletPoints.map(coerceBulletText) : []),
+    ...(Array.isArray(project.responsibilities)
+      ? project.responsibilities.map(coerceBulletText)
+      : []),
+  ]);
+  const split = splitProjectFields({
+    description: project.description,
+    bullets: [
+      ...(Array.isArray(project.bullets) ? project.bullets.map(coerceBulletText) : []),
+      ...extra,
+    ],
+    technologies: project.technologies,
+  });
+  return dedupeBulletList([...splitLines(split.description), ...split.bullets]);
 }
 
 /** Deep-clone project fields for a new resume (no shared references). */

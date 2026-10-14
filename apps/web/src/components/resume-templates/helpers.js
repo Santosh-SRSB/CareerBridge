@@ -246,6 +246,25 @@ function asBulletEntry(raw, index = 0) {
   };
 }
 
+function descriptionBulletLines(description) {
+  const text = String(description || "").trim();
+  if (!text) return [];
+  return text
+    .split(/\n+/)
+    .flatMap((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return [];
+      if (/[•●▪▸]/.test(trimmed)) {
+        return trimmed
+          .split(/\s*[•●▪▸]\s*/)
+          .map((part) => part.replace(/^[-*]\s*/, "").trim())
+          .filter(Boolean);
+      }
+      const cleaned = trimmed.replace(/^[-•*●▪▸]\s*/, "").trim();
+      return cleaned ? [cleaned] : [];
+    });
+}
+
 export function projectBulletEntries(project) {
   const source = project && typeof project === "object" ? project : {};
   const list = Array.isArray(source.bullets)
@@ -253,11 +272,62 @@ export function projectBulletEntries(project) {
     : Array.isArray(source.bulletPoints)
       ? source.bulletPoints
       : [];
-  return list.map((item, index) => asBulletEntry(item, index));
+  const entries = list.map((item, index) => asBulletEntry(item, index));
+  if (entries.some((item) => String(item.text || "").trim())) return entries;
+  return descriptionBulletLines(source.description).map((text, index) => asBulletEntry(text, index));
 }
 
 export function projectBulletTexts(project) {
   return projectBulletEntries(project).map((b) => String(b.text || "").trim()).filter(Boolean);
+}
+
+function collectBulletTexts(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((item, index) => String(asBulletEntry(item, index).text || "").replace(/^[-•*●▪▸]\s*/, "").trim())
+    .filter(Boolean);
+}
+
+/**
+ * After the project title, every leftover line is a bullet — same as Experience.
+ * Merges description, bullets, bulletPoints, and responsibilities (deduped).
+ */
+export function projectBodyBullets(project) {
+  const source = project && typeof project === "object" ? project : {};
+  const techs = projectTechnologies(source);
+  const techKeys = new Set(techs.map((t) => String(t || "").trim().toLowerCase()).filter(Boolean));
+  let overview = String(source.description || "").trim();
+  if (techs.length && overview) {
+    overview = overview
+      .replace(
+        /(?:^|\n)\s*(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*.+$/gim,
+        "",
+      )
+      .replace(
+        /\b(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]\s*[^.]+$/i,
+        "",
+      )
+      .trim();
+  }
+  const fromDescription = descriptionBulletLines(overview);
+  const fallback = fromDescription.length ? [] : overview ? [overview] : [];
+  const seen = new Set();
+  const bullets = [];
+  for (const line of [
+    ...collectBulletTexts(source.bullets),
+    ...collectBulletTexts(source.bulletPoints),
+    ...collectBulletTexts(source.responsibilities),
+    ...fromDescription,
+    ...fallback,
+  ]) {
+    const text = String(line || "").replace(/^[-•*●▪▸]\s*/, "").trim();
+    if (!text) continue;
+    const key = text.toLowerCase().replace(/\s+/g, " ");
+    if (seen.has(key) || techKeys.has(key)) continue;
+    if (/^(?:technologies?|tech\s*stack|tools?(?:\s+used)?|stack)\s*[:|\-–—]/i.test(text)) continue;
+    seen.add(key);
+    bullets.push(text);
+  }
+  return bullets;
 }
 
 export function projectTechnologies(project) {
