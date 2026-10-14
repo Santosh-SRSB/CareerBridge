@@ -87,11 +87,11 @@ export default function SupportPage() {
             Get answers about your account, applications, and employer connections, or reach our
             support team. Most enquiries are answered within one business day.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <a href="#form" className={primaryButton}>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <a href="#form" className={`${primaryButton} w-full sm:w-auto`}>
               Submit a request
             </a>
-            <a href="#faq" className={secondaryButton}>
+            <a href="#faq" className={`${secondaryButton} w-full sm:w-auto`}>
               Browse the FAQ
             </a>
           </div>
@@ -100,22 +100,28 @@ export default function SupportPage() {
 
       <div className="mx-auto max-w-[960px] px-5 sm:px-7">
         <section id="faq" className="border-b border-[var(--color-border)] py-12">
-          <div className="mb-7 flex items-baseline justify-between border-b-2 border-[var(--color-primary-dark)] pb-3">
+          <div className="mb-7 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-[var(--color-primary-dark)] pb-3">
             <h2 className={sectionHeading}>Frequently asked questions</h2>
             <span className="text-xs font-medium text-[var(--color-text-secondary)]">FAQ</span>
           </div>
 
-          <div className="mb-6 flex flex-wrap gap-2">
+          <div
+            className="mb-6 flex flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            role="tablist"
+            aria-label="FAQ categories"
+          >
             {(Object.keys(TAB_LABELS) as FaqTab[]).map((tab) => (
               <button
                 key={tab}
                 type="button"
+                role="tab"
+                aria-selected={faqTab === tab}
                 aria-pressed={faqTab === tab}
                 onClick={() => {
                   setFaqTab(tab);
                   setOpenIdx(0);
                 }}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${focusRing} ${
+                className={`shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors sm:px-4 sm:text-sm ${focusRing} ${
                   faqTab === tab
                     ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
                     : 'border-[var(--color-border-dark)] bg-white text-[var(--color-primary-dark)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)]'
@@ -154,12 +160,12 @@ export default function SupportPage() {
         </section>
 
         <section id="form" className="py-12">
-          <div className="mb-7 flex items-baseline justify-between border-b-2 border-[var(--color-primary-dark)] pb-3">
+          <div className="mb-7 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-[var(--color-primary-dark)] pb-3">
             <h2 className={sectionHeading}>Submit a support request</h2>
             <span className="text-xs font-medium text-[var(--color-text-secondary)]">Request</span>
           </div>
 
-          <div className="rounded-2xl border border-[var(--color-border)] bg-white p-6 shadow-[0_2px_8px_rgba(16,19,124,0.04)] sm:p-8">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-white p-4 shadow-[0_2px_8px_rgba(16,19,124,0.04)] sm:p-8">
             <h3 className="text-xl font-bold tracking-tight text-[var(--color-text-primary)]">
               We&apos;ll route this to the right team
             </h3>
@@ -242,7 +248,7 @@ export default function SupportPage() {
         <div className="mx-auto max-w-[960px]">
           <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white shadow-[0_12px_40px_rgba(16,19,124,0.08)]">
             <div className="grid gap-0 md:grid-cols-[1.1fr_0.9fr]">
-              <div className="p-7 sm:p-9">
+              <div className="p-5 sm:p-9">
                 <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-[var(--color-primary)]">
                   Direct contact
                 </p>
@@ -258,7 +264,7 @@ export default function SupportPage() {
                 </p>
                 <a
                   href={`mailto:${SUPPORT_EMAIL}`}
-                  className={`mt-6 inline-flex max-w-full items-center gap-3 rounded-full bg-[var(--color-primary)] px-5 py-3 text-sm font-bold text-white no-underline transition hover:-translate-y-0.5 hover:bg-[var(--color-primary-hover)] ${focusRing}`}
+                  className={`mt-6 inline-flex w-full max-w-full min-w-0 items-center gap-3 rounded-full bg-[var(--color-primary)] px-4 py-3 text-sm font-bold text-white no-underline transition hover:-translate-y-0.5 hover:bg-[var(--color-primary-hover)] sm:w-auto sm:px-5 ${focusRing}`}
                 >
                   <span
                     className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-[var(--color-primary)]"
@@ -269,10 +275,10 @@ export default function SupportPage() {
                       <path d="M3 7l9 7 9-7" />
                     </svg>
                   </span>
-                  {SUPPORT_EMAIL}
+                  <span className="min-w-0 truncate">{SUPPORT_EMAIL}</span>
                 </a>
               </div>
-              <div className="relative flex flex-col justify-center gap-4 border-t border-[var(--color-border)] bg-[var(--color-primary-dark)] p-7 text-white sm:p-9 md:border-l md:border-t-0">
+              <div className="relative flex flex-col justify-center gap-4 border-t border-[var(--color-border)] bg-[var(--color-primary-dark)] p-5 text-white sm:p-9 md:border-l md:border-t-0">
                 <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/10 blur-2xl" aria-hidden="true" />
                 <p className="relative text-[12px] font-bold uppercase tracking-[0.16em] text-[var(--color-primary-soft)]">
                   Prefer email?

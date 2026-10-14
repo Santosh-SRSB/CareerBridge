@@ -6184,10 +6184,39 @@ a.ep-prohead__cta {
 }
 
 .ep-ivdesk__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.ep-ivdesk__actions--primary {
+  margin-top: 12px;
+}
+
+.ep-ivdesk__actions--secondary {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8e5;
+}
+
+.ep-ivdesk__actions .ep-ivdesk__btn,
+.ep-ivdesk__actions .ep-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.ep-ivdesk__actions--primary > :first-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 480px) {
+  .ep-ivdesk__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .ep-ivdesk__actions--primary > :first-child {
+    grid-column: auto;
+  }
 }
 
 .ep-ivdesk__btn {
@@ -6632,7 +6661,9 @@ a.ep-prohead__cta {
 .ep-ivdesk__modal-card {
   position: relative;
   z-index: 1;
-  width: min(100%, 440px);
+  width: min(100%, 520px);
+  max-height: min(90dvh, 720px);
+  overflow: auto;
   border-radius: 16px;
   border: 1px solid #d5e0db;
   background: #fff;

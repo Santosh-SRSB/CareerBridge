@@ -669,7 +669,7 @@ export default function EmployerInterviewsPage() {
                 />
                 <em>{detailNotes.length}/1000</em>
               </label>
-              <div className="ep-ivdesk__actions" style={{ marginTop: 8 }}>
+              <div className="ep-ivdesk__actions ep-ivdesk__actions--primary">
                 <Button
                   type="button"
                   size="sm"
@@ -712,7 +712,7 @@ export default function EmployerInterviewsPage() {
                   </Button>
                 ) : null}
               </div>
-              <div className="ep-ivdesk__actions" style={{ marginTop: 14 }}>
+              <div className="ep-ivdesk__actions ep-ivdesk__actions--secondary">
                 <Link
                   href={`/employer/candidates/${detailRow.candidateId}?jobId=${encodeURIComponent(detailRow.jobId)}`}
                   className="ep-ivdesk__btn ep-ivdesk__btn--ghost"

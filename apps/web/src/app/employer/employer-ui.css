@@ -63,15 +63,34 @@
 }
 
 .ev-brand {
-  position: relative;
-  display: block;
-  padding: 2px 12px 10px;
+  display: grid;
+  gap: 6px;
+  padding: 2px 8px 10px;
   color: #fff;
+}
+
+.ev-brand__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ev-brand__row .cb-brand {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ev-brand__row .cb-brand__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ev-brand small {
   display: block;
-  margin-top: 6px;
+  margin-top: 0;
   font-size: 14px;
   opacity: 0.85;
 }
@@ -94,9 +113,8 @@
 }
 
 .ev-support--side {
-  position: absolute;
-  top: 0;
-  right: 4px;
+  position: static;
+  flex: none;
 }
 
 .ev-support--top {
@@ -691,10 +709,12 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 4px;
+  gap: 8px 10px;
+  max-width: 280px;
 }
 
-.ev-rowacts .ev-btn {
+.ev-rowacts .ev-btn,
+.ev-rowacts .ev-lnk {
   white-space: nowrap;
 }
 
@@ -2092,7 +2112,10 @@ a.ev-stat:hover {
 }
 
 .ev-jstats small {
+  display: block;
+  margin-top: 2px;
   font-size: 15px;
+  line-height: 1.35;
   color: var(--ev-mut);
 }
 
@@ -2830,10 +2853,36 @@ a.ev-stat:hover {
   background: var(--ev-soft);
 }
 
+.ev-app .ep-ivdesk__modal-card {
+  width: min(100%, 520px);
+  max-height: min(90dvh, 720px);
+  overflow: auto;
+}
+
 .ev-app .ep-ivdesk__actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.ev-app .ep-ivdesk__actions--primary {
+  margin-top: 12px;
+}
+
+.ev-app .ep-ivdesk__actions--secondary {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ev-line);
+}
+
+.ev-app .ep-ivdesk__actions .ep-ivdesk__btn,
+.ev-app .ep-ivdesk__actions .ep-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.ev-app .ep-ivdesk__actions--primary > :first-child {
+  grid-column: 1 / -1;
 }
 
 .ev-app .ep-ivdesk__btn {
@@ -2850,6 +2899,16 @@ a.ev-stat:hover {
   border: 1px solid var(--ev-btn);
   background: var(--ev-btn);
   color: #fff;
+}
+
+@media (max-width: 480px) {
+  .ev-app .ep-ivdesk__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .ev-app .ep-ivdesk__actions--primary > :first-child {
+    grid-column: auto;
+  }
 }
 
 /* ---------- Responsive ---------- */
