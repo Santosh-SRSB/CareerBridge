@@ -32,19 +32,18 @@ import { TestimonialPromptCard } from '@/components/TestimonialPromptCard';
 import { ErrorState } from '@/components/ui/StateViews';
 import { isUnauthorizedError } from '@/lib/client-errors';
 
-/** Cache-bust so CDNs/browsers never keep serving the retired hero-1/2/3 set. */
-const HERO_ASSET_V = '20261014b';
+/** New role photos (old hero-1/2/3 removed). Paths must stay query-free for next/image. */
 const HERO_SLIDES = [
-  { src: `/employer/hero-it-software.jpg?v=${HERO_ASSET_V}`, position: '52% 12%' },
-  { src: `/employer/hero-retail.jpg?v=${HERO_ASSET_V}`, position: '50% 14%' },
-  { src: `/employer/hero-customer-service.jpg?v=${HERO_ASSET_V}`, position: '48% 12%' },
-  { src: `/employer/hero-sales.jpg?v=${HERO_ASSET_V}`, position: '50% 14%' },
-  { src: `/employer/hero-hospitality.jpg?v=${HERO_ASSET_V}`, position: '50% 12%' },
-  { src: `/employer/hero-healthcare.jpg?v=${HERO_ASSET_V}`, position: '50% 12%' },
-  { src: `/employer/hero-manufacturing.jpg?v=${HERO_ASSET_V}`, position: '50% 16%' },
-  { src: `/employer/hero-logistics.jpg?v=${HERO_ASSET_V}`, position: '50% 14%' },
-  { src: `/employer/hero-education.jpg?v=${HERO_ASSET_V}`, position: '50% 12%' },
-  { src: `/employer/hero-fresher-campus.jpg?v=${HERO_ASSET_V}`, position: '50% 12%' },
+  { src: '/employer/hero-it-software.jpg', position: '52% 12%' },
+  { src: '/employer/hero-retail.jpg', position: '50% 14%' },
+  { src: '/employer/hero-customer-service.jpg', position: '48% 12%' },
+  { src: '/employer/hero-sales.jpg', position: '50% 14%' },
+  { src: '/employer/hero-hospitality.jpg', position: '50% 12%' },
+  { src: '/employer/hero-healthcare.jpg', position: '50% 12%' },
+  { src: '/employer/hero-manufacturing.jpg', position: '50% 16%' },
+  { src: '/employer/hero-logistics.jpg', position: '50% 14%' },
+  { src: '/employer/hero-education.jpg', position: '50% 12%' },
+  { src: '/employer/hero-fresher-campus.jpg', position: '50% 12%' },
 ] as const;
 
 const MOVE_NEXT = [
