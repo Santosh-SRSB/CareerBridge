@@ -105,29 +105,31 @@ export function MatchedCandidateCard({
     (candidateId
       ? `/employer/candidates/${candidateId}${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`
       : null);
+  const score = Math.round(totalScore);
 
   return (
     <article className="ev-card ev-mcc">
       <header className="ev-mcc__head">
         <EvAvatar name={name} photoUrl={photoUrl} size="lg" />
         <div className="ev-mcc__who">
-          <h3>
-            <span className="ev-mcc__name">{displayName(name)}</span>
-            <span className="ev-tag">#{rank}</span>
-          </h3>
-          <span className="ev-sub">{location}</span>
+          <h3 className="ev-mcc__name">{displayName(name)}</h3>
+          <p className="ev-mcc__meta">
+            <span className="ev-mcc__rank">#{rank}</span>
+            <span className="ev-mcc__dot" aria-hidden>
+              ·
+            </span>
+            <span className="ev-mcc__loc">{location}</span>
+          </p>
         </div>
-        <span
-          className="ev-mcc__score"
-          aria-label={`${PROFILE_MATCH_LABEL} ${Math.round(totalScore)} out of 100`}
-        >
-          <EvPill tone={matchPillTone(info.color)}>Match {Math.round(totalScore)}/100</EvPill>
-        </span>
+        <div className="ev-mcc__score" aria-label={`${PROFILE_MATCH_LABEL} ${score} out of 100`}>
+          <span className="ev-mcc__score-val">{score}</span>
+          <span className="ev-mcc__score-label">Match</span>
+        </div>
       </header>
 
       <div className="ev-mcc__badges">
         {badge === 'matched' ? (
-          <EvPill>Matched</EvPill>
+          <EvPill tone="blue">Matched</EvPill>
         ) : badge === 'applied' ? (
           <EvPill tone="blue">Applied</EvPill>
         ) : (
@@ -136,46 +138,60 @@ export function MatchedCandidateCard({
         <EvPill tone={matchPillTone(info.color)}>{info.label}</EvPill>
       </div>
 
-      <div className="ev-mcc__metrics">
+      <div className="ev-mcc__metrics" aria-label="Fit breakdown">
         <div>
           <small>Skills fit</small>
-          <b>{Math.round(skillsScore)}/40</b>
+          <b>
+            {Math.round(skillsScore)}
+            <span>/40</span>
+          </b>
         </div>
         <div>
           <small>Experience fit</small>
-          <b>{Math.round(experienceScore)}/20</b>
+          <b>
+            {Math.round(experienceScore)}
+            <span>/20</span>
+          </b>
         </div>
       </div>
 
       <div className="ev-mcc__body">
         {topSkills.length > 0 ? (
-          <div className="ev-chips" aria-label="Skills">
+          <div className="ev-chips ev-mcc__skills" aria-label="Skills">
             {topSkills.map((skill) => (
               <span key={skill} className="ev-chip">
                 {skill}
               </span>
             ))}
-            {moreSkills > 0 ? <span className="ev-chip">+{moreSkills}</span> : null}
+            {moreSkills > 0 ? (
+              <span className="ev-chip ev-mcc__more">+{moreSkills}</span>
+            ) : null}
           </div>
         ) : (
           <p className="ev-sub ev-mcc__empty">No skills listed</p>
         )}
 
-        {reasons[0] ? (
-          <p className="ev-hint ev-mcc__fit">
-            <b>Fit:</b> {reasons[0]}
-            {reasons[1] ? ` · ${reasons[1]}` : ''}
-          </p>
-        ) : null}
-        {gaps.length > 0 ? (
-          <p className="ev-hint ev-mcc__gaps">
-            <b>Gaps:</b> {gaps.slice(0, 2).join(', ')}
-          </p>
-        ) : null}
+        {(reasons[0] || gaps.length > 0) && (
+          <div className="ev-mcc__notes">
+            {reasons[0] ? (
+              <p className="ev-mcc__fit">
+                <span>Fit</span>
+                {reasons[0]}
+                {reasons[1] ? ` · ${reasons[1]}` : ''}
+              </p>
+            ) : null}
+            {gaps.length > 0 ? (
+              <p className="ev-mcc__gaps">
+                <span>Gaps</span>
+                {gaps.slice(0, 2).join(', ')}
+              </p>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {profileHref ? (
-        <Link href={profileHref} className="ev-btn ev-btn--ghost ev-mcc__cta">
+        <Link href={profileHref} className="ev-btn ev-mcc__cta">
           Open profile
         </Link>
       ) : null}
