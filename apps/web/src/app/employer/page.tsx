@@ -33,9 +33,16 @@ import { ErrorState } from '@/components/ui/StateViews';
 import { isUnauthorizedError } from '@/lib/client-errors';
 
 const HERO_SLIDES = [
-  { src: '/employer/hero-1.jpg', position: '50% 0%' },
-  { src: '/employer/hero-2.jpg', position: '50% 3%' },
-  { src: '/employer/hero-3.jpg', position: '50% 14%' },
+  { src: '/employer/hero-it-software.jpg', position: '50% 8%' },
+  { src: '/employer/hero-retail.jpg', position: '50% 10%' },
+  { src: '/employer/hero-customer-service.jpg', position: '50% 8%' },
+  { src: '/employer/hero-sales.jpg', position: '50% 10%' },
+  { src: '/employer/hero-hospitality.jpg', position: '50% 8%' },
+  { src: '/employer/hero-healthcare.jpg', position: '50% 8%' },
+  { src: '/employer/hero-manufacturing.jpg', position: '50% 12%' },
+  { src: '/employer/hero-logistics.jpg', position: '50% 10%' },
+  { src: '/employer/hero-education.jpg', position: '50% 8%' },
+  { src: '/employer/hero-fresher-campus.jpg', position: '50% 8%' },
 ] as const;
 
 const MOVE_NEXT = [
@@ -101,7 +108,8 @@ function DashboardHero({ companyLabel }: { companyLabel: string }) {
             alt=""
             width={900}
             height={1100}
-            priority={index === 0}
+            priority={index < 2}
+            loading={index < 2 ? 'eager' : 'lazy'}
             className={index === slide ? 'on' : undefined}
             style={{ objectPosition: item.position }}
           />
