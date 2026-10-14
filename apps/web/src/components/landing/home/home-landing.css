@@ -51,7 +51,7 @@
   color: var(--color-text-white);
 }
 
-.hl-btn--primary:hover {
+.hl-btn--primary:hover:not(.hl-nav__signup) {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
 }
@@ -359,10 +359,10 @@
   min-width: 0;
 }
 
-/* Sit Testimonial left of the auth buttons (still on the navy curve). */
+/* Pull Testimonial left of Login / Sign Up (still on the navy curve). */
 .hl-nav__testimonial {
-  margin-right: 10px;
-  padding-right: 4px;
+  margin-right: clamp(22px, 3.2vw, 40px);
+  padding-right: 2px;
   white-space: nowrap;
 }
 
@@ -403,18 +403,20 @@
   background: color-mix(in srgb, var(--color-white) 14%, transparent);
 }
 
-/* Desktop: keep center links centered; Testimonial + CTAs on the navy side. */
+/* Desktop: Testimonial left of CTAs; Login / Sign Up hover + press feedback. */
 @media (min-width: 901px) {
+  .hl-hero .hl-nav__actions {
+    gap: 12px;
+  }
+
+  .hl-hero .hl-nav__testimonial {
+    margin-right: clamp(28px, 4vw, 52px);
+  }
+
   .hl-hero .hl-nav__login,
   .hl-hero .hl-nav__login:focus-visible,
-  .hl-hero .hl-nav__login:active,
   .hl-hero .hl-nav--mirror .hl-nav__login,
   .hl-hero .hl-nav--mirror .hl-nav__login.is-focus,
-  .hl-hero .hl-nav__signup,
-  .hl-hero .hl-nav__signup:focus-visible,
-  .hl-hero .hl-nav__signup:active,
-  .hl-hero .hl-nav--mirror .hl-nav__signup,
-  .hl-hero .hl-nav--mirror .hl-nav__signup.is-focus,
   .hl-hero .hl-nav__cta,
   .hl-hero .hl-nav--mirror .hl-nav__cta {
     background: var(--color-white);
@@ -430,31 +432,41 @@
   .hl-hero .hl-nav--mirror .hl-nav__cta {
     position: relative;
     overflow: hidden;
+    will-change: transform;
     transition:
       background-color 0.2s ease,
       border-color 0.2s ease,
       color 0.2s ease,
       box-shadow 0.2s ease,
-      transform 0.18s ease;
+      transform 0.18s ease,
+      filter 0.18s ease;
   }
 
   .hl-hero .hl-nav__login:hover,
-  .hl-hero .hl-nav--mirror .hl-nav__login.is-hover {
+  .hl-hero .hl-nav__login:focus-visible,
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-hover,
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus {
     background: var(--color-primary-soft);
     border-color: var(--color-primary);
     color: var(--color-primary);
-    box-shadow: 0 10px 22px color-mix(in srgb, var(--color-primary-dark) 28%, transparent);
-    transform: translateY(-2px);
+    box-shadow: 0 12px 24px color-mix(in srgb, var(--color-primary-dark) 30%, transparent);
+    transform: translateY(-3px);
+    filter: brightness(1.02);
   }
 
-  .hl-hero .hl-nav__login:active,
-  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus:active {
-    transform: translateY(0);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary-dark) 22%, transparent);
+  .hl-hero .hl-nav__login:active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-white);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--color-primary-dark) 28%, transparent);
+    transform: translateY(1px) scale(0.98);
+    filter: none;
   }
 
   .hl-hero .hl-nav__signup,
-  .hl-hero .hl-nav--mirror .hl-nav__signup {
+  .hl-hero .hl-nav__signup:focus-visible,
+  .hl-hero .hl-nav--mirror .hl-nav__signup,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-focus {
     background: var(--color-accent-orange-2, #f0a11a);
     border-color: var(--color-accent-orange-2, #f0a11a);
     color: var(--color-primary-dark, #10137c);
@@ -462,18 +474,24 @@
   }
 
   .hl-hero .hl-nav__signup:hover,
-  .hl-hero .hl-nav--mirror .hl-nav__signup.is-hover {
-    background: #ffb84a;
-    border-color: #ffb84a;
+  .hl-hero .hl-nav__signup:focus-visible,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-hover,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-focus {
+    background: #ffc15a;
+    border-color: #ffc15a;
     color: var(--color-primary-dark, #10137c);
-    box-shadow: 0 12px 26px color-mix(in srgb, #c47a00 36%, transparent);
-    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 14px 28px color-mix(in srgb, #c47a00 40%, transparent);
+    transform: translateY(-3px) scale(1.04);
+    filter: brightness(1.04);
   }
 
-  .hl-hero .hl-nav__signup:active,
-  .hl-hero .hl-nav--mirror .hl-nav__signup.is-focus:active {
-    transform: translateY(0) scale(0.98);
-    box-shadow: 0 4px 12px color-mix(in srgb, #c47a00 28%, transparent);
+  .hl-hero .hl-nav__signup:active {
+    background: #e09210;
+    border-color: #e09210;
+    color: var(--color-primary-dark, #10137c);
+    box-shadow: 0 3px 10px color-mix(in srgb, #c47a00 30%, transparent);
+    transform: translateY(1px) scale(0.97);
+    filter: none;
   }
 
   .hl-hero .hl-nav--mirror .hl-nav__login.is-focus,
