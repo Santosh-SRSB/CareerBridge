@@ -1053,7 +1053,7 @@ export class EmployersService {
         : [],
     );
 
-    const candidates = await Promise.all(
+    const candidatePayload = await Promise.all(
       pageRows.map(async ({ match, candidate, currentlyEmployed, application, availability }) => {
         const latestRole = candidate.experiences[0];
         const skillNames = candidate.skills.map((item) => item.name);
@@ -1097,7 +1097,7 @@ export class EmployersService {
       total: filtered.length,
       page,
       pageSize,
-      candidates,
+      candidates: candidatePayload,
     };
   }
 
