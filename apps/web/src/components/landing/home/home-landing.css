@@ -355,14 +355,14 @@
   grid-column: 3;
   align-items: center;
   justify-self: end;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
-/* Pull Testimonial left of Login / Sign Up (still on the navy curve). */
+/* Sit Testimonial clearly left of the auth pair (still on the navy curve). */
 .hl-nav__testimonial {
-  margin-right: clamp(22px, 3.2vw, 40px);
-  padding-right: 2px;
+  margin-right: clamp(40px, 5.5vw, 72px);
+  padding-right: 4px;
   white-space: nowrap;
 }
 
@@ -403,14 +403,14 @@
   background: color-mix(in srgb, var(--color-white) 14%, transparent);
 }
 
-/* Desktop: Testimonial left of CTAs; Login / Sign Up hover + press feedback. */
+/* Desktop: Testimonial left of CTAs; Login / Sign Up hover + press (real + mirror). */
 @media (min-width: 901px) {
   .hl-hero .hl-nav__actions {
     gap: 12px;
   }
 
   .hl-hero .hl-nav__testimonial {
-    margin-right: clamp(28px, 4vw, 52px);
+    margin-right: clamp(48px, 6.5vw, 88px);
   }
 
   .hl-hero .hl-nav__login,
@@ -431,35 +431,37 @@
   .hl-hero .hl-nav--mirror .hl-nav__signup,
   .hl-hero .hl-nav--mirror .hl-nav__cta {
     position: relative;
-    overflow: hidden;
-    will-change: transform;
+    will-change: transform, filter, box-shadow;
     transition:
-      background-color 0.2s ease,
-      border-color 0.2s ease,
-      color 0.2s ease,
-      box-shadow 0.2s ease,
-      transform 0.18s ease,
-      filter 0.18s ease;
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease,
+      box-shadow 0.18s ease,
+      transform 0.16s ease,
+      filter 0.16s ease;
   }
 
   .hl-hero .hl-nav__login:hover,
   .hl-hero .hl-nav__login:focus-visible,
   .hl-hero .hl-nav--mirror .hl-nav__login.is-hover,
   .hl-hero .hl-nav--mirror .hl-nav__login.is-focus {
-    background: var(--color-primary-soft);
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-    box-shadow: 0 12px 24px color-mix(in srgb, var(--color-primary-dark) 30%, transparent);
-    transform: translateY(-3px);
-    filter: brightness(1.02);
+    background: #eef2ff;
+    border-color: var(--color-white);
+    color: var(--color-primary-dark, #10137c);
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--color-white) 70%, transparent),
+      0 10px 22px color-mix(in srgb, #000 28%, transparent);
+    transform: scale(1.06);
+    filter: brightness(1.06);
   }
 
-  .hl-hero .hl-nav__login:active {
+  .hl-hero .hl-nav__login:active,
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-press {
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: var(--color-white);
-    box-shadow: 0 3px 10px color-mix(in srgb, var(--color-primary-dark) 28%, transparent);
-    transform: translateY(1px) scale(0.98);
+    box-shadow: 0 2px 8px color-mix(in srgb, #000 35%, transparent);
+    transform: scale(0.96);
     filter: none;
   }
 
@@ -478,19 +480,22 @@
   .hl-hero .hl-nav--mirror .hl-nav__signup.is-hover,
   .hl-hero .hl-nav--mirror .hl-nav__signup.is-focus {
     background: #ffc15a;
-    border-color: #ffc15a;
+    border-color: #ffd27a;
     color: var(--color-primary-dark, #10137c);
-    box-shadow: 0 14px 28px color-mix(in srgb, #c47a00 40%, transparent);
-    transform: translateY(-3px) scale(1.04);
-    filter: brightness(1.04);
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, #ffc15a 55%, transparent),
+      0 12px 24px color-mix(in srgb, #c47a00 45%, transparent);
+    transform: scale(1.07);
+    filter: brightness(1.08);
   }
 
-  .hl-hero .hl-nav__signup:active {
-    background: #e09210;
-    border-color: #e09210;
+  .hl-hero .hl-nav__signup:active,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-press {
+    background: #d9850c;
+    border-color: #d9850c;
     color: var(--color-primary-dark, #10137c);
-    box-shadow: 0 3px 10px color-mix(in srgb, #c47a00 30%, transparent);
-    transform: translateY(1px) scale(0.97);
+    box-shadow: 0 2px 8px color-mix(in srgb, #c47a00 40%, transparent);
+    transform: scale(0.96);
     filter: none;
   }
 
@@ -516,7 +521,9 @@
   .hl-hero .hl-nav--mirror .hl-nav__login.is-hover,
   .hl-hero .hl-nav--mirror .hl-nav__signup.is-hover,
   .hl-hero .hl-nav__login:active,
-  .hl-hero .hl-nav__signup:active {
+  .hl-hero .hl-nav__signup:active,
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-press,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-press {
     transform: none;
   }
 }
@@ -527,13 +534,7 @@
   color: var(--color-primary);
 }
 
-.hl-nav--mirror .hl-btn--primary.is-hover {
-  background: var(--color-primary-light);
-  border-color: var(--color-primary-light);
-}
-
-.hl-nav--mirror .hl-nav__signup,
-.hl-nav--mirror .hl-nav__signup.is-hover {
+.hl-nav--mirror .hl-nav__signup {
   background: var(--color-accent-orange-2, #f0a11a);
   border-color: var(--color-accent-orange-2, #f0a11a);
   color: var(--color-primary-dark, #10137c);
