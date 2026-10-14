@@ -38,7 +38,7 @@ function useStoredUser(): AuthUser | null {
   return useMemo(() => (raw ? (JSON.parse(raw) as AuthUser) : null), [raw]);
 }
 
-type Highlight = { focus: string | null; hover: string | null };
+type Highlight = { focus: string | null; hover: string | null; press: string | null };
 
 type NavBarProps = {
   signedIn: boolean;
@@ -63,13 +63,13 @@ function NavBar({
   onNavigate,
   onLogout,
 }: NavBarProps) {
-  /** The real bar reports focus/hover; the white copy over the dark panel echoes it. */
+  /** The real bar reports focus/hover/press; the white copy over the dark panel echoes it. */
   const track = (key: string) =>
     mirror
       ? {
           className: `${highlight?.focus === key ? " is-focus" : ""}${
             highlight?.hover === key ? " is-hover" : ""
-          }`,
+          }${highlight?.press === key ? " is-press" : ""}`,
         }
       : {
           className: "",
@@ -77,7 +77,12 @@ function NavBar({
             onHighlight?.("focus", event.currentTarget.matches(":focus-visible") ? key : null),
           onBlur: () => onHighlight?.("focus", null),
           onMouseEnter: () => onHighlight?.("hover", key),
-          onMouseLeave: () => onHighlight?.("hover", null),
+          onMouseLeave: () => {
+            onHighlight?.("hover", null);
+            onHighlight?.("press", null);
+          },
+          onMouseDown: () => onHighlight?.("press", key),
+          onMouseUp: () => onHighlight?.("press", null),
         };
 
   const primaryAction = track("primary");
@@ -187,7 +192,11 @@ export function HomeNavbar() {
   const router = useRouter();
   const user = useStoredUser();
   const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState<Highlight>({ focus: null, hover: null });
+  const [highlight, setHighlight] = useState<Highlight>({
+    focus: null,
+    hover: null,
+    press: null,
+  });
 
   const signedIn = Boolean(user?.id);
   const homeHref = homePathForUser(user);
