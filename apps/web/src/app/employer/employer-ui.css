@@ -1572,6 +1572,126 @@ a.ev-stat:hover {
   gap: 12px;
 }
 
+/* Uniform matched-candidate cards (job matches grid) */
+.ev-match-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.ev-mcc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 320px;
+  padding: 18px 18px 16px;
+}
+
+.ev-mcc__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px 12px;
+}
+
+.ev-mcc__who {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.ev-mcc__who h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--ev-serif);
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--ev-ink);
+}
+
+.ev-mcc__name {
+  overflow-wrap: anywhere;
+}
+
+.ev-mcc__score {
+  justify-self: end;
+}
+
+.ev-mcc__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ev-mcc__metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ev-soft);
+}
+
+.ev-mcc__metrics small {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ev-mut);
+}
+
+.ev-mcc__metrics b {
+  font-size: 16px;
+  color: var(--ev-ink);
+}
+
+.ev-mcc__body {
+  display: grid;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 72px;
+}
+
+.ev-mcc__body .ev-chips {
+  max-height: 64px;
+  overflow: hidden;
+}
+
+.ev-mcc__empty {
+  margin: 0;
+}
+
+.ev-mcc__fit,
+.ev-mcc__gaps {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.ev-mcc__cta {
+  width: 100%;
+  margin-top: auto;
+  justify-content: center;
+}
+
+@media (max-width: 520px) {
+  .ev-mcc__head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ev-mcc__score {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
 .ev-cand h3 {
   margin: 0;
   font-family: var(--ev-serif);
@@ -2724,15 +2844,17 @@ a.ev-stat:hover {
   position: absolute;
   inset: 0;
   clip-path: polygon(53.8% 0, 100% 0, 100% 100%, 51.3% 100%, 65.6% 9%);
+  background: linear-gradient(135deg, #0b0e5c 0%, #1b1f96 55%, #2a30b8 100%);
 }
 
 .ev-hero-art img {
   position: absolute;
   top: 0;
-  left: 48%;
-  width: 52%;
+  left: 46%;
+  width: 56%;
   height: 100%;
   object-fit: cover;
+  object-position: center 18%;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -3318,12 +3440,13 @@ a.ev-stat:hover {
     order: 2;
     height: clamp(300px, 78vw, 440px);
     clip-path: none;
-    background: var(--ev-side);
+    background: linear-gradient(160deg, #0b0e5c 0%, #1b1f96 100%);
   }
 
   .ev-hero-art img {
     left: 0;
     width: 100%;
+    object-position: center 20%;
   }
 
   .ev-dots {

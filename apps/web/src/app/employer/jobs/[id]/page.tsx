@@ -312,7 +312,7 @@ export default function EmployerJobApplicationsPage() {
         ) : null}
 
         {!loading && uniqueMatches.length > 0 ? (
-          <div className="ev-grid ev-g2">
+          <div className="ev-match-grid">
             {uniqueMatches.map((row) => {
               const name =
                 [row.candidate?.firstName, row.candidate?.lastName].filter(Boolean).join(' ') || 'Candidate';
