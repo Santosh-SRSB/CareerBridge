@@ -1593,6 +1593,164 @@ a.ev-stat:hover {
   gap: 12px;
 }
 
+/* Employer Candidates search cards */
+.ev-cand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ev-candcard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  min-height: 300px;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--ev-line);
+  border-radius: 18px;
+  background: var(--ev-card);
+  box-shadow: 0 1px 0 rgba(16, 19, 124, 0.04);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.ev-candcard:hover {
+  border-color: #c8cce8;
+  box-shadow: 0 10px 28px rgba(16, 19, 124, 0.08);
+  transform: translateY(-1px);
+}
+
+.ev-candcard__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.ev-candcard__who {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.ev-candcard__who h3 {
+  margin: 0;
+  font-family: var(--ev-serif);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ev-ink);
+  overflow-wrap: anywhere;
+}
+
+.ev-candcard__who .ev-sub {
+  margin: 0;
+  font-size: 13px;
+}
+
+.ev-candcard__match {
+  justify-self: end;
+}
+
+.ev-candcard__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--ev-soft) 0%, #f4f5fc 100%);
+}
+
+.ev-candcard__stats > div:last-child {
+  grid-column: 1 / -1;
+  padding-top: 8px;
+  border-top: 1px solid #dde1f2;
+}
+
+.ev-candcard__stats small {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ev-mut);
+}
+
+.ev-candcard__stats b {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ev-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ev-candcard__skills {
+  flex: 1 1 auto;
+  min-height: 40px;
+}
+
+.ev-candcard__skills .ev-chips {
+  max-height: 68px;
+  overflow: hidden;
+}
+
+.ev-candcard__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.ev-candcard__actions .ev-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.ev-candcard__shortlisted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #b7e4d4;
+  border-radius: 12px;
+  background: #eefaf4;
+  color: #0f7a55;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ev-candcard__actions:has(.ev-candcard__shortlisted):not(:has(button)) .ev-btn {
+  grid-column: 1;
+}
+
+@media (max-width: 520px) {
+  .ev-candcard__head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ev-candcard__match {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .ev-candcard__actions {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Uniform matched-candidate cards (job matches grid) */
 .ev-match-grid {
   display: grid;

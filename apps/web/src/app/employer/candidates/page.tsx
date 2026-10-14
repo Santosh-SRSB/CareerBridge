@@ -480,85 +480,88 @@ export default function EmployerCandidatesPage() {
               </span>
             </div>
 
-            <ul className="ev-grid ev-g2 ev-plain-list">
+            <ul className="ev-cand-grid ev-plain-list">
               {results.map((row) => {
                 const isShortlisted = row.applicationStatus === 'SHORTLISTED' || Boolean(row.talentShortlisted);
                 const canShortlist = row.applicationId
                   ? ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(String(row.applicationStatus || 'APPLIED'))
                   : !row.talentShortlisted;
                 const shortlistBusy = busyId === `shortlist-${row.id}`;
-                const visibleSkills = row.skills.slice(0, 3);
+                const visibleSkills = row.skills.slice(0, 4);
                 const moreSkills = Math.max((row.skillsTotal || row.skills.length) - visibleSkills.length, 0);
                 const availabilityTone = row.availabilityTone || 'neutral';
                 const band = row.matchScore !== null ? atsMatchBandInfo(row.matchScore) : null;
+                const name = candidateName(row);
+                const education = row.highestEducation?.trim() || 'Not provided';
 
                 return (
-                  <li key={row.id} className="ev-card ev-cand">
-                    <div className="ev-cand-hd">
-                      <EvAvatar name={candidateName(row)} photoUrl={row.photoUrl} size="md" />
-                      <div>
-                        <h3>{candidateName(row)}</h3>
+                  <li key={row.id} className="ev-card ev-candcard">
+                    <header className="ev-candcard__head">
+                      <EvAvatar name={name} photoUrl={row.photoUrl} size="lg" />
+                      <div className="ev-candcard__who">
+                        <h3>{name}</h3>
                         <span className="ev-sub">{formatLocation(row.city, row.state)}</span>
                       </div>
                       {band && row.matchScore !== null ? (
                         <span
+                          className="ev-candcard__match"
                           title={`${PROFILE_MATCH_LABEL} for the selected job · ${band.label}`}
                           aria-label={`${PROFILE_MATCH_LABEL} ${row.matchScore} out of 100`}
                         >
                           <EvPill tone={matchPillTone(band.color)}>Match {row.matchScore}/100</EvPill>
                         </span>
                       ) : null}
-                    </div>
+                    </header>
 
-                    <div className="ev-kv">
+                    <div className="ev-candcard__stats" aria-label="Candidate summary">
                       <div>
-                        <small>EXPERIENCE</small>
+                        <small>Experience</small>
                         <b>{formatExperience(row)}</b>
                       </div>
                       <div>
-                        <small>EDUCATION</small>
-                        <b>{row.highestEducation?.trim() || 'Not provided'}</b>
+                        <small>Education</small>
+                        <b title={education}>{education}</b>
                       </div>
-                    </div>
-                    <div className="ev-kv">
                       <div>
-                        <small>AVAILABILITY</small>
-                        <b className={`ev-avail ev-avail--${availabilityTone}`}>{row.availabilityLabel || 'Available'}</b>
+                        <small>Availability</small>
+                        <b className={`ev-avail ev-avail--${availabilityTone}`}>
+                          {row.availabilityLabel || 'Available'}
+                        </b>
                       </div>
                     </div>
 
-                    <div className="ev-chips">
+                    <div className="ev-candcard__skills">
                       {visibleSkills.length ? (
-                        <>
+                        <div className="ev-chips" aria-label="Skills">
                           {visibleSkills.map((item) => (
                             <span key={item} className="ev-chip">
                               {item}
                             </span>
                           ))}
                           {moreSkills > 0 ? <span className="ev-chip">+{moreSkills}</span> : null}
-                        </>
+                        </div>
                       ) : (
                         <span className="ev-sub">No skills listed</span>
                       )}
                     </div>
 
-                    <div className="ev-kv">
+                    <footer className="ev-candcard__actions">
                       <Link
                         href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
-                        className="ev-btn ev-btn--ghost"
+                        className="ev-btn ev-btn--ghost ev-btn--sm"
                       >
                         View profile
                       </Link>
                       {canShortlist ? (
                         <button
                           type="button"
-                          className="ev-btn"
+                          className="ev-btn ev-btn--sm"
                           disabled={shortlistBusy}
                           onClick={() =>
                             setShortlistTarget({
                               candidateId: row.id,
                               applicationId: row.applicationId || null,
-                              name: candidateName(row),
+                              name,
                             })
                           }
                         >
@@ -567,14 +570,14 @@ export default function EmployerCandidatesPage() {
                       ) : null}
                       {isShortlisted ? (
                         <span
-                          className="ev-btn ev-btn--ghost ev-btn--static"
+                          className="ev-candcard__shortlisted"
                           data-testid="shortlisted-badge"
                           title={row.applicationId ? undefined : 'Saved to your private shortlist for this job'}
                         >
                           Shortlisted ✓
                         </span>
                       ) : null}
-                    </div>
+                    </footer>
                   </li>
                 );
               })}
