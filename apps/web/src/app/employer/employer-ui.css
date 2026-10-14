@@ -64,12 +64,45 @@
 
 .ev-brand {
   display: grid;
-  gap: 6px;
-  padding: 2px 8px 10px;
+  gap: 8px;
+  padding: 2px 8px 12px;
   color: #fff;
+  min-width: 0;
 }
 
-.ev-brand__row {
+/* Full-width lockup — support lives on the meta row so it never covers the name. */
+.ev-brand__lockup.cb-brand {
+  display: flex;
+  flex: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ev-side .cb-brand--sm {
+  --cb-brand-logo-h: 26px;
+  --cb-brand-gap: 2px;
+}
+
+.ev-side .cb-brand__logo {
+  flex: none;
+  width: auto;
+  max-width: 92px;
+  height: var(--cb-brand-logo-h);
+  object-fit: contain;
+}
+
+.ev-side .cb-brand__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.ev-brand__meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -77,25 +110,10 @@
   min-width: 0;
 }
 
-.ev-brand__row .cb-brand {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: calc(100% - 48px);
-  overflow: hidden;
-}
-
-.ev-brand__row .cb-brand__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ev-side .cb-brand--sm {
-  --cb-brand-logo-h: 28px;
-  --cb-brand-gap: 2px;
-}
-
-.ev-side .cb-brand__name {
-  font-size: 15px;
+.ev-brand__meta small {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.85;
 }
 
 .ev-brand small {
@@ -109,8 +127,8 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   border-radius: 12px;
   color: #fff;
   box-shadow: inset 0 0 0 1.5px #ffffff66;
@@ -123,8 +141,11 @@
 }
 
 .ev-support--side {
-  position: static;
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
   flex: none;
+  margin-left: auto;
 }
 
 .ev-support--top {
