@@ -31,7 +31,10 @@ export function EmployerAtsPanel({ match, compact = false, className = '' }: Pro
   const pct = Math.max(0, Math.min(100, ats.score));
 
   return (
-    <section className={`ev-ats ${className}`.trim()} aria-label={`${PROFILE_MATCH_LABEL} ${ats.score} out of 100`}>
+    <section
+      className={`ev-ats${compact ? ' ev-ats--compact' : ''} ${className}`.trim()}
+      aria-label={`${PROFILE_MATCH_LABEL} ${ats.score} out of 100`}
+    >
       <div className="ev-ring" style={{ background: `conic-gradient(${color} ${pct}%, var(--ev-soft) 0)` }}>
         <div>
           <span>
@@ -42,19 +45,21 @@ export function EmployerAtsPanel({ match, compact = false, className = '' }: Pro
         </div>
       </div>
 
-      {ats.factors.map((factor) => (
-        <div key={factor.key}>
-          <div className="ev-mrow">
-            <span>{factor.label}</span>
-            <span>
-              {factor.score}/{factor.max}
-            </span>
+      <div className="ev-ats__factors">
+        {ats.factors.map((factor) => (
+          <div key={factor.key} className="ev-ats__factor">
+            <div className="ev-mrow">
+              <span>{factor.label}</span>
+              <span>
+                {factor.score}/{factor.max}
+              </span>
+            </div>
+            <div className="ev-bar" aria-hidden>
+              <i style={{ width: `${Math.min(100, Math.max(0, factor.pct))}%` }} />
+            </div>
           </div>
-          <div className="ev-bar" aria-hidden>
-            <i style={{ width: `${Math.min(100, Math.max(0, factor.pct))}%` }} />
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
 
       {!compact && (ats.reasons.length > 0 || ats.gaps.length > 0) ? (
         <div className="ev-explain">
