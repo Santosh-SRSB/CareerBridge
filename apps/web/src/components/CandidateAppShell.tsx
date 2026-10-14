@@ -432,8 +432,8 @@ export function CandidateAppShell({
     <div className="flex min-h-screen flex-col bg-[var(--color-background)] font-sans text-[var(--color-text-primary)]">
       <header className="sticky top-0 z-40 w-full rounded-none bg-[var(--color-primary-dark)] shadow-[0_8px_24px_rgba(16,19,124,0.22)]">
         {/* Mobile: compact full-width row */}
-        <div className="relative flex h-14 w-full items-center justify-between gap-3 px-3 md:hidden">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <div className="relative flex h-14 w-full items-center justify-between gap-2 px-3 md:hidden">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             {showBack ? (
               <button
                 type="button"
@@ -451,13 +451,15 @@ export function CandidateAppShell({
               tone="dark"
               size="sm"
               priority
-              className={simpleMobileHeader ? 'cb-brand--title-beside' : ''}
+              className={
+                simpleMobileHeader ? 'cb-brand--title-beside cb-brand--compact-mobile' : 'cb-brand--compact-mobile'
+              }
             />
             {simpleMobileHeader ? (
-              <h1 className="truncate text-base font-extrabold text-white">{title}</h1>
+              <h1 className="min-w-0 truncate text-base font-extrabold text-white">{title}</h1>
             ) : null}
           </div>
-          <div className="relative flex items-center gap-2.5">
+          <div className="relative flex shrink-0 items-center gap-2">
             <SupportIconLink className={`${HEADER_ICON_LINK} h-9 w-9`} iconSize={18} />
             <NotificationBell variant="candidate-pill" className="!h-9 !w-9" />
             <button

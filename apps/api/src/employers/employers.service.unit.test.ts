@@ -1319,6 +1319,7 @@ describe('Fix 9 — application transitions', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
     await assert.rejects(matching.recordHiringOutcome('uA', 'APP4', 'HIRED'), ConflictException);
   });
@@ -1333,6 +1334,7 @@ describe('Fix 9 — application transitions', () => {
         employer: { findUnique: async ({ where }: Row) => employers[where.userId] ?? null },
         job: { findFirst: async ({ where }: Row) => jobs.find((j) => j.id === where.id && j.employerId === where.employerId) ?? null },
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

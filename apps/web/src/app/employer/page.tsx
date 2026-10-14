@@ -427,7 +427,7 @@ export default function EmployerDashboardPage() {
               upcomingInterviews.map((row) => (
                 <div key={row.id} className="ev-row">
                   <span className="ev-row-main">
-                    <EvAvatar name={candidateName(row.candidate)} size="sm" />
+                    <EvAvatar name={candidateName(row.candidate)} photoUrl={row.candidate.photoUrl} size="sm" />
                     <span style={{ minWidth: 0 }}>
                       <b style={{ color: 'var(--ev-ink)' }}>{candidateName(row.candidate)}</b>
                       <br />
@@ -483,7 +483,7 @@ export default function EmployerDashboardPage() {
                           <tr key={row.id}>
                             <td>
                               <span className="ev-who">
-                                <EvAvatar name={name} size="sm" />
+                                <EvAvatar name={name} photoUrl={row.candidate.photoUrl} size="sm" />
                                 <b>{name}</b>
                               </span>
                             </td>

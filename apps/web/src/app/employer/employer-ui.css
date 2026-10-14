@@ -1581,6 +1581,7 @@ a.ev-stat:hover {
   place-items: center;
   width: 44px;
   height: 44px;
+  overflow: hidden;
   border-radius: 50%;
   background: var(--ev-side);
   color: #fff;
@@ -1597,6 +1598,17 @@ a.ev-stat:hover {
   width: 38px;
   height: 38px;
   font-size: 14px;
+}
+
+.ev-av--photo {
+  background: var(--ev-line, #e6ebf2);
+}
+
+.ev-av--photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .ev-chips {

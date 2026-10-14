@@ -1354,6 +1354,7 @@ export type JobMatchRow = {
     lastName: string | null;
     city: string | null;
     skills: string[];
+    photoUrl?: string | null;
   } | null;
 };
 

@@ -1140,6 +1140,8 @@ export type EmployerApplication = {
     skills: string[];
     highestEducation: string | null;
     experienceYears?: number;
+    /** Browser-readable profile photo when the candidate uploaded one. */
+    photoUrl?: string | null;
   };
   job: { id: string; title: string };
   /** Private hiring-team note; never shown to the candidate. */
@@ -1170,6 +1172,8 @@ export type EmployerCandidateSearchResult = {
   talentShortlisted?: boolean;
   availabilityLabel?: string | null;
   availabilityTone?: 'ready' | 'soon' | 'neutral' | string | null;
+  /** Browser-readable profile photo when the candidate uploaded one. */
+  photoUrl?: string | null;
 };
 
 /** Job posting fee in paise (₹999). Each paid unit unlocks a batch of matched profiles. */
@@ -1205,6 +1209,8 @@ export type EmployerCandidatePassport = {
   profileCompletion: number;
   about: string | null;
   openToRelocating: boolean;
+  /** Browser-readable profile photo when the candidate uploaded one. */
+  photoUrl?: string | null;
   skills: string[];
   education: Array<{
     qualification: string;
@@ -1279,6 +1285,7 @@ export type EmployerInterviewRecord = {
     lastName: string | null;
     city: string | null;
     skills: string[];
+    photoUrl?: string | null;
   };
   job: { id: string; title: string };
 };

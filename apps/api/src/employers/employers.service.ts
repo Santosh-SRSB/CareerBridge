@@ -77,6 +77,7 @@ import { ResumesService } from '../resumes/resumes.service';
 import { EmailService } from '../auth/email.service';
 import { JobsService } from '../jobs/jobs.service';
 import { StorageService } from '../common/storage/storage.service';
+import { readableCandidatePhotoUrl } from '../candidates/profile-photo.util';
 import { candidateInterviewUrl, interviewMeetingUrl } from '../common/web/public-web-url';
 import { TestimonialsService } from '../testimonials/testimonials.service';
 import { employerPlanUsage, usagePeriod } from './employer-plan';
@@ -790,28 +791,31 @@ export class EmployersService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((row) => ({
-      id: row.id,
-      status: row.status,
-      createdAt: row.createdAt.toISOString(),
-      candidate: {
-        id: row.candidate.id,
-        firstName: row.candidate.firstName,
-        lastName: row.candidate.lastName,
-        city: row.candidate.city,
-        skills: row.candidate.skills.map((item) => item.name),
-        highestEducation: row.candidate.highestEducation,
-        experienceYears: row.candidate.totalExperienceYears || 0,
-      },
-      job: { id: job.id, title: job.title },
-      employerNote: row.employerNote,
-      screeningAnswers: parseScreeningAnswers(row.screeningAnswersJson).map((item) => ({
-        questionId: item.questionId,
-        answer: item.answer,
-        prompt: questionMap.get(item.questionId) || item.questionId,
+    return Promise.all(
+      rows.map(async (row) => ({
+        id: row.id,
+        status: row.status,
+        createdAt: row.createdAt.toISOString(),
+        candidate: {
+          id: row.candidate.id,
+          firstName: row.candidate.firstName,
+          lastName: row.candidate.lastName,
+          city: row.candidate.city,
+          skills: row.candidate.skills.map((item) => item.name),
+          highestEducation: row.candidate.highestEducation,
+          experienceYears: row.candidate.totalExperienceYears || 0,
+          photoUrl: await readableCandidatePhotoUrl(this.storage, row.candidate.id, row.candidate.photoUrl),
+        },
+        job: { id: job.id, title: job.title },
+        employerNote: row.employerNote,
+        screeningAnswers: parseScreeningAnswers(row.screeningAnswersJson).map((item) => ({
+          questionId: item.questionId,
+          answer: item.answer,
+          prompt: questionMap.get(item.questionId) || item.questionId,
+        })),
+        match: this.scoreApplicationMatch(row.candidate, job),
       })),
-      match: this.scoreApplicationMatch(row.candidate, job),
-    }));
+    );
   }
 
   async allApplications(userId: string) {
@@ -831,23 +835,26 @@ export class EmployersService {
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
-    return rows.map((row) => ({
-      id: row.id,
-      status: row.status,
-      createdAt: row.createdAt.toISOString(),
-      candidate: {
-        id: row.candidate.id,
-        firstName: row.candidate.firstName,
-        lastName: row.candidate.lastName,
-        city: row.candidate.city,
-        skills: row.candidate.skills.map((item) => item.name),
-        highestEducation: row.candidate.highestEducation,
-        experienceYears: row.candidate.totalExperienceYears || 0,
-      },
-      job: { id: row.job.id, title: row.job.title },
-      employerNote: row.employerNote,
-      match: this.scoreApplicationMatch(row.candidate, row.job),
-    }));
+    return Promise.all(
+      rows.map(async (row) => ({
+        id: row.id,
+        status: row.status,
+        createdAt: row.createdAt.toISOString(),
+        candidate: {
+          id: row.candidate.id,
+          firstName: row.candidate.firstName,
+          lastName: row.candidate.lastName,
+          city: row.candidate.city,
+          skills: row.candidate.skills.map((item) => item.name),
+          highestEducation: row.candidate.highestEducation,
+          experienceYears: row.candidate.totalExperienceYears || 0,
+          photoUrl: await readableCandidatePhotoUrl(this.storage, row.candidate.id, row.candidate.photoUrl),
+        },
+        job: { id: row.job.id, title: row.job.title },
+        employerNote: row.employerNote,
+        match: this.scoreApplicationMatch(row.candidate, row.job),
+      })),
+    );
   }
 
   async searchCandidates(
@@ -1046,15 +1053,8 @@ export class EmployersService {
         : [],
     );
 
-    return {
-      jobId,
-      unlocked: true,
-      unlockLimit,
-      totalMatched,
-      total: filtered.length,
-      page,
-      pageSize,
-      candidates: pageRows.map(({ match, candidate, currentlyEmployed, application, availability }) => {
+    const candidates = await Promise.all(
+      pageRows.map(async ({ match, candidate, currentlyEmployed, application, availability }) => {
         const latestRole = candidate.experiences[0];
         const skillNames = candidate.skills.map((item) => item.name);
         const matchScore = Math.round(match.totalScore);
@@ -1084,8 +1084,20 @@ export class EmployersService {
           applicationId: application?.id || null,
           applicationStatus: application?.status || null,
           talentShortlisted: talentShortlisted.has(candidate.id),
+          photoUrl: await readableCandidatePhotoUrl(this.storage, candidate.id, candidate.photoUrl),
         };
       }),
+    );
+
+    return {
+      jobId,
+      unlocked: true,
+      unlockLimit,
+      totalMatched,
+      total: filtered.length,
+      page,
+      pageSize,
+      candidates,
     };
   }
 
@@ -1194,6 +1206,7 @@ export class EmployersService {
       profileCompletion: candidate.profileCompletion,
       about: candidate.about,
       openToRelocating: candidate.openToRelocating,
+      photoUrl: await readableCandidatePhotoUrl(this.storage, candidate.id, candidate.photoUrl),
       skills: candidate.skills.map((item) => item.name),
       education: candidate.education.map((item) => ({
         qualification: item.qualification,
@@ -1283,7 +1296,17 @@ export class EmployersService {
       orderBy: { scheduledAt: 'asc' },
       take: 100,
     });
-    return rows.map((row) => this.toInterview(row));
+    return Promise.all(
+      rows.map(async (row) => {
+        const base = this.toInterview(row);
+        const photoUrl = await readableCandidatePhotoUrl(
+          this.storage,
+          row.application.candidate.id,
+          row.application.candidate.photoUrl,
+        );
+        return { ...base, candidate: { ...base.candidate, photoUrl } };
+      }),
+    );
   }
 
   async scheduleInterview(

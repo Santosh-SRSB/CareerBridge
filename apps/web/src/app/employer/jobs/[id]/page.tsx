@@ -76,13 +76,25 @@ export default function EmployerJobApplicationsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  const uniqueMatches = useMemo(() => {
+    const seen = new Set<string>();
+    const out: JobMatchRow[] = [];
+    for (const row of matches) {
+      const key = row.candidate?.id || row.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+    }
+    return out.map((row, index) => ({ ...row, rank: index + 1 }));
+  }, [matches]);
+
   const matchByApp = useMemo(() => {
     const map = new Map<string, JobMatchRow>();
-    for (const row of matches) {
+    for (const row of uniqueMatches) {
       if (row.applicationId) map.set(row.applicationId, row);
     }
     return map;
-  }, [matches]);
+  }, [uniqueMatches]);
 
   const rankedItems = useMemo(() => {
     return [...items].sort((a, b) => {
@@ -262,8 +274,8 @@ export default function EmployerJobApplicationsPage() {
             <p className="ev-sub">
               {loading
                 ? 'Loading ranked talent…'
-                : matches.length > 0
-                  ? `${matches.length} ranked profile${matches.length === 1 ? '' : 's'} for this role`
+                : uniqueMatches.length > 0
+                  ? `${uniqueMatches.length} ranked profile${uniqueMatches.length === 1 ? '' : 's'} for this role`
                   : 'Rank candidates by ATS fit for this job'}
             </p>
           </div>
@@ -274,7 +286,7 @@ export default function EmployerJobApplicationsPage() {
         {error ? <EvAlert tone="error">{error}</EvAlert> : null}
         {message ? <EvAlert tone="ok">{message}</EvAlert> : null}
 
-        {!loading && matches.length === 0 && items.length === 0 ? (
+        {!loading && uniqueMatches.length === 0 && items.length === 0 ? (
           <EvEmpty
             title="No matched profiles yet"
             body="Tap Rank matches to score candidates against this job."
@@ -286,17 +298,18 @@ export default function EmployerJobApplicationsPage() {
           />
         ) : null}
 
-        {!loading && matches.length > 0 ? (
+        {!loading && uniqueMatches.length > 0 ? (
           <div className="ev-grid ev-g2">
-            {matches.map((row) => {
+            {uniqueMatches.map((row) => {
               const name =
                 [row.candidate?.firstName, row.candidate?.lastName].filter(Boolean).join(' ') || 'Candidate';
               return (
                 <MatchedCandidateCard
-                  key={row.id}
+                  key={row.candidate?.id || row.id}
                   rank={row.rank}
                   name={name}
                   city={row.candidate?.city}
+                  photoUrl={row.candidate?.photoUrl}
                   skills={row.candidate?.skills || []}
                   totalScore={row.totalScore}
                   skillsScore={row.skillsScore}
@@ -340,7 +353,7 @@ export default function EmployerJobApplicationsPage() {
               return (
                 <article key={item.id} className="ev-card ev-cand">
                   <div className="ev-cand-hd">
-                    <EvAvatar name={name} size="lg" />
+                    <EvAvatar name={name} photoUrl={item.candidate.photoUrl} size="lg" />
                     <div>
                       <h3>
                         {rank ? <span className="ev-tag" style={{ marginLeft: 0, marginRight: 8 }}>#{rank.rank}</span> : null}

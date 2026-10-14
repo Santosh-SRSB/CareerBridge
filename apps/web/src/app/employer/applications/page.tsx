@@ -325,7 +325,7 @@ function EmployerApplicationsBody() {
                         <tr key={item.id}>
                           <td>
                             <div className="ev-who">
-                              <EvAvatar name={candidateName(item)} size="md" />
+                              <EvAvatar name={candidateName(item)} photoUrl={item.candidate.photoUrl} size="md" />
                               <div>
                                 <b>{candidateName(item)}</b>
                                 {jobFilter === 'all' ? <span className="ev-sub">{item.job.title}</span> : null}

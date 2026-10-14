@@ -16,6 +16,7 @@ import {
   pipelineStage,
   type EvTone,
 } from '@/lib/employer-ui-status';
+import { browserReadablePhotoUrl } from '@/lib/photo-url';
 
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ');
@@ -120,10 +121,24 @@ export function EvJobStatus({ status }: { status?: string | null }) {
   );
 }
 
-export function EvAvatar({ name, size = 'md' }: { name?: string | null; size?: 'sm' | 'md' | 'lg' }) {
+export function EvAvatar({
+  name,
+  photoUrl,
+  size = 'md',
+}: {
+  name?: string | null;
+  photoUrl?: string | null;
+  size?: 'sm' | 'md' | 'lg';
+}) {
+  const src = browserReadablePhotoUrl(photoUrl);
   return (
-    <span className={cx('ev-av', size !== 'lg' && `ev-av--${size}`)} aria-hidden>
-      {initials(name)}
+    <span className={cx('ev-av', size !== 'lg' && `ev-av--${size}`, src && 'ev-av--photo')} aria-hidden>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element -- signed GCS / data URLs
+        <img src={src} alt="" />
+      ) : (
+        initials(name)
+      )}
     </span>
   );
 }

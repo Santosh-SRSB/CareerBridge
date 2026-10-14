@@ -525,7 +525,7 @@ export default function EmployerInterviewsPage() {
                       <tr key={item.id}>
                         <td>
                           <div className="ev-who">
-                            <EvAvatar name={candidateName(item)} size="md" />
+                            <EvAvatar name={candidateName(item)} photoUrl={item.candidate.photoUrl} size="md" />
                             <div>
                               <b>{candidateName(item)}</b>
                             </div>
