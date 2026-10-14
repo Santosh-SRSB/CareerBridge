@@ -13,8 +13,9 @@ const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/employer/welcome", label: "Employer" },
   { href: "/welcome", label: "Candidate" },
-  { href: "/testimonials", label: "Testimonial" },
 ] as const;
+
+const TESTIMONIAL_LINK = { href: "/testimonials", label: "Testimonial" } as const;
 
 const MENU_ID = "hl-nav-menu";
 
@@ -81,6 +82,7 @@ function NavBar({
 
   const primaryAction = track("primary");
   const secondaryAction = track("secondary");
+  const { className: testimonialClass, ...testimonialEvents } = track(TESTIMONIAL_LINK.href);
 
   return (
     <nav
@@ -124,6 +126,14 @@ function NavBar({
         </ul>
 
         <div className="hl-nav__actions">
+          <Link
+            href={TESTIMONIAL_LINK.href}
+            className={`hl-nav__link hl-nav__testimonial${testimonialClass}`}
+            onClick={onNavigate}
+            {...testimonialEvents}
+          >
+            {TESTIMONIAL_LINK.label}
+          </Link>
           {signedIn ? (
             <>
               <Link
@@ -138,7 +148,7 @@ function NavBar({
                 type="button"
                 onClick={onLogout}
                 {...primaryAction}
-                className={`hl-btn hl-btn--primary hl-btn--nav${primaryAction.className}`}
+                className={`hl-btn hl-btn--primary hl-btn--nav hl-nav__cta${primaryAction.className}`}
               >
                 Logout
               </button>
@@ -157,7 +167,7 @@ function NavBar({
                 href="/register?role=candidate"
                 onClick={onNavigate}
                 {...primaryAction}
-                className={`hl-btn hl-btn--primary hl-btn--nav${primaryAction.className}`}
+                className={`hl-btn hl-btn--primary hl-btn--nav hl-nav__signup${primaryAction.className}`}
               >
                 Sign Up
               </Link>
