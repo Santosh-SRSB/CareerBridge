@@ -64,6 +64,19 @@ function formatSalary(min: unknown, max: unknown) {
     .join(' – ');
 }
 
+function displayName(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function shortSkill(skill: string) {
+  return skill.replace(/^Frontend:\s*/i, '').trim();
+}
+
 export default function EmployerJobApplicationsPage() {
   const params = useParams<{ id: string }>();
   const [items, setItems] = useState<EmployerApplication[]>([]);
@@ -329,11 +342,12 @@ export default function EmployerJobApplicationsPage() {
       {!loading && rankedItems.length > 0 ? (
         <section className="ev-mt" aria-labelledby="job-applications-title">
           <h2 id="job-applications-title">Applications</h2>
-          <div className="ev-grid">
+          <div className="ev-appcard-list">
             {rankedItems.map((item) => {
               const rank = matchByApp.get(item.id);
-              const name =
+              const rawName =
                 [item.candidate.firstName, item.candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
+              const name = displayName(rawName);
               const atsScore = item.match?.score ?? rank?.totalScore ?? null;
               const breakdown = item.match ? toAtsMatchBreakdown(item.match) : null;
               const locationParts = (item.candidate.city || '')
@@ -347,38 +361,41 @@ export default function EmployerJobApplicationsPage() {
                 }
               }
               const location = uniqueLoc.slice(0, 2).join(', ') || 'Location n/a';
-              const skillPreview = (item.candidate.skills || [])
-                .slice(0, 5)
-                .map((s) => s.replace(/^Frontend:\s*/i, '').trim());
+              const skillPreview = (item.candidate.skills || []).slice(0, 5).map(shortSkill);
+              const moreSkills = Math.max((item.candidate.skills || []).length - skillPreview.length, 0);
               return (
-                <article key={item.id} className="ev-card ev-cand">
-                  <div className="ev-cand-hd">
+                <article key={item.id} className="ev-card ev-appcard">
+                  <header className="ev-appcard__head">
                     <EvAvatar name={name} photoUrl={item.candidate.photoUrl} size="lg" />
-                    <div>
+                    <div className="ev-appcard__who">
                       <h3>
-                        {rank ? <span className="ev-tag" style={{ marginLeft: 0, marginRight: 8 }}>#{rank.rank}</span> : null}
-                        {name}
+                        <span className="ev-appcard__name">{name}</span>
+                        {rank ? <span className="ev-tag">#{rank.rank}</span> : null}
                       </h3>
-                      <span className="ev-sub">
-                        {location}
-                        {skillPreview.length > 0 ? ` · ${skillPreview.join(' · ')}` : ''}
-                      </span>
+                      <p className="ev-sub">{location}</p>
+                      {skillPreview.length > 0 ? (
+                        <div className="ev-chips" aria-label="Skills">
+                          {skillPreview.map((skill) => (
+                            <span key={skill} className="ev-chip">
+                              {skill}
+                            </span>
+                          ))}
+                          {moreSkills > 0 ? <span className="ev-chip">+{moreSkills}</span> : null}
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="ev-chips">
+                    <div className="ev-appcard__badges">
                       {atsScore != null ? <EmployerAtsBandChip score={atsScore} /> : null}
                       <EvApplicationPill status={item.status} />
                     </div>
-                  </div>
+                  </header>
 
-                  <div className="ev-grid ev-g2-wide">
-                    <div>
+                  <div className="ev-appcard__body">
+                    <div className="ev-appcard__match">
                       {item.match ? (
                         <EmployerAtsPanel match={item.match} compact />
                       ) : (
-                        <div
-                          className="ev-kvl"
-                          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 120px), 1fr))' }}
-                        >
+                        <div className="ev-kvl ev-appcard__fallback">
                           <div>
                             <small>{PROFILE_MATCH_LABEL.toUpperCase()}</small>
                             <b>{rank?.totalScore ?? '—'}</b>
@@ -424,8 +441,8 @@ export default function EmployerJobApplicationsPage() {
                       ) : null}
                     </div>
 
-                    <div className="ev-grid" style={{ alignContent: 'start' }}>
-                      <nav className="ev-chips2" aria-label="Candidate documents">
+                    <div className="ev-appcard__ops">
+                      <nav className="ev-appcard__docs" aria-label="Candidate documents">
                         <Link
                           href={`/employer/candidates/${item.candidate.id}?jobId=${encodeURIComponent(params.id)}`}
                           className="ev-btn ev-btn--ghost ev-btn--sm"
@@ -447,11 +464,9 @@ export default function EmployerJobApplicationsPage() {
                         </Link>
                       </nav>
 
-                      <div>
-                        <div className="ev-sub2" style={{ marginTop: 0 }}>
-                          MOVE CANDIDATE
-                        </div>
-                        <div className="ev-chips2" role="group" aria-label="Move candidate">
+                      <section className="ev-pipe" aria-label="Move candidate">
+                        <h4 className="ev-pipe__label">Move candidate</h4>
+                        <div className="ev-pipe__track" role="group">
                           {ACTIONS.map((action) => {
                             const active =
                               (action.value === 'REVIEW' && item.status === 'UNDER_REVIEW') ||
@@ -473,13 +488,11 @@ export default function EmployerJobApplicationsPage() {
                             );
                           })}
                         </div>
-                      </div>
+                      </section>
 
-                      <div>
-                        <div className="ev-sub2" style={{ marginTop: 0 }}>
-                          OUTCOME
-                        </div>
-                        <div className="ev-chips2" role="group" aria-label="Hiring outcome">
+                      <section className="ev-pipe ev-pipe--outcome" aria-label="Hiring outcome">
+                        <h4 className="ev-pipe__label">Outcome</h4>
+                        <div className="ev-pipe__track" role="group">
                           {OUTCOMES.map((outcome) => (
                             <button
                               key={outcome.value}
@@ -491,7 +504,7 @@ export default function EmployerJobApplicationsPage() {
                             </button>
                           ))}
                         </div>
-                      </div>
+                      </section>
                     </div>
                   </div>
                 </article>

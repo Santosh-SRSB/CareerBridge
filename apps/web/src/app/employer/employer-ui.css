@@ -73,19 +73,29 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .ev-brand__row .cb-brand {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: calc(100% - 48px);
   overflow: hidden;
 }
 
 .ev-brand__row .cb-brand__name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ev-side .cb-brand--sm {
+  --cb-brand-logo-h: 28px;
+  --cb-brand-gap: 2px;
+}
+
+.ev-side .cb-brand__name {
+  font-size: 15px;
 }
 
 .ev-brand small {
@@ -1704,6 +1714,51 @@ a.ev-stat:hover {
 }
 
 /* Match visuals */
+.ev-ats {
+  display: grid;
+  gap: 4px 18px;
+}
+
+.ev-ats__factors {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ev-ats__factor .ev-bar {
+  margin: 4px 0 10px;
+}
+
+.ev-ats--compact {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.ev-ats--compact .ev-ring {
+  grid-row: 1 / span 2;
+  margin: 0;
+  width: 120px;
+  height: 120px;
+}
+
+.ev-ats--compact .ev-ring > div {
+  width: 90px;
+  height: 90px;
+}
+
+.ev-ats--compact .ev-ring b {
+  font-size: 28px;
+}
+
+.ev-ats--compact .ev-hint {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+.ev-ats--compact .ev-explain {
+  grid-column: 1 / -1;
+}
+
 .ev-ring {
   display: grid;
   place-items: center;
@@ -1732,6 +1787,123 @@ a.ev-stat:hover {
 .ev-ring small {
   font-weight: 600;
   color: var(--ev-mut);
+}
+
+/* Application cards on job detail */
+.ev-appcard-list {
+  display: grid;
+  gap: 18px;
+}
+
+.ev-appcard {
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px;
+}
+
+.ev-appcard__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--ev-line);
+}
+
+.ev-appcard__who {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.ev-appcard__who h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--ev-serif);
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--ev-ink);
+}
+
+.ev-appcard__name {
+  overflow-wrap: anywhere;
+}
+
+.ev-appcard__who .ev-sub {
+  margin: 0;
+}
+
+.ev-appcard__who .ev-chips {
+  margin-top: 2px;
+}
+
+.ev-appcard__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.ev-appcard__body {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.95fr) minmax(280px, 1.15fr);
+  gap: 22px 28px;
+  align-items: start;
+}
+
+.ev-appcard__match {
+  min-width: 0;
+}
+
+.ev-appcard__fallback {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+}
+
+.ev-appcard__ops {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 4px 0 0 22px;
+  border-left: 1px solid var(--ev-line);
+}
+
+.ev-appcard__docs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ev-appcard__docs .ev-btn {
+  justify-content: center;
+  min-width: min(100%, 132px);
+}
+
+.ev-pipe {
+  display: grid;
+  gap: 8px;
+}
+
+.ev-pipe__label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ev-mut);
+}
+
+.ev-pipe__track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ev-pipe--outcome .ev-chipbtn {
+  background: var(--ev-soft);
 }
 
 .ev-explain {
@@ -2974,6 +3146,55 @@ a.ev-stat:hover {
 
   .ev-g2-wide {
     grid-template-columns: 1fr;
+  }
+
+  .ev-appcard__body {
+    grid-template-columns: 1fr;
+  }
+
+  .ev-appcard__ops {
+    padding: 18px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--ev-line);
+  }
+}
+
+@media (max-width: 700px) {
+  .ev-appcard {
+    padding: 16px;
+  }
+
+  .ev-appcard__head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ev-appcard__badges {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .ev-ats--compact {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .ev-ats--compact .ev-ring {
+    grid-row: auto;
+    margin: 0 0 8px;
+  }
+
+  .ev-ats--compact .ev-ats__factors,
+  .ev-ats--compact .ev-hint {
+    width: 100%;
+  }
+
+  .ev-appcard__docs .ev-btn {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .ev-pipe__track .ev-chipbtn {
+    flex: 1 1 calc(50% - 4px);
+    text-align: center;
   }
 }
 
