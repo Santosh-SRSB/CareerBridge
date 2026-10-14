@@ -1604,6 +1604,7 @@ a.ev-stat:hover {
   list-style: none;
 }
 
+.ev-card.ev-candcard,
 .ev-candcard {
   position: relative;
   display: flex;
@@ -1611,9 +1612,11 @@ a.ev-stat:hover {
   gap: 14px;
   height: 100%;
   min-height: 300px;
+  min-width: 0;
+  max-width: 100%;
   padding: 18px 18px 16px;
   overflow: hidden;
-  border: 1px solid #dfe3f4;
+  border: 1.5px solid #1f9d63;
   border-radius: 18px;
   background:
     linear-gradient(180deg, #fcfcff 0%, #ffffff 42%),
@@ -1634,14 +1637,14 @@ a.ev-stat:hover {
   right: 0;
   left: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--ev-side) 0%, #3b42d4 55%, #f0a11a 100%);
-  opacity: 0.9;
+  background: linear-gradient(90deg, #0f7a55 0%, #1f9d63 55%, #3bbf7a 100%);
+  opacity: 0.95;
 }
 
 .ev-candcard:hover {
-  border-color: #c5cae8;
+  border-color: #0f7a55;
   box-shadow:
-    0 2px 0 rgba(16, 19, 124, 0.04),
+    0 2px 0 rgba(15, 122, 85, 0.08),
     0 16px 34px rgba(16, 19, 124, 0.1);
   transform: translateY(-2px);
 }
@@ -1761,6 +1764,9 @@ a.ev-stat:hover {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   border: 1px solid #dde1f2;
   border-radius: 14px;
@@ -1769,7 +1775,9 @@ a.ev-stat:hover {
 
 .ev-candcard__stats > div {
   min-width: 0;
-  padding: 11px 12px;
+  max-width: 100%;
+  padding: 11px 10px;
+  overflow: hidden;
 }
 
 .ev-candcard__stats > div + div {
@@ -1786,8 +1794,10 @@ a.ev-stat:hover {
   color: var(--ev-mut);
 }
 
-.ev-candcard__stats b {
+.ev-candcard__stats b,
+.ev-candcard__edu {
   display: block;
+  max-width: 100%;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.3;
@@ -1795,6 +1805,8 @@ a.ev-stat:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .ev-candcard__stats b.ev-avail--ready,

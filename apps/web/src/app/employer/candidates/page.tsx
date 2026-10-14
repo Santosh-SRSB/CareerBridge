@@ -102,9 +102,10 @@ function formatExperience(row: EmployerCandidateSearchResult) {
 function shortEducation(value: string) {
   const raw = value.trim();
   if (!raw || raw === 'Not provided') return raw || 'Not provided';
-  const paren = raw.match(/^(.+?)\s*\((.+)\)$/);
-  if (paren?.[1]) return paren[1].trim();
-  return raw.length > 28 ? `${raw.slice(0, 26)}…` : raw;
+  // Prefer acronym / leading token before parentheses: "MCA (Master…)" → "MCA"
+  const beforeParen = raw.split('(')[0]?.trim();
+  const compact = beforeParen || raw;
+  return compact.length > 18 ? `${compact.slice(0, 16)}…` : compact;
 }
 
 function shortSkillLabel(skill: string) {
@@ -565,7 +566,9 @@ export default function EmployerCandidatesPage() {
                       </div>
                       <div>
                         <small>Education</small>
-                        <b title={educationFull}>{education}</b>
+                        <b className="ev-candcard__edu" title={educationFull}>
+                          {education}
+                        </b>
                       </div>
                       <div>
                         <small>Availability</small>
