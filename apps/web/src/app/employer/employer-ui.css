@@ -2523,24 +2523,22 @@ a.ev-stat:hover {
   position: absolute;
   top: 0;
   left: 48%;
-  display: none;
   width: 52%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.55s ease;
+  z-index: 0;
 }
 
+/* Keep the active slide painted — never use display:none (first paint stays blank). */
 .ev-hero-art img.on {
-  display: block;
-  animation: ev-fade 0.7s ease;
-}
-
-@keyframes ev-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 1;
 }
 
 .ev-hero-in {
@@ -3252,8 +3250,11 @@ a.ev-stat:hover {
   }
 
   .ev-caret,
-  .ev-hero-art img.on,
   .ev-skel {
     animation: none;
+  }
+
+  .ev-hero-art img {
+    transition: none;
   }
 }
