@@ -124,6 +124,10 @@ export interface PhotoObjectReader {
   downloadFile(path: string): Promise<Buffer>;
 }
 
+export interface PhotoObjectStore extends PhotoObjectReader {
+  getSignedUrl(path: string, options: { action: 'read'; expiresInMinutes?: number }): Promise<string>;
+}
+
 /** Bytes of the candidate's own stored photo as a data URL; null for anything not owned or unreadable. */
 export async function readOwnedProfilePhotoDataUrl(
   storage: PhotoObjectReader,
@@ -141,6 +145,25 @@ export async function readOwnedProfilePhotoDataUrl(
   } catch {
     return null;
   }
+}
+
+/** Browser-readable candidate photo for employer views: signed URL, else inline copy. */
+export async function readableCandidatePhotoUrl(
+  storage: PhotoObjectStore,
+  candidateId: string,
+  stored: string | null | undefined,
+): Promise<string | null> {
+  if (!stored) return null;
+  if (isSafeInlinePhoto(stored)) return stored;
+  if (!storage.isConfigured()) return null;
+  const owned = ownedProfilePhotoPath(stored, candidateId, storage.getBucketName());
+  if (!owned) return null;
+  try {
+    return await storage.getSignedUrl(owned.path, { action: 'read', expiresInMinutes: 60 * 24 * 7 });
+  } catch {
+    // Cloud Run ADC has no signing key; fall back to an inline copy of the owned object.
+  }
+  return readOwnedProfilePhotoDataUrl(storage, candidateId, stored);
 }
 
 export const PHOTO_VALIDATION_MESSAGES: Record<Exclude<PhotoValidationResult, { ok: true }>['reason'], string> = {

@@ -17,7 +17,7 @@ import { toast } from '@/components/ui/Toast';
 import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
 import { RejectConfirmModal } from '@/components/employer/RejectConfirmModal';
 import { EmployerAtsPanel } from '@/components/employer/EmployerAtsPanel';
-import { EvAlert, EvApplicationPill, EvPageHead, EvSkeleton } from '@/components/employer/ui';
+import { EvAlert, EvApplicationPill, EvAvatar, EvPageHead, EvSkeleton } from '@/components/employer/ui';
 import { pipelineStage } from '@/lib/employer-ui-status';
 
 const FINAL_APPLICATION_STATUSES = ['HIRED', 'REJECTED', 'WITHDRAWN'];
@@ -35,12 +35,6 @@ function titleCaseName(value: string) {
 function candidateName(row: EmployerCandidatePassport) {
   const raw = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
   return raw ? titleCaseName(raw) : 'Candidate';
-}
-
-function initials(row: EmployerCandidatePassport) {
-  const first = row.firstName?.trim()?.[0] || '';
-  const last = row.lastName?.trim()?.[0] || '';
-  return (first + last || 'C').toUpperCase();
 }
 
 function formatLocation(city?: string | null, state?: string | null) {
@@ -156,9 +150,7 @@ export default function EmployerCandidateProfilePage() {
         title={
           profile ? (
             <span className="ev-title-av">
-              <span className="ev-av" aria-hidden>
-                {initials(profile)}
-              </span>
+              <EvAvatar name={candidateName(profile)} photoUrl={profile.photoUrl} size="md" />
               {candidateName(profile)}
             </span>
           ) : (

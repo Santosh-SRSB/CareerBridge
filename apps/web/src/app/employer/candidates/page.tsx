@@ -22,7 +22,7 @@ import {
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
-import { EvAlert, EvEmpty, EvPageHead, EvPill, EvSkeleton } from '@/components/employer/ui';
+import { EvAlert, EvAvatar, EvEmpty, EvPageHead, EvPill, EvSkeleton } from '@/components/employer/ui';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
 import { ErrorState } from '@/components/ui/StateViews';
@@ -72,12 +72,6 @@ function titleCaseName(value: string) {
 function candidateName(row: EmployerCandidateSearchResult) {
   const raw = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
   return raw ? titleCaseName(raw) : 'Candidate';
-}
-
-function initials(row: EmployerCandidateSearchResult) {
-  const first = row.firstName?.trim()?.[0] || '';
-  const last = row.lastName?.trim()?.[0] || '';
-  return (first + last || 'C').toUpperCase();
 }
 
 /** Collapse duplicate city/state fragments like "Bangalore, Bihar, Bihar…". */
@@ -501,9 +495,7 @@ export default function EmployerCandidatesPage() {
                 return (
                   <li key={row.id} className="ev-card ev-cand">
                     <div className="ev-cand-hd">
-                      <span className="ev-av" aria-hidden>
-                        {initials(row)}
-                      </span>
+                      <EvAvatar name={candidateName(row)} photoUrl={row.photoUrl} size="md" />
                       <div>
                         <h3>{candidateName(row)}</h3>
                         <span className="ev-sub">{formatLocation(row.city, row.state)}</span>

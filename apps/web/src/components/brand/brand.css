@@ -84,6 +84,13 @@
   }
 }
 
+/* Candidate mobile header: mark only so the name never overlaps support / bell / account. */
+@media (max-width: 760px) {
+  .cb-brand--compact-mobile .cb-brand__name {
+    display: none;
+  }
+}
+
 @media (max-width: 760px) {
   .cb-brand--md {
     --cb-brand-logo-h: 32px;

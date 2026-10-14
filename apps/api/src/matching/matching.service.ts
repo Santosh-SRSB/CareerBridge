@@ -16,6 +16,8 @@ import { IntelligenceService } from '../intelligence/intelligence.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { DocumentIndexService } from '../ai/document-index.service';
 import { VectorStoreService } from '../ai/vector-store.service';
+import { StorageService } from '../common/storage/storage.service';
+import { readableCandidatePhotoUrl } from '../candidates/profile-photo.util';
 
 @Injectable()
 export class MatchingService {
@@ -26,6 +28,7 @@ export class MatchingService {
     private readonly aiGateway: AiGatewayService,
     private readonly documentIndex: DocumentIndexService,
     private readonly vectors: VectorStoreService,
+    private readonly storage: StorageService,
   ) {}
 
   async getSkillProfile(userId: string, jobId: string) {
@@ -506,31 +509,45 @@ export class MatchingService {
       include: { skills: true },
     });
     const byId = new Map(candidates.map((item) => [item.id, item]));
-    return rows.map((row) => {
-      const candidate = byId.get(row.candidateId);
-      return {
-        id: row.id,
-        jobId: row.jobId,
-        applicationId: row.applicationId,
-        rank: row.rank,
-        totalScore: row.totalScore,
-        skillsScore: row.skillsScore,
-        experienceScore: row.experienceScore,
-        interviewReadinessScore: row.interviewReadinessScore,
-        reasons: parseList(row.reasonsJson),
-        gaps: parseList(row.gapsJson),
-        computedAt: row.computedAt.toISOString(),
-        candidate: candidate
-          ? {
-              id: candidate.id,
-              firstName: candidate.firstName,
-              lastName: candidate.lastName,
-              city: candidate.city,
-              skills: candidate.skills.map((item) => item.name),
-            }
-          : null,
-      };
-    });
+    // One card per candidate (keep best rank) so recompute duplicates never show twice.
+    const uniqueRows: typeof rows = [];
+    const seenCandidates = new Set<string>();
+    for (const row of rows) {
+      if (seenCandidates.has(row.candidateId)) continue;
+      seenCandidates.add(row.candidateId);
+      uniqueRows.push(row);
+    }
+    return Promise.all(
+      uniqueRows.map(async (row, index) => {
+        const candidate = byId.get(row.candidateId);
+        const photoUrl = candidate
+          ? await readableCandidatePhotoUrl(this.storage, candidate.id, candidate.photoUrl)
+          : null;
+        return {
+          id: row.id,
+          jobId: row.jobId,
+          applicationId: row.applicationId,
+          rank: index + 1,
+          totalScore: row.totalScore,
+          skillsScore: row.skillsScore,
+          experienceScore: row.experienceScore,
+          interviewReadinessScore: row.interviewReadinessScore,
+          reasons: parseList(row.reasonsJson),
+          gaps: parseList(row.gapsJson),
+          computedAt: row.computedAt.toISOString(),
+          candidate: candidate
+            ? {
+                id: candidate.id,
+                firstName: candidate.firstName,
+                lastName: candidate.lastName,
+                city: candidate.city,
+                skills: candidate.skills.map((item) => item.name),
+                photoUrl,
+              }
+            : null,
+        };
+      }),
+    );
   }
 
   async recordHiringOutcome(

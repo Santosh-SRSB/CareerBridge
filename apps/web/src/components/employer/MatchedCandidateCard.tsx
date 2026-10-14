@@ -10,6 +10,7 @@ export type MatchedCandidateCardProps = {
   rank: number;
   name: string;
   city?: string | null;
+  photoUrl?: string | null;
   skills?: string[];
   totalScore: number;
   skillsScore: number;
@@ -52,6 +53,7 @@ export function MatchedCandidateCard({
   rank,
   name,
   city,
+  photoUrl,
   skills = [],
   totalScore,
   skillsScore,
@@ -76,7 +78,7 @@ export function MatchedCandidateCard({
   return (
     <article className="ev-card ev-cand">
       <div className="ev-cand-hd">
-        <EvAvatar name={name} size="lg" />
+        <EvAvatar name={name} photoUrl={photoUrl} size="lg" />
         <div>
           <h3>
             {displayName(name)} <span className="ev-tag">#{rank}</span>
