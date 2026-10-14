@@ -144,7 +144,7 @@ export default function EmployerJobsPage() {
               {
                 label: 'Applicants',
                 value: stats.applicants,
-                hint: views.size ? `${stats.views} views across roles` : 'Across roles',
+                hint: views.size ? `Views across roles · ${stats.views}` : 'Across roles',
               },
             ].map((item) => (
               <div key={item.label}>

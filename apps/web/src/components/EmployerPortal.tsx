@@ -160,9 +160,11 @@ function EmployerSidebar({
   return (
     <aside className="ev-side" id="ev-sidebar" aria-label="Employer navigation">
       <div className="ev-brand">
-        <BrandLogo href="/employer" tone="dark" size="sm" priority onClick={onNavigate} />
+        <div className="ev-brand__row">
+          <BrandLogo href="/employer" tone="dark" size="sm" priority onClick={onNavigate} />
+          <SupportIconLink className="ev-support ev-support--side" iconSize={18} onClick={onNavigate} />
+        </div>
         <small>For employers</small>
-        <SupportIconLink className="ev-support ev-support--side" iconSize={18} onClick={onNavigate} />
       </div>
       {impersonating ? <p className="ev-impersonation">Admin view of this employer</p> : null}
       <div className="ev-lab">MAIN</div>
@@ -197,7 +199,9 @@ export function EmployerShellSkeleton() {
       </header>
       <aside className="ev-side" aria-hidden>
         <div className="ev-brand">
-          <BrandLogo tone="dark" size="sm" />
+          <div className="ev-brand__row">
+            <BrandLogo tone="dark" size="sm" />
+          </div>
           <small>For employers</small>
         </div>
       </aside>
