@@ -22,13 +22,12 @@ import {
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
-import { EvAlert, EvAvatar, EvEmpty, EvPageHead, EvPill, EvSkeleton } from '@/components/employer/ui';
+import { EvAlert, EvAvatar, EvEmpty, EvPageHead, EvSkeleton } from '@/components/employer/ui';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
 import { ErrorState } from '@/components/ui/StateViews';
 import { toast } from '@/components/ui/Toast';
 import { userFacingError } from '@/lib/client-errors';
-import { matchPillTone } from '@/lib/employer-ui-status';
 import { ALL_SKILL_OPTIONS } from '@/data/technology-skills';
 import { useCatalog } from '@/hooks/useCatalog';
 import { jobStatusLabel } from '@/lib/job-status';
@@ -97,6 +96,31 @@ function formatExperience(row: EmployerCandidateSearchResult) {
   if (years <= 0) return `${months} mo`;
   if (months > 0) return `${years} yr${years === 1 ? '' : 's'} ${months} mo`;
   return `${years} yr${years === 1 ? '' : 's'}`;
+}
+
+/** Short degree label for dense cards (keep full title as tooltip). */
+function shortEducation(value: string) {
+  const raw = value.trim();
+  if (!raw || raw === 'Not provided') return raw || 'Not provided';
+  const paren = raw.match(/^(.+?)\s*\((.+)\)$/);
+  if (paren?.[1]) return paren[1].trim();
+  return raw.length > 28 ? `${raw.slice(0, 26)}…` : raw;
+}
+
+function shortSkillLabel(skill: string) {
+  const raw = skill.trim();
+  if (!raw) return '';
+  const paren = raw.match(/\(([^)]+)\)/);
+  if (paren?.[1]) {
+    const first = paren[1].split(/[,|/]/)[0]?.trim();
+    if (first) return first.slice(0, 22);
+  }
+  return raw
+    .replace(/^Frontend:\s*/i, '')
+    .replace(/^Backend:\s*/i, '')
+    .replace(/^DevOps(?:\s*&\s*CI\/CD)?:\s*/i, '')
+    .replace(/^Tools?:\s*/i, '')
+    .slice(0, 22);
 }
 
 export default function EmployerCandidatesPage() {
@@ -487,29 +511,50 @@ export default function EmployerCandidatesPage() {
                   ? ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(String(row.applicationStatus || 'APPLIED'))
                   : !row.talentShortlisted;
                 const shortlistBusy = busyId === `shortlist-${row.id}`;
-                const visibleSkills = row.skills.slice(0, 4);
+                const skillLabels = row.skills
+                  .map(shortSkillLabel)
+                  .filter(Boolean)
+                  .filter((label, index, all) => all.findIndex((x) => x.toLowerCase() === label.toLowerCase()) === index);
+                const visibleSkills = skillLabels.slice(0, 3);
                 const moreSkills = Math.max((row.skillsTotal || row.skills.length) - visibleSkills.length, 0);
                 const availabilityTone = row.availabilityTone || 'neutral';
                 const band = row.matchScore !== null ? atsMatchBandInfo(row.matchScore) : null;
                 const name = candidateName(row);
-                const education = row.highestEducation?.trim() || 'Not provided';
+                const educationFull = row.highestEducation?.trim() || 'Not provided';
+                const education = shortEducation(educationFull);
+                const location = formatLocation(row.city, row.state);
 
                 return (
                   <li key={row.id} className="ev-card ev-candcard">
                     <header className="ev-candcard__head">
-                      <EvAvatar name={name} photoUrl={row.photoUrl} size="lg" />
+                      <div className="ev-candcard__avatar">
+                        <EvAvatar name={name} photoUrl={row.photoUrl} size="lg" />
+                      </div>
                       <div className="ev-candcard__who">
                         <h3>{name}</h3>
-                        <span className="ev-sub">{formatLocation(row.city, row.state)}</span>
+                        <p className="ev-candcard__meta">
+                          <span className="ev-candcard__loc">{location}</span>
+                          {band ? (
+                            <>
+                              <span className="ev-candcard__dot" aria-hidden>
+                                ·
+                              </span>
+                              <span className={`ev-candcard__band ev-candcard__band--${band.color}`}>
+                                {band.shortLabel}
+                              </span>
+                            </>
+                          ) : null}
+                        </p>
                       </div>
                       {band && row.matchScore !== null ? (
-                        <span
+                        <div
                           className="ev-candcard__match"
                           title={`${PROFILE_MATCH_LABEL} for the selected job · ${band.label}`}
                           aria-label={`${PROFILE_MATCH_LABEL} ${row.matchScore} out of 100`}
                         >
-                          <EvPill tone={matchPillTone(band.color)}>Match {row.matchScore}/100</EvPill>
-                        </span>
+                          <span className="ev-candcard__score">{row.matchScore}</span>
+                          <span className="ev-candcard__score-label">Match</span>
+                        </div>
                       ) : null}
                     </header>
 
@@ -520,7 +565,7 @@ export default function EmployerCandidatesPage() {
                       </div>
                       <div>
                         <small>Education</small>
-                        <b title={education}>{education}</b>
+                        <b title={educationFull}>{education}</b>
                       </div>
                       <div>
                         <small>Availability</small>
@@ -538,7 +583,9 @@ export default function EmployerCandidatesPage() {
                               {item}
                             </span>
                           ))}
-                          {moreSkills > 0 ? <span className="ev-chip">+{moreSkills}</span> : null}
+                          {moreSkills > 0 ? (
+                            <span className="ev-chip ev-candcard__more">+{moreSkills}</span>
+                          ) : null}
                         </div>
                       ) : (
                         <span className="ev-sub">No skills listed</span>
@@ -548,14 +595,14 @@ export default function EmployerCandidatesPage() {
                     <footer className="ev-candcard__actions">
                       <Link
                         href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
-                        className="ev-btn ev-btn--ghost ev-btn--sm"
+                        className="ev-btn ev-btn--ghost ev-btn--sm ev-candcard__view"
                       >
                         View profile
                       </Link>
                       {canShortlist ? (
                         <button
                           type="button"
-                          className="ev-btn ev-btn--sm"
+                          className="ev-btn ev-btn--sm ev-candcard__shortlist"
                           disabled={shortlistBusy}
                           onClick={() =>
                             setShortlistTarget({
