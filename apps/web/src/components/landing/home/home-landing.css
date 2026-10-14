@@ -304,27 +304,30 @@
 .hl-nav {
   position: relative;
   z-index: 10;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  gap: 16px 24px;
   max-width: 1280px;
   margin: 0 auto;
   padding: 22px 40px;
 }
 
+.hl-nav > .hl-brand {
+  grid-column: 1;
+  justify-self: start;
+}
+
 .hl-nav__menu {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 24px;
-  min-width: 0;
+  display: contents;
 }
 
 .hl-nav__links {
   display: flex;
-  gap: 40px;
-  margin: 0 auto;
+  grid-column: 2;
+  justify-content: center;
+  gap: clamp(20px, 3.2vw, 40px);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -349,8 +352,18 @@
 
 .hl-nav__actions {
   display: flex;
+  grid-column: 3;
   align-items: center;
-  gap: 12px;
+  justify-self: end;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Sit Testimonial left of the auth buttons (still on the navy curve). */
+.hl-nav__testimonial {
+  margin-right: 10px;
+  padding-right: 4px;
+  white-space: nowrap;
 }
 
 .hl-nav__login {
@@ -359,6 +372,8 @@
 
 .hl-nav__burger {
   display: none;
+  grid-column: 3;
+  justify-self: end;
   place-items: center;
   width: 44px;
   height: 44px;
@@ -388,36 +403,39 @@
   background: color-mix(in srgb, var(--color-white) 14%, transparent);
 }
 
-/* Sit Testimonial against the actions so the whole word is on the navy curve.
-   The clipped mirror then paints it white, with no light plate behind the label. */
+/* Desktop: keep center links centered; Testimonial + CTAs on the navy side. */
 @media (min-width: 901px) {
-  .hl-hero .hl-nav__links {
-    flex: 1;
-    margin: 0;
-  }
-
-  .hl-hero .hl-nav__links li:last-child {
-    margin-left: auto;
-  }
-
   .hl-hero .hl-nav__login,
   .hl-hero .hl-nav__login:focus-visible,
   .hl-hero .hl-nav__login:active,
   .hl-hero .hl-nav--mirror .hl-nav__login,
-  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus {
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus,
+  .hl-hero .hl-nav__signup,
+  .hl-hero .hl-nav__signup:focus-visible,
+  .hl-hero .hl-nav__signup:active,
+  .hl-hero .hl-nav--mirror .hl-nav__signup,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-focus,
+  .hl-hero .hl-nav__cta,
+  .hl-hero .hl-nav--mirror .hl-nav__cta {
     background: var(--color-white);
     border-color: transparent;
     color: var(--color-primary);
   }
 
   .hl-hero .hl-nav__login,
-  .hl-hero .hl-nav--mirror .hl-nav__login {
+  .hl-hero .hl-nav__signup,
+  .hl-hero .hl-nav__cta,
+  .hl-hero .hl-nav--mirror .hl-nav__login,
+  .hl-hero .hl-nav--mirror .hl-nav__signup,
+  .hl-hero .hl-nav--mirror .hl-nav__cta {
+    position: relative;
+    overflow: hidden;
     transition:
-      background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s,
-      box-shadow 0.15s,
-      transform 0.15s;
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.18s ease;
   }
 
   .hl-hero .hl-nav__login:hover,
@@ -425,13 +443,63 @@
     background: var(--color-primary-soft);
     border-color: var(--color-primary);
     color: var(--color-primary);
-    box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary-dark) 32%, transparent);
-    transform: translateY(-1px);
+    box-shadow: 0 10px 22px color-mix(in srgb, var(--color-primary-dark) 28%, transparent);
+    transform: translateY(-2px);
   }
 
-  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus {
+  .hl-hero .hl-nav__login:active,
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary-dark) 22%, transparent);
+  }
+
+  .hl-hero .hl-nav__signup,
+  .hl-hero .hl-nav--mirror .hl-nav__signup {
+    background: var(--color-accent-orange-2, #f0a11a);
+    border-color: var(--color-accent-orange-2, #f0a11a);
+    color: var(--color-primary-dark, #10137c);
+    font-weight: 700;
+  }
+
+  .hl-hero .hl-nav__signup:hover,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-hover {
+    background: #ffb84a;
+    border-color: #ffb84a;
+    color: var(--color-primary-dark, #10137c);
+    box-shadow: 0 12px 26px color-mix(in srgb, #c47a00 36%, transparent);
+    transform: translateY(-2px) scale(1.03);
+  }
+
+  .hl-hero .hl-nav__signup:active,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-focus:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 4px 12px color-mix(in srgb, #c47a00 28%, transparent);
+  }
+
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-focus,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-hero .hl-nav__login,
+  .hl-hero .hl-nav__signup,
+  .hl-hero .hl-nav__cta,
+  .hl-hero .hl-nav--mirror .hl-nav__login,
+  .hl-hero .hl-nav--mirror .hl-nav__signup,
+  .hl-hero .hl-nav--mirror .hl-nav__cta {
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+
+  .hl-hero .hl-nav__login:hover,
+  .hl-hero .hl-nav__signup:hover,
+  .hl-hero .hl-nav--mirror .hl-nav__login.is-hover,
+  .hl-hero .hl-nav--mirror .hl-nav__signup.is-hover,
+  .hl-hero .hl-nav__login:active,
+  .hl-hero .hl-nav__signup:active {
+    transform: none;
   }
 }
 
@@ -444,6 +512,13 @@
 .hl-nav--mirror .hl-btn--primary.is-hover {
   background: var(--color-primary-light);
   border-color: var(--color-primary-light);
+}
+
+.hl-nav--mirror .hl-nav__signup,
+.hl-nav--mirror .hl-nav__signup.is-hover {
+  background: var(--color-accent-orange-2, #f0a11a);
+  border-color: var(--color-accent-orange-2, #f0a11a);
+  color: var(--color-primary-dark, #10137c);
 }
 
 .hl-nav--mirror .is-focus {
@@ -2385,7 +2460,7 @@
 @media (max-width: 900px) {
   /* The inline links and both buttons stop fitting below ~880px, so the burger takes over. */
   .hl-nav {
-    flex-wrap: wrap;
+    grid-template-columns: 1fr auto;
     gap: 0;
   }
 
@@ -2395,7 +2470,7 @@
 
   .hl-nav__menu {
     display: none;
-    flex: none;
+    grid-column: 1 / -1;
     flex-direction: column;
     align-items: stretch;
     gap: 0;
@@ -2412,7 +2487,9 @@
   }
 
   .hl-nav__links {
+    grid-column: auto;
     flex-direction: column;
+    justify-content: flex-start;
     gap: 0;
     margin: 0;
     padding: 10px 0 4px;
@@ -2425,7 +2502,14 @@
     border: 0;
   }
 
+  .hl-nav__testimonial {
+    margin-right: 0;
+    padding-right: 0;
+  }
+
   .hl-nav__actions {
+    grid-column: auto;
+    justify-self: stretch;
     padding: 8px 0 14px;
   }
 
