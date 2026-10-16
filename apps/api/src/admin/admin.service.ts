@@ -2072,6 +2072,8 @@ export class AdminService {
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
+    // Never expose Admin.loginPassword (or passwordHash) on list — one-shot handoff
+    // remains only on createAdmin / setAdminPassword responses.
     return rows.map((row) => ({
       id: row.id,
       email: row.email,
@@ -2082,7 +2084,6 @@ export class AdminService {
       lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
       fullName: row.fullName,
       userId: row.userId,
-      password: row.loginPassword ?? null,
     }));
   }
 
