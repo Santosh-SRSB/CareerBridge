@@ -14,6 +14,7 @@ import {
   type InAppNotification,
 } from '@/lib/api';
 import { getStoredUser, isEmployerRole } from '@/lib/session';
+import { safeNotificationLink } from '@/lib/safe-notification-link';
 
 function formatWhen(value: string) {
   const date = new Date(value);
@@ -176,7 +177,7 @@ export default function NotificationsPage() {
       await markNotificationRead(item.id).catch(() => undefined);
       setItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, read: true } : row)));
     }
-    if (item.link) router.push(item.link);
+    if (item.link) router.push(safeNotificationLink(item.link));
   }
 
   async function onMarkAll() {

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { SAFE_NOTIFICATION_LINK_SW_SOURCE } from '@/lib/safe-notification-link';
 
 /**
  * Dynamic Firebase Messaging service worker.
  * Served at /firebase-messaging-sw.js so FCM can use root scope.
+ * Link navigation uses the same rules as {@link safeNotificationLink} (inlined ES5).
  */
 export function GET() {
   const config = {
@@ -23,6 +25,8 @@ firebase.initializeApp(${JSON.stringify(config)});
 
 const messaging = firebase.messaging();
 
+${SAFE_NOTIFICATION_LINK_SW_SOURCE}
+
 messaging.onBackgroundMessage(function (payload) {
   const title = (payload.notification && payload.notification.title) || 'CareerBridge';
   const options = {
@@ -35,7 +39,8 @@ messaging.onBackgroundMessage(function (payload) {
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  const link = (event.notification.data && event.notification.data.link) || '/notifications';
+  var raw = (event.notification.data && event.notification.data.link) || '/notifications';
+  var link = safeNotificationLink(raw, '/notifications');
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
       for (const client of clientList) {

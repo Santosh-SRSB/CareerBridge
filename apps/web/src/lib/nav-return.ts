@@ -1,17 +1,33 @@
 /**
  * App-wide "return to previous screen" helper.
  * When navigating X → Y, call rememberReturnTo(X). On Y's Back, goToReturnTo(fallback).
+ * SEC-FE-007: only same-origin relative app paths are stored / navigated
+ * (rules aligned with safeNotificationLink — keep in sync).
  */
 const RETURN_STACK_KEY = 'cb.navReturnStack';
 const MAX_STACK = 12;
 
+/** Same-origin relative path only; rejects absolute, protocol-relative, and scheme-bearing values. */
+export function sanitizeReturnPath(path: unknown): string | null {
+  if (typeof path !== 'string') return null;
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+  if (!trimmed.startsWith('/')) return null;
+  if (trimmed.startsWith('//')) return null;
+  if (trimmed.includes('\\')) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed.slice(1))) return null;
+  return trimmed;
+}
+
 function readStack(): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = sessionStorage.getItem(RETURN_STACK_KEY);
+    const raw = window.sessionStorage.getItem(RETURN_STACK_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string' && x.startsWith('/')) : [];
+    return Array.isArray(parsed)
+      ? parsed.map((x) => sanitizeReturnPath(x)).filter((x): x is string => Boolean(x))
+      : [];
   } catch {
     return [];
   }
@@ -20,7 +36,7 @@ function readStack(): string[] {
 function writeStack(stack: string[]) {
   if (typeof window === 'undefined') return;
   try {
-    sessionStorage.setItem(RETURN_STACK_KEY, JSON.stringify(stack.slice(-MAX_STACK)));
+    window.sessionStorage.setItem(RETURN_STACK_KEY, JSON.stringify(stack.slice(-MAX_STACK)));
   } catch {
     // ignore quota
   }
@@ -29,10 +45,12 @@ function writeStack(stack: string[]) {
 /** Remember the page the user is leaving so Back on the next page can return here. */
 export function rememberReturnTo(path?: string | null) {
   if (typeof window === 'undefined') return;
-  const next =
-    (path && path.startsWith('/') ? path : null) ||
-    `${window.location.pathname}${window.location.search || ''}`;
-  if (!next.startsWith('/')) return;
+  const fromArg = sanitizeReturnPath(path);
+  const fromLocation = sanitizeReturnPath(
+    `${window.location.pathname}${window.location.search || ''}`,
+  );
+  const next = fromArg || fromLocation;
+  if (!next) return;
   const stack = readStack();
   if (stack[stack.length - 1] === next) return;
   stack.push(next);
@@ -60,11 +78,12 @@ export function goToReturnTo(
   fallback = '/dashboard',
 ) {
   const path = consumeReturnTo();
-  router.push(path || fallback);
+  const dest = sanitizeReturnPath(path) || sanitizeReturnPath(fallback) || '/dashboard';
+  router.push(dest);
 }
 
 /** Clear the entire return stack (e.g. after finishing a flow to dashboard). */
 export function clearReturnStack() {
   if (typeof window === 'undefined') return;
-  sessionStorage.removeItem(RETURN_STACK_KEY);
+  window.sessionStorage.removeItem(RETURN_STACK_KEY);
 }

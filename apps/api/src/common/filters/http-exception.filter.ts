@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ErrorCode } from '@careerbridge/shared';
+import { resolveRequestId } from '../request-id';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -14,10 +15,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
+    // Prefer the interceptor-sanitized value; never echo a raw hostile header.
     const requestId =
-      (request.headers['x-request-id'] as string) ||
       (request as Request & { requestId?: string }).requestId ||
-      'unknown';
+      resolveRequestId(request.headers['x-request-id']);
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let code: string = ErrorCode.INTERNAL_ERROR;

@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import type { WhatsAppEventLogItem } from './whatsapp.types';
 
 /** In-memory ring buffer for the admin WhatsApp test console. */
@@ -7,7 +8,7 @@ export class WhatsAppEventLog {
 
   push(item: Omit<WhatsAppEventLogItem, 'id' | 'at'> & { at?: string }) {
     const entry: WhatsAppEventLogItem = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `${Date.now()}-${randomBytes(4).toString('hex')}`,
       at: item.at || new Date().toISOString(),
       kind: item.kind,
       summary: item.summary,

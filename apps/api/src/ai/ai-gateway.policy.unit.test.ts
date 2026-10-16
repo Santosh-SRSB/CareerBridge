@@ -266,3 +266,28 @@ describe('resume rewrite output budget', () => {
     assert.equal(interactions[0].status, 'FAILED');
   });
 });
+
+describe('SEC-LOG-010 AI interaction requestId persistence', () => {
+  it('does not persist a hostile options.requestId; stores a sanitized UUID instead', async () => {
+    const { provider } = providerWith(async () => ok('{"ok":true}'));
+    const { prisma, interactions } = fakePrisma();
+    const hostile = "spoof\r\nid-with-newline";
+    await gateway(provider, prisma).generate({
+      ...request,
+      options: { requestId: hostile },
+    });
+    assert.equal(interactions.length, 1);
+    const stored = interactions[0]!.requestId as string;
+    assert.notEqual(stored, hostile);
+    assert.ok(!String(stored).includes('\n') && !String(stored).includes('\r'));
+    assert.match(stored, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  });
+
+  it('persists null when no requestId was provided (does not invent one)', async () => {
+    const { provider } = providerWith(async () => ok('{"ok":true}'));
+    const { prisma, interactions } = fakePrisma();
+    await gateway(provider, prisma).generate(request);
+    assert.equal(interactions.length, 1);
+    assert.equal(interactions[0]!.requestId, null);
+  });
+});

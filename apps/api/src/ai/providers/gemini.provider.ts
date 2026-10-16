@@ -10,6 +10,13 @@ import {
 import { AiProviderName } from '../ai.types';
 import { classifyAiError, linkedAbort, raceAbort } from '../ai-resilience';
 
+export function outerJsonObject(rawText: string): [string] | null {
+  const start = rawText.indexOf('{');
+  const end = rawText.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  return [rawText.slice(start, end + 1)];
+}
+
 function abortReason(signal: AbortSignal): Error {
   if (signal.reason instanceof Error) return signal.reason;
   const err = new Error('AI request aborted');
@@ -156,7 +163,7 @@ export class GeminiProvider implements AiProvider {
     const direct = tryParse(rawText);
     if (direct) return direct;
 
-    const match = rawText.match(/\{[\s\S]*\}/);
+    const match = outerJsonObject(rawText);
     if (match) {
       const object = tryParse(match[0]);
       if (object) return object;
@@ -242,7 +249,7 @@ export class GeminiProvider implements AiProvider {
         try {
           data = JSON.parse(rawText) as T;
         } catch {
-          const match = rawText.match(/\{[\s\S]*\}/);
+          const match = outerJsonObject(rawText);
           if (match) {
             try {
               data = JSON.parse(match[0]) as T;
