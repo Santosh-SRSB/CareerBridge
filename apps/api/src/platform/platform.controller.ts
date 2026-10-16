@@ -4,6 +4,7 @@ import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobStatus } from '../prisma/client';
+import { formatClientErrorLogLine } from './client-error-sanitize';
 
 class ClientErrorReportDto {
   @IsString()
@@ -76,9 +77,14 @@ export class PlatformController {
   @Post('client-errors')
   @HttpCode(202)
   reportClientError(@Body() body: ClientErrorReportDto) {
-    const oneLine = (value?: string) => (value || '').replace(/[\r\n]+/g, ' ').slice(0, 500);
+    // SEC-LOG-008: never log pasted Bearer/JWT/API credentials from client error reports.
     this.logger.error(
-      `errorId=${body.errorId} path=${oneLine(body.path)} digest=${oneLine(body.digest)} message=${oneLine(body.message)}`,
+      formatClientErrorLogLine({
+        errorId: body.errorId,
+        path: body.path,
+        digest: body.digest,
+        message: body.message,
+      }),
     );
     return { received: true, errorId: body.errorId };
   }
