@@ -144,6 +144,20 @@ describe('piiKeyringFingerprint', () => {
     for (const env of variants) assert.notEqual(piiKeyringFingerprint(loadPiiKeyring(env)!), fp, JSON.stringify(env));
   });
 
+  it('sorts mixed-case key ids in English order, independent of insertion order', () => {
+    const lookup = key(9);
+    const zaFirst = {
+      PII_ENCRYPTION_KEYS: `Z:${key(1)},a:${key(2)}`,
+      PII_ENCRYPTION_ACTIVE_KEY_ID: 'Z',
+      PII_LOOKUP_KEY: lookup,
+    };
+    const aFirst = { ...zaFirst, PII_ENCRYPTION_KEYS: `a:${key(2)},Z:${key(1)}` };
+    const both = piiKeyringFingerprint(loadPiiKeyring(zaFirst)!);
+    assert.equal(piiKeyringFingerprint(loadPiiKeyring(aFirst)!), both);
+    assert.notEqual(piiKeyringFingerprint(loadPiiKeyring({ PII_ENCRYPTION_KEYS: `Z:${key(1)}`, PII_LOOKUP_KEY: lookup })!), both);
+    assert.notEqual(piiKeyringFingerprint(loadPiiKeyring({ PII_ENCRYPTION_KEYS: `a:${key(2)}`, PII_LOOKUP_KEY: lookup })!), both);
+  });
+
   it('contains no key material in any encoding', () => {
     const ring = loadPiiKeyring(TWO)!;
     const fp = piiKeyringFingerprint(ring);

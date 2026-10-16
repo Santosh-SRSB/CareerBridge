@@ -16,6 +16,7 @@ Thumbs.db
 apps/api/generated
 docker-data
 .postgres-data
+.scannerwork
 apps/api/secrets/
 gcp-*.json
 *firebase-adminsdk*.json

@@ -147,7 +147,7 @@ export function piiKeyringFingerprint(ring: PiiKeyring): string {
   const check = (key: Buffer) => createHmac('sha256', key).update('careerbridge/pii-key-check/v1', 'utf8').digest('hex');
   const digest = createHash('sha256').update('careerbridge/pii-keyring-fingerprint/v1\n', 'utf8');
   digest.update(`active=${ring.activeKeyId}\n`, 'utf8');
-  for (const keyId of [...ring.keys.keys()].sort()) {
+  for (const keyId of [...ring.keys.keys()].sort((a, b) => a.localeCompare(b, 'en'))) {
     digest.update(`key=${keyId}:${check(ring.keys.get(keyId) as Buffer)}\n`, 'utf8');
   }
   digest.update(`lookup=${check(ring.lookupKey)}\n`, 'utf8');

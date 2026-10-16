@@ -14,6 +14,7 @@ import {
   parseAiSettings,
   registrationPasswordError,
 } from '@careerbridge/shared';
+import { randomInt } from 'crypto';
 import { UserStatus, UserType } from '../prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
@@ -2111,14 +2112,14 @@ export class AdminService {
     let phone = input.phone?.trim() || '';
     if (!phone) {
       // Unique per (phone, userType) — avoid collisions when creating many admins quickly.
-      phone = `+91${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`;
+      phone = `+91${Date.now().toString().slice(-8)}${randomInt(10, 100)}`;
     }
     const phoneTaken = await this.prisma.user.findFirst({
       where: { phone, userType: role as UserType },
       select: { id: true },
     });
     if (phoneTaken) {
-      phone = `+91${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 900 + 100)}`;
+      phone = `+91${Date.now().toString().slice(-8)}${randomInt(100, 1000)}`;
     }
 
     const created = await this.prisma.$transaction(async (tx) => {

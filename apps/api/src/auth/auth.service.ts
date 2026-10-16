@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, randomUUID } from 'crypto';
+import { createHash, randomInt, randomUUID } from 'crypto';
 import { ErrorCode, OTP_EXPIRED_MESSAGE, businessLocationError, registrationPasswordError } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { FirebaseService } from './firebase.service';
@@ -207,7 +207,7 @@ export class AuthService {
       channel === 'EMAIL'
         ? this.isDevOtp()
           ? DEV_OTP
-          : String(Math.floor(100000 + Math.random() * 900000))
+          : String(randomInt(100000, 1000000))
         : this.isDevOtp()
           ? DEV_OTP
           : null;

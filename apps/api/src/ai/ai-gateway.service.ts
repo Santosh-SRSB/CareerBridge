@@ -29,6 +29,15 @@ import {
   parseAiSettings,
 } from '@careerbridge/shared';
 import { AiCircuitBreaker, classifyAiError, unavailableReasonFor } from './ai-resilience';
+import { sanitizeAiClientError, scrubSensitiveAiValue } from './ai-client-error';
+import { sanitizePersistedRequestId } from '../common/request-id';
+
+export function outerJsonObject(rawText: string): [string] | null {
+  const start = rawText.indexOf('{');
+  const end = rawText.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  return [rawText.slice(start, end + 1)];
+}
 
 const SETTINGS_TTL_MS = 30_000;
 const USAGE_TTL_MS = 60_000;
@@ -178,6 +187,8 @@ export class AiGatewayService {
     const startTime = Date.now();
     const promptVersion = request.options?.promptVersion || `${request.task.toLowerCase()}.v1`;
     const provider = this.resolveProvider(request.options?.provider);
+    // Never trust optional caller correlation ids for logs/persistence (SEC-LOG-010).
+    const correlationId = sanitizePersistedRequestId(request.options?.requestId);
 
     if (!provider) {
       this.logger.warn(`No Gemini provider configured for task "${request.task}".`);
@@ -188,7 +199,7 @@ export class AiGatewayService {
         model: 'none',
         promptVersion,
         latencyMs: Date.now() - startTime,
-        error: 'No AI provider configured (set GEMINI_API_KEY)',
+        error: 'No AI provider configured.',
         unavailableReason: 'NOT_CONFIGURED',
       };
     }
@@ -196,7 +207,7 @@ export class AiGatewayService {
     const blocked = await this.unavailableReason();
     if (blocked) {
       this.logger.warn(
-        JSON.stringify({ event: 'AI_REQUEST_SKIPPED', task: request.task, reason: blocked, requestId: request.options?.requestId }),
+        JSON.stringify({ event: 'AI_REQUEST_SKIPPED', task: request.task, reason: blocked, requestId: correlationId }),
       );
       return {
         success: false,
@@ -246,7 +257,7 @@ export class AiGatewayService {
           estimatedCostUsd,
           success: Boolean(result.data),
           userId: request.options?.userId,
-          requestId: request.options?.requestId,
+          requestId: correlationId,
         }),
       );
 
@@ -263,7 +274,7 @@ export class AiGatewayService {
             latencyMs,
             status: result.data ? 'SUCCESS' : 'FAILED',
             estimatedCostUsd,
-            requestId: request.options?.requestId || null,
+            requestId: correlationId,
           },
         });
       } catch (err) {
@@ -285,7 +296,7 @@ export class AiGatewayService {
       };
     } catch (err) {
       const latencyMs = Date.now() - startTime;
-      const errorMsg = (err as Error).message;
+      const errorMsg = sanitizeAiClientError((err as Error).message);
       const kind = classifyAiError(err);
       const callerAborted = Boolean(request.options?.signal?.aborted);
       if (!callerAborted && (kind === 'UPSTREAM_UNAVAILABLE' || kind === 'TIMEOUT')) {
@@ -307,7 +318,7 @@ export class AiGatewayService {
             latencyMs,
             status: 'FAILED',
             estimatedCostUsd: 0,
-            requestId: request.options?.requestId || null,
+            requestId: correlationId,
             error: errorMsg.slice(0, 2000),
           },
         });
@@ -702,7 +713,9 @@ export class AiGatewayService {
         promptVersion: prompt.version,
       },
     });
-    return { data: res.data, unavailableReason: res.data ? undefined : res.unavailableReason ?? 'FAILED' };
+    // SEC-INJ-009: never return credential-like material from review JSON even if the model echoes bait.
+    const data = res.data ? scrubSensitiveAiValue(res.data) : null;
+    return { data, unavailableReason: data ? undefined : res.unavailableReason ?? 'FAILED' };
   }
 
   /**
@@ -823,7 +836,7 @@ export class AiGatewayService {
     let question = (res.data?.question || '').trim();
     if (!question && res.rawText) {
       try {
-        const match = res.rawText.match(/\{[\s\S]*\}/);
+        const match = outerJsonObject(res.rawText);
         if (match) {
           const parsed = JSON.parse(match[0]) as { question?: string; category?: string; hint?: string; thinkSeconds?: number };
           question = (parsed.question || '').trim();

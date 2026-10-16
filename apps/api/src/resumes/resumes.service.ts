@@ -23,7 +23,9 @@ import { IntelligenceService } from '../intelligence/intelligence.service';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { StorageService } from '../common/storage/storage.service';
 import { CloudTasksService } from '../common/tasks/cloud-tasks.service';
+import { assertTaskSecret, isTaskSecretRequired } from '../common/tasks/assert-task-secret';
 import { renderResumePdf } from './resume-pdf';
+import { parseResumeContentJson } from './resume-content-json';
 import { readOwnedProfilePhotoDataUrl } from '../candidates/profile-photo.util';
 import { ResumeOptimizeAi } from './resume-optimize-ai';
 import { ResumeProcessorService } from './resume-processor.service';
@@ -529,14 +531,17 @@ export class ResumesService {
   }
 
   async processWorker(payload: { resumeId: string; userId: string }, providedSecret?: string) {
-    const expected = (this.config.get<string>('RESUME_TASK_SECRET') || process.env.RESUME_TASK_SECRET || '').trim();
-    // When secret is configured (DEV/prod Cloud Run), reject missing/wrong values.
-    if (expected && providedSecret !== expected) {
-      throw new ForbiddenException({
-        code: ErrorCode.UNAUTHORIZED,
-        message: 'Invalid resume worker credentials.',
-      });
-    }
+    assertTaskSecret(
+      this.config.get<string>('RESUME_TASK_SECRET') || process.env.RESUME_TASK_SECRET,
+      providedSecret,
+      {
+        requireConfigured: isTaskSecretRequired(),
+        invalidMessage: {
+          code: ErrorCode.UNAUTHORIZED,
+          message: 'Invalid resume worker credentials.',
+        },
+      },
+    );
     if (!payload?.resumeId || !payload?.userId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
@@ -1682,7 +1687,7 @@ function hydrateResumeContent(content: ResumeContent, rawText?: string | null): 
 
 function parseContent(raw: string): ResumeContent {
   try {
-    return normalizeStoredContent(JSON.parse(raw) as Record<string, unknown>);
+    return normalizeStoredContent(parseResumeContentJson(raw));
   } catch {
     return {
       fullName: '',

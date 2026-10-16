@@ -41,8 +41,8 @@ jobs:
         run: |
           failed=()
           for suite in test:auth test:email test:whatsapp test:whatsapp-flow test:whatsapp-profile \
-                       test:employer test:admin test:interview test:ai test:match test:photo \
-                       test:gst test:pii test:rag test:resume test:testimonials; do
+                       test:employer test:admin test:interview test:ai test:task-secret test:request-id \
+                       test:match test:photo test:gst test:pii test:rag test:resume test:testimonials; do
             echo "::group::npm run $suite"
             if npm run "$suite"; then
               echo "::endgroup::"

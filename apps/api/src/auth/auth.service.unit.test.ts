@@ -5,7 +5,7 @@
  * Run: npm run test:auth
  */
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 import { BadRequestException, HttpException, Module, ValidationPipe } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, NestFactory } from '@nestjs/core';
@@ -24,10 +24,14 @@ function errorCode(err: unknown) {
   return err instanceof HttpException ? String((err.getResponse() as { code?: string }).code) : '';
 }
 
-function harness(users: Row[] = []) {
+function harness(
+  users: Row[] = [],
+  options: { devOtp?: boolean; emailConfigured?: boolean; nodeEnv?: string } = {},
+) {
   const otpRequests: Row[] = [];
   const updateManyCalls: Row[] = [];
   const createdUsers: Row[] = [];
+  const sentOtps: Array<{ email: string; code: string }> = [];
   let seq = 0;
   const matches = (row: Row, where: Row) =>
     Object.entries(where).every(([key, cond]) => {
@@ -79,17 +83,22 @@ function harness(users: Row[] = []) {
     },
   };
   const settings: Record<string, string> = {
-    AUTH_DEV_OTP: 'true',
-    NODE_ENV: 'development',
+    AUTH_DEV_OTP: options.devOtp === false ? 'false' : 'true',
+    NODE_ENV: options.nodeEnv ?? 'development',
     JWT_ACCESS_SECRET: 'unit-test-access-secret',
     JWT_REFRESH_SECRET: 'unit-test-refresh-secret',
   };
   const config = { get: (key: string) => settings[key] };
   const jwt = { signAsync: async () => 'signed-token' };
   const firebase = { isConfigured: () => false };
-  const email = { isConfigured: () => false };
+  const email = {
+    isConfigured: () => options.emailConfigured === true,
+    sendOtp: async (to: string, code: string) => {
+      sentOtps.push({ email: to, code });
+    },
+  };
   const svc = new AuthService(prisma, jwt as any, config as any, firebase as any, email as any);
-  return { svc, otpRequests, updateManyCalls, createdUsers };
+  return { svc, otpRequests, updateManyCalls, createdUsers, sentOtps };
 }
 
 const register = (extra: Row = {}) => ({
@@ -507,5 +516,27 @@ describe('Auth DTO validation (global ValidationPipe settings)', () => {
     await assert.rejects(validate(RequestOtpDto, { ...register(), password: undefined }), BadRequestException);
     await assert.rejects(validate(RequestOtpDto, { ...register(), fullName: undefined }), BadRequestException);
     await validate(RequestOtpDto, register({ replacesRequestId: 'otp-1' }));
+  });
+});
+
+describe('email OTP outside development OTP mode', () => {
+  it('generates a six-digit code with crypto.randomInt and emails that code', async () => {
+    const { svc, otpRequests, sentOtps } = harness(
+      [{ id: 'u1', email: 'asha@example.test', userType: 'CANDIDATE', phone: '+919800000099' }],
+      { devOtp: false, emailConfigured: true },
+    );
+    const result = await svc.requestOtp({
+      channel: 'EMAIL',
+      purpose: 'LOGIN',
+      accountType: 'CANDIDATE',
+      email: 'asha@example.test',
+    });
+    assert.equal(sentOtps.length, 1);
+    assert.equal(sentOtps[0].email, 'asha@example.test');
+    assert.match(sentOtps[0].code, /^[1-9]\d{5}$/);
+    const value = Number(sentOtps[0].code);
+    assert.ok(value >= 100000 && value <= 999999);
+    assert.equal(otpRequests[0].otpHash, createHash('sha256').update(sentOtps[0].code).digest('hex'));
+    assert.equal('devOtp' in result, false);
   });
 });
