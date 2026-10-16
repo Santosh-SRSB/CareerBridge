@@ -353,6 +353,7 @@ export function DetailPanel({
             <Field label="Email" value={email} />
             <Field label="Phone" value={phone} />
             <Field label="Location" value={location} />
+            {kind === 'employers' ? <Field label="GSTIN" value={data.gstin} /> : null}
             <Field
               label="Profile completion"
               value={data.profileCompletion != null ? `${data.profileCompletion}%` : null}
@@ -404,7 +405,6 @@ export function DetailPanel({
               <Field label="Hires" value={counts?.hires} />
               <Field label="Verification" value={data.verificationStatus} />
               <Field label="City" value={data.city} />
-              {kind === 'employers' ? <Field label="GSTIN" value={data.gstin} /> : null}
             </div>
           </Section>
         )}
