@@ -378,7 +378,7 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
                 <b>{profile.city || '—'}</b>
               </div>
               <div>
-                <small>GST</small>
+                <small>GSTIN</small>
                 <b>{profile.gstNumber || 'Not added'}</b>
               </div>
             </div>

@@ -100,5 +100,53 @@ export function buildProgressPie(stages: AdminProgressStage[]): ProgressPie {
 }
 
 export function progressPieSummary(title: string, stages: Pick<AdminProgressStage, 'label' | 'count'>[]): string {
-  return `${title} pie chart: ${stages.map((stage) => `${stage.label} ${stage.count}`).join(', ')}`;
+  return `${title} bar chart: ${stages.map((stage) => `${stage.label} ${stage.count}`).join(', ')}`;
+}
+
+/** Chart area for the grouped vertical bar chart (same stage colours as the former pie). */
+export const PROGRESS_BAR_VIEW = { width: 360, height: 220, padTop: 16, padRight: 12, padBottom: 36, padLeft: 36 } as const;
+
+export type ProgressBar = {
+  key: string;
+  label: string;
+  count: number;
+  color: string;
+  share: number;
+  /** Bar height in SVG units; 0 when the stage has no count. */
+  height: number;
+  x: number;
+  width: number;
+};
+
+export type ProgressBarChart = { total: number; max: number; bars: ProgressBar[]; plotHeight: number };
+
+/**
+ * One vertical bar per backend stage, left-to-right in backend order.
+ * Heights scale to the largest stage count so empty stages stay as a labelled gap.
+ */
+export function buildProgressBars(stages: AdminProgressStage[]): ProgressBarChart {
+  const { width, height, padTop, padRight, padBottom, padLeft } = PROGRESS_BAR_VIEW;
+  const plotWidth = width - padLeft - padRight;
+  const plotHeight = height - padTop - padBottom;
+  const total = stages.reduce((sum, stage) => sum + Math.max(0, stage.count), 0);
+  const max = stages.reduce((m, stage) => Math.max(m, Math.max(0, stage.count)), 0);
+  const gap = 8;
+  const barWidth = stages.length ? Math.max(10, (plotWidth - gap * (stages.length - 1)) / stages.length) : 0;
+  const bars = stages.map((stage, index): ProgressBar => {
+    const count = Math.max(0, stage.count);
+    const color = PROGRESS_PIE_COLORS[index % PROGRESS_PIE_COLORS.length]!;
+    const share = total ? Math.round((count / total) * 1000) / 10 : 0;
+    const heightPx = max ? (count / max) * plotHeight : 0;
+    return {
+      key: stage.key,
+      label: stage.label,
+      count: stage.count,
+      color,
+      share,
+      height: round2(heightPx),
+      x: round2(padLeft + index * (barWidth + gap)),
+      width: round2(barWidth),
+    };
+  });
+  return { total, max, bars, plotHeight };
 }
