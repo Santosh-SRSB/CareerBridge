@@ -926,9 +926,15 @@ export class CandidatesService {
 
   async removeEducation(userId: string, educationId: string) {
     const candidate = await this.loadCandidate(userId);
-    await this.prisma.candidateEducation.deleteMany({
+    const deleted = await this.prisma.candidateEducation.deleteMany({
       where: { id: educationId, candidateId: candidate.id },
     });
+    if (deleted.count === 0) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'Education record was not found',
+      });
+    }
     return this.recompute(userId);
   }
 
