@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { getAdminCandidateProgress, getAdminEmployerProgress } from '@/lib/api';
 import {
   type AdminProgressReport,
-  PROGRESS_BAR_VIEW,
-  buildProgressBars,
+  PROGRESS_PIE_SIZE,
+  buildProgressPie,
   progressCaption,
   progressPieSummary,
   progressShareLabel,
@@ -21,19 +21,11 @@ type Props = {
   load: () => Promise<AdminProgressReport>;
 };
 
-function ProgressBarSkeleton({ label, rows }: { label: string; rows: number }) {
+function ProgressPieSkeleton({ label, rows }: { label: string; rows: number }) {
   return (
     <div role="status" aria-live="polite" data-state="loading" className="flex flex-col items-center gap-4 p-4">
       <span className="sr-only">{label}</span>
-      <div aria-hidden="true" className="flex h-[180px] w-full max-w-[320px] items-end justify-between gap-2">
-        {Array.from({ length: Math.min(rows, 7) }).map((_, i) => (
-          <div
-            key={i}
-            className="cb-skeleton w-full animate-pulse rounded-t-md bg-[var(--sa-tint2)]"
-            style={{ height: `${40 + ((i * 17) % 50)}%` }}
-          />
-        ))}
-      </div>
+      <div aria-hidden="true" className="cb-skeleton aspect-square w-full max-w-[220px] animate-pulse rounded-full bg-[var(--sa-tint2)]" />
       <div className="w-full space-y-2">
         {Array.from({ length: rows }).map((_, i) => (
           <Skeleton key={i} className="h-5 w-full" />
@@ -68,16 +60,8 @@ function ProgressPiePanel({ title, noun, testId, load }: Props) {
     setAttempt((n) => n + 1);
   };
   const state = progressViewState({ loading, error, report: data });
-  const chart = state === 'ready' && data ? buildProgressBars(data.stages) : null;
+  const pie = state === 'ready' && data ? buildProgressPie(data.stages) : null;
   const dim = (key: string) => activeKey !== null && activeKey !== key;
-  const { width, height, padTop, padLeft, padRight, padBottom } = PROGRESS_BAR_VIEW;
-  const plotBottom = height - padBottom;
-  const gridLines = chart
-    ? [0, 0.25, 0.5, 0.75, 1].map((t) => ({
-        y: padTop + chart.plotHeight * (1 - t),
-        label: chart.max ? Math.round(chart.max * t) : 0,
-      }))
-    : [];
 
   return (
     <section
@@ -93,91 +77,58 @@ function ProgressPiePanel({ title, noun, testId, load }: Props) {
         {data && state !== 'error' ? <p className="sa-muted text-xs">{progressCaption(data, noun)}</p> : null}
       </div>
       {state === 'loading' ? (
-        <ProgressBarSkeleton label={`Loading ${title.toLowerCase()}…`} rows={data?.stages.length || 5} />
+        <ProgressPieSkeleton label={`Loading ${title.toLowerCase()}…`} rows={data?.stages.length || 5} />
       ) : state === 'error' ? (
         <ErrorState className="m-4" message={error} onRetry={retry} />
       ) : state === 'empty' ? (
         <EmptyState className="m-4" title="No progress data available yet." />
-      ) : chart && data ? (
+      ) : pie && data ? (
         <div className="flex flex-col items-center gap-4 p-4">
           <svg
-            viewBox={`0 0 ${width} ${height}`}
-            className="h-auto w-full max-w-[360px]"
+            viewBox={`0 0 ${PROGRESS_PIE_SIZE} ${PROGRESS_PIE_SIZE}`}
+            className="h-auto w-full max-w-[220px]"
             role="img"
             aria-label={progressPieSummary(title, data.stages)}
-            data-testid="progress-bar"
+            data-testid="progress-pie"
           >
-            {gridLines.map((line) => (
-              <g key={line.y}>
-                <line
-                  x1={padLeft}
-                  x2={width - padRight}
-                  y1={line.y}
-                  y2={line.y}
-                  stroke="#d1d5db"
-                  strokeWidth={1}
-                />
-                <text
-                  x={padLeft - 6}
-                  y={line.y}
-                  textAnchor="end"
-                  dominantBaseline="central"
-                  className="fill-[var(--sa-muted,#6b7280)] text-[10px]"
+            {pie.slices.map((slice) =>
+              slice.path ? (
+                <path
+                  key={slice.key}
+                  d={slice.path}
+                  fill={slice.color}
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                  opacity={dim(slice.key) ? 0.35 : 1}
+                  data-slice={slice.key}
+                  data-count={slice.count}
+                  onMouseEnter={() => setActiveKey(slice.key)}
+                  onMouseLeave={() => setActiveKey(null)}
                 >
-                  {line.label}
+                  <title>{`${slice.label}: ${slice.count} ${noun} (${slice.share}% of chart)`}</title>
+                </path>
+              ) : null,
+            )}
+            {pie.slices.map((slice) =>
+              slice.labelPoint ? (
+                <text
+                  key={slice.key}
+                  x={slice.labelPoint.x}
+                  y={slice.labelPoint.y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  className="pointer-events-none fill-white text-[11px] font-bold"
+                  aria-hidden="true"
+                  opacity={dim(slice.key) ? 0.35 : 1}
+                >
+                  {`${Math.round(slice.share)}%`}
                 </text>
-              </g>
-            ))}
-            {chart.bars.map((bar, index) => {
-              const y = plotBottom - bar.height;
-              const h = Math.max(bar.height, 0);
-              const r = Math.min(10, bar.width / 2, h);
-              // Rounded top corners only (matches reference bar style).
-              const d =
-                h <= 0
-                  ? ''
-                  : [
-                      `M ${bar.x} ${plotBottom}`,
-                      `L ${bar.x} ${y + r}`,
-                      `Q ${bar.x} ${y} ${bar.x + r} ${y}`,
-                      `L ${bar.x + bar.width - r} ${y}`,
-                      `Q ${bar.x + bar.width} ${y} ${bar.x + bar.width} ${y + r}`,
-                      `L ${bar.x + bar.width} ${plotBottom}`,
-                      'Z',
-                    ].join(' ');
-              return (
-                <g key={bar.key}>
-                  {h > 0 ? (
-                    <path
-                      d={d}
-                      fill={bar.color}
-                      stroke="#374151"
-                      strokeWidth={1.25}
-                      opacity={dim(bar.key) ? 0.35 : 1}
-                      data-bar={bar.key}
-                      data-count={bar.count}
-                      onMouseEnter={() => setActiveKey(bar.key)}
-                      onMouseLeave={() => setActiveKey(null)}
-                    >
-                      <title>{`${bar.label}: ${bar.count} ${noun} (${bar.share}% of chart)`}</title>
-                    </path>
-                  ) : null}
-                  <text
-                    x={bar.x + bar.width / 2}
-                    y={height - 12}
-                    textAnchor="middle"
-                    className="fill-[var(--sa-muted,#6b7280)] text-[10px] font-bold"
-                    opacity={dim(bar.key) ? 0.5 : 1}
-                  >
-                    {index + 1}
-                  </text>
-                </g>
-              );
-            })}
+              ) : null,
+            )}
           </svg>
           <ol className="sa-rows w-full" data-testid="progress-legend">
             {data.stages.map((stage, index) => {
-              const bar = chart.bars[index]!;
+              const slice = pie.slices[index]!;
               return (
                 <li
                   key={stage.key}
@@ -188,12 +139,12 @@ function ProgressPiePanel({ title, noun, testId, load }: Props) {
                   onMouseEnter={() => setActiveKey(stage.key)}
                   onMouseLeave={() => setActiveKey(null)}
                 >
-                  <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: bar.color }} aria-hidden="true" />
+                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} aria-hidden="true" />
                   <span className="sa-muted w-4 shrink-0 text-xs font-extrabold">{index + 1}</span>
                   <span className="sa-ink min-w-0 flex-1 font-semibold" data-testid="stage-label">
                     {stage.label}
                   </span>
-                  <span className="sa-muted shrink-0 text-xs tabular-nums">{bar.share}%</span>
+                  <span className="sa-muted shrink-0 text-xs tabular-nums">{slice.share}%</span>
                   <span className="sa-value w-12 shrink-0 text-right text-base" data-testid="stage-count">
                     {stage.count}
                   </span>
@@ -202,7 +153,7 @@ function ProgressPiePanel({ title, noun, testId, load }: Props) {
             })}
           </ol>
           <p className="sa-muted w-full text-xs">
-            Bars compare stage counts; one {noun.replace(/s$/, '')} can appear in several stages.
+            Slices compare stage counts; one {noun.replace(/s$/, '')} can appear in several stages.
           </p>
         </div>
       ) : null}

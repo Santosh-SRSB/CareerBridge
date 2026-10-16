@@ -4,7 +4,6 @@ import {
   type AdminProgressReport,
   type AdminProgressStage,
   PROGRESS_PIE_COLORS,
-  buildProgressBars,
   buildProgressPie,
   hasProgressData,
   progressCaption,
@@ -144,30 +143,6 @@ test('view state: loading, error, empty (no report or all zero) and ready', () =
 test('accessible summary lists every stage with its backend count', () => {
   assert.equal(
     progressPieSummary('Employer Progress', stages(EMPLOYER_STAGES, [12, 9, 5, 3, 2])),
-    'Employer Progress bar chart: Employer Onboarded 12, Requirements Posted 9, Interview Happened 5, Selection Done 3, Candidates Onboarded 2',
-  );
-});
-
-test('bar chart keeps stage order, colours and scales heights to the max count', () => {
-  const counts = [12, 9, 5, 3, 2];
-  const chart = buildProgressBars(stages(EMPLOYER_STAGES, counts));
-  assert.equal(chart.max, 12);
-  assert.equal(chart.total, 31);
-  assert.deepEqual(
-    chart.bars.map((b) => [b.key, b.count, b.color]),
-    EMPLOYER_STAGES.map(([key], i) => [key, counts[i], PROGRESS_PIE_COLORS[i]]),
-  );
-  assert.equal(chart.bars[0]!.height, chart.plotHeight);
-  assert.ok(chart.bars[1]!.height < chart.bars[0]!.height);
-  assert.ok(chart.bars[4]!.height > 0);
-});
-
-test('empty stages get zero-height bars but stay in the series', () => {
-  const chart = buildProgressBars(stages(EMPLOYER_STAGES, [7, 0, 0, 0, 0]));
-  assert.equal(chart.bars.length, 5);
-  assert.equal(chart.bars[0]!.height, chart.plotHeight);
-  assert.deepEqual(
-    chart.bars.slice(1).map((b) => b.height),
-    [0, 0, 0, 0],
+    'Employer Progress pie chart: Employer Onboarded 12, Requirements Posted 9, Interview Happened 5, Selection Done 3, Candidates Onboarded 2',
   );
 });
