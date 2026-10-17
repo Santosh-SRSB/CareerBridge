@@ -1,0 +1,216 @@
+import type { ReminderKind, WhatsAppTemplateName } from './whatsapp.types';
+
+/** Meta template name mapping — override via env WHATSAPP_TEMPLATE_* */
+export const DEFAULT_TEMPLATE_NAMES: Record<WhatsAppTemplateName, string> = {
+  INTERVIEW_INVITATION: 'interview_invitation',
+  INTERVIEW_CONFIRMATION: 'interview_confirmation',
+  INTERVIEW_RESCHEDULE: 'interview_reschedule',
+  INTERVIEW_REMINDER_24H: 'interview_reminder_24h',
+  INTERVIEW_REMINDER_2H: 'interview_reminder_2h',
+  INTERVIEW_REMINDER_15M: 'interview_reminder_15m',
+  INTERVIEW_CANCELLED: 'interview_cancelled',
+  INTERVIEW_COMPLETED: 'interview_completed',
+  INTERVIEW_FEEDBACK_AVAILABLE: 'interview_feedback_available',
+  TEST_MESSAGE: 'hello_world',
+};
+
+export function resolveTemplateName(
+  logical: WhatsAppTemplateName,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const key = `WHATSAPP_TEMPLATE_${logical}`;
+  return env[key]?.trim() || DEFAULT_TEMPLATE_NAMES[logical];
+}
+
+export function formatInterviewWhen(date: Date, timeZone = 'Asia/Kolkata') {
+  const dateLabel = new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone,
+  }).format(date);
+  const timeLabel = new Intl.DateTimeFormat('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone,
+  }).format(date);
+  return { dateLabel, timeLabel };
+}
+
+/** Must match the body of the approved `interview_reschedule` Meta template. */
+export const RESCHEDULE_REQUEST_TEXT =
+  'Your interview needs to be rescheduled. Please select another available date and the time range when you are available.';
+export const RESCHEDULE_BUTTON_TEXT = 'Choose Another Time';
+export const CONFIRMATION_LINK_NOTE =
+  'The interview link is sent via email and will also be shared here with a reminder.';
+
+/** Meta rejects interactive messages whose reply-button titles repeat (#131009 "Duplicate button title"). */
+export function uniqueButtonTitles(titles: string[]) {
+  const seen = new Set<string>();
+  return titles.map((raw, index) => {
+    let title = raw.slice(0, 20);
+    if (seen.has(title)) {
+      const suffix = ` #${index + 1}`;
+      title = `${raw.slice(0, 20 - suffix.length)}${suffix}`;
+    }
+    seen.add(title);
+    return title;
+  });
+}
+
+/** Stands in for a missing company name, matching the interview emails. */
+export const INVITATION_COMPANY_FALLBACK = 'Employer';
+
+/** Meta rejects template parameters containing newlines, tabs or runs of more than four spaces. */
+export function invitationCompanyName(raw: string | null | undefined) {
+  return (raw || '').replace(/\s+/g, ' ').trim() || INVITATION_COMPANY_FALLBACK;
+}
+
+/** Body variables {{1}}–{{5}} of the approved `interview_invitation` template, in order. */
+export function invitationTemplateParams(input: {
+  candidateName: string;
+  jobTitle: string;
+  scheduledAt: Date;
+  companyName: string | null | undefined;
+  timeZone?: string;
+}) {
+  const { dateLabel, timeLabel } = formatInterviewWhen(input.scheduledAt, input.timeZone);
+  return [input.candidateName, input.jobTitle, dateLabel, timeLabel, invitationCompanyName(input.companyName)];
+}
+
+export function buildInvitationText(input: {
+  candidateName: string;
+  jobTitle: string;
+  companyName: string | null | undefined;
+  scheduledAt: Date;
+  durationMin: number;
+  timeZone?: string;
+}) {
+  const { dateLabel, timeLabel } = formatInterviewWhen(input.scheduledAt, input.timeZone);
+  return [
+    `Hi ${input.candidateName}`,
+    '',
+    `You have been invited for an interview for ${input.jobTitle} from ${invitationCompanyName(input.companyName)}.`,
+    '',
+    `Date: ${dateLabel}`,
+    `Time: ${timeLabel}`,
+    `Duration: ${input.durationMin} minutes`,
+    '',
+    'Please confirm your availability.',
+  ].join('\n');
+}
+
+export function buildConfirmationText(input: {
+  candidateName: string;
+  scheduledAt: Date;
+  timeZone?: string;
+  meetingUrl?: string | null;
+}) {
+  const { dateLabel, timeLabel } = formatInterviewWhen(input.scheduledAt, input.timeZone);
+  return [
+    `Great, ${input.candidateName}!`,
+    '',
+    `Your interview is confirmed for ${dateLabel} at ${timeLabel}.`,
+    ...(input.meetingUrl ? ['', `Meeting link: ${input.meetingUrl}`] : []),
+    '',
+    "We'll remind you before the interview.",
+    '',
+    'Good luck!',
+    '',
+    CONFIRMATION_LINK_NOTE,
+  ].join('\n');
+}
+
+export function buildReminderText(
+  kind: ReminderKind,
+  input: {
+    candidateName: string;
+    jobTitle: string;
+    scheduledAt: Date;
+    meetingUrl?: string | null;
+    timeZone?: string;
+  },
+) {
+  const { dateLabel, timeLabel } = formatInterviewWhen(input.scheduledAt, input.timeZone);
+  if (kind === '24h') {
+    return [
+      `Hi ${input.candidateName}`,
+      '',
+      `Reminder: your interview for ${input.jobTitle} is tomorrow at ${timeLabel}.`,
+      `Date: ${dateLabel}`,
+    ].join('\n');
+  }
+  if (kind === '2h') {
+    return [
+      `Hi ${input.candidateName}`,
+      '',
+      'Your interview starts in 2 hours. Please make sure you have a quiet place and a stable internet connection.',
+      `Role: ${input.jobTitle}`,
+      `Time: ${timeLabel}`,
+    ].join('\n');
+  }
+  return [
+    `Hi ${input.candidateName}`,
+    '',
+    'Your interview starts in 15 minutes.',
+    input.meetingUrl ? `Start here: ${input.meetingUrl}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export function confirmPayload(interviewId: string) {
+  return `CONFIRM:${interviewId}`;
+}
+
+export function reschedulePayload(interviewId: string) {
+  return `RESCHEDULE:${interviewId}`;
+}
+
+export function slotPayload(interviewId: string, iso: string) {
+  return `SLOT:${interviewId}:${iso}`;
+}
+
+export function startPayload(interviewId: string) {
+  return `START:${interviewId}`;
+}
+
+export function parseInteractivePayload(raw: string | undefined): import('./whatsapp.types').ParsedInteractivePayload {
+  if (!raw) return { action: 'UNKNOWN', raw: '' };
+  const value = raw.trim();
+  if (value.startsWith('CONFIRM:')) {
+    return { action: 'CONFIRM', interviewId: value.slice('CONFIRM:'.length), raw: value };
+  }
+  if (value.startsWith('RESCHEDULE:')) {
+    return { action: 'RESCHEDULE', interviewId: value.slice('RESCHEDULE:'.length), raw: value };
+  }
+  if (value.startsWith('DECLINE:')) {
+    return { action: 'DECLINE', interviewId: value.slice('DECLINE:'.length), raw: value };
+  }
+  if (value.startsWith('START:')) {
+    return { action: 'START', interviewId: value.slice('START:'.length), raw: value };
+  }
+  if (value.startsWith('SLOT:')) {
+    const rest = value.slice('SLOT:'.length);
+    const split = rest.indexOf(':');
+    if (split > 0) {
+      return {
+        action: 'SLOT',
+        interviewId: rest.slice(0, split),
+        slotIso: rest.slice(split + 1),
+        raw: value,
+      };
+    }
+  }
+  const lower = value.toLowerCase();
+  if (lower.includes('confirm')) return { action: 'CONFIRM', raw: value };
+  if (
+    lower.includes('reschedule') ||
+    lower.includes('another time') ||
+    lower.includes('choose another')
+  ) {
+    return { action: 'RESCHEDULE', raw: value };
+  }
+  return { action: 'UNKNOWN', raw: value };
+}

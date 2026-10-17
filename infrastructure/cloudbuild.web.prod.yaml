@@ -1,0 +1,24 @@
+# Cloud Build / GitHub Actions — CareerBridge Web bake (PROD)
+# Public client config only. Never put secrets here.
+#
+# NEXT_PUBLIC_API_URL is intentionally not a real PROD URL in this file.
+# deploy-prod.yml must pass web_api_url_override from the GitHub Environment
+# variable PROD_PUBLIC_API_URL (approved production API origin + /api/v1).
+# Firebase client values reuse the shared project careerbridge-f7b72 (intentional).
+substitutions:
+  _REGION: asia-south1
+  _REPO: careerbridge-prod
+  _IMAGE: web
+  _TAG: prod
+  _API_URL: REQUIRE_OVERRIDE
+  _AUTH_DEV_OTP: "false"
+  _FB_API_KEY: AIzaSyBEAdXWyCupaF14a_5j7aNHwxxtEHLnbaU
+  _FB_AUTH_DOMAIN: careerbridge-f7b72.firebaseapp.com
+  _FB_PROJECT_ID: careerbridge-f7b72
+  _FB_STORAGE_BUCKET: careerbridge-f7b72.firebasestorage.app
+  _FB_MESSAGING_SENDER_ID: "601892050765"
+  _FB_APP_ID: 1:601892050765:web:293fe4ec50962f076e4904
+  _FB_MEASUREMENT_ID: G-0EJSP0HMP1
+
+# VAPID (_FB_VAPID_KEY) is not baked here yet — Dockerfile supports
+# NEXT_PUBLIC_FIREBASE_VAPID_KEY when launch scope requires web push.

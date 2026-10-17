@@ -1,0 +1,159 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { Input } from '@/components/ui/Input';
+
+export type SelectGroup = {
+  label?: string;
+  options: readonly string[];
+};
+
+export function GroupedSelect({
+  label,
+  value,
+  onChange,
+  groups,
+  allowAll = false,
+  allLabel = 'All',
+  placeholder = 'Select',
+  required = false,
+  otherInputLabel = 'Enter other',
+  otherPlaceholder = 'Type here',
+  id,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  groups: SelectGroup[];
+  allowAll?: boolean;
+  allLabel?: string;
+  placeholder?: string;
+  required?: boolean;
+  otherInputLabel?: string;
+  otherPlaceholder?: string;
+  id: string;
+  disabled?: boolean;
+}) {
+  const listed = groups.flatMap((group) => [...group.options]);
+  const listedKey = listed.join('|');
+  const isListed = listed.includes(value);
+  const [otherMode, setOtherMode] = useState(() => Boolean(value) && !isListed);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (value && !listed.includes(value)) setOtherMode(true);
+  }, [listedKey, value]);
+
+  useEffect(() => {
+    function onDocClick(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const display = otherMode ? 'Others' : value || (allowAll ? allLabel : placeholder);
+
+  function pick(next: string, other = false) {
+    setOtherMode(other);
+    onChange(other ? (listed.includes(value) ? '' : value) : next);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={rootRef} className="relative min-w-0 space-y-2">
+      <p id={`${id}-label`} className="mb-1.5 text-sm font-semibold text-primary">
+        {label}
+        {required ? (
+          <span className="ml-0.5 text-error" aria-hidden="true">
+            *
+          </span>
+        ) : null}
+      </p>
+      <button
+        type="button"
+        id={id}
+        aria-labelledby={`${id}-label ${id}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-2 rounded-md border border-primary/15 bg-[#faf8f3] px-3 py-2.5 text-left text-sm text-primary outline-none disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className={`truncate ${value || otherMode || allowAll ? '' : 'text-muted'}`}>{display}</span>
+        <span className="shrink-0 text-muted" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+            <path
+              fillRule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </span>
+      </button>
+      {open ? (
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-primary/15 bg-white shadow-[0_16px_40px_color-mix(in_srgb,var(--navy)_16%,transparent)]">
+          <div className="max-h-56 overflow-y-auto" role="listbox">
+            {allowAll ? (
+              <button
+                type="button"
+                className={`flex w-full px-3 py-2 text-left text-sm ${!value && !otherMode ? 'bg-[color-mix(in_srgb,var(--teal)_10%,white)] font-bold text-primary' : 'text-primary hover:bg-fog'}`}
+                onClick={() => pick('')}
+              >
+                {allLabel}
+              </button>
+            ) : null}
+            {groups.map((group) => (
+              <div key={group.label || 'options'}>
+                {group.label ? (
+                  <p className="sticky top-0 bg-fog px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-muted">
+                    {group.label}
+                  </p>
+                ) : null}
+                {group.options.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`flex w-full px-3 py-2 text-left text-sm ${!otherMode && value === option ? 'bg-[color-mix(in_srgb,var(--teal)_10%,white)] font-bold text-primary' : 'text-primary hover:bg-fog'}`}
+                    onClick={() => pick(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={`flex w-full border-t border-primary/10 px-3 py-2.5 text-left text-sm font-bold ${otherMode ? 'bg-[color-mix(in_srgb,var(--teal)_10%,white)] text-primary' : 'text-primary hover:bg-fog'}`}
+            onClick={() => pick('', true)}
+          >
+            Others
+          </button>
+        </div>
+      ) : null}
+      {otherMode ? (
+        <Input
+          label={otherInputLabel}
+          name={`${id}-other`}
+          required={required}
+          value={isListed ? '' : value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={otherPlaceholder}
+        />
+      ) : required && !allowAll ? (
+        <input
+          tabIndex={-1}
+          className="sr-only"
+          aria-hidden="true"
+          aria-label={label}
+          required
+          value={value}
+          onChange={() => undefined}
+        />
+      ) : null}
+    </div>
+  );
+}

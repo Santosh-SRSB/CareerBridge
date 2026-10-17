@@ -1,0 +1,586 @@
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { UserType } from '../prisma/client';
+import { Transform, Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+import {
+  CANDIDATE_AVAILABILITY_FILTERS,
+  CANDIDATE_EDUCATION_FILTERS,
+  CANDIDATE_EXPERIENCE_FILTERS,
+  CANDIDATE_SEARCH_MAX_SKILLS,
+  CANDIDATE_SEARCH_SORTS,
+  type CandidateSearchSort,
+  ErrorCode,
+  JOB_DESCRIPTION_MAX,
+  JOB_EXPERIENCE_RANGES,
+  LEGACY_JOB_EXPERIENCE_RANGES,
+  JOB_TYPES,
+  SCREENING_QUESTION_TYPES,
+  WORK_MODES,
+} from '@careerbridge/shared';
+import { EmployersService } from './employers.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
+
+class TalentShortlistDto {
+  @IsString()
+  @IsUUID('all', { message: 'jobId is required' })
+  jobId!: string;
+}
+
+class TalentShortlistBodyDto extends TalentShortlistDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+class UpdateEmployerDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  industry?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  contactName?: string;
+
+  @IsOptional()
+  @IsString()
+  website?: string;
+
+  @IsOptional()
+  @IsString()
+  workEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  designation?: string;
+
+  @IsOptional()
+  @IsString()
+  companySize?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  about?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  linkedinUrl?: string;
+}
+
+class SaveEmployerKycDto {
+  @IsString()
+  @MinLength(1)
+  gstNumber: string;
+
+  /** Omitted: the saved CIN is kept. Empty string or null: the saved CIN is removed. */
+  @IsOptional()
+  @IsString()
+  cin?: string | null;
+
+  @IsString()
+  @MinLength(1)
+  website: string;
+
+  @IsString()
+  @MinLength(1)
+  panNumber: string;
+
+  @IsOptional()
+  @IsString()
+  trademark?: string;
+}
+
+class SubmitEmployerVerificationDto {
+  @IsString()
+  @MinLength(2)
+  companyName: string;
+
+  @IsString()
+  @MinLength(3)
+  workEmail: string;
+
+  @IsString()
+  @MinLength(2)
+  designation: string;
+}
+
+class ScreeningQuestionDto {
+  @IsString()
+  @MinLength(1)
+  id: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(200)
+  prompt: string;
+
+  @IsString()
+  @IsIn([...SCREENING_QUESTION_TYPES])
+  type: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  options?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  required?: boolean;
+}
+
+class CreateJobDto {
+  @IsString()
+  @MinLength(2)
+  title: string;
+
+  @IsString()
+  @MinLength(20, { message: 'Add a short job description.' })
+  @MaxLength(JOB_DESCRIPTION_MAX, { message: `Job description must be ${JOB_DESCRIPTION_MAX} characters or fewer.` })
+  description: string;
+
+  @IsString()
+  @MinLength(2)
+  city: string;
+
+  @IsOptional()
+  @IsString()
+  department?: string;
+
+  @IsOptional()
+  @IsString()
+  hiringManager?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(999)
+  openings?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...WORK_MODES])
+  workMode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  educationMin?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  salaryMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  salaryMax?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...JOB_TYPES])
+  jobType?: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(80)
+  category: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...JOB_EXPERIENCE_RANGES, ...LEGACY_JOB_EXPERIENCE_RANGES, 'NONE'])
+  experience?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  requiredSkills?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  preferredSkills?: string[];
+
+  @IsOptional()
+  @IsString()
+  benefits?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ScreeningQuestionDto)
+  screeningQuestions?: ScreeningQuestionDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  publish?: boolean;
+}
+
+class ApplicationActionDto {
+  @IsString()
+  @IsIn(['REVIEW', 'SHORTLIST', 'INTERVIEW', 'HOLD', 'SELECT', 'REJECT', 'HIRE'])
+  action: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+
+  /** Private hiring-team note; never sent to the candidate (unlike `reason`). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+class CandidateSearchQueryDto {
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  skill?: string;
+
+  /** Comma-separated; every listed skill must be present. */
+  @IsOptional()
+  @Transform(({ value }) =>
+    (Array.isArray(value) ? value : String(value ?? '').split(','))
+      .map((item: unknown) => String(item).trim())
+      .filter(Boolean),
+  )
+  @IsArray()
+  @ArrayMaxSize(CANDIDATE_SEARCH_MAX_SKILLS, {
+    message: `You can filter by up to ${CANDIDATE_SEARCH_MAX_SKILLS} skills.`,
+  })
+  @IsString({ each: true })
+  skills?: string[];
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(50)
+  experienceMin?: number;
+
+  /** Experience band such as "2-5" or "5+". */
+  @IsOptional()
+  @IsIn(CANDIDATE_EXPERIENCE_FILTERS.map((item) => item.value))
+  experience?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  language?: string;
+
+  @IsOptional()
+  @IsIn(CANDIDATE_EDUCATION_FILTERS.map((item) => item.value))
+  education?: string;
+
+  @IsOptional()
+  @IsIn(CANDIDATE_AVAILABILITY_FILTERS.map((item) => item.value))
+  availability?: string;
+
+  @IsOptional()
+  @IsIn(CANDIDATE_SEARCH_SORTS.map((item) => item.value))
+  sort?: CandidateSearchSort;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  pageSize?: number;
+
+  @IsString()
+  jobId: string;
+}
+
+class ScheduleInterviewDto {
+  @IsString()
+  applicationId: string;
+
+  @IsString()
+  scheduledAt: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(15)
+  @Max(180)
+  durationMin?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['VIDEO', 'IN_PERSON', 'PHONE'])
+  mode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  notifyWhatsApp?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  notifyEmail?: boolean;
+}
+
+class InterviewActionDto {
+  @IsString()
+  @IsIn(['confirm', 'reschedule', 'complete', 'cancel', 'notes'])
+  action: string;
+
+  @IsOptional()
+  @IsString()
+  scheduledAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+
+  /** Reschedule only: replaces the video meeting link. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  meetingUrl?: string;
+}
+
+@ApiTags('employers')
+@ApiBearerAuth()
+@UseGuards(RolesGuard)
+@Roles(UserType.EMPLOYER_ADMIN, UserType.EMPLOYER_RECRUITER)
+@Controller('employers')
+export class EmployersController {
+  constructor(private readonly employers: EmployersService) {}
+
+  @Get('me')
+  me(@CurrentUser() user: { id: string }) {
+    return this.employers.me(user.id);
+  }
+
+  @Get('plan-usage')
+  planUsage(@CurrentUser() user: { id: string }) {
+    return this.employers.planUsage(user.id);
+  }
+
+  @Patch('me')
+  updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateEmployerDto) {
+    return this.employers.updateMe(user.id, dto);
+  }
+
+  @Post('me/logo')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  uploadLogo(
+    @CurrentUser() user: { id: string },
+    @UploadedFile()
+    file?: { buffer: Buffer; mimetype: string; size: number; originalname: string },
+  ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Please choose a JPG or PNG logo.',
+      });
+    }
+    return this.employers.uploadLogoFile(user.id, file);
+  }
+
+  @Patch('me/kyc')
+  saveKyc(@CurrentUser() user: { id: string }, @Body() dto: SaveEmployerKycDto) {
+    return this.employers.saveKyc(user.id, dto);
+  }
+
+  @Post('me/verification')
+  submitVerification(
+    @CurrentUser() user: { id: string },
+    @Body() dto: SubmitEmployerVerificationDto,
+  ) {
+    return this.employers.submitVerification(user.id, dto);
+  }
+
+  @Get('me/dashboard')
+  dashboard(@CurrentUser() user: { id: string }) {
+    return this.employers.dashboard(user.id);
+  }
+
+  @Get('jobs')
+  jobs(@CurrentUser() user: { id: string }) {
+    return this.employers.jobs(user.id);
+  }
+
+  @Post('jobs')
+  createJob(@CurrentUser() user: { id: string }, @Body() dto: CreateJobDto) {
+    return this.employers.createJob(user.id, dto);
+  }
+
+  @Get('jobs/:id')
+  job(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.employers.job(user.id, id);
+  }
+
+  @Patch('jobs/:id')
+  updateJob(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: CreateJobDto) {
+    return this.employers.updateJob(user.id, id, dto);
+  }
+
+  @Post('jobs/:id/publish')
+  publish(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.employers.setStatus(user.id, id, 'PUBLISHED');
+  }
+
+  @Post('jobs/:id/pause')
+  pause(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.employers.setStatus(user.id, id, 'PAUSED');
+  }
+
+  @Post('jobs/:id/close')
+  close(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.employers.setStatus(user.id, id, 'CLOSED');
+  }
+
+  @Get('jobs/:id/applications')
+  applications(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.employers.applications(user.id, id);
+  }
+
+  @Get('applications')
+  allApplications(@CurrentUser() user: { id: string }) {
+    return this.employers.allApplications(user.id);
+  }
+
+  @Get('candidates/search')
+  searchCandidates(@CurrentUser() user: { id: string }, @Query() query: CandidateSearchQueryDto) {
+    return this.employers.searchCandidates(user.id, query);
+  }
+
+  @Post('candidates/:id/shortlist')
+  talentShortlist(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() body: TalentShortlistBodyDto,
+  ) {
+    return this.employers.setTalentShortlist(user.id, id, body.jobId.trim(), true, body.note);
+  }
+
+  @Delete('candidates/:id/shortlist')
+  removeTalentShortlist(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query() query: TalentShortlistDto,
+  ) {
+    return this.employers.setTalentShortlist(user.id, id, query.jobId.trim(), false);
+  }
+
+  @Get('candidates/:id')
+  candidate(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query('jobId') jobId?: string,
+  ) {
+    return this.employers.candidateView(user.id, id, jobId);
+  }
+
+  @Get('candidates/:id/resume')
+  candidateResume(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query('jobId') jobId?: string,
+  ) {
+    return this.employers.downloadCandidateResume(user.id, id, jobId);
+  }
+
+  @Get('interviews')
+  interviews(@CurrentUser() user: { id: string }, @Query('status') status?: string) {
+    return this.employers.listInterviews(user.id, status);
+  }
+
+  @Post('interviews')
+  scheduleInterview(@CurrentUser() user: { id: string }, @Body() dto: ScheduleInterviewDto) {
+    return this.employers.scheduleInterview(user.id, dto);
+  }
+
+  @Post('interviews/:id/action')
+  interviewAction(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: InterviewActionDto,
+  ) {
+    return this.employers.updateInterviewStatus(
+      user.id,
+      id,
+      dto.action as 'confirm' | 'reschedule' | 'complete' | 'cancel' | 'notes',
+      dto,
+    );
+  }
+
+  @Post('interviews/:id/request-feedback')
+  requestInterviewFeedback(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.employers.requestInterviewFeedback(user.id, id);
+  }
+
+  @Post('applications/:id/status')
+  status(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: ApplicationActionDto,
+  ) {
+    return this.employers.changeStatus(user.id, id, dto.action, dto.reason, dto.note);
+  }
+}

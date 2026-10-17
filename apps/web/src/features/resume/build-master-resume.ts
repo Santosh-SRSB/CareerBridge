@@ -1,0 +1,203 @@
+import { normalizeResumeDateForStorage } from '@careerbridge/shared';
+import type { MasterResumeDocument } from './master-resume.types';
+import { formatDateForResume, formatEducationYearRange } from '@/lib/resume-dates';
+import { isValidEmail, isValidPhone } from './resume-wizard-validation';
+import { sortExperienceForResume } from './master-to-ats-data';
+
+interface EducationItem {
+  degree: string;
+  field?: string;
+  institution: string;
+  location?: string;
+  startDate: string;
+  endDate: string;
+  isCurrent?: boolean;
+  grade?: string;
+  gradeType?: string;
+}
+
+interface ExperienceItem {
+  role: string;
+  company: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  responsibilities?: string[];
+  isInternship?: boolean;
+}
+
+interface ProjectItem {
+  name: string;
+  description: string;
+  technologies?: string[];
+  bullets?: string[];
+}
+
+interface CertificationItem {
+  name: string;
+  issuer: string;
+  date: string;
+}
+
+interface AchievementItem {
+  title: string;
+  organization?: string;
+  description: string;
+  date?: string;
+}
+
+interface LanguageItem {
+  name: string;
+  level?: string;
+}
+
+export interface BuildMasterResumeInput {
+  fullName: string;
+  location: string;
+  email?: string;
+  phone?: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  summary: string;
+  skills: string[];
+  experienceList: ExperienceItem[];
+  educationList: EducationItem[];
+  projectList: ProjectItem[];
+  certificationList: CertificationItem[];
+  achievementList: AchievementItem[];
+  languages?: LanguageItem[];
+}
+
+export function buildMasterResume(input: BuildMasterResumeInput): MasterResumeDocument {
+  const technicalSkills =
+    input.skills.length > 0 ? [{ category: '', skills: input.skills }] : [];
+
+  return {
+    personalInfo: {
+      fullName: input.fullName.trim(),
+      location: input.location.trim(),
+      email: (input.email || '').trim(),
+      phone: (input.phone || '').trim(),
+      linkedin: (input.linkedin || '').trim(),
+      github: (input.github || '').trim(),
+      portfolio: (input.portfolio || '').trim(),
+    },
+    summary: input.summary.trim(),
+    experience: sortExperienceForResume(
+      input.experienceList.map((exp) => ({
+        role: exp.role.trim(),
+        company: exp.company.trim(),
+        location: exp.location.trim(),
+        startDate: formatDateForResume(exp.startDate),
+        endDate: exp.isCurrent ? '' : formatDateForResume(exp.endDate),
+        current: exp.isCurrent,
+        responsibilities: (exp.responsibilities || []).map((r) => r.trim()).filter(Boolean),
+        isInternship: Boolean(exp.isInternship) || /\bintern(?:ship|s)?\b/i.test(exp.role),
+      })),
+    ).map((exp) => ({
+      jobTitle: exp.role,
+      company: exp.company,
+      location: exp.location,
+      startDate: exp.startDate,
+      endDate: exp.endDate,
+      isCurrent: Boolean(exp.current),
+      responsibilities: exp.responsibilities,
+      isInternship: exp.isInternship,
+    })),
+    technicalSkills,
+    education: input.educationList.map((edu) => {
+      const yearRange = formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate);
+      const parts = yearRange.split(' – ');
+      return {
+        degree: edu.degree.trim(),
+        field: (edu.field || '').trim(),
+        institution: edu.institution.trim(),
+        location: (edu.location || '').trim(),
+        startYear: parts[0] || '',
+        endYear: parts[1] || '',
+        grade: (edu.grade || '').trim(),
+        gradeType: (edu.gradeType || '').trim(),
+        startDate: normalizeResumeDateForStorage(edu.startDate) || '',
+        endDate: edu.isCurrent ? '' : normalizeResumeDateForStorage(edu.endDate) || '',
+        isCurrent: Boolean(edu.isCurrent),
+      };
+    }),
+    projects: input.projectList.map((proj) => {
+      // Deep-copy bullets per resume — never reuse shared array references.
+      const bullets = [...(proj.bullets || [])].map((b) => b.trim()).filter(Boolean);
+      const description = proj.description.trim();
+      const uniqueBullets = [...new Set(bullets.map((b) => b))];
+      const filteredBullets = uniqueBullets.filter(
+        (b) => b.toLowerCase() !== description.toLowerCase(),
+      );
+      return {
+        name: proj.name.trim(),
+        technologies: [...(proj.technologies || [])].map((t) => t.trim()).filter(Boolean),
+        description,
+        url: '',
+        bullets: filteredBullets,
+      };
+    }),
+    achievements: input.achievementList
+      .filter((ach) => {
+        const blob = [ach.title, ach.organization, ach.description].filter(Boolean).join(' ');
+        const cleaned = blob
+          .trim()
+          .replace(/[-–—•|]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!cleaned) return false;
+        if (/^(page\s+)?\d+\s*of\s*\d+$/i.test(cleaned.replace(/\s+/g, ''))) return false;
+        if (/^(page\s+)?\d+\s+of\s+\d+$/i.test(cleaned)) return false;
+        return true;
+      })
+      .map((ach) => ({
+      title: ach.title.trim(),
+      organization: (ach.organization || '').trim(),
+      date: formatDateForResume(ach.date || ''),
+      description: ach.description.trim(),
+    })),
+    certifications: input.certificationList.map((cert) => ({
+      name: cert.name.trim(),
+      issuer: cert.issuer.trim(),
+      date: formatDateForResume(cert.date),
+      credentialUrl: '',
+    })),
+    languages: (input.languages || [])
+      .map((lang) => ({
+        name: lang.name.trim(),
+        level: (lang.level || '').trim(),
+      }))
+      .filter((lang) => lang.name),
+  };
+}
+
+export function validateMasterResume(doc: MasterResumeDocument): string[] {
+  const errors: string[] = [];
+  if (!doc.personalInfo.fullName) {
+    errors.push('Name is required.');
+  }
+  if (!doc.personalInfo.email) {
+    errors.push('Email is required.');
+  } else if (!isValidEmail(doc.personalInfo.email)) {
+    errors.push('Enter a valid email address.');
+  }
+  if (!doc.personalInfo.phone) {
+    errors.push('Phone number is required.');
+  } else if (!isValidPhone(doc.personalInfo.phone)) {
+    errors.push('Enter a valid 10-digit Indian mobile number.');
+  }
+  if (!doc.personalInfo.location.trim()) {
+    errors.push('Location is required.');
+  }
+  if (doc.education.length === 0) {
+    errors.push('Add at least one education entry.');
+  }
+  const hasSkills = doc.technicalSkills.some((group) => group.skills.length > 0);
+  if (!hasSkills) {
+    errors.push('Add at least one skill.');
+  }
+  return errors;
+}

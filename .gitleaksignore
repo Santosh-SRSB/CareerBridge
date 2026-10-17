@@ -1,0 +1,6 @@
+# Verified historical SEC-LOG-008 unit-test fixtures from commit b436281 only
+# (jwt.io-style JWT + truncated PEM used to test client-error redaction).
+# Current fixtures were rewritten in a618124 to assemble at runtime; tip tree is clean.
+# Do not broaden beyond these two fingerprints.
+b43628178e0fb127e708c30d59ccb53e292c8462:apps/api/src/platform/client-error-sanitize.unit.test.ts:jwt:9
+b43628178e0fb127e708c30d59ccb53e292c8462:apps/api/src/platform/client-error-sanitize.unit.test.ts:private-key:43

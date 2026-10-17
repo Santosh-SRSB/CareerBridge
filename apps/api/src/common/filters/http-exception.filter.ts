@@ -1,0 +1,89 @@
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import { Request, Response } from 'express';
+import { ErrorCode } from '@careerbridge/shared';
+import { resolveRequestId } from '../request-id';
+
+@Catch()
+export class HttpExceptionFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+    // Prefer the interceptor-sanitized value; never echo a raw hostile header.
+    const requestId =
+      (request as Request & { requestId?: string }).requestId ||
+      resolveRequestId(request.headers['x-request-id']);
+
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let code: string = ErrorCode.INTERNAL_ERROR;
+    let message = 'Something went wrong. Please try again.';
+
+    if (!(exception instanceof HttpException)) {
+      // Surface unexpected errors in API logs (Prisma schema drift, etc.)
+      // eslint-disable-next-line no-console
+      console.error(
+        `[HttpExceptionFilter] requestId=${requestId} ${request.method} ${request.originalUrl || request.url}`,
+        exception,
+      );
+
+      const prismaCode =
+        exception && typeof exception === 'object' && 'code' in exception
+          ? String((exception as { code?: string }).code)
+          : '';
+      if (prismaCode === 'P2002') {
+        status = HttpStatus.CONFLICT;
+        code = ErrorCode.DUPLICATE_RESOURCE;
+        message = 'An account already exists with this email or mobile. Please sign in.';
+      }
+    }
+
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const payload = exception.getResponse();
+      if (typeof payload === 'string') {
+        message = payload;
+      } else if (typeof payload === 'object' && payload) {
+        const body = payload as { message?: string | string[]; code?: string };
+        const raw = Array.isArray(body.message) ? body.message[0] : body.message;
+        if (raw) {
+          message = raw;
+        }
+        if (body.code) {
+          code = body.code;
+        }
+      }
+      if (!code || code === ErrorCode.INTERNAL_ERROR) {
+        if (status === HttpStatus.UNAUTHORIZED) code = ErrorCode.UNAUTHORIZED;
+        else if (status === HttpStatus.FORBIDDEN) code = ErrorCode.FORBIDDEN;
+        else if (status === HttpStatus.NOT_FOUND) code = ErrorCode.RESOURCE_NOT_FOUND;
+        else if (status === HttpStatus.BAD_REQUEST) code = ErrorCode.VALIDATION_ERROR;
+        else if (status === HttpStatus.CONFLICT) code = ErrorCode.DUPLICATE_RESOURCE;
+        else if (status === HttpStatus.UNPROCESSABLE_ENTITY)
+          code = ErrorCode.BUSINESS_RULE_VIOLATION;
+      }
+      if (status >= 500) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[HttpExceptionFilter] requestId=${requestId} status=${status} ${request.method} ${request.originalUrl || request.url}: ${message}`,
+        );
+      }
+    }
+
+    // 5xx details stay in the logs; clients get a generic message plus the request id.
+    if (status >= 500 && status !== HttpStatus.SERVICE_UNAVAILABLE) {
+      message = 'Something went wrong. Please try again.';
+    }
+
+    response.status(status).json({
+      success: false,
+      error: { code, message },
+      requestId,
+    });
+  }
+}
