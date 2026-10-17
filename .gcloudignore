@@ -1,0 +1,11 @@
+#!include:.gitignore
+
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+.tools/
+**/node_modules/
+_*.json
+_*.txt

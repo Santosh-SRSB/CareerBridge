@@ -1,0 +1,1941 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  ATS_ENHANCE_PLANS,
+  ErrorCode,
+  analyzeResumeContent,
+  applySafeOptimizations,
+  extractFacts,
+  factPreservationScore,
+  type ResumeAnalysis,
+  type ResumeChangeRecord,
+  type ResumeContent,
+} from '@careerbridge/shared';
+import { PrismaService } from '../prisma/prisma.service';
+import { IntelligenceService } from '../intelligence/intelligence.service';
+import { AiGatewayService } from '../ai/ai-gateway.service';
+import { StorageService } from '../common/storage/storage.service';
+import { CloudTasksService } from '../common/tasks/cloud-tasks.service';
+import { assertTaskSecret, isTaskSecretRequired } from '../common/tasks/assert-task-secret';
+import { renderResumePdf } from './resume-pdf';
+import { parseResumeContentJson } from './resume-content-json';
+import { readOwnedProfilePhotoDataUrl } from '../candidates/profile-photo.util';
+import { ResumeOptimizeAi } from './resume-optimize-ai';
+import { ResumeProcessorService } from './resume-processor.service';
+import { publicProcessingError } from './resume-eligibility';
+import { readableResumeUrl } from './resume-view-url.util';
+import { analyzeRoleResume, rewriteRoleResume, recommendCareerRoles } from './ats-engine';
+import {
+  resolveResumeTemplateId,
+  CAREERBRIDGE_RESUME_TEMPLATE,
+  fitResumeSummary,
+  type AiUnavailableReason,
+} from '@careerbridge/shared';
+import { extractProjectTechnologies, isPageMarkerText, isThinResumeContent, parseExtractedResumeText } from './parse-extracted-resume';
+
+@Injectable()
+export class ResumesService {
+  private readonly logger = new Logger(ResumesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly intelligence: IntelligenceService,
+    private readonly optimizeAi: ResumeOptimizeAi,
+    private readonly aiGateway: AiGatewayService,
+    private readonly storage: StorageService,
+    private readonly cloudTasks: CloudTasksService,
+    private readonly processor: ResumeProcessorService,
+    private readonly config: ConfigService,
+  ) {}
+
+  async list(userId: string) {
+    const candidate = await this.requireCandidate(userId);
+    const rows = await this.prisma.resume.findMany({
+      where: { candidateId: candidate.id, archivedAt: null },
+      orderBy: { updatedAt: 'desc' },
+      include: { _count: { select: { applications: true } } },
+    });
+    // Recompute ATS readiness from current content so list scores stay in sync
+    // (avoids stale values like every resume stuck at 77 after an old scoring bug).
+    return Promise.all(
+      rows.map(async (row) => {
+        if (atsBlockedReason(row.processingStatus)) {
+          if (row.score !== 0) {
+            await this.prisma.resume.updateMany({ where: { id: row.id, score: { not: 0 } }, data: { score: 0 } });
+          }
+          return this.toRecord({ ...row, score: 0 }, undefined, row._count.applications);
+        }
+        const content = hydrateResumeContent(parseContent(row.contentJson), row.rawText);
+        const analysis = analyzeResumeContent(content, row.rawText || '');
+        if (row.score !== analysis.score) {
+          await this.prisma.resume.update({
+            where: { id: row.id },
+            data: { score: analysis.score },
+          });
+        }
+        return this.toRecord({ ...row, score: analysis.score }, analysis, row._count.applications);
+      }),
+    );
+  }
+
+  /**
+   * Structure raw resume text via AI Gateway (Gemini only). Used by web parse route.
+   */
+  async structureText(rawText: string) {
+    const text = (rawText || '').trim();
+    if (!text) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Resume text is required',
+      });
+    }
+
+    if (this.aiGateway.isConfigured()) {
+      const structured = await this.aiGateway.structureResumeText(text);
+      if (structured) {
+        return {
+          ...structured,
+          stillInCollege: false,
+          educationStart: '',
+          educationEnd: '',
+          experienceLevel:
+            structured.experience?.length > 0 ? ('experienced' as const) : ('fresher' as const),
+          totalExperienceYears: '',
+          totalExperienceMonths: '',
+          gapReason: '',
+          source: 'resume' as const,
+        };
+      }
+    }
+
+    // Deterministic fallback when Gemini is unavailable — never OpenAI.
+    const parsed = parseExtractedResumeText(text);
+    const nameParts = (parsed.fullName || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' ') || '',
+      city: parsed.city || '',
+      about: parsed.summary || '',
+      education: (parsed.education || []).map((row) => ({
+        qualification: row.qualification || '',
+        institution: row.institution || '',
+        fieldOfStudy: '',
+        yearCompleted: row.yearCompleted != null ? String(row.yearCompleted) : '',
+      })),
+      stillInCollege: false,
+      educationStart: '',
+      educationEnd: '',
+      experienceLevel:
+        (parsed.experiences || []).length > 0 ? ('experienced' as const) : ('fresher' as const),
+      totalExperienceYears: '',
+      totalExperienceMonths: '',
+      experience: (parsed.experiences || []).map((row) => ({
+        company: row.company || '',
+        jobTitle: row.jobTitle || '',
+        isInternship: Boolean(row.isInternship),
+        description: row.description || '',
+      })),
+      projects: (parsed.projects || []).map((row) => ({
+        title: row.name || '',
+        role: '',
+        year: '',
+        description: row.description || '',
+        url: '',
+      })),
+      gapReason: '',
+      skills: parsed.skills || [],
+      careerInterests: [],
+      linkedin: parsed.links?.linkedin || '',
+      github: parsed.links?.github || '',
+      portfolio: parsed.links?.portfolio || parsed.links?.website || '',
+      source: 'resume' as const,
+    };
+  }
+
+  async create(
+    userId: string,
+    dto: {
+      targetJobTitle?: string;
+      title?: string;
+      template?: string;
+      includePhoto?: boolean;
+      blank?: boolean;
+      content?: Record<string, unknown>;
+      summary?: string;
+      parentResumeId?: string;
+      kind?: 'ORIGINAL' | 'OPTIMIZED';
+    },
+  ) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { userId },
+      include: { user: true, skills: true, education: true, experiences: true },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Candidate profile was not found' });
+    }
+    let content: ResumeContent & { _manual?: boolean; data?: Record<string, unknown> };
+    if (dto.content && typeof dto.content === 'object') {
+      content = normalizeStoredContent(dto.content);
+    } else if (dto.blank) {
+      content = blankManualContent(dto.includePhoto !== false);
+    } else {
+      content = this.contentFromPassport(candidate, dto.targetJobTitle);
+    }
+    if (dto.summary !== undefined) {
+      content.summary = dto.summary;
+    }
+    if (dto.includePhoto === false) content.includePhoto = false;
+    if (dto.includePhoto === true) content.includePhoto = true;
+
+    let parentResumeId: string | null = null;
+    let version = 1;
+    let kind: 'ORIGINAL' | 'OPTIMIZED' = dto.kind === 'OPTIMIZED' ? 'OPTIMIZED' : 'ORIGINAL';
+    if (dto.parentResumeId) {
+      const parent = await this.prisma.resume.findFirst({
+        where: { id: dto.parentResumeId, candidateId: candidate.id, archivedAt: null },
+      });
+      if (!parent) {
+        throw new NotFoundException({
+          code: ErrorCode.RESOURCE_NOT_FOUND,
+          message: 'Parent resume was not found',
+        });
+      }
+      parentResumeId = parent.parentResumeId || parent.id;
+      const siblings = await this.prisma.resume.count({
+        where: {
+          candidateId: candidate.id,
+          OR: [{ id: parentResumeId }, { parentResumeId }],
+        },
+      });
+      version = siblings + 1;
+      kind = 'OPTIMIZED';
+    }
+
+    const title =
+      (dto.title && dto.title.trim()) ||
+      (dto.blank || dto.content ? 'Untitled resume' : dto.targetJobTitle ? `${dto.targetJobTitle} Resume` : 'General Resume');
+    const created = await this.prisma.resume.create({
+      data: {
+        candidateId: candidate.id,
+        title,
+        targetJobTitle: dto.targetJobTitle || null,
+        template: resolveResumeTemplateId(dto.template || CAREERBRIDGE_RESUME_TEMPLATE),
+        summary: content.summary,
+        contentJson: JSON.stringify(content),
+        score: 0,
+        kind,
+        parentResumeId,
+        version,
+      },
+    });
+    const analysis = await this.persistAnalysis(created.id, content, '');
+    await this.safeSyncPdfForResume(created.id, userId, 'create');
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: created.id } });
+    return this.toRecord({ ...fresh, score: analysis.score }, analysis);
+  }
+
+  async upload(
+    userId: string,
+    dto: {
+      fileName?: string;
+      targetJobTitle?: string;
+      content: Partial<ResumeContent>;
+      rawText?: string;
+      template?: string;
+      includePhoto?: boolean;
+    },
+  ) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { userId },
+      include: { user: true },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Candidate profile was not found' });
+    }
+    const content = sanitizeUploadedContent(dto.content, {
+      fullName: [candidate.firstName, candidate.lastName].filter(Boolean).join(' '),
+      city: candidate.city,
+      phone: candidate.user.phone,
+    });
+    if (dto.includePhoto === false) content.includePhoto = false;
+    if (dto.includePhoto === true) content.includePhoto = true;
+    const rawText = (dto.rawText || '').slice(0, 80000);
+    const baseName = (dto.fileName || 'Uploaded resume').replace(/\.[^.]+$/, '').trim() || 'Uploaded resume';
+    const created = await this.prisma.resume.create({
+      data: {
+        candidateId: candidate.id,
+        title: baseName,
+        targetJobTitle: dto.targetJobTitle || content.experiences[0]?.jobTitle || null,
+        template: resolveResumeTemplateId(dto.template || CAREERBRIDGE_RESUME_TEMPLATE),
+        summary: content.summary,
+        contentJson: JSON.stringify(content),
+        rawText,
+        score: 0,
+        kind: 'ORIGINAL',
+      },
+    });
+    const analysis = await this.persistAnalysis(created.id, content, rawText);
+    await this.safeSyncPdfForResume(created.id, userId, 'create');
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: created.id } });
+    return this.toRecord({ ...fresh, score: analysis.score }, analysis);
+  }
+
+  async uploadFile(
+    userId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
+    targetJobTitle?: string,
+  ) {
+    const candidate = await this.requireCandidate(userId);
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+    ];
+    const mime = (file.mimetype || '').toLowerCase();
+    const name = file.originalname || 'resume.pdf';
+    const okExt = /\.(pdf|doc|docx|png|jpe?g)$/i.test(name);
+    if (!allowed.includes(mime) && !okExt) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Upload a PDF, Word document, or clear image (PNG/JPG).',
+      });
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Resume file must be 8MB or smaller.',
+      });
+    }
+
+    const baseName = name.replace(/\.[^.]+$/, '').trim() || 'Uploaded resume';
+    const created = await this.prisma.resume.create({
+      data: {
+        candidateId: candidate.id,
+        title: baseName,
+        targetJobTitle: targetJobTitle || null,
+        template: resolveResumeTemplateId(CAREERBRIDGE_RESUME_TEMPLATE),
+        summary: null,
+        contentJson: JSON.stringify({
+          fullName: [candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || 'Candidate',
+          city: candidate.city,
+          phone: null,
+          email: null,
+          summary: '',
+          skills: [],
+          education: [],
+          experiences: [],
+          languages: [],
+        }),
+        score: 0,
+        kind: 'ORIGINAL',
+        sourceKind: 'UPLOAD',
+        sourceFileName: name,
+        sourceMimeType: mime || 'application/octet-stream',
+        sourceFileSize: file.size,
+        processingStatus: 'PENDING',
+      },
+    });
+
+    // Flat path: resumes/{file}-{fullResumeId}.ext — never truncate id (collision risk).
+    const storagePath = this.storage.resumeObjectPath(name, created.id);
+    let storageUri: string | null = null;
+    const isProdLike = (this.config.get<string>('NODE_ENV') || process.env.NODE_ENV) === 'production';
+    try {
+      if (!this.storage.isConfigured()) {
+        if (isProdLike) {
+          throw new Error(this.storage.getConfigurationError() || 'Cloud Storage is not configured.');
+        }
+        this.logger.warn(
+          JSON.stringify({
+            msg: 'resume_gcs_skipped_local',
+            resumeId: created.id,
+            reason: 'storage_not_configured',
+          }),
+        );
+      } else {
+        const uploaded = await this.storage.uploadFile(storagePath, file.buffer, {
+          contentType: mime || 'application/octet-stream',
+          metadata: {
+            candidateId: candidate.id,
+            resumeId: created.id,
+            source: 'upload',
+          },
+        });
+        storageUri = uploaded.gcsUri;
+        await this.prisma.resume.update({
+          where: { id: created.id },
+          data: {
+            sourceStoragePath: storagePath,
+            sourceStorageUri: uploaded.gcsUri,
+            pdfStoragePath: storagePath,
+            pdfStorageUri: uploaded.gcsUri,
+            pdfPublicUrl: uploaded.publicUrl,
+            pdfUploadedAt: new Date(),
+          },
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        JSON.stringify({ msg: 'resume_gcs_upload_failed', resumeId: created.id, error: message.slice(0, 300) }),
+      );
+      await this.prisma.resume.update({
+        where: { id: created.id },
+        data: {
+          processingStatus: 'FAILED',
+          processingError: `Upload to storage failed: ${message}`.slice(0, 2000),
+        },
+      });
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'We could not store your resume file. Please try again in a moment.',
+      });
+    }
+
+    await this.cloudTasks.enqueueResumeProcessing(created.id, userId, () =>
+      this.processor.processUploadedResume(created.id, userId, file.buffer),
+    );
+
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: created.id } });
+    return {
+      ...this.toRecord(fresh),
+      processingStatus: fresh.processingStatus,
+      processingError: publicProcessingError(fresh.processingError),
+      sourceStorageUri: storageUri || fresh.sourceStorageUri,
+    };
+  }
+
+  async processingStatus(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const status = resume.processingStatus || 'READY';
+    const staleMs = Date.now() - new Date(resume.updatedAt).getTime();
+    if ((status === 'PENDING' || status === 'PROCESSING') && staleMs > 8000) {
+      void this.processor.processUploadedResume(id, userId).catch((err) => {
+        this.logger.error(`Retry processing failed for ${id}: ${(err as Error).message}`);
+      });
+    }
+    const processingError = publicProcessingError(resume.processingError);
+    return {
+      id: resume.id,
+      processingStatus: status,
+      processingError,
+      score: resume.score,
+      message:
+        status === 'COMPLETED'
+          ? 'Resume analysed successfully.'
+          : status === 'FAILED'
+            ? processingError || 'Processing failed.'
+            : status === 'PROCESSING'
+              ? 'Extracting text and analysing with AI…'
+              : status === 'PENDING'
+                ? 'Queued for processing…'
+                : 'Ready',
+    };
+  }
+
+  /** User-triggered retry after FAILED (or stuck PENDING/PROCESSING). */
+  async retryProcessing(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    if (!resume.sourceStoragePath) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'This resume has no file in Cloud Storage. Please upload the file again.',
+      });
+    }
+    await this.prisma.resume.update({
+      where: { id: resume.id },
+      data: { processingStatus: 'PENDING', processingError: null },
+    });
+    await this.cloudTasks.enqueueResumeProcessing(resume.id, userId, () =>
+      this.processor.processUploadedResume(resume.id, userId),
+    );
+    return {
+      id: resume.id,
+      processingStatus: 'PENDING',
+      processingError: null,
+      message: 'Resume queued for reprocessing.',
+    };
+  }
+
+  /** Signed Cloud Storage URL for viewing the original uploaded file (or generated PDF). */
+  /** Signed Cloud Storage URL for viewing the CareerBridge-formatted PDF (or original file). */
+  async getViewUrl(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const content = parseContent(resume.contentJson);
+    // Prefer regenerating the formatted PDF so project bullets match Experience style.
+    if (content.projects?.length || content.summary || content.experiences?.length) {
+      try {
+        const storage = await this.syncPdfForResume(resume.id, userId);
+        const url = await this.storage.getSignedUrl(storage.pdfStoragePath, {
+          action: 'read',
+          expiresInMinutes: 30,
+        });
+        return {
+          id: resume.id,
+          url,
+          source: 'signed' as const,
+          fileName: `${resume.title.replace(/\s+/g, '-')}.pdf`,
+          mimeType: 'application/pdf',
+          storagePath: storage.pdfStoragePath,
+          expiresInMinutes: 30,
+        };
+      } catch (err) {
+        this.logger.warn(
+          `Formatted view PDF failed for ${resume.id}, falling back to stored file: ${(err as Error).message}`,
+        );
+      }
+    }
+    const objectPath = resume.pdfStoragePath || resume.sourceStoragePath;
+    if (!objectPath) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'No resume file is stored in Cloud Storage for this record.',
+      });
+    }
+    if (!this.storage.isConfigured()) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: this.storage.getConfigurationError() || 'Cloud Storage is not configured.',
+      });
+    }
+    const mimeType = 'application/pdf';
+    let view: Awaited<ReturnType<typeof readableResumeUrl>>;
+    try {
+      view = await readableResumeUrl(this.storage, objectPath, mimeType, 30);
+    } catch (err) {
+      this.logger.error(`Resume view failed for ${resume.id}: ${(err as Error).message}`);
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'The stored resume file could not be read. Please try again or re-upload it.',
+      });
+    }
+    return {
+      id: resume.id,
+      url: view.url,
+      source: view.source,
+      fileName: resume.sourceFileName || `${resume.title}.pdf`,
+      mimeType,
+      storagePath: objectPath,
+      expiresInMinutes: view.source === 'signed' ? 30 : null,
+    };
+  }
+
+  async processWorker(payload: { resumeId: string; userId: string }, providedSecret?: string) {
+    assertTaskSecret(
+      this.config.get<string>('RESUME_TASK_SECRET') || process.env.RESUME_TASK_SECRET,
+      providedSecret,
+      {
+        requireConfigured: isTaskSecretRequired(),
+        invalidMessage: {
+          code: ErrorCode.UNAUTHORIZED,
+          message: 'Invalid resume worker credentials.',
+        },
+      },
+    );
+    if (!payload?.resumeId || !payload?.userId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'resumeId and userId are required.',
+      });
+    }
+    // Ownership: resume must belong to the candidate for this userId.
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { userId: payload.userId },
+      select: { id: true },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Candidate was not found' });
+    }
+    const resume = await this.prisma.resume.findFirst({
+      where: { id: payload.resumeId, candidateId: candidate.id },
+      select: { id: true },
+    });
+    if (!resume) {
+      throw new ForbiddenException({
+        code: ErrorCode.UNAUTHORIZED,
+        message: 'Resume does not belong to this user.',
+      });
+    }
+    this.logger.log(
+      JSON.stringify({
+        msg: 'resume_worker_accepted',
+        resumeId: payload.resumeId,
+        userId: payload.userId,
+      }),
+    );
+    return this.processor.processUploadedResume(payload.resumeId, payload.userId);
+  }
+
+  async savePrimary(
+    userId: string,
+    dto: {
+      title?: string;
+      targetJobTitle?: string;
+      template?: string;
+      content: Record<string, unknown>;
+      resumeId?: string;
+      skipCloudSync?: boolean;
+    },
+  ) {
+    const candidate = await this.requireCandidate(userId);
+    const content = normalizeStoredContent(dto.content);
+    const title =
+      (dto.title && dto.title.trim()) ||
+      (dto.targetJobTitle ? `${dto.targetJobTitle} Resume` : `${content.fullName || 'My'} Resume`);
+    const template = resolveResumeTemplateId(dto.template || CAREERBRIDGE_RESUME_TEMPLATE);
+
+    let resumeId = dto.resumeId;
+    if (resumeId) {
+      await this.requireResume(userId, resumeId);
+    } else {
+      const existing = await this.prisma.resume.findFirst({
+        where: { candidateId: candidate.id, kind: 'ORIGINAL', parentResumeId: null },
+        orderBy: { updatedAt: 'desc' },
+      });
+      resumeId = existing?.id;
+    }
+
+    let row;
+    if (resumeId) {
+      const current = await this.requireResume(userId, resumeId);
+      const analysis = analyzeResumeContent(content, current.rawText || '');
+      row = await this.prisma.resume.update({
+        where: { id: resumeId },
+        data: {
+          title,
+          targetJobTitle: dto.targetJobTitle || current.targetJobTitle,
+          template,
+          summary: content.summary,
+          contentJson: JSON.stringify(content),
+          score: analysis.score,
+        },
+      });
+      await this.reindexAfterContentChange(current, content, userId);
+      await this.persistAnalysis(row.id, content, current.rawText || '');
+    } else {
+      row = await this.prisma.resume.create({
+        data: {
+          candidateId: candidate.id,
+          title,
+          targetJobTitle: dto.targetJobTitle || null,
+          template,
+          summary: content.summary,
+          contentJson: JSON.stringify(content),
+          score: 0,
+          kind: 'ORIGINAL',
+        },
+      });
+      await this.persistAnalysis(row.id, content, '');
+    }
+
+    let storage: {
+      pdfStoragePath: string;
+      pdfStorageUri: string;
+      pdfPublicUrl: string;
+    } | null = null;
+    let storageError: string | null = null;
+    if (!dto.skipCloudSync) {
+      try {
+        storage = await this.syncPdfForResume(row.id, userId);
+      } catch (err) {
+        storageError = err instanceof Error ? err.message : 'Cloud storage upload failed';
+        this.logger.error(`savePrimary GCS sync failed for resume ${row.id}: ${storageError}`);
+      }
+    }
+    const analysis = await this.analyze(userId, row.id);
+    return { ...analysis, storage, storageError };
+  }
+
+  async enhance(userId: string, id: string) {
+    const record = await this.analyze(userId, id);
+    return {
+      ...record,
+      plans: ATS_ENHANCE_PLANS.map((plan) => ({ ...plan })),
+    };
+  }
+
+  async get(userId: string, id: string) {
+    return this.analyze(userId, id);
+  }
+
+  async update(
+    userId: string,
+    id: string,
+    dto: {
+      title?: string;
+      targetJobTitle?: string;
+      template?: string;
+      summary?: string;
+      content?: Record<string, unknown>;
+    },
+  ) {
+    const resume = await this.requireResume(userId, id);
+    let content = parseContent(resume.contentJson);
+    if (dto.content && typeof dto.content === 'object') {
+      content = normalizeStoredContent(dto.content);
+    }
+    if (dto.summary !== undefined) content.summary = dto.summary;
+    const analysis = analyzeResumeContent(content, resume.rawText || '');
+    const template = dto.template ? resolveResumeTemplateId(dto.template) : resume.template;
+    const unchanged =
+      JSON.stringify(content) === resume.contentJson &&
+      (dto.title ?? resume.title) === resume.title &&
+      (dto.targetJobTitle ?? resume.targetJobTitle) === resume.targetJobTitle &&
+      template === resume.template;
+    if (unchanged) return this.toRecord(resume, analysis);
+    const updated = await this.prisma.resume.update({
+      where: { id: resume.id },
+      data: {
+        title: dto.title ?? resume.title,
+        targetJobTitle: dto.targetJobTitle ?? resume.targetJobTitle,
+        template,
+        summary: content.summary,
+        contentJson: JSON.stringify(content),
+        score: analysis.score,
+        version: resume.kind === 'ORIGINAL' ? resume.version : resume.version + 1,
+      },
+    });
+    await this.reindexAfterContentChange(resume, content, userId);
+    await this.safeSyncPdfForResume(updated.id, userId, 'update');
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: updated.id } });
+    return this.toRecord(fresh, analysis);
+  }
+
+  async remove(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const applicationCount = await this.prisma.application.count({
+      where: { resumeId: resume.id },
+    });
+
+    // Linked to applications → archive (keep history). Unused → hard delete + cloud cleanup.
+    if (applicationCount > 0) {
+      await this.prisma.resume.update({
+        where: { id: resume.id },
+        data: { archivedAt: new Date() },
+      });
+      return { deleted: false, archived: true, reason: 'linked_to_applications' };
+    }
+
+    if (resume.pdfStoragePath) {
+      await this.storage.deleteFile(resume.pdfStoragePath).catch(() => undefined);
+    }
+    await this.prisma.resume.delete({ where: { id: resume.id } });
+    return { deleted: true, archived: false };
+  }
+
+  async analyze(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const blocked = atsBlockedReason(resume.processingStatus);
+    if (blocked) {
+      await this.clearAtsArtifacts(resume.id);
+      return { ...this.toRecord({ ...resume, score: 0 }), atsStatus: 'UNAVAILABLE' as const, atsMessage: blocked };
+    }
+    // Same content the list and the UI score, so the stored score doesn't flip between code paths.
+    const content = hydrateResumeContent(parseContent(resume.contentJson), resume.rawText);
+    const analysis = await this.persistAnalysis(resume.id, content, resume.rawText || '');
+    return { ...this.toRecord({ ...resume, score: analysis.score }, analysis), atsStatus: 'READY' as const, atsMessage: null };
+  }
+
+  async issues(userId: string, id: string) {
+    const record = await this.analyze(userId, id);
+    return {
+      atsStatus: record.atsStatus,
+      atsMessage: record.atsMessage,
+      highPriority: record.analysis?.highPriority ?? 0,
+      mediumPriority: record.analysis?.mediumPriority ?? 0,
+      goodSections: record.analysis?.goodSections ?? 0,
+      issues: record.analysis?.issues ?? [],
+    };
+  }
+
+  /** A failed or unfinished parse has no trustworthy content, so no ATS score may be shown for it. */
+  private async clearAtsArtifacts(resumeId: string) {
+    await this.prisma.$transaction([
+      this.prisma.resumeIssue.deleteMany({ where: { resumeId } }),
+      this.prisma.resumeFact.deleteMany({ where: { resumeId } }),
+      this.prisma.resumeAtsReport.deleteMany({ where: { resumeId } }),
+      this.prisma.resume.updateMany({ where: { id: resumeId, score: { not: 0 } }, data: { score: 0 } }),
+    ]);
+  }
+
+  private assertAtsEligible(resume: { processingStatus: string | null }) {
+    const blocked = atsBlockedReason(resume.processingStatus);
+    if (blocked) {
+      throw new ConflictException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message: blocked });
+    }
+  }
+
+  async optimizationOptions(userId: string, id: string) {
+    const record = await this.analyze(userId, id);
+    return {
+      score: record.score,
+      recommendedPlanId: record.analysis?.recommendedPlanId,
+      disclaimer: record.analysis?.disclaimer,
+      plans: ATS_ENHANCE_PLANS.map((plan) => ({ ...plan })),
+    };
+  }
+
+  async startOptimization(userId: string, id: string, planId: string) {
+    const plan = ATS_ENHANCE_PLANS.find((item) => item.id === planId);
+    if (!plan) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Choose a valid optimization target.' });
+    }
+    const source = await this.requireResume(userId, id);
+    this.assertAtsEligible(source);
+    const content = parseContent(source.contentJson);
+    const before = analyzeResumeContent(content, source.rawText || '');
+    const facts = extractFacts(content, source.rawText || '');
+    const optimization = await this.prisma.resumeOptimization.create({
+      data: {
+        sourceResumeId: source.id,
+        planId: plan.id,
+        targetMin: plan.minScore,
+        targetMax: plan.maxScore,
+        status: 'RUNNING',
+        beforeScore: before.score,
+        updatedAt: new Date(),
+      },
+    });
+
+    try {
+      const ai = await this.optimizeAi.rewrite(content, before.issues, facts);
+      const used = ai && ai.changes.length ? ai : applySafeOptimizations(content, facts);
+      const after = analyzeResumeContent(used.content, source.rawText || '');
+      const preservation = factPreservationScore(facts, used.changes);
+      const result = await this.prisma.resume.create({
+        data: {
+          candidateId: source.candidateId,
+          title: `${source.title} (ATS optimized)`,
+          targetJobTitle: source.targetJobTitle,
+          template: source.template,
+          summary: used.content.summary,
+          contentJson: JSON.stringify(used.content),
+          rawText: source.rawText,
+          score: after.score,
+          kind: 'OPTIMIZED',
+          parentResumeId: source.id,
+          version: source.version + 1,
+        },
+      });
+      await this.persistAnalysis(result.id, used.content, source.rawText || '');
+      const improvements = improvementLabels(used.changes);
+      const updated = await this.prisma.resumeOptimization.update({
+        where: { id: optimization.id },
+        data: {
+          resultResumeId: result.id,
+          status: 'COMPLETED',
+          afterScore: after.score,
+          factPreservation: preservation,
+          improvementsJson: JSON.stringify(improvements),
+          changesJson: JSON.stringify(used.changes),
+        },
+      });
+      return this.toOptimization(updated, before.score, after.score);
+    } catch {
+      await this.prisma.resumeOptimization.update({
+        where: { id: optimization.id },
+        data: { status: 'FAILED' },
+      });
+      throw new BadRequestException({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Optimization could not finish. Your original resume was not changed.',
+      });
+    }
+  }
+
+  async getOptimization(userId: string, id: string, optId: string) {
+    await this.requireResume(userId, id);
+    const row = await this.prisma.resumeOptimization.findFirst({
+      where: { id: optId, sourceResumeId: id },
+    });
+    if (!row) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Optimization was not found' });
+    }
+    return this.toOptimization(row, row.beforeScore, row.afterScore);
+  }
+
+  async versions(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const rootId = resume.parentResumeId || resume.id;
+    const rows = await this.prisma.resume.findMany({
+      where: {
+        candidateId: resume.candidateId,
+        OR: [{ id: rootId }, { parentResumeId: rootId }],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => this.toRecord(row));
+  }
+
+  async changes(userId: string, id: string) {
+    await this.requireResume(userId, id);
+    const row = await this.prisma.resumeOptimization.findFirst({
+      where: { OR: [{ sourceResumeId: id }, { resultResumeId: id }] },
+      orderBy: { createdAt: 'desc' },
+    });
+    const list = row ? (JSON.parse(row.changesJson || '[]') as ResumeChangeRecord[]) : [];
+    return { changes: list, factPreservation: row?.factPreservation ?? null };
+  }
+
+  async duplicate(userId: string, id: string) {
+    const resume = await this.requireResume(userId, id);
+    const copy = await this.prisma.resume.create({
+      data: {
+        candidateId: resume.candidateId,
+        title: `${resume.title} copy`,
+        targetJobTitle: resume.targetJobTitle,
+        template: resume.template,
+        summary: resume.summary,
+        contentJson: resume.contentJson,
+        rawText: resume.rawText,
+        score: resume.score,
+        kind: 'ORIGINAL',
+      },
+    });
+    return this.toRecord(copy);
+  }
+
+  async download(userId: string, id: string, variant?: 'original' | 'formatted') {
+    const resume = await this.requireResume(userId, id);
+    const preferOriginal =
+      variant === 'original' ||
+      (variant !== 'formatted' && Boolean(resume.sourceStoragePath));
+
+    // A: prefer original uploaded bytes when available — portal-rendered PDF is lossy.
+    if (preferOriginal && resume.sourceStoragePath) {
+      try {
+        const buf = await this.storage.downloadFile(resume.sourceStoragePath);
+        return {
+          pdf: buf.toString('base64'),
+          fileName: resume.sourceFileName || `${resume.title.replace(/\s+/g, '-')}-original.pdf`,
+          mimeType: resume.sourceMimeType || 'application/pdf',
+          variant: 'original' as const,
+          isPortalRendered: false,
+          note: 'Original uploaded file (not CareerBridge-formatted).',
+          storage: null,
+          storageError: null,
+          pdfStoragePath: resume.pdfStoragePath,
+          pdfStorageUri: resume.pdfStorageUri,
+          pdfPublicUrl: resume.pdfPublicUrl,
+          pdfUploadedAt: resume.pdfUploadedAt?.toISOString() || null,
+        };
+      } catch (err) {
+        this.logger.warn(
+          `Original source download failed for ${resume.id}, falling back to formatted PDF: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    let storage: {
+      pdfStoragePath: string;
+      pdfStorageUri: string;
+      pdfPublicUrl: string;
+    } | null = null;
+    let storageError: string | null = null;
+    try {
+      storage = await this.syncPdfForResume(resume.id, userId);
+      this.logger.log(`Resume PDF synced to GCS for download: ${resume.id}`);
+    } catch (err) {
+      storageError = err instanceof Error ? err.message : 'Cloud storage upload failed';
+      this.logger.error(`Download GCS sync failed for resume ${resume.id}: ${storageError}`);
+    }
+    const pdf = await this.readStoredPdf(resume, userId);
+    const fresh = await this.prisma.resume.findUniqueOrThrow({ where: { id: resume.id } });
+    return {
+      pdf: pdf.toString('base64'),
+      fileName: `${resume.title.replace(/\s+/g, '-')}.pdf`,
+      mimeType: 'application/pdf',
+      variant: 'formatted' as const,
+      isPortalRendered: true,
+      note: 'CareerBridge-formatted PDF regenerated from stored contentJson — not the original upload.',
+      storage,
+      storageError,
+      pdfStoragePath: fresh.pdfStoragePath,
+      pdfStorageUri: fresh.pdfStorageUri,
+      pdfPublicUrl: fresh.pdfPublicUrl,
+      pdfUploadedAt: fresh.pdfUploadedAt?.toISOString() || null,
+    };
+  }
+
+  async aiReview(
+    userId: string,
+    id: string,
+    input: {
+      targetRole?: string;
+      jobDescription?: string;
+      templateId?: string;
+      resume?: Record<string, unknown>;
+    },
+  ) {
+    const resume = await this.requireResume(userId, id);
+    this.assertAtsEligible(resume);
+    const content = parseContent(resume.contentJson);
+    const targetRole = input.targetRole?.trim() || resume.targetJobTitle || 'General Professional';
+
+    // Time-box the gateway and cancel it (including pending retries) when the budget elapses; the
+    // deterministic ATS analysis below still runs, and the response says AI was unavailable and why.
+    let aiUnavailableReason: AiUnavailableReason = 'NOT_CONFIGURED';
+    if (this.aiGateway.isConfigured()) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        const err = new Error('AI resume review timed out');
+        err.name = 'TimeoutError';
+        controller.abort(err);
+      }, 25_000);
+      try {
+        const { data: aiResult, unavailableReason } = await this.aiGateway.reviewResumeWithStatus(
+          content,
+          targetRole,
+          { userId, signal: controller.signal },
+        );
+        if (aiResult) {
+          return {
+            score: aiResult.score,
+            strengths: aiResult.strengths || [],
+            improvements: aiResult.improvements || [],
+            missingSkills: aiResult.missingSkills || [],
+            suggestedSections: aiResult.suggestedSections || {},
+            suggestions: aiResult.suggestions || [],
+            provider: 'gemini',
+            aiAvailable: true,
+          };
+        }
+        aiUnavailableReason = controller.signal.aborted ? 'TIMEOUT' : unavailableReason ?? 'FAILED';
+      } catch (err) {
+        this.logger.warn(`AI resume review failed: ${(err as Error).message}`);
+        aiUnavailableReason = controller.signal.aborted ? 'TIMEOUT' : 'FAILED';
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    // Deterministic ATS fallback
+    const analysis = analyzeRoleResume({
+      targetRole,
+      jobDescription: input.jobDescription || '',
+      templateId: resolveResumeTemplateId(input.templateId || resume.template),
+      resume: input.resume || toRoleAtsResume(content, targetRole),
+    });
+
+    return {
+      score: analysis.score,
+      strengths: analysis.strengths || [],
+      improvements: (analysis.issues || []).map((i: any) => i.recommendation),
+      missingSkills: analysis.missingSkills || [],
+      suggestedSections: {},
+      suggestions: [],
+      provider: 'ats-engine',
+      aiAvailable: false,
+      aiUnavailableReason,
+    };
+  }
+
+  /** Suggests a clearer professional summary; the candidate decides whether to use it. */
+  async improveSummary(
+    userId: string,
+    input: { summary?: string; targetRole?: string; profile?: Record<string, unknown>; avoid?: string[] },
+  ): Promise<
+    | { aiAvailable: true; improvedSummary: string }
+    | { aiAvailable: false; aiUnavailableReason: AiUnavailableReason }
+  > {
+    const summary = (input.summary || '').trim();
+    const profile = input.profile || {};
+    if (!summary && Object.keys(profile).length === 0) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Add a draft summary or some profile details before using AI.',
+      });
+    }
+    if (!this.aiGateway.isConfigured()) return { aiAvailable: false, aiUnavailableReason: 'NOT_CONFIGURED' };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const err = new Error('AI summary improvement timed out');
+      err.name = 'TimeoutError';
+      controller.abort(err);
+    }, 20_000);
+    try {
+      const avoid = cleanAvoidList(input.avoid);
+      const { data, unavailableReason } = await this.aiGateway.improveResumeSummaryWithStatus(
+        { summary, targetRole: input.targetRole?.trim() || undefined, profile, ...(avoid.length ? { avoidSuggestions: avoid } : {}) },
+        { userId, signal: controller.signal },
+      );
+      const fitted = fitResumeSummary(data?.improvedSummary);
+      if (fitted && !repeatsAvoided([fitted], avoid)) return { aiAvailable: true, improvedSummary: fitted };
+      return {
+        aiAvailable: false,
+        aiUnavailableReason: controller.signal.aborted ? 'TIMEOUT' : unavailableReason ?? 'FAILED',
+      };
+    } catch (err) {
+      this.logger.warn(`AI summary improvement failed: ${(err as Error).message}`);
+      return { aiAvailable: false, aiUnavailableReason: controller.signal.aborted ? 'TIMEOUT' : 'FAILED' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Suggests clearer bullets for one experience entry; the candidate decides whether to use them. */
+  async improveExperience(
+    userId: string,
+    input: { role?: string; company?: string; bullets?: string[]; targetRole?: string; avoid?: string[] },
+  ): Promise<
+    | { aiAvailable: true; improvedBullets: string[] }
+    | { aiAvailable: false; aiUnavailableReason: AiUnavailableReason }
+  > {
+    const role = (input.role || '').trim();
+    if (!role) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Add the job title before using AI.',
+      });
+    }
+    if (!this.aiGateway.isConfigured()) return { aiAvailable: false, aiUnavailableReason: 'NOT_CONFIGURED' };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const err = new Error('AI experience improvement timed out');
+      err.name = 'TimeoutError';
+      controller.abort(err);
+    }, 20_000);
+    try {
+      const avoid = cleanAvoidList(input.avoid);
+      const { data, unavailableReason } = await this.aiGateway.improveExperienceBulletsWithStatus(
+        {
+          role,
+          company: input.company?.trim() || undefined,
+          bullets: (input.bullets || []).map((b) => b.trim()).filter(Boolean),
+          targetRole: input.targetRole?.trim() || undefined,
+          ...(avoid.length ? { avoidSuggestions: avoid } : {}),
+        },
+        { userId, signal: controller.signal },
+      );
+      if (data?.improvedBullets.length && !repeatsAvoided([data.improvedBullets.join('\n')], avoid)) {
+        return { aiAvailable: true, improvedBullets: data.improvedBullets };
+      }
+      return {
+        aiAvailable: false,
+        aiUnavailableReason: controller.signal.aborted ? 'TIMEOUT' : unavailableReason ?? 'FAILED',
+      };
+    } catch (err) {
+      this.logger.warn(`AI experience improvement failed: ${(err as Error).message}`);
+      return { aiAvailable: false, aiUnavailableReason: controller.signal.aborted ? 'TIMEOUT' : 'FAILED' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async careerGuidance(
+    userId: string,
+    input: { resumeId?: string; resume?: Record<string, unknown> },
+  ) {
+    let payload = input.resume;
+    if (input.resumeId) {
+      const resume = await this.requireResume(userId, input.resumeId);
+      const content = parseContent(resume.contentJson);
+      payload = input.resume || toRoleAtsResume(content, resume.targetJobTitle);
+    }
+    if (!payload) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Resume data is required.' });
+    }
+    return recommendCareerRoles(payload);
+  }
+
+  async roleAnalyze(
+    userId: string,
+    input: {
+      resumeId?: string;
+      targetRole: string;
+      jobDescription?: string;
+      templateId?: string;
+      resume?: Record<string, unknown>;
+    },
+  ) {
+    const targetRole = input.targetRole?.trim();
+    if (!targetRole) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Enter a target job role.' });
+    }
+    let templateId = input.templateId || CAREERBRIDGE_RESUME_TEMPLATE;
+    let payload = input.resume;
+    if (input.resumeId) {
+      const resume = await this.requireResume(userId, input.resumeId);
+      this.assertAtsEligible(resume);
+      const content = parseContent(resume.contentJson);
+      templateId = resolveResumeTemplateId(input.templateId || resume.template);
+      // Prefer the live client payload (post-edit) so recheck reflects latest changes.
+      payload = input.resume || toRoleAtsResume(content, resume.targetJobTitle);
+    }
+    if (!payload) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Resume data is required.' });
+    }
+    return analyzeRoleResume({
+      targetRole,
+      jobDescription: input.jobDescription || '',
+      templateId,
+      resume: payload,
+    });
+  }
+
+  async roleRewrite(
+    userId: string,
+    input: {
+      resumeId?: string;
+      targetRole: string;
+      jobDescription?: string;
+      templateId?: string;
+      resume?: Record<string, unknown>;
+      analysis?: Record<string, unknown> | null;
+    },
+  ) {
+    const targetRole = input.targetRole?.trim();
+    if (!targetRole) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Enter a target job role.' });
+    }
+    let templateId = input.templateId || CAREERBRIDGE_RESUME_TEMPLATE;
+    let payload = input.resume;
+    let ownedId: string | null = input.resumeId || null;
+    if (input.resumeId) {
+      const resume = await this.requireResume(userId, input.resumeId);
+      this.assertAtsEligible(resume);
+      ownedId = resume.id;
+      const content = parseContent(resume.contentJson);
+      templateId = resolveResumeTemplateId(input.templateId || resume.template);
+      payload = input.resume || toRoleAtsResume(content, resume.targetJobTitle);
+    }
+    if (!payload) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Resume data is required.' });
+    }
+    const result = rewriteRoleResume({
+      targetRole,
+      jobDescription: input.jobDescription || '',
+      templateId,
+      resume: payload,
+      analysis: input.analysis || null,
+    });
+    return { ...result, resumeId: ownedId };
+  }
+
+  private async persistAnalysis(resumeId: string, content: ResumeContent, rawText: string) {
+    const analysis = analyzeResumeContent(content, rawText);
+    const facts = extractFacts(content, rawText);
+    // Row lock serialises concurrent analyses so replace-all never interleaves into duplicates.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM resumes WHERE id = ${resumeId} FOR UPDATE`;
+      await this.writeAnalysis(tx, resumeId, analysis, facts);
+    });
+    return analysis;
+  }
+
+  private async writeAnalysis(
+    db: Pick<PrismaService, 'resumeIssue' | 'resumeFact' | 'resumeAtsReport' | 'resume'>,
+    resumeId: string,
+    analysis: ReturnType<typeof analyzeResumeContent>,
+    facts: ReturnType<typeof extractFacts>,
+  ) {
+    await db.resumeIssue.deleteMany({ where: { resumeId } });
+    await db.resumeFact.deleteMany({ where: { resumeId } });
+    await db.resumeAtsReport.upsert({
+      where: { resumeId },
+      create: {
+        resumeId,
+        scoreType: analysis.scoreType,
+        overallScore: analysis.score,
+        label: analysis.label,
+        sectionJson: JSON.stringify(analysis.sections),
+        issuesJson: JSON.stringify(analysis.issues),
+        highPriority: analysis.highPriority,
+        mediumPriority: analysis.mediumPriority,
+        goodSections: analysis.goodSections,
+        recommendedPlanId: analysis.recommendedPlanId,
+        updatedAt: new Date(),
+      },
+      update: {
+        overallScore: analysis.score,
+        label: analysis.label,
+        sectionJson: JSON.stringify(analysis.sections),
+        issuesJson: JSON.stringify(analysis.issues),
+        highPriority: analysis.highPriority,
+        mediumPriority: analysis.mediumPriority,
+        goodSections: analysis.goodSections,
+        recommendedPlanId: analysis.recommendedPlanId,
+      },
+    });
+    if (analysis.issues.length) {
+      await db.resumeIssue.createMany({
+        data: analysis.issues.map((item) => ({
+          resumeId,
+          section: item.section,
+          severity: item.severity,
+          problem: item.problem,
+          location: item.location,
+          why: item.why,
+          recommendation: item.recommendation,
+          originalExample: item.originalExample || null,
+          suggestedExample: item.suggestedExample || null,
+        })),
+      });
+    }
+    if (facts.length) {
+      await db.resumeFact.createMany({
+        data: facts.map((item) => ({
+          resumeId,
+          factType: item.type,
+          value: item.value.slice(0, 500),
+          source: item.source.slice(0, 1000),
+          section: item.section,
+        })),
+      });
+    }
+    // Conditional so an unchanged score doesn't bump updatedAt (which picks the "latest" resume elsewhere).
+    await db.resume.updateMany({ where: { id: resumeId, score: { not: analysis.score } }, data: { score: analysis.score } });
+  }
+
+  private contentFromPassport(
+    candidate: {
+      firstName: string | null;
+      lastName: string | null;
+      city: string | null;
+      preferredLanguage: string | null;
+      user: { phone: string };
+      skills: Array<{ name: string }>;
+      education: Array<{ qualification: string; institution: string | null; yearCompleted: number | null }>;
+      experiences: Array<{ company: string; jobTitle: string; description: string | null; isInternship: boolean }>;
+    },
+    targetJobTitle?: string,
+  ) {
+    const fullName = [candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || 'Candidate';
+    return this.intelligence.buildResumeContent({
+      fullName,
+      city: candidate.city,
+      phone: candidate.user.phone,
+      language: candidate.preferredLanguage,
+      skills: candidate.skills.map((item) => item.name),
+      education: candidate.education,
+      experiences: candidate.experiences,
+      targetJobTitle,
+    });
+  }
+
+  /** A parsed (RAG-indexed) resume whose content changed must be re-indexed so retrieval never serves stale text. */
+  private async reindexAfterContentChange(
+    before: { id: string; candidateId: string; contentJson: string; rawText: string | null; processingStatus: string | null },
+    content: ResumeContent,
+    userId: string,
+  ) {
+    if (before.processingStatus !== 'COMPLETED' || before.contentJson === JSON.stringify(content)) return;
+    try {
+      await this.processor.reindexIfStale(before.id, before.candidateId, content, before.rawText || '', userId);
+    } catch (err) {
+      this.logger.error(`Resume re-index after edit failed for ${before.id}: ${(err as Error).message}`);
+    }
+  }
+
+  private async safeSyncPdfForResume(resumeId: string, userId: string, context: string) {
+    try {
+      return await this.syncPdfForResume(resumeId, userId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Resume PDF cloud sync failed (${context}) for ${resumeId}: ${message}`);
+      return null;
+    }
+  }
+
+  private async syncPdfForResume(resumeId: string, userId: string) {
+    const resume = await this.requireResume(userId, resumeId);
+    const candidate = await this.requireCandidate(userId);
+    const content = parseContent(resume.contentJson);
+    const includePhoto = content.includePhoto !== false;
+    const pdf = await renderResumePdf(
+      content,
+      CAREERBRIDGE_RESUME_TEMPLATE,
+      includePhoto ? await readOwnedProfilePhotoDataUrl(this.storage, candidate.id, candidate.photoUrl) : null,
+    );
+    const path = this.storage.resumeObjectPath(
+      `${content.fullName || 'resume'}.pdf`,
+      resume.id,
+    );
+    const uploaded = await this.storage.uploadFile(path, pdf, {
+      contentType: 'application/pdf',
+      metadata: {
+        candidateId: candidate.id,
+        resumeId: resume.id,
+      },
+    });
+    await this.prisma.resume.update({
+      where: { id: resumeId },
+      data: {
+        pdfStoragePath: path,
+        pdfStorageUri: uploaded.gcsUri,
+        pdfPublicUrl: uploaded.publicUrl,
+        pdfUploadedAt: new Date(),
+      },
+    });
+    return {
+      pdfStoragePath: path,
+      pdfStorageUri: uploaded.gcsUri,
+      pdfPublicUrl: uploaded.publicUrl,
+    };
+  }
+
+  private async readStoredPdf(resume: { id: string; contentJson: string; template: string; candidateId: string }, userId?: string) {
+    const candidate =
+      userId != null
+        ? await this.requireCandidate(userId)
+        : await this.prisma.candidate.findUniqueOrThrow({ where: { id: resume.candidateId } });
+    const content = parseContent(resume.contentJson);
+    const includePhoto = content.includePhoto !== false;
+    return renderResumePdf(
+      content,
+      CAREERBRIDGE_RESUME_TEMPLATE,
+      includePhoto ? await readOwnedProfilePhotoDataUrl(this.storage, candidate.id, candidate.photoUrl) : null,
+    );
+  }
+
+  private async requireCandidate(userId: string) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { userId },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Candidate profile was not found' });
+    }
+    return candidate;
+  }
+
+  private async requireResume(userId: string, id: string) {
+    const candidate = await this.requireCandidate(userId);
+    const resume = await this.prisma.resume.findFirst({
+      where: { id, candidateId: candidate.id, archivedAt: null },
+    });
+    if (!resume) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Resume was not found' });
+    }
+    return resume;
+  }
+
+  private toOptimization(
+    row: {
+      id: string;
+      sourceResumeId: string;
+      resultResumeId: string | null;
+      planId: string;
+      targetMin: number;
+      targetMax: number;
+      status: string;
+      beforeScore: number;
+      afterScore: number | null;
+      factPreservation: number | null;
+      improvementsJson: string;
+      changesJson: string;
+    },
+    beforeScore: number,
+    afterScore: number | null,
+  ) {
+    const plan = ATS_ENHANCE_PLANS.find((item) => item.id === row.planId);
+    return {
+      id: row.id,
+      sourceResumeId: row.sourceResumeId,
+      resultResumeId: row.resultResumeId,
+      planId: row.planId,
+      targetLabel: plan?.label || 'Optimization',
+      targetMin: row.targetMin,
+      targetMax: row.targetMax,
+      status: row.status,
+      beforeScore,
+      afterScore,
+      improvement: afterScore == null ? null : afterScore - beforeScore,
+      factPreservation: row.factPreservation,
+      improvements: JSON.parse(row.improvementsJson || '[]') as string[],
+      changes: JSON.parse(row.changesJson || '[]') as ResumeChangeRecord[],
+      guaranteed: false,
+    };
+  }
+
+  private toRecord(
+    row: {
+      id: string;
+      title: string;
+      targetJobTitle: string | null;
+      template: string;
+      summary: string | null;
+      contentJson: string;
+      rawText?: string | null;
+      score: number;
+      version: number;
+      updatedAt: Date;
+      kind?: string;
+      parentResumeId?: string | null;
+      pdfStoragePath?: string | null;
+      pdfStorageUri?: string | null;
+      pdfPublicUrl?: string | null;
+      pdfUploadedAt?: Date | null;
+      archivedAt?: Date | null;
+      processingStatus?: string | null;
+      processingError?: string | null;
+      sourceStoragePath?: string | null;
+      sourceStorageUri?: string | null;
+    },
+    analysis?: ResumeAnalysis,
+    applicationCount = 0,
+  ) {
+    const content = hydrateResumeContent(parseContent(row.contentJson), row.rawText);
+    return {
+      id: row.id,
+      title: row.title,
+      targetJobTitle: row.targetJobTitle,
+      template: row.template,
+      summary: content.summary || row.summary,
+      content,
+      score: row.score,
+      version: row.version,
+      kind: row.kind || 'ORIGINAL',
+      parentResumeId: row.parentResumeId ?? null,
+      pdfStoragePath: row.pdfStoragePath ?? null,
+      pdfStorageUri: row.pdfStorageUri ?? null,
+      pdfPublicUrl: row.pdfPublicUrl ?? null,
+      pdfUploadedAt: row.pdfUploadedAt?.toISOString() ?? null,
+      archivedAt: row.archivedAt?.toISOString() ?? null,
+      processingStatus: row.processingStatus ?? null,
+      processingError: publicProcessingError(row.processingError),
+      sourceStoragePath: row.sourceStoragePath ?? null,
+      sourceStorageUri: row.sourceStorageUri ?? null,
+      applicationCount,
+      updatedAt: row.updatedAt.toISOString(),
+      analysis,
+      plans: ATS_ENHANCE_PLANS.map((plan) => ({ ...plan })),
+    };
+  }
+}
+
+/** Builder resumes are READY; uploaded ones are ATS-eligible only after a successful parse. */
+function atsBlockedReason(processingStatus: string | null | undefined): string | null {
+  if (processingStatus === 'FAILED') {
+    return 'Resume processing failed, so no ATS score is available. Retry processing or re-upload the resume.';
+  }
+  if (processingStatus === 'PENDING' || processingStatus === 'PROCESSING') {
+    return 'Resume is still being processed. The ATS score will be available once processing completes.';
+  }
+  return null;
+}
+
+function improvementLabels(changes: ResumeChangeRecord[]) {
+  const labels = new Set<string>();
+  for (const change of changes) {
+    if (change.validation !== 'PASS') continue;
+    if (/summary/i.test(change.section)) labels.add('Improved professional summary');
+    else if (/experience/i.test(change.section)) labels.add('Improved experience bullets');
+    else if (/skill/i.test(change.section)) labels.add('Organized skills');
+    else labels.add(`Improved ${change.section.toLowerCase()}`);
+  }
+  if (!labels.size) labels.add('Improved readability');
+  return [...labels];
+}
+
+function asString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Coerce string or `{ text }` / `{ value }` bullet rows used by ATS templates. */
+function asBulletText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    const row = value as { text?: unknown; value?: unknown };
+    return asString(row.text) || asString(row.value);
+  }
+  return '';
+}
+
+function asBulletList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of value) {
+    const text = asBulletText(item);
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out;
+}
+
+function asTechList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => asString(item)).filter(Boolean))];
+}
+
+function cleanAvoidList(avoid: string[] | undefined): string[] {
+  return (avoid || []).map((s) => s.trim()).filter(Boolean).slice(0, 5);
+}
+
+const normalizeForCompare = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** True when "Try again" produced the same wording as a suggestion the candidate already saw. */
+export function repeatsAvoided(candidates: string[], avoid: string[]): boolean {
+  if (!avoid.length) return false;
+  const seen = new Set(avoid.map(normalizeForCompare));
+  return candidates.some((c) => seen.has(normalizeForCompare(c)));
+}
+
+function sanitizeUploadedContent(
+  raw: Partial<ResumeContent> | Record<string, unknown>,
+  fallback: { fullName: string; city: string | null; phone: string | null },
+): ResumeContent {
+  const data = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const education = Array.isArray(data.education)
+    ? data.education
+        .map((row) => {
+          const item = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+          const yearRaw = item.yearCompleted;
+          const yearCompleted =
+            typeof yearRaw === 'number' ? yearRaw : Number.parseInt(asString(yearRaw), 10) || null;
+          return {
+            qualification: asString(item.qualification),
+            institution: asString(item.institution) || null,
+            yearCompleted,
+          };
+        })
+        .filter((row) => row.qualification)
+    : [];
+  const experiences = Array.isArray(data.experiences)
+    ? data.experiences
+        .map((row) => {
+          const item = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+          return {
+            company: asString(item.company),
+            jobTitle: asString(item.jobTitle),
+            description: asString(item.description) || null,
+            isInternship: Boolean(item.isInternship),
+          };
+        })
+        .filter((row) => row.company || row.jobTitle)
+    : [];
+  const skills = Array.isArray(data.skills) ? data.skills.map((item) => asString(item)).filter(Boolean) : [];
+  const languages = Array.isArray(data.languages)
+    ? data.languages.map((item) => asString(item)).filter(Boolean)
+    : [];
+  const certifications = Array.isArray(data.certifications)
+    ? data.certifications
+        .map((row) => {
+          if (typeof row === 'string') {
+            const name = asString(row);
+            return name ? { name, issuer: null as string | null, date: null as string | null } : null;
+          }
+          const item = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+          const name = asString(item.name);
+          if (!name) return null;
+          return {
+            name,
+            issuer: asString(item.issuer) || null,
+            date: asString(item.date) || null,
+          };
+        })
+        .filter((row): row is { name: string; issuer: string | null; date: string | null } => Boolean(row))
+    : [];
+  const projects = Array.isArray(data.projects)
+    ? data.projects
+        .map((row) => {
+          const item = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+          const bullets = asBulletList(item.bullets);
+          const technologies = asTechList(item.technologies);
+          return {
+            name: asString(item.name),
+            description: asString(item.description) || null,
+            ...(bullets.length ? { bullets } : {}),
+            ...(technologies.length ? { technologies } : {}),
+            url: asString(item.url) || null,
+          };
+        })
+        .filter((row) => row.name)
+    : [];
+  return {
+    fullName: asString(data.fullName) || fallback.fullName || 'Candidate',
+    city: asString(data.city) || fallback.city,
+    phone: asString(data.phone) || fallback.phone,
+    email: asString(data.email) || null,
+    summary: asString(data.summary),
+    skills,
+    education,
+    experiences,
+    languages,
+    certifications,
+    projects,
+  };
+}
+
+function hydrateResumeContent(content: ResumeContent, rawText?: string | null): ResumeContent {
+  if (!rawText?.trim() || !isThinResumeContent(content)) return content;
+  const parsed = parseExtractedResumeText(rawText);
+  return {
+    ...parsed,
+    fullName: parsed.fullName || content.fullName,
+    city: parsed.city || content.city,
+    email: parsed.email || content.email || null,
+    phone: parsed.phone || content.phone,
+    skills: parsed.skills.length ? parsed.skills : content.skills,
+  };
+}
+
+function parseContent(raw: string): ResumeContent {
+  try {
+    return normalizeStoredContent(parseResumeContentJson(raw));
+  } catch {
+    return {
+      fullName: '',
+      city: null,
+      phone: null,
+      summary: '',
+      skills: [],
+      education: [],
+      experiences: [],
+      languages: [],
+    };
+  }
+}
+
+function emptyFriendData() {
+  return {
+    fullName: '',
+    title: '',
+    email: '',
+    phone: '',
+    location: '',
+    linkedin: '',
+    website: '',
+    photo: '',
+    summary: '',
+    skills: [] as string[],
+    experience: [] as unknown[],
+    education: [] as unknown[],
+    projects: [] as unknown[],
+    certifications: [] as unknown[],
+    careerGaps: [] as unknown[],
+    targetRole: '',
+    jobDescription: '',
+  };
+}
+
+function blankManualContent(includePhoto: boolean): ResumeContent & { _manual?: boolean; data?: Record<string, unknown> } {
+  const data = emptyFriendData();
+  return {
+    _manual: true,
+    data,
+    includePhoto,
+    fullName: '',
+    city: null,
+    phone: null,
+    email: null,
+    summary: '',
+    skills: [],
+    education: [],
+    experiences: [],
+    languages: [],
+    certifications: [],
+    projects: [],
+  };
+}
+
+function friendDataToContent(data: Record<string, unknown>, includePhoto?: boolean): ResumeContent & {
+  _manual?: boolean;
+  data?: Record<string, unknown>;
+} {
+  const skills = Array.isArray(data.skills) ? data.skills.map((item) => String(item || '').trim()).filter(Boolean) : [];
+  const experience = Array.isArray(data.experience) ? data.experience : [];
+  const education = Array.isArray(data.education) ? data.education : [];
+  const projects = Array.isArray(data.projects) ? data.projects : [];
+  const certifications = Array.isArray(data.certifications) ? data.certifications : [];
+  return {
+    _manual: true,
+    data,
+    includePhoto: includePhoto ?? Boolean(data.photo),
+    fullName: String(data.fullName || ''),
+    city: data.location ? String(data.location) : null,
+    phone: data.phone ? String(data.phone) : null,
+    email: data.email ? String(data.email) : null,
+    summary: String(data.summary || ''),
+    skills,
+    education: education.map((item) => {
+      const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      const year = Number.parseInt(String(row.endDate || ''), 10);
+      return {
+        qualification: String(row.degree || row.qualification || ''),
+        institution: String(row.institution || row.school || '') || null,
+        yearCompleted: Number.isFinite(year) ? year : null,
+      };
+    }),
+    experiences: experience.map((item) => {
+      const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      const bullets = Array.isArray(row.bullets)
+        ? row.bullets.map((line) => String(line || '').trim()).filter(Boolean)
+        : [];
+      return {
+        company: String(row.company || ''),
+        jobTitle: String(row.role || row.jobTitle || ''),
+        description: bullets.length ? bullets.join('\n') : row.description ? String(row.description) : null,
+        isInternship: false,
+      };
+    }),
+    languages: [],
+    certifications: certifications
+      .map((item) => {
+        if (typeof item === 'string') {
+          const name = item.trim();
+          return name ? { name, issuer: null as string | null, date: null as string | null } : null;
+        }
+        const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+        const name = String(row.name || '').trim();
+        if (!name) return null;
+        return {
+          name,
+          issuer: String(row.issuer || '').trim() || null,
+          date: String(row.date || '').trim() || null,
+        };
+      })
+      .filter((row): row is { name: string; issuer: string | null; date: string | null } => Boolean(row)),
+    projects: projects.map((item) => {
+      const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+      const bullets = asBulletList(row.bullets ?? row.bulletPoints);
+      const technologies = asTechList(row.technologies);
+      return {
+        name: String(row.name || row.title || ''),
+        description: row.description ? String(row.description) : null,
+        ...(bullets.length ? { bullets } : {}),
+        ...(technologies.length ? { technologies } : {}),
+        url: row.url || row.link ? String(row.url || row.link) : null,
+      };
+    }),
+  };
+}
+
+function normalizeStoredContent(raw: Record<string, unknown>): ResumeContent & {
+  _manual?: boolean;
+  data?: Record<string, unknown>;
+} {
+  if (raw._manual && raw.data && typeof raw.data === 'object') {
+    return friendDataToContent(raw.data as Record<string, unknown>, raw.includePhoto as boolean | undefined);
+  }
+  if (Array.isArray(raw.experience) && !Array.isArray(raw.experiences)) {
+    return friendDataToContent(raw, raw.includePhoto as boolean | undefined);
+  }
+  return raw as unknown as ResumeContent;
+}
+
+function toRoleAtsResume(content: ResumeContent & { _manual?: boolean; data?: Record<string, unknown> }, title?: string | null) {
+  if (content._manual && content.data && typeof content.data === 'object') {
+    return {
+      ...content.data,
+      title: (content.data.title as string) || title || '',
+    };
+  }
+  const links = content.links || content.resumeData?.links || {};
+  return {
+    fullName: content.fullName || '',
+    title: title || '',
+    email: content.email || '',
+    phone: content.phone || '',
+    location: content.city || '',
+    linkedin: links.linkedin || '',
+    website: links.portfolio || links.website || links.github || '',
+    photo: '',
+    summary: content.summary || '',
+    skills: content.skills || [],
+    experience: (content.experiences || []).map((item, index) => {
+      const fromData = content.resumeData?.experience?.[index];
+      return {
+        company: item.company,
+        role: item.jobTitle,
+        location: '',
+        startDate: item.startDate || fromData?.startDate || '',
+        endDate: item.endDate || fromData?.endDate || '',
+        current: Boolean(item.isCurrent ?? fromData?.isCurrent),
+        bullets: item.description
+          ? item.description
+              .split(/\n|•/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+          : [],
+      };
+    }),
+    education: (content.education || []).map((item, index) => ({
+      id: `education-${index}`,
+      institution: item.institution || '',
+      school: item.institution || '',
+      degree: item.qualification || '',
+      fieldOfStudy: '',
+      endDate: item.yearCompleted ? String(item.yearCompleted) : '',
+    })),
+    projects: (content.projects || []).map((item, index) => {
+      const fromData = content.resumeData?.projects?.[index];
+      const existingTech = [
+        ...(item.technologies || []),
+        ...((fromData?.technologies as string[] | undefined) || []),
+      ]
+        .map((t) => String(t || '').trim())
+        .filter(Boolean);
+      const bodyLines = String(item.description || '')
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const peeled = extractProjectTechnologies(bodyLines);
+      const technologies = [...new Set([...existingTech, ...peeled.technologies])];
+      const description = peeled.description || item.description || '';
+      const explicitBullets = asBulletList(item.bullets ?? fromData?.bullets);
+      const descLines = description
+        ? description
+            .split(/\n+|•/)
+            .map((line) => line.replace(/^[-*]\s*/, '').trim())
+            .filter(Boolean)
+        : [];
+      // Keep overview + bullets separate when bullets exist; otherwise treat extra lines as bullets.
+      const bullets = explicitBullets.length
+        ? explicitBullets
+        : descLines.length > 1
+          ? descLines.slice(1)
+          : [];
+      return {
+        name: item.name,
+        title: item.name,
+        description: explicitBullets.length
+          ? description
+          : descLines.length > 1
+            ? descLines[0] || ''
+            : description,
+        technologies,
+        bullets,
+        bulletPoints: bullets,
+        url: item.url || '',
+      };
+    }),
+    certifications: (content.certifications || []).map((entry) => {
+      if (typeof entry === 'string') return { name: entry, issuer: '', date: '', url: '' };
+      return {
+        name: entry.name || '',
+        issuer: entry.issuer || '',
+        date: entry.date || '',
+        url: entry.url || '',
+      };
+    }),
+    achievements: (content.achievements || [])
+      .filter((item) => !isPageMarkerText(item.title, item.organization, item.description))
+      .map((item) => ({
+      title: item.title || '',
+      organization: item.organization || '',
+      description: item.description || '',
+      date: item.date || '',
+    })),
+    languages: (content.languages || []).map((entry) => {
+      const match = String(entry).match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+      if (match) return { name: match[1].trim(), level: match[2].trim() };
+      return { name: String(entry), level: '' };
+    }),
+  };
+}

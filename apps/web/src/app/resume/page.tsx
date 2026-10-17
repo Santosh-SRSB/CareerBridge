@@ -1,0 +1,3593 @@
+﻿'use client';
+
+import { useEffect, useMemo, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ResumePreviewScreen } from '@/components/resume/ResumePreviewScreen';
+import {
+  AchievementInlineForm,
+  CertificationInlineForm,
+  EducationInlineForm,
+  ExperienceInlineForm,
+  ProjectInlineForm,
+} from '@/components/resume/ResumeEntryForms';
+import { SkillSearchCombobox } from '@/components/resume/SkillSearchCombobox';
+import { StateCitySelect } from '@/components/resume/EducationSelectors';
+import { formatDateForResume, formatEducationYearRange, formatMonthRange } from '@/lib/resume-dates';
+import { buildMasterResume, validateMasterResume } from '@/features/resume/build-master-resume';
+import {
+  loadResumeWizardDraft,
+  saveResumeWizardDraft,
+  clearResumeWizardDraft,
+  peekResumeSeedFromProfile,
+  peekResumeStartWizard,
+  peekResumeAutofillSeed,
+  peekResumeFromAutofill,
+  peekResumeFromBuild,
+  clearResumeAutofillSeed,
+  clearResumeFromAutofill,
+  clearResumeFromBuild,
+  type ResumeWizardDraft,
+} from '@/features/resume/resume-wizard-draft';
+import {
+  buildWizardSeedFromCandidate,
+  mapCandidateProfileToResumeWizard,
+  mergeProfileSeedWithDraft,
+} from '@/features/resume/profile-to-resume-wizard';
+import {
+  getResumeUpdateResumeId,
+  getResumeUpdateReturnTo,
+  isResumeUpdateMode,
+  clearResumeUpdateMode,
+  peekAtsSectionEdit,
+  clearAtsSectionEdit,
+  mapAtsSectionToWizardStep,
+} from '@/features/resume/resume-update-mode';
+import { validateWizardStep } from '@/features/resume/resume-wizard-validation';
+import {
+  LAST_WIZARD_GROUP,
+  WIZARD_GROUPS,
+  profileCompletionPercent,
+  wizardGroupFirstStep,
+  wizardGroupFormSteps,
+  wizardGroupIndex,
+} from '@/features/resume/wizard-groups';
+import { parseCityState } from '@/data/india-locations';
+import './resume-wizard.css';
+import { RESUME_SUMMARY_MAX } from '@/features/resume/resume-entry-validation';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { SummaryAiAssist } from '@/components/resume/SummaryAiAssist';
+import type { ResumeAiSuggestion } from '@/features/resume/resume-ai-review';
+import { getStoredUser, patchStoredUser } from '@/lib/session';
+import { OB } from '@/components/OnboardingFrame';
+import { BrandLogo } from '@/components/brand/BrandLogo';
+import { goToReturnTo, clearReturnStack } from '@/lib/nav-return';
+import {
+  getCandidateMe,
+  getResume,
+  getResumeProcessingStatus,
+  retryResumeProcessing,
+  listResumes,
+  createResume,
+  updateResume,
+  savePassport,
+  updateCandidateMe,
+  analyzeCareerGap,
+} from '@/lib/api';
+import { careerGapAnalyzeInput, fitsCareerGapAnalyzeContract } from '@/lib/career-gap';
+import { mapResumeRecordToWizardSeed } from '@/features/resume/resume-record-to-wizard';
+import { masterResumeToResumeContent } from '@/features/resume/master-to-resume-content';
+import { mapResumeContentToPassportPayload } from '@/features/resume/resume-content-to-passport';
+import { mergeResumeLinksIntoProfile, syncResumeToProfile } from '@/features/resume/resume-profile-sync';
+import { fitResumeSummary, type CandidateProfile } from '@careerbridge/shared';
+import {
+  parseLanguageSkills,
+  serializeLanguageSkills,
+  computeCareerGapAfterHighestEducation,
+  PREFERRED_JOB_ROLES,
+} from '@careerbridge/shared';
+
+type FlowPhase = 'wizard' | 'preview' | 'finish';
+
+function formatSalaryDisplay(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  return Number(digits).toLocaleString('en-IN');
+}
+type ActiveForm = null | 'education' | 'experience' | 'project' | 'certification' | 'achievement';
+type EntryKind = Exclude<ActiveForm, null>;
+type PendingEntryDelete = { kind: EntryKind; id: string; label: string };
+
+const ENTRY_KIND_NAMES: Record<EntryKind, string> = {
+  education: 'education entry',
+  experience: 'experience entry',
+  project: 'project',
+  certification: 'certification',
+  achievement: 'achievement',
+};
+
+interface EducationItem {
+  id: string;
+  degree: string;
+  field: string;
+  institution: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  grade: string;
+  gradeType: string;
+}
+
+interface ExperienceItem {
+  id: string;
+  role: string;
+  company: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  responsibilities: string[];
+}
+
+interface ProjectItem {
+  id: string;
+  name: string;
+  description: string;
+  technologies: string[];
+  bullets: string[];
+}
+
+interface CertificationItem {
+  id: string;
+  name: string;
+  issuer: string;
+  date: string;
+}
+
+interface AchievementItem {
+  id: string;
+  title: string;
+  organization: string;
+  description: string;
+  date: string;
+}
+
+const WIZARD_STEPS = [
+  'Personal',
+  'Education',
+  'Experience',
+  'Skills',
+  'Credentials',
+  'Links',
+  'Career Gap',
+  'Review',
+];
+
+const STEP_SECTION_LABELS: Record<string, string> = {
+  Personal: 'Personal details',
+  Education: 'Education details',
+  Experience: 'Experience details',
+  Skills: 'Skills & languages',
+  Credentials: 'Projects, certifications & achievements',
+  Links: 'Links & preferences',
+  'Career Gap': 'Career gap explanation',
+  Review: 'Review details',
+};
+
+const REVIEW_INDEX = WIZARD_STEPS.length - 1;
+
+function getStepSectionLabel(step: string) {
+  return STEP_SECTION_LABELS[step] || step;
+}
+
+const LANGUAGE_POOL = [
+  'English',
+  'Hindi',
+  'Tamil',
+  'Telugu',
+  'Malayalam',
+  'Kannada',
+  'Bengali',
+  'Marathi',
+  'Gujarati',
+  'Punjabi',
+];
+
+function normalizeLanguagePool(selected: string[], available: string[] | undefined) {
+  const selectedClean = (selected || []).filter(Boolean);
+  const selectedNames = new Set(
+    selectedClean.map((entry) => parseLanguageSkills(entry)[0]?.name || entry),
+  );
+  const fromDraft = (available || []).filter((name) => name && !selectedNames.has(name));
+  if (fromDraft.length > 0) return { languages: selectedClean, availableLanguages: fromDraft };
+  return {
+    languages: selectedClean,
+    availableLanguages: LANGUAGE_POOL.filter((name) => !selectedNames.has(name)),
+  };
+}
+
+function applyWizardDraft(draft: Omit<ResumeWizardDraft, 'savedAt'>) {
+  const langs = normalizeLanguagePool(draft.languages, draft.availableLanguages);
+  const phase =
+    draft.flowPhase === 'preview' ||
+    draft.flowPhase === 'wizard' ||
+    draft.flowPhase === 'finish'
+      ? draft.flowPhase
+      : 'wizard';
+  return {
+    flowPhase: phase,
+    wizardIndex: draft.wizardIndex,
+    fullName: draft.fullName,
+    location: draft.location,
+    email: draft.email,
+    phone: draft.phone,
+    summary: draft.summary,
+    skills: draft.skills,
+    educationList: draft.educationList as EducationItem[],
+    experienceList: draft.experienceList as ExperienceItem[],
+    projectList: draft.projectList as ProjectItem[],
+    certificationList: draft.certificationList as CertificationItem[],
+    achievementList: draft.achievementList as AchievementItem[],
+    linkedin: draft.linkedin || '',
+    github: draft.github || '',
+    portfolio: draft.portfolio || '',
+    gapReason: draft.gapReason || '',
+    languages: langs.languages,
+    availableLanguages: langs.availableLanguages,
+    preferredRole: draft.preferredRole,
+    preferredLocation: draft.preferredLocation,
+    expectedSalary: draft.expectedSalary,
+  };
+}
+
+function applyProfileSeed(
+  seed: Omit<ResumeWizardDraft, 'savedAt' | 'flowPhase' | 'wizardIndex'>,
+  setters: {
+    setFullName: (value: string) => void;
+    setLocation: (value: string) => void;
+    setEmail: (value: string) => void;
+    setPhone: (value: string) => void;
+    setSummary: (value: string) => void;
+    setSkills: (value: string[]) => void;
+    setEducationList: (value: EducationItem[]) => void;
+    setExperienceList: (value: ExperienceItem[]) => void;
+    setProjectList: (value: ProjectItem[]) => void;
+    setCertificationList: (value: CertificationItem[]) => void;
+    setAchievementList: (value: AchievementItem[]) => void;
+    setLinkedin: (value: string) => void;
+    setGithub: (value: string) => void;
+    setPortfolio: (value: string) => void;
+    setGapReason: (value: string) => void;
+    setLanguages: (value: string[]) => void;
+    setAvailableLanguages: (value: string[]) => void;
+    setPreferredRole: (value: string) => void;
+    setPreferredLocation: (value: string) => void;
+    setExpectedSalary: (value: string) => void;
+  },
+) {
+  setters.setFullName(seed.fullName);
+  setters.setLocation(seed.location);
+  setters.setEmail(seed.email);
+  setters.setPhone(seed.phone);
+  setters.setSummary(seed.summary);
+  setters.setSkills(seed.skills);
+  setters.setEducationList(seed.educationList as EducationItem[]);
+  setters.setExperienceList(seed.experienceList as ExperienceItem[]);
+  setters.setProjectList(seed.projectList as ProjectItem[]);
+  setters.setCertificationList(seed.certificationList as CertificationItem[]);
+  setters.setAchievementList(seed.achievementList as AchievementItem[]);
+  setters.setLinkedin(seed.linkedin || '');
+  setters.setGithub(seed.github || '');
+  setters.setPortfolio(seed.portfolio || '');
+  setters.setGapReason(seed.gapReason || '');
+  setters.setLanguages(seed.languages);
+  setters.setAvailableLanguages(seed.availableLanguages);
+  setters.setPreferredRole(seed.preferredRole);
+  setters.setPreferredLocation(seed.preferredLocation);
+  setters.setExpectedSalary(seed.expectedSalary);
+}
+
+export default function ResumePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-[#f8f9fc] text-sm text-slate-500">
+          Loading…
+        </main>
+      }
+    >
+      <ResumePageInner />
+    </Suspense>
+  );
+}
+
+function ResumePageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromAutofillQuery = searchParams.get('from') === 'autofill';
+  const fromBuildQuery = searchParams.get('from') === 'build';
+  const [flowPhase, setFlowPhase] = useState<FlowPhase>('wizard');
+  const [wizardIndex, setWizardIndex] = useState(0);
+  const [saving, setSaving] = useState(false);
+  /** When set, wizard shows only this step and Save returns to ATS (does not advance creation flow). */
+  const [atsEditStep, setAtsEditStep] = useState<string | null>(null);
+  const [atsEditReturnTo, setAtsEditReturnTo] = useState<'preview' | 'ats'>('preview');
+  const [atsRecheckNonce, setAtsRecheckNonce] = useState(0);
+
+  const [fullName, setFullName] = useState('');
+  const [location, setLocation] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [summary, setSummary] = useState('');
+  const [skills, setSkills] = useState<string[]>([]);
+
+  const [educationList, setEducationList] = useState<EducationItem[]>([]);
+  const [experienceList, setExperienceList] = useState<ExperienceItem[]>([]);
+  const [projectList, setProjectList] = useState<ProjectItem[]>([]);
+  const [certificationList, setCertificationList] = useState<CertificationItem[]>([]);
+  const [achievementList, setAchievementList] = useState<AchievementItem[]>([]);
+  const [linkedin, setLinkedin] = useState('');
+  const [github, setGithub] = useState('');
+  const [portfolio, setPortfolio] = useState('');
+  const [gapReason, setGapReason] = useState('');
+  const [gapMonths, setGapMonths] = useState(0);
+  const [gapLabel, setGapLabel] = useState('');
+  const [backendGapOnly, setBackendGapOnly] = useState(false);
+  const [extraLinkSlots, setExtraLinkSlots] = useState(0);
+  const [activeForm, setActiveForm] = useState<ActiveForm>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [entrySubmitSignal, setEntrySubmitSignal] = useState(0);
+  const [continueAfterEntrySave, setContinueAfterEntrySave] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PendingEntryDelete | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [draftReady, setDraftReady] = useState(false);
+  const [pendingParseId, setPendingParseId] = useState<string | null>(null);
+  const [parseBusy, setParseBusy] = useState(false);
+  const [parseError, setParseError] = useState('');
+
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [availableLanguages, setAvailableLanguages] = useState<string[]>([...LANGUAGE_POOL]);
+
+  const [preferredRole, setPreferredRole] = useState('');
+  const [preferredLocation, setPreferredLocation] = useState('');
+  const [expectedSalary, setExpectedSalary] = useState('');
+  const [savedResumeId, setSavedResumeId] = useState<string | undefined>();
+  const [highlightMissingPersonal, setHighlightMissingPersonal] = useState(false);
+  const isBuildPath = fromBuildQuery || peekResumeFromBuild();
+  const isAutofillPath =
+    Boolean(fromAutofillQuery || peekResumeFromAutofill()) || highlightMissingPersonal;
+
+  useEffect(() => {
+    let active = true;
+
+    async function init() {
+      const updateMode = isResumeUpdateMode();
+      const updateResumeId = updateMode ? getResumeUpdateResumeId() : undefined;
+
+      function restoreFromDraft(source: Omit<ResumeWizardDraft, 'savedAt'>) {
+        const restored = applyWizardDraft(source);
+        setFlowPhase(restored.flowPhase);
+        setWizardIndex(restored.wizardIndex);
+        setFullName(restored.fullName);
+        setLocation(restored.location);
+        setEmail(restored.email);
+        setPhone(restored.phone);
+        setSummary(restored.summary);
+        setSkills(restored.skills);
+        setEducationList(restored.educationList);
+        setExperienceList(restored.experienceList);
+        setProjectList(restored.projectList);
+        setCertificationList(restored.certificationList);
+        setAchievementList(restored.achievementList);
+        setLinkedin(restored.linkedin || '');
+        setGithub(restored.github || '');
+        setPortfolio(restored.portfolio || '');
+        setGapReason(restored.gapReason || '');
+        setLanguages(restored.languages);
+        setAvailableLanguages(restored.availableLanguages);
+        setPreferredRole(restored.preferredRole);
+        setPreferredLocation(restored.preferredLocation);
+        setExpectedSalary(restored.expectedSalary);
+      }
+
+      function applySeed(source: Omit<ResumeWizardDraft, 'savedAt' | 'flowPhase' | 'wizardIndex'>) {
+        applyProfileSeed(source, {
+          setFullName,
+          setLocation,
+          setEmail,
+          setPhone,
+          setSummary,
+          setSkills,
+          setEducationList,
+          setExperienceList,
+          setProjectList,
+          setCertificationList,
+          setAchievementList,
+          setLinkedin,
+          setGithub,
+          setPortfolio,
+          setGapReason,
+          setLanguages,
+          setAvailableLanguages,
+          setPreferredRole,
+          setPreferredLocation,
+          setExpectedSalary,
+        });
+      }
+
+      // ATS dashboard → edit one section only (do not restart full creation wizard)
+      const pendingAtsEdit = peekAtsSectionEdit();
+      if (pendingAtsEdit?.resumeId) {
+        try {
+          const [profile, record] = await Promise.all([
+            getCandidateMe(),
+            getResume(pendingAtsEdit.resumeId),
+          ]);
+          if (!active) return;
+          if (profile && record) {
+            const step = mapAtsSectionToWizardStep(pendingAtsEdit.sectionKey);
+            const stepIndex = Math.max(0, WIZARD_STEPS.indexOf(step));
+            const seeded = buildWizardSeedFromCandidate(profile, record, {
+              flowPhase: 'wizard',
+              wizardIndex: stepIndex,
+            });
+            applySeed(seeded);
+            setSavedResumeId(record.id);
+            setAtsEditStep(step);
+            setAtsEditReturnTo(pendingAtsEdit.returnTo === 'ats' ? 'ats' : 'preview');
+            setFlowPhase('wizard');
+            setWizardIndex(stepIndex);
+            if (active) setDraftReady(true);
+            return;
+          }
+        } catch {
+          clearAtsSectionEdit();
+        }
+      }
+
+      // Path A: seed from uploaded resume → open Personal step (skip choose screen)
+      const autofillSeed = peekResumeAutofillSeed();
+      const fromAutofill = Boolean(autofillSeed || peekResumeFromAutofill() || fromAutofillQuery);
+      if (fromAutofill) {
+        if (autofillSeed) {
+          const { resumeId, highlightMissing, pendingParse, ...seedFields } = autofillSeed;
+          applySeed(seedFields);
+          if (resumeId) setSavedResumeId(resumeId);
+          if (pendingParse && resumeId) {
+            setPendingParseId(resumeId);
+            setParseBusy(true);
+            setParseError('');
+          }
+          setHighlightMissingPersonal(Boolean(highlightMissing ?? true));
+          saveResumeWizardDraft({
+            flowPhase: 'wizard',
+            wizardIndex: 0,
+            fullName: seedFields.fullName || '',
+            location: seedFields.location || '',
+            email: seedFields.email || '',
+            phone: seedFields.phone || '',
+            summary: seedFields.summary || '',
+            skills: seedFields.skills || [],
+            educationList: seedFields.educationList || [],
+            experienceList: seedFields.experienceList || [],
+            projectList: seedFields.projectList || [],
+            certificationList: seedFields.certificationList || [],
+            achievementList: seedFields.achievementList || [],
+            linkedin: seedFields.linkedin || '',
+            github: seedFields.github || '',
+            portfolio: seedFields.portfolio || '',
+            gapReason: seedFields.gapReason || '',
+            languages: seedFields.languages || [],
+            availableLanguages: seedFields.availableLanguages || [],
+            preferredRole: seedFields.preferredRole || '',
+            preferredLocation: seedFields.preferredLocation || '',
+            expectedSalary: seedFields.expectedSalary || '',
+            pendingParseId: pendingParse && resumeId ? resumeId : null,
+            savedResumeId: resumeId || null,
+          });
+          // Clear seed only — keep from-autofill flag for Strict Mode remount.
+          clearResumeAutofillSeed();
+          setFlowPhase('wizard');
+          setWizardIndex(0);
+        } else {
+          const draft = loadResumeWizardDraft();
+          if (draft) {
+            restoreFromDraft({
+              ...draft,
+              flowPhase: draft.flowPhase === 'choose' ? 'wizard' : draft.flowPhase,
+            });
+            if (draft.pendingParseId) {
+              setPendingParseId(draft.pendingParseId);
+              setSavedResumeId(draft.pendingParseId);
+              setParseBusy(true);
+              setParseError('');
+            } else if (draft.savedResumeId) {
+              setSavedResumeId(draft.savedResumeId);
+            }
+          } else {
+            setFlowPhase('wizard');
+            setWizardIndex(0);
+          }
+          setHighlightMissingPersonal(true);
+        }
+        if (active) setDraftReady(true);
+        return;
+      }
+
+      if (updateMode) {
+        try {
+          const [profile, rows] = await Promise.all([getCandidateMe(), listResumes()]);
+          if (!active) return;
+
+          let record = updateResumeId
+            ? rows.find((row) => row.id === updateResumeId) || null
+            : rows.find((row) => row.kind !== 'OPTIMIZED') || rows[0] || null;
+
+          if (updateResumeId && !record) {
+            try {
+              record = await getResume(updateResumeId);
+            } catch {
+              record = null;
+            }
+          }
+
+          if (!profile) {
+            if (active) setDraftReady(true);
+            return;
+          }
+
+          const seeded = buildWizardSeedFromCandidate(profile, record, {
+            flowPhase: 'wizard',
+            wizardIndex: 0,
+          });
+          applySeed(seeded);
+          if (record?.id) setSavedResumeId(record.id);
+          setFlowPhase('wizard');
+          setWizardIndex(0);
+          // Keep returnTo so Back goes to View Resume / ATS / dashboard.
+          clearResumeUpdateMode({ keepReturnTo: true });
+          if (active) setDraftReady(true);
+          return;
+        } catch {
+          clearResumeUpdateMode({ keepReturnTo: true });
+          // Fall through to profile/draft path below.
+        }
+      }
+
+      const seedFromProfile = peekResumeSeedFromProfile();
+      const startWizard = peekResumeStartWizard() || fromBuildQuery || peekResumeFromBuild();
+      if (seedFromProfile) clearResumeWizardDraft();
+      const draft = seedFromProfile ? null : loadResumeWizardDraft();
+
+      try {
+        const profile = await getCandidateMe();
+        if (!active) return;
+
+        if (!profile) {
+          if (draft) restoreFromDraft(draft);
+          return;
+        }
+
+        if (seedFromProfile || !draft) {
+          applySeed(mapCandidateProfileToResumeWizard(profile));
+          setFlowPhase('wizard');
+          setWizardIndex(0);
+          setHighlightMissingPersonal(false);
+          // Keep build/from-profile flags for Strict Mode remount; clear only ephemeral start flag after draft saves.
+          if (typeof window !== 'undefined' && startWizard) {
+            sessionStorage.removeItem('cb.resumeStartWizard');
+            // Persist build flag until ATS / dashboard
+            if (fromBuildQuery || peekResumeFromBuild()) {
+              sessionStorage.setItem('cb.resumeFromBuild', '1');
+            }
+          } else if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('cb.resumeFromProfile');
+            sessionStorage.removeItem('cb.resumeStartWizard');
+          }
+          return;
+        }
+
+        restoreFromDraft(mergeProfileSeedWithDraft(draft, profile));
+      } catch {
+        if (!active) return;
+        if (draft) {
+          restoreFromDraft(draft);
+          return;
+        }
+        try {
+          const user = getStoredUser();
+          if (user?.firstName) {
+            setFullName(user.firstName);
+          }
+        } catch {}
+      } finally {
+        if (active) setDraftReady(true);
+      }
+
+      try {
+        const rows = await listResumes();
+        if (!active) return;
+        const primary = rows.find((row) => row.kind !== 'OPTIMIZED') || rows[0];
+        if (primary?.id) {
+          setSavedResumeId(primary.id);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    void init();
+
+    return () => {
+      active = false;
+    };
+  }, [fromAutofillQuery, fromBuildQuery]);
+
+  // Background parse: hydrate wizard when Document AI + Gemini finish (upload already navigated).
+  useEffect(() => {
+    if (!pendingParseId) return;
+    let cancelled = false;
+
+    async function hydrateFromParsedResume(resumeId: string) {
+      const record = await getResume(resumeId);
+      if (cancelled) return;
+      const seed = mapResumeRecordToWizardSeed(record);
+      applyProfileSeed(seed, {
+        setFullName,
+        setLocation,
+        setEmail,
+        setPhone,
+        setSummary,
+        setSkills,
+        setEducationList: setEducationList as (value: EducationItem[]) => void,
+        setExperienceList: setExperienceList as (value: ExperienceItem[]) => void,
+        setProjectList: setProjectList as (value: ProjectItem[]) => void,
+        setCertificationList: setCertificationList as (value: CertificationItem[]) => void,
+        setAchievementList: setAchievementList as (value: AchievementItem[]) => void,
+        setLinkedin,
+        setGithub,
+        setPortfolio,
+        setGapReason,
+        setLanguages,
+        setAvailableLanguages,
+        setPreferredRole,
+        setPreferredLocation,
+        setExpectedSalary,
+      });
+      setSavedResumeId(resumeId);
+      setHighlightMissingPersonal(true);
+      setParseBusy(false);
+      setParseError('');
+      setPendingParseId(null);
+    }
+
+    async function poll() {
+      setParseBusy(true);
+      for (let i = 0; i < 180; i += 1) {
+        if (cancelled) return;
+        try {
+          if (!pendingParseId) return;
+          const result = await getResumeProcessingStatus(pendingParseId);
+          if (result.processingStatus === 'COMPLETED') {
+            await hydrateFromParsedResume(pendingParseId);
+            return;
+          }
+          if (result.processingStatus === 'FAILED') {
+            setParseBusy(false);
+            setParseError(result.processingError || 'Could not read this resume. Please retry.');
+            return;
+          }
+        } catch (err) {
+          if (cancelled) return;
+          setParseBusy(false);
+          setParseError(err instanceof Error ? err.message : 'Could not check resume status.');
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      if (!cancelled) {
+        setParseBusy(false);
+        setParseError('Reading is taking longer than usual. You can keep editing or retry.');
+      }
+    }
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingParseId]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    saveResumeWizardDraft({
+      flowPhase,
+      wizardIndex,
+      fullName,
+      location,
+      email,
+      phone,
+      summary,
+      skills,
+      educationList,
+      experienceList,
+      projectList,
+      certificationList,
+      achievementList,
+      linkedin,
+      github,
+      portfolio,
+      gapReason,
+      languages,
+      availableLanguages,
+      preferredRole,
+      preferredLocation,
+      expectedSalary,
+      pendingParseId: pendingParseId || null,
+      savedResumeId: savedResumeId || null,
+    });
+  }, [
+    draftReady,
+    flowPhase,
+    wizardIndex,
+    fullName,
+    location,
+    email,
+    phone,
+    summary,
+    skills,
+    educationList,
+    experienceList,
+    projectList,
+    certificationList,
+    achievementList,
+    linkedin,
+    github,
+    portfolio,
+    gapReason,
+    languages,
+    availableLanguages,
+    preferredRole,
+    preferredLocation,
+    expectedSalary,
+    pendingParseId,
+    savedResumeId,
+  ]);
+
+  const masterResume = useMemo(
+    () =>
+      buildMasterResume({
+        fullName,
+        location,
+        email,
+        phone,
+        linkedin,
+        github,
+        portfolio,
+        summary,
+        skills,
+        experienceList,
+        educationList,
+        projectList,
+        certificationList,
+        achievementList,
+        languages: languages
+          .map((entry) => parseLanguageSkills(entry)[0] || { name: entry, level: '' })
+          .filter((item) => item.name.trim()),
+      }),
+    [
+      fullName,
+      location,
+      email,
+      phone,
+      linkedin,
+      github,
+      portfolio,
+      summary,
+      skills,
+      experienceList,
+      educationList,
+      projectList,
+      certificationList,
+      achievementList,
+      languages,
+    ],
+  );
+
+  const gapInput = useMemo(
+    () => careerGapAnalyzeInput(educationList, experienceList),
+    [educationList, experienceList],
+  );
+  const localGap = useMemo(() => computeCareerGapAfterHighestEducation(gapInput), [gapInput]);
+
+  useEffect(() => {
+    setGapMonths(localGap.gapMonths);
+    setGapLabel(localGap.gapLabel);
+    if (!localGap.hasGap && gapReason) {
+      // Keep typed reason while browsing; clear only when gap disappears after edu/exp edits
+    }
+  }, [localGap, gapReason]);
+
+  const currentStep = WIZARD_STEPS[wizardIndex];
+  const isReviewStep = wizardIndex === REVIEW_INDEX;
+  const groupIndex = wizardGroupIndex(currentStep);
+  const showGapCard = localGap.hasGap || backendGapOnly || currentStep === 'Career Gap';
+  const groupFormSteps = wizardGroupFormSteps(groupIndex, showGapCard);
+  /** ATS section edits keep the single-step view; the normal flow renders a whole section. */
+  const showStep = (step: string) => (atsEditStep ? currentStep === step : groupFormSteps.includes(step));
+  const showLegacyReview = isReviewStep && Boolean(atsEditStep);
+  const showReviewSummary = !atsEditStep && groupIndex === LAST_WIZARD_GROUP;
+
+  function goToGroup(index: number) {
+    setValidationErrors([]);
+    setWizardIndex(WIZARD_STEPS.indexOf(wizardGroupFirstStep(index)));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function addSkill(s: string) {
+    const trimmed = s.trim();
+    if (!trimmed) return;
+    setSkills((prev) => {
+      if (prev.some((x) => x.toLowerCase() === trimmed.toLowerCase())) return prev;
+      return [...prev, trimmed];
+    });
+  }
+
+  function removeSkill(s: string) {
+    const target = s.trim().toLowerCase();
+    setSkills((prev) => prev.filter((x) => x.toLowerCase() !== target));
+  }
+
+  function languageName(entry: string) {
+    return parseLanguageSkills(entry)[0]?.name || entry;
+  }
+
+  function addLanguage(l: string) {
+    const name = l.trim();
+    if (!name) return;
+    if (languages.some((entry) => languageName(entry) === name)) return;
+    setLanguages((prev) => [...prev, name]);
+    setAvailableLanguages((prev) => prev.filter((x) => x !== name));
+  }
+
+  function removeLanguage(l: string) {
+    const name = languageName(l);
+    setLanguages((prev) => prev.filter((entry) => languageName(entry) !== name));
+    if (!availableLanguages.includes(name)) {
+      setAvailableLanguages((prev) => [...prev, name]);
+    }
+  }
+
+  /** Sync the finished resume into the profile; returns the saved profile and the links held before the save. */
+  async function savePassportFromResume() {
+    const { profile, existing } = await syncResumeToProfile(
+      masterResumeToResumeContent(masterResume),
+      { getCandidateMe, savePassport },
+      { hasGap: localGap.hasGap, gapMonths: localGap.gapMonths, gapReason },
+    );
+    return { profile, existingLinks: existing?.links ?? null };
+  }
+
+  async function handleFinishWizard() {
+    const errors = validateMasterResume(masterResume);
+    if (errors.length) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors([]);
+    setSaving(true);
+    try {
+      await ensureResumeSaved();
+      try {
+        const { profile, existingLinks } = await savePassportFromResume();
+        const links = existingLinks
+          ? mergeResumeLinksIntoProfile(existingLinks, {
+              linkedin: masterResume.personalInfo.linkedin,
+              github: masterResume.personalInfo.github,
+              portfolio: masterResume.personalInfo.portfolio,
+            })
+          : null;
+        if (links) {
+          await updateCandidateMe({ links }).catch(() => undefined);
+        }
+        const preferredLanguage = serializeLanguageSkills(
+          languages
+            .map((entry) => parseLanguageSkills(entry)[0] || { name: entry, level: '' })
+            .filter((item) => item.name.trim()),
+        );
+        if (preferredLanguage) {
+          await updateCandidateMe({ preferredLanguage }).catch(() => undefined);
+        }
+        patchStoredUser({ firstName: profile.firstName, onboardingCompleted: true });
+      } catch {
+        // Resume is saved; passport sync can be completed later from dashboard.
+      }
+      setFlowPhase('finish');
+      clearResumeFromAutofill();
+      // Keep build path flag so the next-step screen can show Path B guidance.
+    } catch {
+      setValidationErrors(['Could not save your resume. Please try again.']);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleSaveAndContinue() {
+    const errors = validateMasterResume(masterResume);
+    if (errors.length) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors([]);
+    setSaving(true);
+    setFlowPhase('preview');
+    setSaving(false);
+  }
+
+  function wizardValidationInput() {
+    return {
+      fullName,
+      location,
+      email,
+      phone,
+      summary,
+      skills,
+      educationList,
+      languages,
+      preferredRole,
+      linkedin,
+      github,
+      portfolio,
+      gapReason,
+      gapMonths: localGap.gapMonths,
+      hasCareerGap: localGap.hasGap,
+    };
+  }
+
+  function clearEntryForm() {
+    setActiveForm(null);
+    setEditingId(null);
+  }
+
+  function summaryAiProfile(): Record<string, unknown> {
+    const profile: Record<string, unknown> = {};
+    if (skills.length) profile.skills = skills.slice(0, 25);
+    if (languages.length) profile.languages = languages;
+    if (educationList.length) {
+      profile.education = educationList.map((e) => ({
+        degree: e.degree,
+        field: e.field,
+        institution: e.institution,
+        completed: e.isCurrent ? 'ongoing' : e.endDate,
+      }));
+    }
+    if (experienceList.length) {
+      profile.experience = experienceList.map((e) => ({
+        role: e.role,
+        company: e.company,
+        from: e.startDate,
+        to: e.isCurrent ? 'present' : e.endDate,
+      }));
+    }
+    return profile;
+  }
+
+  function requestEntryDelete(kind: EntryKind, id: string, label: string) {
+    setPendingDelete({ kind, id, label });
+  }
+
+  function confirmEntryDelete() {
+    if (!pendingDelete) return;
+    const { kind, id } = pendingDelete;
+    const drop = <T extends { id: string }>(prev: T[]) => prev.filter((x) => x.id !== id);
+    if (kind === 'education') setEducationList(drop);
+    else if (kind === 'experience') setExperienceList(drop);
+    else if (kind === 'project') setProjectList(drop);
+    else if (kind === 'certification') setCertificationList(drop);
+    else setAchievementList(drop);
+    if (editingId === id) clearEntryForm();
+    setPendingDelete(null);
+  }
+
+  useEffect(() => {
+    if (!continueAfterEntrySave || activeForm !== null) return;
+    setContinueAfterEntrySave(false);
+    handleWizardNext();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [continueAfterEntrySave, activeForm, educationList, experienceList]);
+
+  function handleEntryInvalid() {
+    setContinueAfterEntrySave(false);
+    setValidationErrors(['Fix the highlighted fields in the open entry, or cancel it, before continuing.']);
+  }
+
+  function nextWizardIndex(from: number) {
+    const step = WIZARD_STEPS[from];
+    if (step === 'Links') {
+      if (localGap.hasGap) return WIZARD_STEPS.indexOf('Career Gap');
+      return WIZARD_STEPS.indexOf('Review');
+    }
+    return Math.min(from + 1, REVIEW_INDEX);
+  }
+
+  async function refreshGapFromBackend(persist = false) {
+    if (!fitsCareerGapAnalyzeContract(gapInput)) return localGap;
+    try {
+      const result = await analyzeCareerGap({
+        ...gapInput,
+        gapReason: gapReason.trim() || undefined,
+        persist,
+      });
+      setGapMonths(result.gapMonths);
+      setGapLabel(result.gapLabel);
+      if (!gapReason.trim() && result.savedGapReason) {
+        setGapReason(result.savedGapReason);
+      }
+      return result;
+    } catch {
+      return localGap;
+    }
+  }
+
+  function handleWizardNext() {
+    const stepsInView = atsEditStep ? [currentStep] : groupFormSteps;
+    const openEntryOnStep =
+      (activeForm === 'education' && stepsInView.includes('Education')) ||
+      (activeForm === 'experience' && stepsInView.includes('Experience'));
+    if (openEntryOnStep) {
+      setContinueAfterEntrySave(true);
+      setEntrySubmitSignal((n) => n + 1);
+      return;
+    }
+    // ATS edit mode: never advance through the creation wizard
+    if (atsEditStep) {
+      void handleAtsEditSaveAndReturn();
+      return;
+    }
+    const input = wizardValidationInput();
+    const errors = stepsInView.flatMap((step) =>
+      validateWizardStep(step, { ...input, hasCareerGap: localGap.hasGap || backendGapOnly }),
+    );
+    if (errors.length) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors([]);
+    if (stepsInView.includes('Links')) {
+      if (saving) return;
+      void (async () => {
+        setSaving(true);
+        const result = await refreshGapFromBackend(showGapCard);
+        setSaving(false);
+        if (result.hasGap && !showGapCard) {
+          setBackendGapOnly(true);
+          setValidationErrors(['Please explain why this career gap is OK.']);
+          return;
+        }
+        await handleFinishWizard();
+      })();
+      return;
+    }
+    const lastStep = stepsInView[stepsInView.length - 1] ?? currentStep;
+    setWizardIndex(nextWizardIndex(WIZARD_STEPS.indexOf(lastStep)));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function handleAtsEditSaveAndReturn() {
+    const errors =
+      currentStep === 'Review'
+        ? validateMasterResume(masterResume)
+        : validateWizardStep(currentStep, wizardValidationInput());
+    if (errors.length) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors([]);
+    if (currentStep === 'Links' || currentStep === 'Career Gap') {
+      try {
+        if (linkedin || github || portfolio) {
+          await updateCandidateMe({
+            links: {
+              linkedin: linkedin.trim() || undefined,
+              github: github.trim() || undefined,
+              portfolio: portfolio.trim() || undefined,
+            },
+          });
+        }
+        if (currentStep === 'Career Gap') {
+          await refreshGapFromBackend(true);
+        }
+      } catch {
+        /* non-blocking */
+      }
+    }
+    setSaving(true);
+    try {
+      const id = await ensureResumeSaved();
+      const returnTo = atsEditReturnTo;
+      setAtsEditStep(null);
+      clearAtsSectionEdit();
+      if (returnTo === 'ats') {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('cb.atsAutoRecheck', '1');
+        }
+        router.push(`/ats?resumeId=${encodeURIComponent(id)}`);
+        return;
+      }
+      setAtsRecheckNonce((n) => n + 1);
+      setFlowPhase('preview');
+    } catch {
+      setValidationErrors(['Could not save your changes. Please try again.']);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function beginAtsSectionEdit(sectionLabel: string, sectionKey: string) {
+    const step = mapAtsSectionToWizardStep(sectionKey || sectionLabel);
+    setAtsEditStep(step);
+    setAtsEditReturnTo('preview');
+    setValidationErrors([]);
+    setFlowPhase('wizard');
+    setWizardIndex(Math.max(0, WIZARD_STEPS.indexOf(step)));
+  }
+
+  async function ensureResumeSaved(): Promise<string> {
+    const content = masterResumeToResumeContent(masterResume);
+    const title = `${fullName.trim() || 'My'} Resume`;
+    const payload = {
+      title,
+      targetJobTitle: preferredRole.trim() || undefined,
+      template: 'resume-template-01',
+      summary: summary || content.summary || undefined,
+      content: content as unknown as Record<string, unknown>,
+    };
+
+    if (savedResumeId) {
+      const updated = await updateResume(savedResumeId, payload);
+      setSavedResumeId(updated.id);
+      return updated.id;
+    }
+
+    const created = await createResume({
+      ...payload,
+      content: content as unknown as Record<string, unknown>,
+    });
+    setSavedResumeId(created.id);
+    return created.id;
+  }
+
+  function handleApplyAiSuggestion(suggestion: ResumeAiSuggestion, improvedText: string) {
+    const lines = improvedText
+      .split(/\n+/)
+      .map((line) => line.replace(/^[-•*]\s*/, '').trim())
+      .filter(Boolean);
+
+    switch (suggestion.section) {
+      case 'summary':
+        setSummary(fitResumeSummary(improvedText) ?? improvedText.replace(/\n+/g, ' ').trim());
+        break;
+      case 'skills':
+        setSkills(
+          improvedText
+            .split(',')
+            .map((skill) => skill.trim())
+            .filter(Boolean)
+            .filter((skill, index, all) =>
+              all.findIndex((x) => x.toLowerCase() === skill.toLowerCase()) === index,
+            ),
+        );
+        break;
+      case 'experience':
+        setExperienceList((prev) => {
+          if (!prev.length) return prev;
+          const next = [...prev];
+          next[0] = { ...next[0], responsibilities: lines };
+          return next;
+        });
+        break;
+      case 'projects':
+        setProjectList((prev) => {
+          if (!prev.length) return prev;
+          const next = [...prev];
+          next[0] = {
+            ...next[0],
+            description: lines[0] || improvedText,
+            bullets: lines.length > 1 ? lines.slice(1) : lines,
+          };
+          return next;
+        });
+        break;
+      case 'education':
+        setEducationList((prev) => {
+          if (!prev.length) {
+            return [
+              {
+                id: `edu-${Date.now()}`,
+                degree: improvedText.split(' in ')[0] || improvedText,
+                field: improvedText.includes(' in ')
+                  ? improvedText.split(' in ')[1]?.split(' — ')[0] || ''
+                  : '',
+                institution: improvedText.split(' — ')[1]?.replace(/\s*\(.*\)$/, '') || '',
+                location: '',
+                startDate: '',
+                endDate: '',
+                isCurrent: false,
+                grade: '',
+                gradeType: '',
+              },
+            ];
+          }
+          const next = [...prev];
+          const degreeMatch = improvedText.match(/^([^—]+?)(?:\s+in\s+([^—]+))?/);
+          next[0] = {
+            ...next[0],
+            degree: degreeMatch?.[1]?.trim() || next[0].degree,
+            field: degreeMatch?.[2]?.trim() || next[0].field,
+            institution: improvedText.split(' — ')[1]?.replace(/\s*\(.*\)$/, '').trim() || next[0].institution,
+          };
+          return next;
+        });
+        break;
+      case 'achievements': {
+        const achievementEntries: AchievementItem[] = [];
+        const certEntries: CertificationItem[] = [];
+
+        for (const line of lines) {
+          if (/certification|certificate|certified/i.test(line)) {
+            const name = line.replace(/\s*—\s*Udemy\s*$/i, '').trim() || line;
+            certEntries.push({
+              id: `cert-${Date.now()}-${certEntries.length}`,
+              name,
+              issuer: /udemy/i.test(line) ? 'Udemy' : '',
+              date: '',
+            });
+          } else {
+            achievementEntries.push({
+              id: `ach-${Date.now()}-${achievementEntries.length}`,
+              title: line,
+              organization: '',
+              description: '',
+              date: '',
+            });
+          }
+        }
+
+        setAchievementList(achievementEntries);
+        setCertificationList(certEntries);
+        break;
+      }
+      case 'contact': {
+        const parts = improvedText.split('|').map((part) => part.trim());
+        if (parts[0] && !fullName) setFullName(parts[0]);
+        const emailPart = parts.find((part) => part.includes('@'));
+        const phonePart = parts.find((part) => /\+?\d/.test(part));
+        if (emailPart) setEmail(emailPart);
+        if (phonePart) setPhone(phonePart);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  async function goToDashboard() {
+    clearResumeFromAutofill();
+    clearResumeFromBuild();
+    clearResumeWizardDraft();
+    clearResumeUpdateMode();
+    clearReturnStack();
+    try {
+      await savePassportFromResume();
+    } catch {
+      /* still mark dashboard reached */
+    }
+    try {
+      await updateCandidateMe({ dashboardReached: true, onboardingCompleted: true });
+      patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
+    } catch {
+      patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
+    }
+    router.push('/dashboard');
+  }
+
+  async function syncProfileFromResume() {
+    const content = masterResumeToResumeContent(masterResume);
+    const profile = await savePassport({
+      ...mapResumeContentToPassportPayload(content),
+      education: educationList
+        .filter((edu) => edu.degree.trim())
+        .map((edu) => ({
+          qualification: [edu.degree, edu.field].filter(Boolean).join(' in '),
+          institution: edu.institution || undefined,
+          fieldOfStudy: edu.field || undefined,
+          yearCompleted: edu.endDate?.slice(0, 4) || undefined,
+          startDate: edu.startDate || undefined,
+          endDate: edu.isCurrent ? undefined : edu.endDate || undefined,
+        })),
+      experience: experienceList
+        .filter((exp) => exp.company.trim() || exp.role.trim())
+        .map((exp) => ({
+          company: exp.company || undefined,
+          jobTitle: exp.role || undefined,
+          startDate: exp.startDate || undefined,
+          endDate: exp.isCurrent ? undefined : exp.endDate || undefined,
+          stillInCompany: exp.isCurrent,
+          description: (exp.responsibilities || []).join('\n') || undefined,
+        })),
+      gapReason: localGap.hasGap ? gapReason.trim() : '',
+      gapMonths: localGap.hasGap ? localGap.gapMonths : 0,
+    });
+    if (linkedin.trim() || github.trim() || portfolio.trim()) {
+      await updateCandidateMe({
+        links: {
+          linkedin: linkedin.trim() || undefined,
+          github: github.trim() || undefined,
+          portfolio: portfolio.trim() || undefined,
+        },
+      }).catch(() => undefined);
+    }
+    if (localGap.hasGap && fitsCareerGapAnalyzeContract(gapInput)) {
+      await analyzeCareerGap({
+        ...gapInput,
+        gapReason: gapReason.trim(),
+        persist: true,
+      }).catch(() => undefined);
+    }
+    const preferredLanguage = serializeLanguageSkills(
+      languages
+        .map((entry) => parseLanguageSkills(entry)[0] || { name: entry, level: '' })
+        .filter((item) => item.name.trim()),
+    );
+    if (preferredLanguage) {
+      await updateCandidateMe({ preferredLanguage }).catch(() => undefined);
+    }
+    try {
+      await updateCandidateMe({ dashboardReached: true, onboardingCompleted: true });
+    } catch {
+      /* optional */
+    }
+    patchStoredUser({
+      firstName: profile.firstName,
+      onboardingCompleted: true,
+      dashboardReached: true,
+    });
+  }
+
+  function leaveResumeFlow(fallback = '/dashboard') {
+    const updateReturn = getResumeUpdateReturnTo();
+    clearResumeUpdateMode();
+    clearAtsSectionEdit();
+    if (updateReturn) {
+      router.push(updateReturn);
+      return;
+    }
+    goToReturnTo(router, fallback);
+  }
+
+  function handleBack() {
+    setValidationErrors([]);
+    // ATS edit mode: cancel section edit and return to ATS (never walk creation steps)
+    if (atsEditStep) {
+      const returnTo = atsEditReturnTo;
+      setAtsEditStep(null);
+      clearAtsSectionEdit();
+      if (returnTo === 'ats' && savedResumeId) {
+        router.push(`/ats?resumeId=${encodeURIComponent(savedResumeId)}`);
+        return;
+      }
+      setFlowPhase('preview');
+      return;
+    }
+    if (flowPhase === 'finish') {
+      setFlowPhase('wizard');
+      setWizardIndex(REVIEW_INDEX);
+      return;
+    }
+    if (flowPhase === 'preview') {
+      setFlowPhase('wizard');
+      setWizardIndex(REVIEW_INDEX);
+      return;
+    }
+    if (groupIndex > 0) {
+      goToGroup(groupIndex - 1);
+      return;
+    }
+    if (highlightMissingPersonal) {
+      clearResumeFromAutofill();
+      leaveResumeFlow('/onboarding/complete');
+      return;
+    }
+    // Step 0: leave wizard back to where the user came from (View Resume, ATS, dashboard…)
+    leaveResumeFlow('/dashboard');
+  }
+
+  if (!draftReady) {
+    return (
+      <div className="cb-resume-flow-root flex min-h-screen items-center justify-center bg-[#f8f9fc]">
+        <p className="text-sm font-medium text-[#43526b]">Loading your resume…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`cb-resume-flow-root${flowPhase === 'preview' ? ' cb-resume-flow-preview' : ''}`}>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        :root {
+          --ink: #10137c;
+          --ink-70: #3b4c85;
+          --ink-50: #5b6488;
+          --paper: #f8f9fc;
+          --card: #ffffff;
+          --line: #e1e5f2;
+          --marigold: #1a1fc4;
+          --marigold-dark: #10137c;
+          --teal: #10137c;
+          --radius-m: 10px;
+          --radius-l: 16px;
+        }
+
+        .cb-resume-flow-root {
+          font-family: 'Inter', sans-serif;
+          background: var(--paper);
+          color: var(--ink);
+          min-height: 100vh;
+        }
+
+        .cb-flow-topbar {
+          max-width: 900px;
+          margin: 0 auto;
+          padding: 14px 20px 0;
+          display: flex;
+          justify-content: flex-end;
+        }
+        .cb-flow-back-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 0;
+          background: none;
+          border: none;
+          font-family: 'Inter', sans-serif;
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--ink);
+          cursor: pointer;
+        }
+        .cb-flow-back-btn:hover { color: var(--ink-70); }
+
+        .cb-main-head-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .cb-main-head-row h1 {
+          flex: 1;
+          min-width: 0;
+        }
+        .cb-main-head-row .cb-flow-back-btn {
+          flex-shrink: 0;
+          padding-top: 4px;
+        }
+
+        .cb-wizard-shell {
+          max-width: 900px;
+          margin: 0 auto;
+          padding: 32px 20px 60px;
+        }
+
+        @media (max-width: 768px) {
+          .cb-flow-topbar { padding: 12px 12px 0; }
+          .cb-wizard-shell { padding: 16px 12px 32px; }
+          .cb-field-grid { grid-template-columns: 1fr !important; }
+          .cb-main-head { margin-bottom: 12px; }
+          .cb-main-head h1 { font-size: 20px; }
+          .cb-main-head .desc { font-size: 12.5px; }
+          .cb-section-head { font-size: 16px; margin-bottom: 14px; }
+          .cb-stepper-wrap { margin-bottom: 16px; }
+          .cb-stepper-desktop { display: none !important; }
+          .cb-resume-flow-preview {
+            display: flex;
+            flex-direction: column;
+            min-height: 100dvh;
+            height: 100dvh;
+            background: #fff;
+            overflow: hidden;
+          }
+          .cb-resume-flow-preview .cb-preview-page {
+            flex: 1 1 auto;
+            min-height: 0;
+          }
+        }
+
+        .cb-main-head { margin-bottom: 26px; }
+        .cb-main-head h1 {
+          font-size: 24px;
+          font-family: 'Space Grotesk', sans-serif;
+          font-weight: 700;
+          color: var(--ink);
+          margin: 0;
+        }
+        .cb-main-head .desc {
+          font-size: 13.5px;
+          color: var(--ink-70);
+          margin-top: 4px;
+        }
+
+        .cb-validation-errors {
+          background: #fcebea;
+          border: 1px solid #e8b4b0;
+          border-radius: 10px;
+          padding: 12px 14px;
+          margin-bottom: 16px;
+          font-size: 13px;
+          color: #8b2e26;
+        }
+        .cb-validation-errors div + div { margin-top: 4px; }
+
+        .cb-section-head {
+          text-align: center;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 18px;
+          font-weight: 700;
+          color: var(--ink);
+          margin: 0 0 18px;
+        }
+
+        .cb-stepper-wrap {
+          margin-bottom: 28px;
+        }
+        .cb-stepper-row {
+          display: flex;
+          gap: 4px;
+          width: 100%;
+        }
+        .cb-stepper-desktop .cb-step-h .lab {
+          font-size: 11px;
+        }
+        .cb-step-h {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          cursor: pointer;
+        }
+        .cb-step-h .track {
+          height: 3px;
+          border-radius: 2px;
+          background: var(--line);
+        }
+        .cb-step-h .track.done { background: var(--teal); }
+        .cb-step-h .track.current { background: var(--marigold); }
+        .cb-step-h .lab {
+          font-size: 12px;
+          color: var(--ink-50);
+          text-align: center;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+        .cb-step-h .lab.current { color: var(--ink); font-weight: 700; }
+
+        .cb-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          font-family: 'Inter', sans-serif;
+          font-weight: 600;
+          font-size: 14px;
+          border-radius: var(--radius-m);
+          padding: 11px 20px;
+          border: none;
+          cursor: pointer;
+        }
+        .cb-btn-primary { background: var(--ink); color: #fff; }
+        .cb-btn-primary:hover { background: #0f203d; }
+        .cb-btn-ghost {
+          background: transparent;
+          color: var(--ink);
+          border: 1.5px solid var(--line);
+        }
+        .cb-btn-row {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+
+        .cb-card {
+          background: var(--card);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-l);
+          padding: 26px 28px;
+          margin-bottom: 20px;
+        }
+
+        .cb-field-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+        .cb-field { margin-bottom: 16px; }
+        .cb-field.full { grid-column: 1 / -1; }
+        .cb-field label {
+          display: block;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: var(--ink-70);
+          margin-bottom: 6px;
+        }
+        .cb-field input,
+        .cb-field textarea {
+          width: 100%;
+          border: 1.5px solid var(--line);
+          border-radius: var(--radius-m);
+          padding: 11px 13px;
+          font-family: 'Inter', sans-serif;
+          font-size: 14px;
+          color: var(--ink);
+          resize: none;
+          box-sizing: border-box;
+        }
+        .cb-field textarea { min-height: 78px; }
+        .cb-field input:focus,
+        .cb-field textarea:focus {
+          outline: 2px solid var(--marigold);
+          outline-offset: 1px;
+          border-color: transparent;
+        }
+
+        .cb-search-field {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          border: 1.5px solid var(--line);
+          border-radius: var(--radius-m);
+          padding: 12px 15px;
+          margin-bottom: 8px;
+        }
+        .cb-section-label {
+          font-size: 12.5px;
+          font-weight: 600;
+          color: var(--ink-50);
+          margin: 22px 0 12px;
+        }
+        .cb-chip-wrap { display: flex; flex-wrap: wrap; gap: 9px; }
+        .cb-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          border-radius: 999px;
+          font-size: 13.5px;
+          font-weight: 600;
+          padding: 9px 15px;
+          cursor: pointer;
+          border: 1.5px solid #0d1a94;
+          background: #f0f1fd;
+          color: #0f1976;
+        }
+        .cb-chip .plus { color: #0d1a94; font-weight: 800; }
+        .cb-chip.selected {
+          background: var(--ink);
+          border-color: var(--ink);
+          color: #fff;
+        }
+
+        .cb-add-row {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1.5px dashed var(--line);
+          border-radius: var(--radius-m);
+          padding: 14px;
+          color: var(--ink-70);
+          font-size: 13.5px;
+          font-weight: 600;
+          cursor: pointer;
+          margin-bottom: 12px;
+          width: 100%;
+          background: transparent;
+          font-family: 'Inter', sans-serif;
+        }
+        .cb-entry-empty {
+          margin: 0 0 12px;
+          padding: 14px 16px;
+          border-radius: var(--radius-m);
+          background: #f6f7f2;
+          color: var(--ink-70);
+          font-size: 13.5px;
+        }
+        .cb-char-count {
+          align-self: flex-end;
+          font-size: 12px;
+          color: var(--ink-70);
+        }
+        .cb-entry-card {
+          border: 1px solid var(--line);
+          border-radius: var(--radius-m);
+          padding: 14px 16px;
+          margin-bottom: 12px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .cb-entry-card .role { font-size: 14px; font-weight: 700; }
+        .cb-entry-card .meta { font-size: 12.5px; color: var(--ink-50); margin-top: 2px; }
+        .cb-entry-card .edit-link,
+        .cb-entry-card .remove {
+          font-size: 12.5px;
+          color: var(--ink-50);
+          font-weight: 600;
+          cursor: pointer;
+          background: none;
+          border: none;
+          font-family: 'Inter', sans-serif;
+        }
+
+        /* Review screen (combined form) */
+        .cb-review-shell { max-width: 640px; margin: 0 auto; }
+        .cb-review-title {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 24px;
+          font-weight: 700;
+          margin: 0 0 24px;
+        }
+        .cb-review-card {
+          background: var(--card);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-l);
+          padding: 28px;
+        }
+        .cb-review-section { margin-bottom: 28px; }
+        .cb-review-section:last-of-type { margin-bottom: 0; }
+        .cb-review-section-title {
+          font-size: 15px;
+          font-weight: 700;
+          margin: 0 0 16px;
+        }
+        .cb-save-btn {
+          display: block;
+          width: auto;
+          min-width: 200px;
+          margin: 32px auto 0;
+          padding: 14px 32px;
+          background: var(--ink);
+          color: #fff;
+          border: none;
+          border-radius: var(--radius-m);
+          font-family: 'Inter', sans-serif;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .cb-entry-actions {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-shrink: 0;
+        }
+        .cb-entry-actions .edit {
+          border: 1.5px solid #e1e5f2;
+          background: #fff;
+          color: #142a4f;
+          border-radius: 8px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .cb-entry-actions .remove {
+          cursor: pointer;
+        }
+          `,
+        }}
+      />
+
+      {flowPhase === 'finish' ? (
+        <div className="cb-wizard-shell">
+          <div className="mx-auto flex max-w-md justify-center px-4 py-6 sm:py-8">
+            <div
+              className="relative flex h-[min(90dvh,640px)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white px-5 py-4 text-center sm:rounded-3xl sm:px-7 sm:py-5"
+              style={{
+                boxShadow: '0 1px 2px rgba(36,28,21,0.06), 0 12px 32px rgba(63,91,58,0.08)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleBack}
+                className="absolute right-3 top-3 z-10 inline-flex items-center gap-0.5 rounded-full border bg-white px-2 py-0.5 text-[11px] font-medium shadow-sm transition hover:border-[#1A1FC4] hover:text-[#10137C] sm:right-4 sm:top-4"
+                style={{ borderColor: '#d1d5e5', color: '#4b4f8f' }}
+                aria-label="Go back"
+              >
+                ← Back
+              </button>
+
+              <h1
+                className="shrink-0 pt-5 text-[1.45rem] font-semibold leading-tight sm:text-[1.65rem]"
+                style={{
+                  fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
+                  color: OB.ink,
+                }}
+              >
+                You are all set!
+              </h1>
+
+              <div className="cb-success-hero mt-1 flex min-h-0 flex-[0.7] items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/illustrations/success-career-growth.png"
+                  alt=""
+                  className="cb-success-hero__img mx-auto h-full max-h-[150px] w-auto max-w-[140px] object-contain sm:max-h-[170px] sm:max-w-[160px]"
+                />
+              </div>
+
+              <div className="mt-1 shrink-0 sm:mt-2">
+                <p
+                  className="text-[1.15rem] font-semibold leading-snug sm:text-[1.3rem]"
+                  style={{
+                    color: OB.ink,
+                    fontFamily: "var(--font-fraunces), Georgia, 'Times New Roman', serif",
+                  }}
+                >
+                  ALL THE BEST!
+                </p>
+                <p
+                  className="mt-0.5 text-[0.95rem] leading-snug sm:text-[1.05rem]"
+                  style={{ color: OB.ink }}
+                >
+                  Companies are waiting for you,{' '}
+                  <strong style={{ fontWeight: 700 }}>
+                    {(fullName.trim().split(/\s+/)[0] || getStoredUser()?.firstName || 'friend').replace(
+                      /^./,
+                      (c) => c.toUpperCase(),
+                    )}
+                  </strong>
+                </p>
+
+                <p
+                  className="text-xs font-bold sm:text-sm"
+                  style={{ marginTop: 40, color: OB.ink }}
+                >
+                  Is your resume ATS friendly?{' '}
+                  <span style={{ color: OB.clay }}>Sure</span>
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearResumeFromAutofill();
+                    setFlowPhase('preview');
+                  }}
+                  className="w-full rounded-full py-2.5 text-sm font-semibold text-white transition hover:opacity-95 sm:py-3"
+                  style={{ marginTop: 10, background: OB.moss }}
+                >
+                  Check ATS score
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearResumeFromBuild();
+                    clearResumeFromAutofill();
+                    void goToDashboard();
+                  }}
+                  className="w-full rounded-full border-2 bg-white py-2.5 text-sm font-semibold transition hover:bg-[#F5F7F0] sm:py-3"
+                  style={{ marginTop: 50, borderColor: OB.ink, color: OB.ink }}
+                >
+                  Continue to dashboard →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : flowPhase === 'preview' ? (
+          <ResumePreviewScreen
+            resume={masterResume}
+            targetJobTitle={preferredRole}
+            resumeId={savedResumeId}
+            resumeFileName={`${fullName.trim() || 'My'} Resume`}
+            onEnsureSaved={ensureResumeSaved}
+            onResumeSaved={(id) => {
+              setSavedResumeId(id);
+            }}
+            onSyncProfile={syncProfileFromResume}
+            onBack={handleBack}
+            onEdit={() => {
+              setFlowPhase('wizard');
+              setWizardIndex(REVIEW_INDEX);
+            }}
+            onAddSection={beginAtsSectionEdit}
+            recheckNonce={atsRecheckNonce}
+            onApplySuggestion={handleApplyAiSuggestion}
+          />
+      ) : (
+      <div className="cbw-app">
+        <aside className="cbw-side">
+          <div className="cbw-brand">
+            <BrandLogo tone="dark" size="sm" />
+          </div>
+          {!atsEditStep ? (
+            <nav className="cbw-nav" aria-label="Profile sections">
+              {WIZARD_GROUPS.map((group, i) => (
+                <button
+                  key={group.label}
+                  type="button"
+                  className={i === groupIndex ? 'is-active' : i < groupIndex ? 'is-done' : ''}
+                  aria-current={i === groupIndex ? 'step' : undefined}
+                  onClick={() => goToGroup(i)}
+                >
+                  <span className="n" aria-hidden>
+                    {i < groupIndex ? '✓' : i + 1}
+                  </span>
+                  <span>{group.label}</span>
+                  {i < groupIndex ? <span className="sr-only"> (visited)</span> : null}
+                </button>
+              ))}
+            </nav>
+          ) : null}
+        </aside>
+        {!atsEditStep ? (
+          <div className="cbw-mtop">
+            <span>
+              Step {groupIndex + 1} of {WIZARD_GROUPS.length}
+            </span>
+            <b>{WIZARD_GROUPS[groupIndex].label}</b>
+            <i aria-hidden>
+              <span style={{ width: `${((groupIndex + 1) / WIZARD_GROUPS.length) * 100}%` }} />
+            </i>
+          </div>
+        ) : null}
+        <main className="cbw-main">
+      <div className="cb-wizard-shell cbw-inner">
+        {(parseBusy || parseError) ? (
+          <div
+            className="mb-4 rounded-2xl border px-4 py-3"
+            style={{
+              borderColor: parseError ? '#f3c2c2' : '#cfd1e3',
+              background: parseError ? '#fff5f5' : '#f3f4fa',
+            }}
+          >
+            {parseBusy ? (
+              <div className="flex items-center gap-3">
+                <div className="cb-bounce-dots" aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <div>
+                  <p className="m-0 text-sm font-semibold" style={{ color: '#10137c' }}>
+                    Reading your resume
+                  </p>
+                  <p className="m-0 mt-0.5 text-xs" style={{ color: '#6b7789' }}>
+                    You can keep editing — details will fill in automatically.
+                  </p>
+                </div>
+              </div>
+            ) : parseError ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="m-0 text-sm font-medium text-red-700">{parseError}</p>
+                {pendingParseId ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-[#1a1fc4] px-3 py-1.5 text-xs font-semibold text-[#10137c]"
+                    onClick={() => {
+                      void (async () => {
+                        setParseError('');
+                        setParseBusy(true);
+                        try {
+                          await retryResumeProcessing(pendingParseId);
+                          // Re-trigger poll by resetting id
+                          const id = pendingParseId;
+                          setPendingParseId(null);
+                          setTimeout(() => setPendingParseId(id), 0);
+                        } catch (err) {
+                          setParseBusy(false);
+                          setParseError(
+                            err instanceof Error ? err.message : 'Retry failed. Please try again.',
+                          );
+                        }
+                      })();
+                    }}
+                  >
+                    Retry reading
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="cb-main-head">
+          <div className="cb-main-head-row">
+            <h1>
+              {atsEditStep
+                ? 'Edit resume section'
+                : isAutofillPath
+                  ? 'Complete your Profile'
+                  : 'Build your resume'}
+            </h1>
+            {atsEditStep ? (
+              <button type="button" className="cb-flow-back-btn" onClick={handleBack}>
+                {atsEditReturnTo === 'ats' ? '← Back to ATS' : '← Back'}
+              </button>
+            ) : null}
+          </div>
+          <div className="desc">
+            {atsEditStep
+              ? 'Update this section, then save to return to the ATS dashboard and recheck your score.'
+              : isAutofillPath
+                ? 'Fill in the gaps so your profile is ready.'
+                : isBuildPath
+                  ? 'Fill each section, then check ATS score and improve with AI before you save.'
+                  : 'One strong profile — ready for every application.'}
+          </div>
+        </div>
+
+        {/* WIZARD SECTIONS */}
+        {!showLegacyReview && (
+          <>
+            <h2 className="cbw-sec">
+              {atsEditStep ? getStepSectionLabel(currentStep) : WIZARD_GROUPS[groupIndex].label}
+            </h2>
+            {validationErrors.length > 0 && !showReviewSummary && (
+              <div className="cb-validation-errors" role="alert">
+                {validationErrors.map((err) => (
+                  <div key={err}>{err}</div>
+                ))}
+              </div>
+            )}
+              {showStep('Personal') && (
+              <section className="cb-card cbw-card" aria-label="Personal details">
+                <div className="cb-field-grid">
+                  {highlightMissingPersonal ? (
+                    <p className="cb-field full" style={{ margin: 0, fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>
+                      Empty fields are highlighted in red — fill them to complete your profile.
+                    </p>
+                  ) : null}
+                  <div className={`cb-field${highlightMissingPersonal && !fullName.trim() ? ' cb-field-missing' : ''}`}>
+                    <label htmlFor="cb-resume-full-name">Full Name</label>
+                    <input id="cb-resume-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                  </div>
+                  <div className={`cb-field${highlightMissingPersonal && !email.trim() ? ' cb-field-missing' : ''}`}>
+                    <label htmlFor="cb-resume-email">Email</label>
+                    <input
+                      id="cb-resume-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  <div className={`cb-field${highlightMissingPersonal && !phone.trim() ? ' cb-field-missing' : ''}`}>
+                    <label htmlFor="cb-resume-phone">Phone</label>
+                    <input
+                      id="cb-resume-phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                    />
+                  </div>
+                  <div className="cb-field full cb-location-pair">
+                    <StateCitySelect
+                      location={location}
+                      onChange={setLocation}
+                      stateLabel="State"
+                      cityLabel="City"
+                      highlightMissing={highlightMissingPersonal}
+                    />
+                  </div>
+                  <div className={`cb-field full${highlightMissingPersonal && !summary.trim() ? ' cb-field-missing' : ''}`}>
+                    <label htmlFor="cb-resume-summary">Professional Summary</label>
+                    <textarea
+                      id="cb-resume-summary"
+                      value={summary}
+                      maxLength={RESUME_SUMMARY_MAX}
+                      aria-describedby="cb-resume-summary-count"
+                      onChange={(e) => setSummary(e.target.value.slice(0, RESUME_SUMMARY_MAX))}
+                      placeholder="A line or two about the role you want"
+                    />
+                    <span id="cb-resume-summary-count" className="cb-char-count" aria-live="polite">
+                      {summary.length}/{RESUME_SUMMARY_MAX}
+                    </span>
+                    <SummaryAiAssist
+                      summary={summary}
+                      targetRole={preferredRole}
+                      profile={summaryAiProfile()}
+                      onUse={setSummary}
+                    />
+                  </div>
+                </div>
+              </section>
+              )}
+
+              {showStep('Education') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-education">
+                <h3 id="cbw-education">Education</h3>
+                <p className="cbw-hint">Add at least one education record.</p>
+                <div>
+                  {educationList.map((edu) => (
+                    <div key={edu.id} className="cb-entry-card">
+                      <div>
+                        <div className="role">
+                          {edu.degree}
+                          {edu.field ? ` in ${edu.field}` : ''}
+                        </div>
+                        <div className="meta">
+                          {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' · ')}
+                          {edu.grade ? ` · ${edu.gradeType || 'Grade'}: ${edu.grade}` : ''}
+                        </div>
+                      </div>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(edu.id);
+                            setActiveForm('education');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          aria-label={`Delete ${edu.degree || 'education entry'}`}
+                          onClick={() => requestEntryDelete('education', edu.id, edu.degree)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {educationList.length === 0 && activeForm !== 'education' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No education records yet.
+                    </p>
+                  ) : null}
+                  {activeForm === 'education' ? (
+                    <EducationInlineForm
+                      key={editingId || 'edu-new'}
+                      initial={
+                        editingId
+                          ? educationList.find((e) => e.id === editingId) || undefined
+                          : undefined
+                      }
+                      submitSignal={entrySubmitSignal}
+                      onInvalid={handleEntryInvalid}
+                      onCancel={clearEntryForm}
+                      onSave={(data) => {
+                        if (editingId) {
+                          setEducationList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? {
+                                    ...row,
+                                    degree: data.degree,
+                                    field: data.field,
+                                    institution: data.institution,
+                                    location: data.location,
+                                    startDate: data.startDate,
+                                    endDate: data.endDate,
+                                    isCurrent: data.isCurrent,
+                                    grade: data.grade,
+                                    gradeType: data.gradeType,
+                                  }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setEducationList((prev) => [
+                            ...prev,
+                            {
+                              id: `edu-${Date.now()}`,
+                              degree: data.degree,
+                              field: data.field,
+                              institution: data.institution,
+                              location: data.location,
+                              startDate: data.startDate,
+                              endDate: data.endDate,
+                              isCurrent: data.isCurrent,
+                              grade: data.grade,
+                              gradeType: data.gradeType,
+                            },
+                          ]);
+                        }
+                        clearEntryForm();
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('education');
+                      }}
+                    >
+                      + Add Education
+                    </button>
+                  )}
+                </div>
+              </section>
+              )}
+
+              {showStep('Experience') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-experience">
+                <h3 id="cbw-experience">Experience</h3>
+                <p className="cbw-hint">Freshers can skip this.</p>
+                <div>
+                  {experienceList.map((exp) => (
+                    <div key={exp.id} className="cb-entry-card">
+                      <div>
+                        <div className="role">
+                          {exp.role} — {exp.company}
+                        </div>
+                        <div className="meta">
+                          {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(exp.id);
+                            setActiveForm('experience');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          aria-label={`Delete ${exp.role || 'experience entry'}`}
+                          onClick={() => requestEntryDelete('experience', exp.id, exp.role)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {experienceList.length === 0 && activeForm !== 'experience' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No experience records yet.
+                    </p>
+                  ) : null}
+                  {activeForm === 'experience' ? (
+                    <ExperienceInlineForm
+                      key={editingId || 'exp-new'}
+                      defaultLocation={location}
+                      initial={
+                        editingId
+                          ? experienceList.find((e) => e.id === editingId) || undefined
+                          : undefined
+                      }
+                      submitSignal={entrySubmitSignal}
+                      onInvalid={handleEntryInvalid}
+                      onCancel={clearEntryForm}
+                      onSave={(data) => {
+                        if (editingId) {
+                          setExperienceList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? {
+                                    ...row,
+                                    role: data.role,
+                                    company: data.company,
+                                    location: data.location,
+                                    startDate: data.startDate,
+                                    endDate: data.endDate,
+                                    isCurrent: data.isCurrent,
+                                    responsibilities: data.responsibilities,
+                                  }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setExperienceList((prev) => [
+                            ...prev,
+                            {
+                              id: `exp-${Date.now()}`,
+                              role: data.role,
+                              company: data.company,
+                              location: data.location,
+                              startDate: data.startDate,
+                              endDate: data.endDate,
+                              isCurrent: data.isCurrent,
+                              responsibilities: data.responsibilities,
+                            },
+                          ]);
+                        }
+                        clearEntryForm();
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('experience');
+                      }}
+                    >
+                      + Add Experience
+                    </button>
+                  )}
+                </div>
+              </section>
+              )}
+
+              {showStep('Skills') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-skills">
+                <h3 id="cbw-skills">Skills &amp; Languages</h3>
+                <p className="cbw-hint">Search and add your skills. Press Enter to add a custom skill.</p>
+                <div>
+                  <SkillSearchCombobox
+                    label="Skills"
+                    selected={skills}
+                    onAdd={addSkill}
+                    onRemove={removeSkill}
+                    placeholder="Search skills..."
+                  />
+                </div>
+                <div>
+                  <p className="cb-section-label">Languages</p>
+                  <p className="cbw-hint">
+                    Tap a language to select it; tap again to remove. Proficiency from your profile (if any) is kept
+                    and shown on the resume.
+                  </p>
+                  <div className="cb-chip-wrap">
+                    {Array.from(
+                      new Set(
+                        [
+                          ...LANGUAGE_POOL,
+                          ...languages.map((entry) => languageName(entry)),
+                          ...availableLanguages,
+                        ].filter(Boolean),
+                      ),
+                    ).map((l) => {
+                      const selectedEntry = languages.find((entry) => languageName(entry) === l);
+                      const selected = Boolean(selectedEntry);
+                      const label = selectedEntry || l;
+                      return (
+                        <button
+                          key={l}
+                          type="button"
+                          className={`cb-chip${selected ? ' selected' : ''}`}
+                          aria-pressed={selected}
+                          onClick={() => (selected ? removeLanguage(l) : addLanguage(l))}
+                        >
+                          {selected ? <span aria-hidden>✓</span> : null}
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+              )}
+
+              {showStep('Credentials') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-projects">
+                <h3 id="cbw-projects">Projects</h3>
+                <div>
+                  {projectList.length === 0 && activeForm !== 'project' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No project records yet.
+                    </p>
+                  ) : null}
+                  {projectList.map((proj) => (
+                    <div key={proj.id} className="cb-entry-card">
+                      <div>
+                        <div className="role">{proj.name}</div>
+                        <div className="meta">
+                          {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(proj.id);
+                            setActiveForm('project');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          aria-label={`Delete ${proj.name || 'project'}`}
+                          onClick={() => requestEntryDelete('project', proj.id, proj.name)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {activeForm === 'project' ? (
+                    <ProjectInlineForm
+                      key={editingId || 'proj-new'}
+                      initial={
+                        editingId
+                          ? projectList.find((p) => p.id === editingId) || undefined
+                          : undefined
+                      }
+                      onCancel={clearEntryForm}
+                      onSave={(data) => {
+                        if (editingId) {
+                          setProjectList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? {
+                                    ...row,
+                                    name: data.name,
+                                    description: data.description,
+                                    technologies: data.technologies,
+                                    bullets: data.bullets,
+                                  }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setProjectList((prev) => [
+                            ...prev,
+                            {
+                              id: `proj-${Date.now()}`,
+                              name: data.name,
+                              description: data.description,
+                              technologies: data.technologies,
+                              bullets: data.bullets,
+                            },
+                          ]);
+                        }
+                        clearEntryForm();
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('project');
+                      }}
+                    >
+                      + Add Project
+                    </button>
+                  )}
+                </div>
+              </section>
+              )}
+
+              {showStep('Credentials') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-certifications">
+                <h3 id="cbw-certifications">Certifications</h3>
+                <p className="cbw-hint">Optional for many roles — add any certificates that strengthen your profile.</p>
+                <div>
+                  {certificationList.length === 0 && activeForm !== 'certification' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No certification records yet.
+                    </p>
+                  ) : null}
+                  {certificationList.map((cert) => (
+                    <div key={cert.id} className="cb-entry-card">
+                      <div>
+                        <div className="role">{cert.name}</div>
+                        <div className="meta">
+                          {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(cert.id);
+                            setActiveForm('certification');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          aria-label={`Delete ${cert.name || 'certification'}`}
+                          onClick={() => requestEntryDelete('certification', cert.id, cert.name)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {activeForm === 'certification' ? (
+                    <CertificationInlineForm
+                      key={editingId || 'cert-new'}
+                      initial={
+                        editingId
+                          ? certificationList.find((c) => c.id === editingId) || undefined
+                          : undefined
+                      }
+                      onCancel={clearEntryForm}
+                      onSave={(data) => {
+                        if (editingId) {
+                          setCertificationList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? { ...row, name: data.name, issuer: data.issuer, date: data.date }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setCertificationList((prev) => [
+                            ...prev,
+                            { id: `cert-${Date.now()}`, name: data.name, issuer: data.issuer, date: data.date },
+                          ]);
+                        }
+                        clearEntryForm();
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('certification');
+                      }}
+                    >
+                      + Add Certification
+                    </button>
+                  )}
+                </div>
+              </section>
+              )}
+
+              {showStep('Credentials') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-achievements">
+                <h3 id="cbw-achievements">Achievements</h3>
+                <p className="cbw-hint">Awards, hackathons, publications, or other highlights (optional).</p>
+                <div>
+                  {achievementList.length === 0 && activeForm !== 'achievement' ? (
+                    <p className="cb-entry-empty" role="status">
+                      No achievement records yet.
+                    </p>
+                  ) : null}
+                  {achievementList.map((ach) => (
+                    <div key={ach.id} className="cb-entry-card">
+                      <div>
+                        <div className="role">{ach.title}</div>
+                        <div className="meta">
+                          {[ach.organization, formatDateForResume(ach.date), ach.description]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </div>
+                      </div>
+                      <div className="cb-entry-actions">
+                        <button
+                          type="button"
+                          className="edit"
+                          onClick={() => {
+                            setEditingId(ach.id);
+                            setActiveForm('achievement');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="remove"
+                          aria-label={`Delete ${ach.title || 'achievement'}`}
+                          onClick={() => requestEntryDelete('achievement', ach.id, ach.title)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {activeForm === 'achievement' ? (
+                    <AchievementInlineForm
+                      key={editingId || 'ach-new'}
+                      initial={
+                        editingId
+                          ? achievementList.find((a) => a.id === editingId) || undefined
+                          : undefined
+                      }
+                      onCancel={clearEntryForm}
+                      onSave={(data) => {
+                        if (editingId) {
+                          setAchievementList((prev) =>
+                            prev.map((row) =>
+                              row.id === editingId
+                                ? {
+                                    ...row,
+                                    title: data.title,
+                                    organization: data.organization,
+                                    description: data.description,
+                                    date: data.date,
+                                  }
+                                : row,
+                            ),
+                          );
+                        } else {
+                          setAchievementList((prev) => [
+                            ...prev,
+                            {
+                              id: `ach-${Date.now()}`,
+                              title: data.title,
+                              organization: data.organization,
+                              description: data.description,
+                              date: data.date,
+                            },
+                          ]);
+                        }
+                        clearEntryForm();
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="cb-add-row"
+                      onClick={() => {
+                        setEditingId(null);
+                        setActiveForm('achievement');
+                      }}
+                    >
+                      + Add Achievement
+                    </button>
+                  )}
+                </div>
+              </section>
+              )}
+
+              {showStep('Links') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-links">
+                <h3 id="cbw-links">Profile Links</h3>
+                <p className="cbw-hint">Optional. Use full links starting with https://</p>
+                <div className="cb-field-grid">
+                  <div className="cb-field full">
+                    <label htmlFor="cbw-linkedin">LinkedIn</label>
+                    <input
+                      id="cbw-linkedin"
+                      value={linkedin}
+                      onChange={(e) => setLinkedin(e.target.value)}
+                      placeholder="https://linkedin.com/in/..."
+                    />
+                    <small className="cbw-hint">Optional — you can add this later.</small>
+                  </div>
+                  {github || extraLinkSlots >= 1 ? (
+                    <div className="cb-field full">
+                      <label htmlFor="cbw-github">GitHub</label>
+                      <input
+                        id="cbw-github"
+                        value={github}
+                        onChange={(e) => setGithub(e.target.value)}
+                        placeholder="https://github.com/your-username"
+                      />
+                    </div>
+                  ) : null}
+                  {portfolio || extraLinkSlots >= 2 ? (
+                    <div className="cb-field full">
+                      <label htmlFor="cbw-portfolio">Portfolio / website</label>
+                      <input
+                        id="cbw-portfolio"
+                        value={portfolio}
+                        onChange={(e) => setPortfolio(e.target.value)}
+                        placeholder="https://your-portfolio.com"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                {!(github || extraLinkSlots >= 1) || !(portfolio || extraLinkSlots >= 2) ? (
+                  <button
+                    type="button"
+                    className="cb-add-row"
+                    onClick={() => setExtraLinkSlots((n) => (github || n >= 1 ? 2 : 1))}
+                  >
+                    + Add link
+                  </button>
+                ) : null}
+              </section>
+              )}
+
+              {showStep('Links') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-preferences">
+                <h3 id="cbw-preferences">Preferences</h3>
+                <p className="cbw-hint">Helps us match you with the right roles.</p>
+                <div className="cb-field-grid">
+                  <div className="cb-field">
+                    <label htmlFor="cbw-preferred-role">Preferred Role</label>
+                    {(() => {
+                      const roleInList = (PREFERRED_JOB_ROLES as readonly string[]).includes(
+                        preferredRole,
+                      );
+                      const selectValue = roleInList ? preferredRole : preferredRole ? 'Other' : '';
+                      const showCustom = selectValue === 'Other';
+                      return (
+                        <>
+                          <select
+                            id="cbw-preferred-role"
+                            value={selectValue}
+                            onChange={(e) => {
+                              const next = e.target.value;
+                              if (next === 'Other') {
+                                setPreferredRole(roleInList ? '' : preferredRole);
+                                return;
+                              }
+                              setPreferredRole(next);
+                            }}
+                          >
+                            <option value="">Select a role</option>
+                            {PREFERRED_JOB_ROLES.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                          {showCustom ? (
+                            <input
+                              className="mt-2"
+                              aria-label="Type your preferred role"
+                              value={roleInList ? '' : preferredRole}
+                              onChange={(e) => setPreferredRole(e.target.value)}
+                              placeholder="Type your preferred role"
+                            />
+                          ) : null}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div className="cb-field">
+                    <label htmlFor="cbw-preferred-location">Preferred Location</label>
+                    <input
+                      id="cbw-preferred-location"
+                      value={preferredLocation}
+                      onChange={(e) => setPreferredLocation(e.target.value)}
+                    />
+                    <small className="cbw-hint">Optional — you can add this later.</small>
+                  </div>
+                  <div className="cb-field full">
+                    <label htmlFor="cbw-expected-salary">Expected Monthly Salary</label>
+                    <input
+                      id="cbw-expected-salary"
+                      inputMode="numeric"
+                      placeholder="50,000"
+                      value={expectedSalary}
+                      onChange={(e) => setExpectedSalary(formatSalaryDisplay(e.target.value))}
+                    />
+                    <small className="cbw-hint">Optional — you can add this later.</small>
+                  </div>
+                </div>
+              </section>
+              )}
+
+              {showStep('Career Gap') && (
+              <section className="cb-card cbw-card" aria-labelledby="cbw-gap">
+                <span className="cbw-badge">✨ Detected automatically</span>
+                <h3 id="cbw-gap">Career gap</h3>
+                <p className="cbw-hint">
+                  We found a gap in your education and work dates. A short explanation helps employers understand
+                  your journey.
+                </p>
+                <fieldset className="cbw-gap">
+                  <legend>{gapLabel || localGap.gapLabel}</legend>
+                  <div className="cb-field full">
+                    <label htmlFor="cbw-gap-reason">Why is this gap OK?</label>
+                    <textarea
+                      id="cbw-gap-reason"
+                      rows={4}
+                      value={gapReason}
+                      onChange={(e) => setGapReason(e.target.value)}
+                      placeholder="For example: prepared for exams, cared for a family member, built a side project…"
+                    />
+                  </div>
+                  {localGap.highestEducation ? (
+                    <p className="cbw-hint" style={{ margin: 0 }}>
+                      Calculated after your highest education
+                      {localGap.highestEducation.qualification
+                        ? ` (${localGap.highestEducation.qualification})`
+                        : ''}
+                      {localGap.highestEducation.endDate ? ` ending ${localGap.highestEducation.endDate}` : ''}. Only
+                      gaps longer than 30 days are shown. Gaps between school and college are not counted.
+                    </p>
+                  ) : null}
+                </fieldset>
+              </section>
+              )}
+
+            {showReviewSummary ? (
+              <section className="cbw-review" aria-labelledby="cbw-review-title">
+                <h2 id="cbw-review-title" className="cbw-sec">
+                  Profile Review
+                </h2>
+                <p className="cbw-hint">Review all your information before completing your profile.</p>
+                {(() => {
+                  const { city, state } = parseCityState(location);
+                  const percent = profileCompletionPercent({
+                    fullName,
+                    email,
+                    phone,
+                    state: state || '',
+                    city: city || '',
+                    summary,
+                    linkedin,
+                    github,
+                    portfolio,
+                    preferredRole,
+                    preferredLocation,
+                    expectedSalary,
+                    education: educationList,
+                    experience: experienceList,
+                    projects: projectList,
+                    certifications: certificationList,
+                    achievements: achievementList,
+                    skills,
+                    languages,
+                  });
+                  const none = <p className="cbw-none">No information added yet.</p>;
+                  const value = (text: string) => (text.trim() ? text : <span className="cbw-none">Not added</span>);
+                  const head = (title: string, group: number) => (
+                    <div className="cbw-rh">
+                      <h3>{title}</h3>
+                      <button type="button" className="cbw-edit" onClick={() => goToGroup(group)}>
+                        Edit<span className="sr-only"> {title}</span>
+                      </button>
+                    </div>
+                  );
+                  return (
+                    <>
+                      <div className="cb-card cbw-card cbw-prog">
+                        <div className="cbw-rh">
+                          <h3>Profile Completion</h3>
+                          <b>{percent}%</b>
+                        </div>
+                        <div
+                          className="cbw-bar"
+                          role="progressbar"
+                          aria-label="Profile completion"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={percent}
+                        >
+                          <span style={{ width: `${percent}%` }} />
+                        </div>
+                      </div>
+                      <div className="cbw-rg">
+                        <div className="cb-card cbw-card">
+                          {head('Personal Information', 0)}
+                          <dl>
+                            <dt>Full Name</dt>
+                            <dd>{value(fullName)}</dd>
+                            <dt>Email</dt>
+                            <dd>{value(email)}</dd>
+                            <dt>Phone</dt>
+                            <dd>{value(phone)}</dd>
+                            <dt>State</dt>
+                            <dd>{value(state || '')}</dd>
+                            <dt>City</dt>
+                            <dd>{value(city || '')}</dd>
+                            <dt>Summary</dt>
+                            <dd>{value(summary)}</dd>
+                          </dl>
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Education', 1)}
+                          {educationList.length
+                            ? educationList.map((edu) => (
+                                <div key={edu.id} className="cbw-rec">
+                                  <b>
+                                    {edu.degree}
+                                    {edu.field ? ` — ${edu.field}` : ''}
+                                  </b>
+                                  <span>{edu.institution}</span>
+                                  <span>{formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)}</span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Experience', 1)}
+                          {experienceList.length
+                            ? experienceList.map((exp) => (
+                                <div key={exp.id} className="cbw-rec">
+                                  <b>
+                                    {exp.role}
+                                    {exp.company ? ` — ${exp.company}` : ''}
+                                  </b>
+                                  <span>
+                                    {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Skills & Languages', 2)}
+                          {skills.length ? (
+                            <div className="cb-chip-wrap">
+                              {skills.map((s) => (
+                                <span key={s} className="cbw-tag">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            none
+                          )}
+                          <h4>Languages</h4>
+                          {languages.length ? (
+                            <div className="cb-chip-wrap">
+                              {languages.map((l) => (
+                                <span key={l} className="cbw-tag">
+                                  {l}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            none
+                          )}
+                        </div>
+                        <div className="cb-card cbw-card cbw-full">
+                          {head('Projects', 2)}
+                          {projectList.length
+                            ? projectList.map((proj) => (
+                                <div key={proj.id} className="cbw-rec">
+                                  <b>{proj.name}</b>
+                                  <span>{[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}</span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Certifications', 2)}
+                          {certificationList.length
+                            ? certificationList.map((cert) => (
+                                <div key={cert.id} className="cbw-rec">
+                                  <b>{cert.name}</b>
+                                  <span>{[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}</span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        <div className="cb-card cbw-card">
+                          {head('Achievements', 2)}
+                          {achievementList.length
+                            ? achievementList.map((ach) => (
+                                <div key={ach.id} className="cbw-rec">
+                                  <b>{ach.title}</b>
+                                  <span>
+                                    {[ach.organization, formatDateForResume(ach.date)].filter(Boolean).join(' · ')}
+                                  </span>
+                                </div>
+                              ))
+                            : none}
+                        </div>
+                        {showGapCard ? (
+                          <div className="cb-card cbw-card cbw-full">
+                            {head('Career Gap', LAST_WIZARD_GROUP)}
+                            <div className="cbw-rec">
+                              <b>{gapLabel || localGap.gapLabel}</b>
+                              <span>{gapReason.trim() || 'No explanation added yet.'}</span>
+                            </div>
+                          </div>
+                        ) : null}
+                        <div className="cb-card cbw-card cbw-full">
+                          {head('Links & Preferences', LAST_WIZARD_GROUP)}
+                          <div className="cbw-tri">
+                            <div>
+                              <span>LinkedIn</span>
+                              {value(linkedin)}
+                            </div>
+                            <div>
+                              <span>GitHub</span>
+                              {value(github)}
+                            </div>
+                            <div>
+                              <span>Portfolio</span>
+                              {value(portfolio)}
+                            </div>
+                            <div>
+                              <span>Preferred Role</span>
+                              {value(preferredRole)}
+                            </div>
+                            <div>
+                              <span>Preferred Location</span>
+                              {value(preferredLocation)}
+                            </div>
+                            <div>
+                              <span>Expected Monthly Salary</span>
+                              {value(expectedSalary)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </section>
+            ) : null}
+
+            {showReviewSummary && validationErrors.length > 0 ? (
+              <div className="cb-validation-errors" role="alert">
+                {validationErrors.map((err) => (
+                  <div key={err}>{err}</div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="cbw-actions">
+              {!atsEditStep ? (
+                <button type="button" className="cb-btn cbw-btn-ghost" onClick={handleBack} disabled={saving}>
+                  Back
+                </button>
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                className="cb-btn cb-btn-primary"
+                onClick={handleWizardNext}
+                disabled={saving}
+                aria-busy={saving || undefined}
+              >
+                {atsEditStep
+                  ? saving
+                    ? 'Saving…'
+                    : 'Save & recheck ATS'
+                  : showReviewSummary
+                    ? saving
+                      ? 'Saving…'
+                      : 'Complete Profile'
+                    : 'Save & Continue'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ATS "Fix formatting" edit keeps the editable combined review */}
+        {showLegacyReview && (
+          <>
+            <h2 className="cb-section-head">{getStepSectionLabel(currentStep)}</h2>
+            <div className="cb-review-shell">
+            <div className="cb-review-card">
+              {/* 1. Name */}
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Name</h2>
+                <div className="cb-field">
+                  <input
+                    id="review-name"
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Your full name"
+                  />
+                </div>
+              </section>
+
+              {/* Location collected once in Personal step */}
+              {location ? (
+                <section className="cb-review-section">
+                  <h2 className="cb-review-section-title">Location</h2>
+                  <p className="text-sm text-[#43526b]">{location}</p>
+                  <button
+                    type="button"
+                    className="mt-1 text-xs font-semibold text-[#2e367d] underline"
+                    onClick={() => setWizardIndex(0)}
+                  >
+                    Edit in Personal details
+                  </button>
+                </section>
+              ) : null}
+
+              {/* Contact */}
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Contact</h2>
+                <div className="cb-field-grid">
+                  <div className="cb-field">
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  <div className="cb-field">
+                    <label>Phone</label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* 3. Professional Summary */}
+              <section className="cb-review-section">
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="cb-review-section-title">Professional Summary</h2>
+                  <div className="cb-entry-actions">
+                    <button
+                      type="button"
+                      className="edit"
+                      onClick={() => setWizardIndex(WIZARD_STEPS.indexOf('Personal'))}
+                    >
+                      Edit
+                    </button>
+                    <button type="button" className="remove" onClick={() => setSummary('')}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                <div className="cb-field">
+                  <textarea
+                    id="review-summary"
+                    aria-label="Professional summary"
+                    aria-describedby="review-summary-count"
+                    value={summary}
+                    maxLength={RESUME_SUMMARY_MAX}
+                    onChange={(e) => setSummary(e.target.value.slice(0, RESUME_SUMMARY_MAX))}
+                    placeholder="A short summary about your experience and goals"
+                  />
+                  <span id="review-summary-count" className="cb-char-count" aria-live="polite">
+                    {summary.length}/{RESUME_SUMMARY_MAX}
+                  </span>
+                  <SummaryAiAssist
+                    summary={summary}
+                    targetRole={preferredRole}
+                    profile={summaryAiProfile()}
+                    onUse={setSummary}
+                  />
+                </div>
+              </section>
+
+              {/* 4. Skills */}
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Professional Skills</h2>
+                <SkillSearchCombobox
+                  selected={skills}
+                  onAdd={addSkill}
+                  onRemove={removeSkill}
+                  placeholder="Search technologies or type your own skill"
+                />
+              </section>
+
+              {/* 5. Work Experience */}
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Work Experience</h2>
+                {experienceList.map((exp) => (
+                  <div key={exp.id} className="cb-entry-card">
+                    <div>
+                      <div className="role">
+                        {exp.role} — {exp.company}
+                      </div>
+                      <div className="meta">
+                        {[formatMonthRange(exp.startDate, exp.endDate, exp.isCurrent), exp.location].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="cb-entry-actions">
+                      <button
+                        type="button"
+                        className="edit"
+                        onClick={() => {
+                          setEditingId(exp.id);
+                          setActiveForm('experience');
+                          setWizardIndex(WIZARD_STEPS.indexOf('Experience'));
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="remove"
+                        aria-label={`Delete ${exp.role || 'experience entry'}`}
+                        onClick={() => requestEntryDelete('experience', exp.id, exp.role)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {activeForm === 'experience' ? (
+                  <ExperienceInlineForm
+                    key={editingId || 'review-exp-new'}
+                    defaultLocation={location}
+                    initial={
+                      editingId
+                        ? experienceList.find((e) => e.id === editingId) || undefined
+                        : undefined
+                    }
+                    onCancel={clearEntryForm}
+                    onSave={(data) => {
+                      if (editingId) {
+                        setExperienceList((prev) =>
+                          prev.map((row) =>
+                            row.id === editingId
+                              ? {
+                                  ...row,
+                                  role: data.role,
+                                  company: data.company,
+                                  startDate: data.startDate,
+                                  endDate: data.endDate,
+                                  isCurrent: data.isCurrent,
+                                  location: data.location,
+                                  responsibilities: data.responsibilities,
+                                }
+                              : row,
+                          ),
+                        );
+                      } else {
+                        setExperienceList((prev) => [
+                          ...prev,
+                          {
+                            id: `exp-${Date.now()}`,
+                            role: data.role,
+                            company: data.company,
+                            startDate: data.startDate,
+                            endDate: data.endDate,
+                            isCurrent: data.isCurrent,
+                            location: data.location,
+                            responsibilities: data.responsibilities,
+                          },
+                        ]);
+                      }
+                      clearEntryForm();
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="cb-add-row"
+                    onClick={() => {
+                      setEditingId(null);
+                      setActiveForm('experience');
+                    }}
+                  >
+                    + Add Experience
+                  </button>
+                )}
+              </section>
+
+              {/* 6. Projects */}
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Projects</h2>
+                {projectList.map((proj) => (
+                  <div key={proj.id} className="cb-entry-card">
+                    <div>
+                      <div className="role">{proj.name}</div>
+                      <div className="meta">
+                        {[proj.technologies.join(', '), proj.description].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="cb-entry-actions">
+                      <button
+                        type="button"
+                        className="edit"
+                        onClick={() => {
+                          setEditingId(proj.id);
+                          setActiveForm('project');
+                          setWizardIndex(WIZARD_STEPS.indexOf('Credentials'));
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="remove"
+                        aria-label={`Delete ${proj.name || 'project'}`}
+                        onClick={() => requestEntryDelete('project', proj.id, proj.name)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {activeForm === 'project' ? (
+                  <ProjectInlineForm
+                    onCancel={() => setActiveForm(null)}
+                    onSave={(data) => {
+                      setProjectList((prev) => [
+                        ...prev,
+                        {
+                          id: `proj-${Date.now()}`,
+                          name: data.name,
+                          description: data.description,
+                          technologies: data.technologies,
+                          bullets: data.bullets,
+                        },
+                      ]);
+                      setActiveForm(null);
+                    }}
+                  />
+                ) : (
+                  <button type="button" className="cb-add-row" onClick={() => setActiveForm('project')}>
+                    + Add Project
+                  </button>
+                )}
+              </section>
+
+              {/* 7. Education */}
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Education</h2>
+                {educationList.map((edu) => (
+                  <div key={edu.id} className="cb-entry-card">
+                    <div>
+                      <div className="role">
+                        {edu.degree}
+                        {edu.field ? ` in ${edu.field}` : ''}
+                      </div>
+                      <div className="meta">
+                        {[edu.institution, edu.location, formatEducationYearRange(edu.startDate, edu.isCurrent ? '' : edu.endDate)].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="cb-entry-actions">
+                      <button
+                        type="button"
+                        className="edit"
+                        onClick={() => {
+                          setEditingId(edu.id);
+                          setActiveForm('education');
+                          setWizardIndex(WIZARD_STEPS.indexOf('Education'));
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="remove"
+                        aria-label={`Delete ${edu.degree || 'education entry'}`}
+                        onClick={() => requestEntryDelete('education', edu.id, edu.degree)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {activeForm === 'education' ? (
+                  <EducationInlineForm
+                    onCancel={() => setActiveForm(null)}
+                    onSave={(data) => {
+                      setEducationList((prev) => [
+                        ...prev,
+                        {
+                          id: `edu-${Date.now()}`,
+                          degree: data.degree,
+                          field: data.field,
+                          institution: data.institution,
+                          location: data.location,
+                          startDate: data.startDate,
+                          endDate: data.endDate,
+                          isCurrent: data.isCurrent,
+                          grade: data.grade,
+                          gradeType: data.gradeType,
+                        },
+                      ]);
+                      setActiveForm(null);
+                    }}
+                  />
+                ) : (
+                  <button type="button" className="cb-add-row" onClick={() => setActiveForm('education')}>
+                    + Add Education
+                  </button>
+                )}
+              </section>
+
+              {/* 8. Certifications */}
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Certifications</h2>
+                {certificationList.map((cert) => (
+                  <div key={cert.id} className="cb-entry-card">
+                    <div>
+                      <div className="role">{cert.name}</div>
+                      <div className="meta">
+                        {[cert.issuer, formatDateForResume(cert.date)].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="cb-entry-actions">
+                      <button
+                        type="button"
+                        className="edit"
+                        onClick={() => {
+                          setEditingId(cert.id);
+                          setActiveForm('certification');
+                          setWizardIndex(WIZARD_STEPS.indexOf('Credentials'));
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="remove"
+                        aria-label={`Delete ${cert.name || 'certification'}`}
+                        onClick={() => requestEntryDelete('certification', cert.id, cert.name)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {activeForm === 'certification' ? (
+                  <CertificationInlineForm
+                    onCancel={() => setActiveForm(null)}
+                    onSave={(data) => {
+                      setCertificationList((prev) => [
+                        ...prev,
+                        { id: `cert-${Date.now()}`, name: data.name, issuer: data.issuer, date: data.date },
+                      ]);
+                      setActiveForm(null);
+                    }}
+                  />
+                ) : (
+                  <button type="button" className="cb-add-row" onClick={() => setActiveForm('certification')}>
+                    + Add Certification
+                  </button>
+                )}
+              </section>
+
+              {/* 9. Achievements */}
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Achievements</h2>
+                {achievementList.map((ach) => (
+                  <div key={ach.id} className="cb-entry-card">
+                    <div>
+                      <div className="role">{ach.title}</div>
+                      <div className="meta">
+                        {[ach.organization, formatDateForResume(ach.date), ach.description].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="cb-entry-actions">
+                      <button
+                        type="button"
+                        className="edit"
+                        onClick={() => {
+                          setEditingId(ach.id);
+                          setActiveForm('achievement');
+                          setWizardIndex(WIZARD_STEPS.indexOf('Credentials'));
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="remove"
+                        aria-label={`Delete ${ach.title || 'achievement'}`}
+                        onClick={() => requestEntryDelete('achievement', ach.id, ach.title)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {activeForm === 'achievement' ? (
+                  <AchievementInlineForm
+                    onCancel={() => setActiveForm(null)}
+                    onSave={(data) => {
+                      setAchievementList((prev) => [
+                        ...prev,
+                        {
+                          id: `ach-${Date.now()}`,
+                          title: data.title,
+                          organization: data.organization,
+                          description: data.description,
+                          date: data.date,
+                        },
+                      ]);
+                      setActiveForm(null);
+                    }}
+                  />
+                ) : (
+                  <button type="button" className="cb-add-row" onClick={() => setActiveForm('achievement')}>
+                    + Add Achievement
+                  </button>
+                )}
+              </section>
+
+              <section className="cb-review-section">
+                <h2 className="cb-review-section-title">Links</h2>
+                <div className="cb-field-grid">
+                  <div className="cb-field full">
+                    <label>LinkedIn</label>
+                    <input value={linkedin} onChange={(e) => setLinkedin(e.target.value)} />
+                  </div>
+                  <div className="cb-field full">
+                    <label>GitHub</label>
+                    <input value={github} onChange={(e) => setGithub(e.target.value)} />
+                  </div>
+                  <div className="cb-field full">
+                    <label>Portfolio</label>
+                    <input value={portfolio} onChange={(e) => setPortfolio(e.target.value)} />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="cb-add-row"
+                  onClick={() => setWizardIndex(WIZARD_STEPS.indexOf('Links'))}
+                >
+                  Edit links
+                </button>
+              </section>
+
+              {localGap.hasGap ? (
+                <section className="cb-review-section">
+                  <h2 className="cb-review-section-title">Career gap</h2>
+                  <p className="text-sm font-semibold text-[#142a4f]">
+                    You have a gap of {gapLabel || localGap.gapLabel}.
+                  </p>
+                  <div className="cb-field full" style={{ marginTop: 12 }}>
+                    <label>Why is this gap OK?</label>
+                    <textarea
+                      rows={3}
+                      value={gapReason}
+                      onChange={(e) => setGapReason(e.target.value)}
+                      placeholder="Explain why this gap is OK…"
+                      style={{
+                        width: '100%',
+                        borderRadius: 12,
+                        border: '1px solid #c9cfc0',
+                        padding: '12px 14px',
+                        fontSize: 14,
+                      }}
+                    />
+                  </div>
+                </section>
+              ) : null}
+
+              {validationErrors.length > 0 && (
+                <div className="cb-validation-errors">
+                  {validationErrors.map((err) => (
+                    <div key={err}>{err}</div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="cb-save-btn"
+                onClick={() => {
+                  if (atsEditStep) void handleAtsEditSaveAndReturn();
+                  else void handleFinishWizard();
+                }}
+                disabled={saving}
+              >
+                {atsEditStep
+                  ? saving
+                    ? 'Saving…'
+                    : 'Save & recheck ATS'
+                  : saving
+                    ? 'Saving...'
+                    : 'Finish'}
+              </button>
+            </div>
+          </div>
+          </>
+        )}
+      </div>
+        </main>
+      </div>
+      )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete ? `Delete this ${ENTRY_KIND_NAMES[pendingDelete.kind]}?` : ''}
+        message={
+          pendingDelete
+            ? `${pendingDelete.label ? `"${pendingDelete.label}" ` : 'This entry '}will be removed from your resume.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmEntryDelete}
+      />
+    </div>
+  );
+}

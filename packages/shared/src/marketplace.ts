@@ -1,0 +1,1365 @@
+import { parseExperienceRange } from './experience-range';
+import type { AiBudgetStatus } from './ai-availability';
+
+export const JOB_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'] as const;
+
+export const WORK_MODES = ['ONSITE', 'HYBRID', 'REMOTE'] as const;
+
+/** Experience options offered on new job posts. */
+export const JOB_EXPERIENCE_RANGES = ['Fresher', '0–1 yr', '1–2 yrs', '2–5 yrs', '5+ yrs'] as const;
+
+/** Labels stored by earlier job posts; still accepted on edit and matched by range. */
+export const LEGACY_JOB_EXPERIENCE_RANGES = [
+  '0 - 1 Years',
+  '1 - 2 Years',
+  '2 - 4 Years',
+  '3 - 5 Years',
+  '5 - 8 Years',
+  '8+ Years',
+] as const;
+
+export type JobExperienceRange = (typeof JOB_EXPERIENCE_RANGES)[number];
+
+/** Nearest current job-post experience option for a stored (possibly legacy) label. */
+export function toJobExperienceRange(label: string | null | undefined): JobExperienceRange | null {
+  const raw = String(label || '').trim();
+  if ((JOB_EXPERIENCE_RANGES as readonly string[]).includes(raw)) return raw as JobExperienceRange;
+  const range = parseExperienceRange(raw);
+  if (!range) return null;
+  if (range.max === 0) return 'Fresher';
+  if (range.min >= 5) return '5+ yrs';
+  if (range.min >= 2) return '2–5 yrs';
+  if (range.min >= 1) return '1–2 yrs';
+  return '0–1 yr';
+}
+
+export const JOB_EDUCATION_LEVELS = [
+  'Any',
+  "10th / Secondary",
+  "12th / Higher Secondary",
+  'Diploma',
+  "Bachelor's Degree",
+  "Master's Degree",
+  'Doctorate',
+] as const;
+
+export const JOB_DEPARTMENTS = [
+  'Engineering',
+  'Product',
+  'Design',
+  'Sales',
+  'Marketing',
+  'Customer Support',
+  'Human Resources',
+  'Finance',
+  'Operations',
+  'IT / Technology',
+  'Legal',
+  'Administration',
+  'Healthcare',
+  'Hospitality',
+  'Logistics',
+  'Retail',
+] as const;
+
+export const SCREENING_QUESTION_TYPES = ['YES_NO', 'SHORT_TEXT', 'SINGLE_CHOICE'] as const;
+
+export const JOB_SKILL_SUGGESTIONS = [
+  'Communication',
+  'Customer Service',
+  'MS Excel',
+  'Sales',
+  'Data Entry',
+  'React',
+  'Node.js',
+  'SQL',
+  'AWS',
+  'JavaScript',
+  'Python',
+  'Java',
+  'TypeScript',
+  'HTML / CSS',
+  'Teamwork',
+] as const;
+
+export const JOB_TITLE_SUGGESTIONS = [
+  'Customer Service Executive',
+  'Sales Executive',
+  'Backend Developer',
+  'Frontend Developer',
+  'Full Stack Developer',
+  'Data Analyst',
+  'HR Executive',
+  'Operations Associate',
+  'Business Development Executive',
+  'Software Engineer',
+] as const;
+
+export type WorkMode = (typeof WORK_MODES)[number];
+export type ScreeningQuestionType = (typeof SCREENING_QUESTION_TYPES)[number];
+
+export type ScreeningQuestion = {
+  id: string;
+  prompt: string;
+  type: ScreeningQuestionType;
+  options?: string[];
+  required?: boolean;
+};
+
+export type ScreeningAnswer = {
+  questionId: string;
+  answer: string;
+  prompt?: string;
+};
+
+export type CreateJobPayload = {
+  title: string;
+  description: string;
+  city: string;
+  category: string;
+  department?: string;
+  hiringManager?: string;
+  openings?: number;
+  workMode?: string;
+  educationMin?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  jobType?: string;
+  experience?: string;
+  requiredSkills?: string[];
+  preferredSkills?: string[];
+  benefits?: string;
+  screeningQuestions?: ScreeningQuestion[];
+  publish?: boolean;
+};
+
+export const TECH_JOB_CATEGORIES = [
+  'Technology',
+  'Software Development',
+  'Data / Analytics',
+  'IT Support',
+  'Product / Design',
+  'Engineering',
+  'Cybersecurity',
+  'QA / Testing',
+] as const;
+export const NON_TECH_JOB_CATEGORIES = [
+  'Customer Service',
+  'Retail',
+  'Sales',
+  'Office/Admin',
+  'Delivery/Logistics',
+  'Education',
+  'Healthcare',
+  'Hospitality',
+  'Finance / Accounting',
+  'Human Resources',
+  'Manufacturing',
+  'Marketing',
+] as const;
+export const JOB_CATEGORIES = [...TECH_JOB_CATEGORIES, ...NON_TECH_JOB_CATEGORIES] as const;
+
+export const INDIAN_CITIES = [
+  'Agra',
+  'Ahmedabad',
+  'Ajmer',
+  'Amritsar',
+  'Aurangabad',
+  'Bengaluru',
+  'Bhopal',
+  'Bhubaneswar',
+  'Chandigarh',
+  'Chennai',
+  'Coimbatore',
+  'Dehradun',
+  'Delhi',
+  'Faridabad',
+  'Ghaziabad',
+  'Goa',
+  'Gurugram',
+  'Guwahati',
+  'Gwalior',
+  'Hubballi',
+  'Hyderabad',
+  'Indore',
+  'Jaipur',
+  'Jalandhar',
+  'Jammu',
+  'Jamshedpur',
+  'Jodhpur',
+  'Kanpur',
+  'Kochi',
+  'Kolkata',
+  'Kota',
+  'Lucknow',
+  'Ludhiana',
+  'Madurai',
+  'Mangaluru',
+  'Meerut',
+  'Mumbai',
+  'Mysuru',
+  'Nagpur',
+  'Nashik',
+  'Navi Mumbai',
+  'Noida',
+  'Patna',
+  'Prayagraj',
+  'Pune',
+  'Raipur',
+  'Rajkot',
+  'Ranchi',
+  'Salem',
+  'Srinagar',
+  'Surat',
+  'Thane',
+  'Thiruvananthapuram',
+  'Tiruchirappalli',
+  'Udaipur',
+  'Vadodara',
+  'Varanasi',
+  'Vijayawada',
+  'Visakhapatnam',
+  'Warangal',
+] as const;
+
+/** Major hubs first in employer/candidate city pickers. */
+export const MAIN_INDIAN_CITIES = [
+  'Bengaluru',
+  'Mumbai',
+  'Delhi',
+  'Hyderabad',
+  'Chennai',
+  'Pune',
+  'Kolkata',
+  'Ahmedabad',
+  'Gurugram',
+  'Noida',
+  'Jaipur',
+  'Chandigarh',
+  'Kochi',
+  'Coimbatore',
+  'Indore',
+] as const;
+
+export function orderedIndianCitiesForJobForm(): string[] {
+  const main = MAIN_INDIAN_CITIES as readonly string[];
+  const mainSet = new Set(main.map((c) => c.toLowerCase()));
+  const rest = (INDIAN_CITIES as readonly string[])
+    .filter((city) => !mainSet.has(city.toLowerCase()))
+    .slice()
+    .sort((a, b) => a.localeCompare(b, 'en'));
+  return [...main, ...rest];
+}
+
+export type IndianCity = (typeof INDIAN_CITIES)[number];
+
+export function isListedIndianCity(city: string) {
+  return (INDIAN_CITIES as readonly string[]).includes(city);
+}
+
+export function isListedJobCategory(category: string) {
+  return (JOB_CATEGORIES as readonly string[]).includes(category);
+}
+
+export const CAREERBRIDGE_RESUME_TEMPLATE = 'resume-template-01' as const;
+
+export const RESUME_TEMPLATES = [
+  'CLASSIC',
+  'MODERN',
+  'SIMPLE',
+  'ats-minimal',
+  'ats-classic',
+  'ats-professional',
+  'ats-executive',
+  'ats-modern',
+  'photo-professional',
+  'photo-executive',
+  'photo-modern',
+  'photo-corporate',
+  'photo-elegant',
+  'resume-template-01',
+] as const;
+
+export const ATS_PHOTO_TEMPLATES = [
+  { id: 'photo-professional', name: 'Photo Professional' },
+  { id: 'photo-executive', name: 'Photo Executive' },
+  { id: 'photo-modern', name: 'Photo Modern' },
+  { id: 'photo-corporate', name: 'Photo Corporate' },
+  { id: 'photo-elegant', name: 'Photo Elegant' },
+] as const;
+
+export const ATS_PLAIN_TEMPLATES = [
+  { id: 'ats-classic', name: 'ATS Classic' },
+  { id: 'ats-professional', name: 'ATS Professional' },
+  { id: 'ats-executive', name: 'ATS Executive' },
+  { id: 'ats-minimal', name: 'ATS Minimal' },
+  { id: 'ats-modern', name: 'ATS Modern' },
+] as const;
+
+export function resolveResumeTemplateId(id?: string | null) {
+  const value = (id || '').trim();
+  // CareerBridge master template — extract user data, always render in our design.
+  if (!value || value === 'resume-template-01' || value === 'CAREERBRIDGE' || value === 'master') {
+    return CAREERBRIDGE_RESUME_TEMPLATE;
+  }
+  if (value === 'CLASSIC') return 'ats-classic';
+  if (value === 'MODERN') return 'ats-modern';
+  if (value === 'SIMPLE') return 'ats-minimal';
+  return value;
+}
+
+export function resumeTemplateHasPhoto(id?: string | null) {
+  return resolveResumeTemplateId(id).startsWith('photo-');
+}
+
+export const INTERVIEW_TYPES = [
+  { value: 'HR', label: 'HR / General' },
+  { value: 'CUSTOMER_SERVICE', label: 'Customer Service' },
+  { value: 'SITUATIONAL', label: 'Situational' },
+] as const;
+export const APPLICATION_STATUSES = [
+  'APPLIED',
+  'UNDER_REVIEW',
+  'SHORTLISTED',
+  'INTERVIEW',
+  'ON_HOLD',
+  'SELECTED',
+  'REJECTED',
+  'WITHDRAWN',
+  'HIRED',
+] as const;
+
+export type JobType = (typeof JOB_TYPES)[number];
+export type JobCategory = (typeof JOB_CATEGORIES)[number];
+export type ResumeTemplate = (typeof RESUME_TEMPLATES)[number];
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
+export type JobMatch = {
+  /** Overall ATS match for this job (0–100). Job-specific — not a permanent candidate score. */
+  score: number;
+  /** Factor scores as 0–100 percentages. */
+  skillScore: number;
+  experienceScore: number;
+  educationScore: number;
+  locationScore: number;
+  /** Spoken / job languages fit (0–100). */
+  languageScore: number;
+  /** Preferred / job-specific skills (0–100). Kept for list ranking compatibility. */
+  preferredSkillScore: number;
+  resumeQualityScore: number;
+  /** Career-interest / category fit (0–100). Kept for list ranking compatibility. */
+  categoryScore: number;
+  reasons: string[];
+  gaps: string[];
+  /** Actionable tips shown under “Improve your match”. */
+  recommendations: string[];
+};
+
+/** Handbook match bands for employer + candidate match UI. */
+export type AtsMatchBand = 'EXCELLENT' | 'GOOD' | 'MODERATE' | 'LOW';
+
+/** Neutral wording: the score describes profile fit, not a hiring decision. */
+export const PROFILE_MATCH_LABEL = 'Profile Match';
+
+export const ATS_MATCH_BANDS: Array<{
+  band: AtsMatchBand;
+  min: number;
+  label: string;
+  shortLabel: string;
+  color: 'green' | 'blue' | 'amber' | 'grey';
+}> = [
+  { band: 'EXCELLENT', min: 90, label: 'Excellent Match', shortLabel: 'Excellent', color: 'green' },
+  { band: 'GOOD', min: 75, label: 'Good Match', shortLabel: 'Good', color: 'blue' },
+  { band: 'MODERATE', min: 50, label: 'Moderate Match', shortLabel: 'Moderate', color: 'amber' },
+  { band: 'LOW', min: 0, label: 'Low Match', shortLabel: 'Low', color: 'grey' },
+];
+
+/** Handbook Vol.3 match weights (points toward 100). */
+export const ATS_JOB_MATCH_WEIGHTS = {
+  skills: 40,
+  experience: 20,
+  location: 15,
+  language: 15,
+  education: 10,
+} as const;
+
+export function atsMatchBand(score: number): AtsMatchBand {
+  const n = Math.max(0, Math.min(100, Math.round(score)));
+  if (n >= 90) return 'EXCELLENT';
+  if (n >= 75) return 'GOOD';
+  if (n >= 50) return 'MODERATE';
+  return 'LOW';
+}
+
+export function atsMatchBandLabel(score: number): string {
+  const band = atsMatchBand(score);
+  return ATS_MATCH_BANDS.find((item) => item.band === band)?.label || 'Low Match';
+}
+
+export function atsMatchBandInfo(score: number) {
+  const band = atsMatchBand(score);
+  return ATS_MATCH_BANDS.find((item) => item.band === band) || ATS_MATCH_BANDS[ATS_MATCH_BANDS.length - 1];
+}
+
+export type AtsMatchFactor = {
+  key: keyof typeof ATS_JOB_MATCH_WEIGHTS;
+  label: string;
+  /** Points earned toward the factor max. */
+  score: number;
+  max: number;
+  /** 0–100 percentage for bars. */
+  pct: number;
+};
+
+export type AtsMatchBreakdown = {
+  score: number;
+  band: AtsMatchBand;
+  bandLabel: string;
+  factors: AtsMatchFactor[];
+  reasons: string[];
+  gaps: string[];
+  recommendations: string[];
+};
+
+export function toAtsMatchBreakdown(match: JobMatch): AtsMatchBreakdown {
+  const w = ATS_JOB_MATCH_WEIGHTS;
+  const factors: AtsMatchFactor[] = [
+    {
+      key: 'skills',
+      label: 'Skills',
+      pct: match.skillScore,
+      max: w.skills,
+      score: Math.round((match.skillScore / 100) * w.skills),
+    },
+    {
+      key: 'experience',
+      label: 'Experience',
+      pct: match.experienceScore,
+      max: w.experience,
+      score: Math.round((match.experienceScore / 100) * w.experience),
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      pct: match.locationScore,
+      max: w.location,
+      score: Math.round((match.locationScore / 100) * w.location),
+    },
+    {
+      key: 'language',
+      label: 'Language',
+      pct: match.languageScore ?? 0,
+      max: w.language,
+      score: Math.round(((match.languageScore ?? 0) / 100) * w.language),
+    },
+    {
+      key: 'education',
+      label: 'Education',
+      pct: match.educationScore,
+      max: w.education,
+      score: Math.round((match.educationScore / 100) * w.education),
+    },
+  ];
+  return {
+    score: match.score,
+    band: atsMatchBand(match.score),
+    bandLabel: atsMatchBandLabel(match.score),
+    factors,
+    reasons: match.reasons || [],
+    gaps: match.gaps || [],
+    recommendations: match.recommendations || [],
+  };
+}
+
+export type JobCard = {
+  id: string;
+  title: string;
+  companyName: string;
+  city: string;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  jobType: string;
+  category: string;
+  requiredSkills: string[];
+  preferredSkills: string[];
+  /** Required experience label from the employer job post (e.g. Fresher, 1-3 years). */
+  experience?: string | null;
+  workMode?: string | null;
+  publishedAt?: string | null;
+  /** Distance from search origin in km (nearby feed only). */
+  distanceKm?: number | null;
+  match?: JobMatch;
+  saved?: boolean;
+  /** True when the current candidate has already applied to this job. */
+  applied?: boolean;
+  /** Job posting status when included on application records (PUBLISHED, CLOSED, DRAFT…). */
+  status?: string;
+};
+
+export type JobDetail = JobCard & {
+  description: string;
+  experience: string | null;
+  benefits: string | null;
+  status: string;
+  applied: boolean;
+};
+
+export type PagedJobs = {
+  items: JobCard[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+/** Default OLX-style distance rings (km). Last bucket is inclusive on max. */
+export const NEARBY_DISTANCE_BUCKETS = [
+  { minKm: 0, maxKm: 10, label: 'Within 10 km', inclusiveMax: false },
+  { minKm: 10, maxKm: 20, label: '10–20 km away', inclusiveMax: false },
+  { minKm: 20, maxKm: 30, label: '20–30 km away', inclusiveMax: false },
+  { minKm: 30, maxKm: 50, label: '30–50 km away', inclusiveMax: true },
+] as const;
+
+export const NEARBY_MAX_RADIUS_KM = 50;
+
+export type NearbyDistanceBucket = {
+  minKm: number;
+  maxKm: number;
+};
+
+export type NearbyJobsResponse = {
+  items: JobCard[];
+  distanceBucket: NearbyDistanceBucket;
+  hasMoreInBucket: boolean;
+  nextPage: number | null;
+  nextBucket: NearbyDistanceBucket | null;
+  page: number;
+  pageSize: number;
+  totalInBucket: number;
+  /** When true, results are remote jobs (no distance filter). */
+  remoteOnly?: boolean;
+};
+
+export type ResumeContent = {
+  fullName: string;
+  city: string | null;
+  state?: string | null;
+  phone: string | null;
+  email?: string | null;
+  summary: string;
+  skills: string[];
+  /** Programming / technical languages (never human languages). Additive; empty for legacy. */
+  programmingLanguages?: string[];
+  education: Array<{
+    qualification: string;
+    institution: string | null;
+    yearCompleted: number | null;
+    fieldOfStudy?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    location?: string | null;
+    isCurrent?: boolean;
+  }>;
+  experiences: Array<{
+    company: string;
+    jobTitle: string;
+    description: string | null;
+    isInternship: boolean;
+    /** Optional — kept for ATS date feedback / recheck sync */
+    startDate?: string | null;
+    endDate?: string | null;
+    isCurrent?: boolean;
+    location?: string | null;
+    responsibilities?: string[];
+    achievements?: string[];
+    technologies?: string[];
+  }>;
+  languages: string[];
+  /**
+   * Certifications — prefer structured objects; legacy string[] (name only) still accepted.
+   */
+  certifications?: Array<
+    | string
+    | {
+        name: string;
+        issuer?: string | null;
+        date?: string | null;
+        url?: string | null;
+      }
+  >;
+  /** Structured achievements — kept separate from certifications. */
+  achievements?: Array<{
+    title: string;
+    organization?: string | null;
+    description?: string | null;
+    date?: string | null;
+  }>;
+  projects?: Array<{
+    name: string;
+    description: string | null;
+    url?: string | null;
+    /** Optional bullet points — kept separate from description to avoid duplication. */
+    bullets?: string[];
+    /** Tech stack tokens — required for ATS project feedback to clear after edits. */
+    technologies?: string[];
+    responsibilities?: string[];
+    startDate?: string | null;
+    endDate?: string | null;
+  }>;
+  /**
+   * Structured personal/contact — additive mirror of top-level contact fields.
+   * Legacy readers continue to use fullName/city/phone/email/links.
+   */
+  personal?: {
+    fullName?: string;
+    email?: string | null;
+    phone?: string | null;
+    city?: string | null;
+    state?: string | null;
+    country?: string | null;
+    address?: string | null;
+    postalCode?: string | null;
+    linkedin?: string;
+    github?: string;
+    portfolio?: string;
+  };
+  /** Optional extraction confidence hints for review UI (not required for ATS). */
+  fieldConfidence?: Array<{
+    field: string;
+    value: string;
+    confidence: number;
+    source?: string;
+  }>;
+  includePhoto?: boolean;
+  /** Extra personal facts from uploaded resume (optional). */
+  personalDetails?: {
+    dateOfBirth?: string | null;
+    fatherName?: string | null;
+    maritalStatus?: string | null;
+    gender?: string | null;
+    permanentAddress?: string | null;
+    place?: string | null;
+  };
+  /** Profile / resume links — also mirrored under resumeData.links. */
+  links?: {
+    linkedin?: string;
+    github?: string;
+    portfolio?: string;
+    website?: string;
+  };
+  /** ADDITIVE optional normalized blob — existing fields above remain source of truth for legacy readers. */
+  resumeData?: import('./resume-data').NormalizedResumeData;
+};
+
+export type ResumeRecord = {
+  id: string;
+  title: string;
+  targetJobTitle: string | null;
+  template: string;
+  summary: string | null;
+  content: ResumeContent;
+  /** Extracted plain text when available (upload / Document AI). Used for file size hints. */
+  rawText?: string | null;
+  score: number;
+  version: number;
+  kind?: 'ORIGINAL' | 'OPTIMIZED';
+  parentResumeId?: string | null;
+  updatedAt: string;
+  archivedAt?: string | null;
+  applicationCount?: number;
+  pdfStoragePath?: string | null;
+  pdfStorageUri?: string | null;
+  pdfPublicUrl?: string | null;
+  pdfUploadedAt?: string | null;
+  processingStatus?: string | null;
+  processingError?: string | null;
+  sourceStoragePath?: string | null;
+  sourceStorageUri?: string | null;
+  sourceFileName?: string | null;
+  sourceMimeType?: string | null;
+  analysis?: import('./ats').ResumeAnalysis;
+  plans?: Array<{ id: string; label: string; minScore: number; maxScore: number; amount: number }>;
+};
+
+export type ApplicationRecord = {
+  id: string;
+  status: ApplicationStatus;
+  createdAt: string;
+  resumeId: string | null;
+  resumeVersion: number | null;
+  job: JobCard;
+  timeline: Array<{ status: string; at: string; done: boolean }>;
+};
+
+export type InterviewQuestion = {
+  index: number;
+  prompt: string;
+  snippet?: string | null;
+  thinkSeconds?: number;
+  aiFallback?: boolean;
+};
+
+export type InterviewFeedback = {
+  score: number;
+  communication: number;
+  structure: number;
+  relevance: number;
+  confidence: number;
+  strengths: string[];
+  improvements: string[];
+};
+
+export type LiveInterviewTurn = {
+  role: 'ai' | 'candidate';
+  text: string;
+  at: string;
+  questionNumber?: number;
+};
+
+export type LiveInterviewQuestion = {
+  id: string;
+  number: number;
+  text: string;
+  category: string;
+  difficulty: string;
+  askedAt: string;
+  answer?: string;
+  answeredAt?: string;
+  answerDurationSec?: number;
+  /** SKIPPED: the candidate skipped the question; it scores 0 and is not sent for AI evaluation. */
+  answerMode?: 'TEXT' | 'AUDIO' | 'SKIPPED';
+  analysis?: string;
+  improvedAnswer?: string;
+  score?: number;
+  strengths?: string[];
+  weaknesses?: string[];
+  whatWasGood?: string[];
+  whatWasMissing?: string[];
+  improvementSuggestion?: string;
+  snippet?: string | null;
+  thinkSeconds?: number;
+  /** The question was prepared from the profile because AI generation was unavailable. */
+  aiFallback?: boolean;
+  /** The answer was scored with the local rubric because AI evaluation was unavailable. */
+  scoredWithoutAi?: boolean;
+};
+
+export type InterviewWarning = {
+  type: string;
+  message: string;
+  severity: 'INFO' | 'WARNING' | 'HIGH';
+  at: string;
+};
+
+export type InterviewReport = {
+  overallScore: number;
+  communication: number;
+  behaviour: number;
+  listening: number;
+  /** 1–10 when enough technical questions were asked; otherwise omitted/null */
+  technicalKnowledge?: number | null;
+  /** 1–10 when problem-solving evidence exists; otherwise omitted/null */
+  problemSolving?: number | null;
+  roleReadiness?: number | null;
+  /** 1–10: how directly the answers addressed the questions asked */
+  relevance?: number | null;
+  /** 1–10: how clear and well-structured the answers were */
+  clarity?: number | null;
+  /** 1–10; text-only interviews cannot reliably measure confidence */
+  confidence?: number | null;
+  confidenceNote?: string | null;
+  recommendation:
+    | 'Strongly Recommended'
+    | 'Recommended'
+    | 'Needs Improvement'
+    | 'Significant Improvement Needed'
+    | 'Not Recommended'
+    | 'Not Ready';
+  summary: string;
+  overallAnalysis?: string;
+  strengths: string[];
+  weaknesses: string[];
+  dos: string[];
+  donts: string[];
+  postInterviewSuggestions?: {
+    communication: string[];
+    technical: string[];
+    answerStructure: string[];
+    topicsToRevise: string[];
+    practicePlan: string[];
+  };
+  answeredCount: number;
+  totalPlanned: number;
+  integrity: {
+    tabSwitches: number;
+    faceMissing: number;
+    multipleFaces: number;
+    micIssues: number;
+    abuseWarnings?: number;
+    nonsenseWarnings?: number;
+  };
+  /** True when AI was unavailable for the summary or any answer, so rubric scoring was used. */
+  aiUnavailable?: boolean;
+};
+
+export type InterviewSession = {
+  id: string;
+  jobRole: string;
+  interviewType: string;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  questionIndex: number;
+  totalQuestions: number;
+  conductWarning?: string | null;
+  conductTerminated?: boolean;
+  currentQuestion: InterviewQuestion | null;
+  score: number | null;
+  feedback: InterviewFeedback | null;
+  mode?: 'CLASSIC' | 'LIVE_AI' | 'HUMAN';
+  source?: 'PASSPORT' | 'UPLOAD' | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  durationSec?: number | null;
+  durationLimitMin?: number | null;
+  difficulty?: string | null;
+  transcript?: LiveInterviewTurn[];
+  liveQuestions?: LiveInterviewQuestion[];
+  warnings?: InterviewWarning[];
+  report?: InterviewReport | null;
+  candidateName?: string | null;
+  communicationScore?: number | null;
+  behaviourScore?: number | null;
+  listeningScore?: number | null;
+  focusStacks?: string[];
+};
+
+export const HUMAN_MOCK_RULES = [
+  'Pay the interview fee first. This checkout is static for now.',
+  'After payment, choose Technical or Non-technical interview.',
+  'Then enter your name, email, and time to schedule.',
+  'The live room opens only 5 minutes before your booked time.',
+  'After the live room, we generate a transcript. Download or copy it, then see your score.',
+];
+
+export const HUMAN_INTERVIEW_TRACKS = ['TECHNICAL', 'NON_TECHNICAL'] as const;
+export type HumanInterviewTrack = (typeof HUMAN_INTERVIEW_TRACKS)[number];
+
+export const HUMAN_INTERVIEW_TRACK_OPTIONS = [
+  { track: 'TECHNICAL' as const, label: 'Technical interview' },
+  { track: 'NON_TECHNICAL' as const, label: 'Non-technical interview' },
+];
+
+export function humanInterviewerPublicLabel(track?: string | null) {
+  if (track === 'TECHNICAL') return 'Technical interviewer';
+  if (track === 'NON_TECHNICAL') return 'Non-technical interviewer';
+  return 'Interviewer';
+}
+
+export const HUMAN_INTERVIEW_PRICE_INR = 199;
+
+export const HUMAN_INTERVIEW_OPEN_BEFORE_MS = 5 * 60 * 1000;
+
+export function humanInterviewOpensAt(scheduledAt: string | Date) {
+  return new Date(new Date(scheduledAt).getTime() - HUMAN_INTERVIEW_OPEN_BEFORE_MS);
+}
+
+export function humanInterviewJoinState(scheduledAt: string | Date, now = Date.now()) {
+  const start = new Date(scheduledAt).getTime();
+  const opensAt = start - HUMAN_INTERVIEW_OPEN_BEFORE_MS;
+  const remainingMs = Math.max(0, opensAt - now);
+  return {
+    canJoin: now >= opensAt,
+    opensAt: new Date(opensAt).toISOString(),
+    remainingMs,
+  };
+}
+
+export function formatInterviewCountdown(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const clock = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  return hours > 0 ? `${hours}:${clock}` : clock;
+}
+
+export function humanInterviewRoleFromPassport(profile: {
+  careerInterests: string[];
+  experiences: { jobTitle: string }[];
+  skills: { name: string }[];
+}) {
+  const latestJob =
+    profile.experiences[profile.experiences.length - 1]?.jobTitle?.trim() ||
+    profile.experiences[0]?.jobTitle?.trim();
+  return latestJob || profile.careerInterests[0]?.trim() || profile.skills[0]?.name?.trim() || null;
+}
+
+export function humanInterviewTypeFromRole(role: string): 'HR' | 'CUSTOMER_SERVICE' | 'SITUATIONAL' {
+  const text = role.toLowerCase();
+  if (/(customer|retail|sales|hospitality)/.test(text)) return 'CUSTOMER_SERVICE';
+  if (/(hr|human resource|recruit)/.test(text)) return 'HR';
+  return 'SITUATIONAL';
+}
+
+export type HumanMockStatus = 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
+
+export type HumanMockSession = {
+  id: string;
+  jobRole: string;
+  interviewType: string;
+  interviewTrack?: HumanInterviewTrack | null;
+  scheduledAt: string;
+  status: HumanMockStatus;
+  candidateName: string | null;
+  candidateEmail: string | null;
+  interviewerName: string | null;
+  interviewerEmail: string | null;
+  emailSent: boolean;
+  joinUrl: string;
+  interviewerJoinUrl: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  durationMs: number | null;
+  interviewerJoined: boolean;
+  transcript: string | null;
+  score: number | null;
+  feedback: InterviewFeedback | null;
+};
+
+export const SKILL_ASSESSMENT_MAX_QUESTIONS = 6;
+export const SKILL_ASSESSMENT_TYPED_COUNT = 3;
+export const SKILL_ASSESSMENT_RECORDED_COUNT = 3;
+export const SKILL_ASSESSMENT_PACK_CREDITS = 3;
+export const SKILL_ASSESSMENT_PACK_PRICE_INR = 99;
+
+export const SKILL_ASSESSMENT_RULES = [
+  'This is separate from mock interview. Questions come from your Career Passport resume and skills.',
+  'You will answer 3 objective questions, then 3 questions by voice recording.',
+  'Sit facing the camera with your head straight and both shoulders visible.',
+  'Use good light. Do not sit with a window or bright light behind you.',
+  'Look at the camera. Do not look down at another phone or notes.',
+  'Do not use ChatGPT, Gemini, or any AI tool during the assessment.',
+  'Do not read answers from another screen, book, or person.',
+  'Keep a voice answer between 8 and 20 seconds. Speak clearly in your own words.',
+  'We analyse the clip for face, voice, and length, then discard it. Only your score is saved.',
+];
+
+export type SkillAssessmentQuestionKind = 'MCQ' | 'TYPED' | 'SPOKEN';
+
+export type SkillAssessmentQuestion = {
+  index: number;
+  prompt: string;
+  skill: string;
+  kind: SkillAssessmentQuestionKind;
+  options: string[];
+};
+
+export type SkillAssessmentResult = {
+  prompt: string;
+  skill: string;
+  kind: SkillAssessmentQuestionKind;
+  correct: boolean;
+};
+
+export type SkillAssessmentFeedback = {
+  score: number;
+  correct: number;
+  total: number;
+  strengths: string[];
+  improvements: string[];
+  results: SkillAssessmentResult[];
+};
+
+export type SkillAssessmentSession = {
+  id: string;
+  skills: string[];
+  resumeScore: number;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  questionIndex: number;
+  totalQuestions: number;
+  currentQuestion: SkillAssessmentQuestion | null;
+  score: number | null;
+  feedback: SkillAssessmentFeedback | null;
+};
+
+export type SkillAssessmentAccess = {
+  credits: number;
+  completedCount: number;
+  canStart: boolean;
+  packCredits: number;
+  packPriceInr: number;
+};
+
+export type EmployerVerificationStatus =
+  | 'UNVERIFIED'
+  | 'KYC_COMPLETE'
+  | 'PENDING'
+  | 'VERIFIED'
+  | 'REJECTED';
+
+export type EmployerProfile = {
+  id: string;
+  companyName: string;
+  industry: string | null;
+  city: string | null;
+  state?: string | null;
+  contactName: string | null;
+  /** Masked for display (e.g. 29ABCPE*****1Z5); the full value never leaves the API. */
+  gstNumber: string | null;
+  /** Masked for display. */
+  cin: string | null;
+  website: string | null;
+  /** Masked for display (e.g. ABCPE****F). */
+  panNumber: string | null;
+  workEmail: string | null;
+  designation: string | null;
+  companySize?: string | null;
+  about?: string | null;
+  linkedinUrl?: string | null;
+  logoUrl?: string | null;
+  verificationStatus: EmployerVerificationStatus;
+  verified: boolean;
+};
+
+export type EmployerJobSummary = {
+  id: string;
+  title: string;
+  city: string;
+  status: string;
+  applicantCount: number;
+  publishedAt: string | null;
+  createdAt: string;
+};
+
+export type JobSkillProfile = {
+  jobId: string;
+  source: 'MANUAL' | 'AI_EXTRACTED' | 'HYBRID' | string;
+  requiredSkills: string[];
+  preferredSkills: string[];
+  experienceYearsMin: number;
+  educationMin: string | null;
+  interviewReadinessMin: number;
+  extractionRaw?: Record<string, unknown>;
+};
+
+export type CandidateMatchRank = {
+  id: string;
+  jobId: string;
+  applicationId: string | null;
+  rank: number | null;
+  totalScore: number;
+  skillsScore: number;
+  experienceScore: number;
+  interviewReadinessScore: number;
+  reasons: string[];
+  gaps: string[];
+  computedAt: string;
+  candidate: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    city: string | null;
+    skills: string[];
+  } | null;
+};
+
+export type HiringOutcomeRecord = {
+  id: string;
+  applicationId: string;
+  jobId: string;
+  candidateId: string;
+  outcome: string;
+  notes: string | null;
+  decidedAt: string;
+};
+
+export type EmployerPaymentRecord = {
+  id: string;
+  jobId: string | null;
+  hiringOutcomeId: string | null;
+  amountPaise: number;
+  currency: string;
+  status: string;
+  provider: string | null;
+  description: string | null;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+export type EmployerKycPayload = {
+  gstNumber: string;
+  /** Omit to keep the saved CIN; send '' to remove it. */
+  cin?: string;
+  website: string;
+  panNumber: string;
+  trademark?: string;
+};
+
+export type EmployerAffiliationPayload = {
+  companyName: string;
+  workEmail: string;
+  designation: string;
+};
+
+export type EmployerDashboard = {
+  openJobs: number;
+  applications: number;
+  shortlisted: number;
+  interviews: number;
+  applicationsByMonth?: Array<{
+    year: number;
+    month: number;
+    label: string;
+    count: number;
+  }>;
+  /** Published jobs only: applications and job-detail views per job. */
+  jobPerformance?: Array<{
+    jobId: string;
+    title: string;
+    applications: number;
+    views: number;
+  }>;
+  recent: Array<{
+    candidateName: string;
+    candidateId?: string;
+    jobTitle: string;
+    status: string;
+    applicationId: string;
+    jobId?: string;
+    appliedAt?: string;
+  }>;
+};
+
+export type EmployerApplication = {
+  id: string;
+  status: ApplicationStatus;
+  createdAt: string;
+  candidate: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    city: string | null;
+    skills: string[];
+    highestEducation: string | null;
+    experienceYears?: number;
+    /** Browser-readable profile photo when the candidate uploaded one. */
+    photoUrl?: string | null;
+  };
+  job: { id: string; title: string };
+  /** Private hiring-team note; never shown to the candidate. */
+  employerNote?: string | null;
+  match?: JobMatch;
+  screeningAnswers?: Array<{ questionId: string; prompt?: string; answer: string }>;
+};
+
+export type EmployerCandidateSearchResult = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  city: string | null;
+  state?: string | null;
+  highestEducation: string | null;
+  experienceYears: number;
+  experienceMonths?: number;
+  preferredLanguage?: string | null;
+  profileCompletion: number;
+  skills: string[];
+  skillsTotal?: number;
+  latestRole: { title: string; company: string } | null;
+  matchScore: number | null;
+  appliedToEmployer: boolean;
+  applicationId?: string | null;
+  applicationStatus?: string | null;
+  /** Employer's private shortlist for a matched candidate who has not applied to the job. */
+  talentShortlisted?: boolean;
+  availabilityLabel?: string | null;
+  availabilityTone?: 'ready' | 'soon' | 'neutral' | string | null;
+  /** Browser-readable profile photo when the candidate uploaded one. */
+  photoUrl?: string | null;
+};
+
+/** Job posting fee in paise (₹999). Each paid unit unlocks a batch of matched profiles. */
+export const EMPLOYER_JOB_POSTING_FEE_PAISE = 99900;
+export const EMPLOYER_CANDIDATES_PER_POSTING_FEE = 10;
+
+export function employerCandidateUnlockLimit(amountPaise: number) {
+  if (amountPaise < EMPLOYER_JOB_POSTING_FEE_PAISE) return 0;
+  return Math.floor(amountPaise / EMPLOYER_JOB_POSTING_FEE_PAISE) * EMPLOYER_CANDIDATES_PER_POSTING_FEE;
+}
+
+export type EmployerCandidateSearchResponse = {
+  jobId: string;
+  unlocked: boolean;
+  unlockLimit: number;
+  totalMatched: number;
+  /** Candidates left after filters (across all pages). */
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  candidates: EmployerCandidateSearchResult[];
+};
+
+export type EmployerCandidatePassport = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  city: string | null;
+  state: string | null;
+  highestEducation: string | null;
+  experienceYears: number;
+  experienceMonths: number;
+  profileCompletion: number;
+  about: string | null;
+  openToRelocating: boolean;
+  /** Browser-readable profile photo when the candidate uploaded one. */
+  photoUrl?: string | null;
+  skills: string[];
+  education: Array<{
+    qualification: string;
+    institution: string | null;
+    fieldOfStudy: string | null;
+    yearCompleted: number | null;
+  }>;
+  experiences: Array<{
+    company: string;
+    jobTitle: string;
+    isInternship: boolean;
+    stillInCompany: boolean;
+  }>;
+  hasResume: boolean;
+  resumeId: string | null;
+  application: {
+    id: string;
+    status: string;
+    jobId: string;
+    jobTitle: string;
+  } | null;
+  match: JobMatch | null;
+  view: 'CONTROLLED_PASSPORT';
+};
+
+export type EmployerInterviewStatus =
+  | 'PROPOSED'
+  | 'SCHEDULED'
+  | 'CONFIRMED'
+  /** Candidate asked for another time; availability not yet submitted. */
+  | 'RESCHEDULE_NEEDED'
+  /** Candidate submitted availability; employer must schedule a new time. */
+  | 'RESCHEDULE_REQUESTED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+/** Candidate's reschedule window; `label` reads like "3 April, 3:00 PM - 6:00 PM". */
+export type CandidateRescheduleAvailability = {
+  from: string;
+  until: string;
+  timezone: string;
+  label: string;
+};
+
+export type EmployerInterviewRecord = {
+  id: string;
+  applicationId: string;
+  jobId: string;
+  candidateId: string;
+  scheduledAt: string;
+  durationMin: number;
+  mode: string;
+  location: string | null;
+  meetingUrl?: string | null;
+  status: EmployerInterviewStatus;
+  notes: string | null;
+  preferredRescheduleAt?: string | null;
+  candidateAvailability?: CandidateRescheduleAvailability | null;
+  rescheduleRequestedAt?: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  applicationStatus: string;
+  feedbackRequestedAt?: string | null;
+  candidateFeedback?: {
+    rating: number;
+    text: string | null;
+    submittedAt: string;
+  } | null;
+  candidate: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    city: string | null;
+    skills: string[];
+    photoUrl?: string | null;
+  };
+  job: { id: string; title: string };
+};
+
+export type CatalogSkill = {
+  id: string;
+  name: string;
+  category: string;
+};
+
+export type AdminDashboard = {
+  candidates: number;
+  activeCandidates: number;
+  employers: number;
+  openJobs: number;
+  applications: number;
+  interviews: number;
+  hires?: number;
+  funnel?: {
+    candidates: number;
+    applications: number;
+    shortlisted: number;
+    interviews: number;
+    hires: number;
+  };
+  recentActivity?: Array<{ at: string; label: string }>;
+  systemStatus?: Array<{ name: string; status: 'Healthy' | 'Degraded' }>;
+  activity?: {
+    candidateRegistrations7d: number;
+    employerRegistrations7d: number;
+    jobsPublished7d: number;
+    applications7d: number;
+    interviews7d: number;
+  };
+  alerts?: {
+    failedNotifications: number;
+    failedAiRequests: number;
+    suspendedAccounts: number;
+    jobsRequiringAttention: number;
+    unreadNotifications: number;
+    /** Today's AI usage against the Super Admin limits; status WARNING at 80%, LIMIT_REACHED when blocked. */
+    aiBudget?: AiBudgetStatus;
+  };
+  aiUsage?: {
+    totalRequests: number;
+    failedRequests?: number;
+    totalTokens?: number;
+    estimatedCostUsd?: number;
+    estimatedCostInr: number;
+    byFeature: Array<{
+      feature: string;
+      requests: number;
+      tokens?: number;
+      estimatedCostInr?: number;
+    }>;
+    byUser?: Array<{
+      userId: string | null;
+      email: string;
+      userType: string | null;
+      requests: number;
+      tokens: number;
+      estimatedCostInr: number;
+    }>;
+    recent?: Array<{
+      id: string;
+      feature: string;
+      provider: string;
+      model: string;
+      status: string;
+      tokens: number;
+      costInr: number;
+      latencyMs: number;
+      error: string | null;
+      at: string;
+    }>;
+  };
+};

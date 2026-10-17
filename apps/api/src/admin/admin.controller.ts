@@ -1,0 +1,489 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { UserType } from '../prisma/client';
+import { Throttle } from '@nestjs/throttler';
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { AdminService } from './admin.service';
+import { AdminAccountDeletionService } from './admin-account-deletion.service';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { contentDisposition, type ReportFile, XLSX_MIME } from './admin-report-export';
+
+/** Writes the workbook directly: the global interceptor would otherwise wrap it in the JSON envelope. */
+function sendXlsx(res: Response, file: ReportFile) {
+  res.setHeader('Content-Type', XLSX_MIME);
+  res.setHeader('Content-Disposition', contentDisposition(file.fileName));
+  res.setHeader('Content-Length', String(file.buffer.length));
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Request-ID');
+  res.status(200).end(file.buffer);
+}
+
+class CreateSkillDto {
+  @IsString()
+  @MinLength(2)
+  name: string;
+
+  @IsString()
+  @MinLength(2)
+  category: string;
+
+  @IsOptional()
+  @IsString()
+  aliases?: string;
+}
+
+class UpdateSkillDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  aliases?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+}
+
+class MergeSkillDto {
+  @IsString()
+  @MinLength(1)
+  targetSkillId: string;
+}
+
+class CreateAdminDto {
+  @IsString()
+  @MinLength(5)
+  email: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+
+  @IsOptional()
+  @IsString()
+  fullName?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsIn(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'])
+  role?: 'SUPER_ADMIN' | 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR';
+}
+
+class StatusDto {
+  @IsIn(['ACTIVE', 'INACTIVE', 'SUSPENDED'])
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+}
+
+class JobStatusDto {
+  @IsIn(['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'PAUSED', 'CLOSED'])
+  status: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'PAUSED' | 'CLOSED';
+}
+
+class SettingsDto {
+  @IsObject()
+  settings: Record<string, string>;
+}
+
+class AdminRoleDto {
+  @IsIn(['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'])
+  role: 'SUPER_ADMIN' | 'PLATFORM_ADMIN' | 'PLATFORM_OPERATOR';
+}
+
+class AdminPasswordDto {
+  @IsString()
+  @MinLength(8)
+  password: string;
+}
+
+class ChangeOwnPasswordDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  currentPassword: string;
+
+  @IsString()
+  @MaxLength(128)
+  newPassword: string;
+
+  @IsString()
+  @MaxLength(128)
+  confirmPassword: string;
+}
+
+@ApiTags('admin')
+@ApiBearerAuth()
+@UseGuards(RolesGuard)
+@Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+@Controller('admin')
+export class AdminController {
+  constructor(
+    private readonly admin: AdminService,
+    private readonly accountDeletion: AdminAccountDeletionService,
+  ) {}
+
+  @Get('dashboard')
+  dashboard() {
+    return this.admin.dashboard();
+  }
+
+  @Get('candidates')
+  candidates(
+    @Query('query') query?: string,
+    @Query('location') location?: string,
+    @Query('skill') skill?: string,
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.admin.candidates(query, { location, skill, status, from, to });
+  }
+
+  @Get('candidates/:id')
+  candidateDetails(@Param('id') id: string) {
+    return this.admin.candidateDetails(id);
+  }
+
+  @Get('candidates/:id/deletion')
+  @Roles(UserType.SUPER_ADMIN)
+  candidateDeletionPreview(@Param('id') id: string) {
+    return this.accountDeletion.candidatePreview(id);
+  }
+
+  @Delete('candidates/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  deleteCandidate(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.accountDeletion.deleteCandidate(user.id, id);
+  }
+
+  @Post('candidates/:id/status')
+  setCandidateStatus(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: StatusDto,
+  ) {
+    return this.admin.setCandidateStatus(user.id, id, dto.status);
+  }
+
+  @Post('users/:id/status')
+  setUserStatus(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: StatusDto,
+  ) {
+    return this.admin.setUserStatus(user.id, id, dto.status);
+  }
+
+  @Get('employers')
+  employers(@Query('query') query?: string) {
+    return this.admin.employers(query);
+  }
+
+  @Get('employers/:id')
+  employerDetails(@Param('id') id: string) {
+    return this.admin.employerDetails(id);
+  }
+
+  @Get('employers/:id/deletion')
+  @Roles(UserType.SUPER_ADMIN)
+  employerDeletionPreview(@Param('id') id: string) {
+    return this.accountDeletion.employerPreview(id);
+  }
+
+  @Delete('employers/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  deleteEmployer(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.accountDeletion.deleteEmployer(user.id, id);
+  }
+
+  @Post('employers/:id/status')
+  setEmployerStatus(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: StatusDto,
+  ) {
+    return this.admin.setEmployerStatus(user.id, id, dto.status);
+  }
+
+  @Post('employers/:id/verify')
+  verify(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.admin.verifyEmployer(user.id, id);
+  }
+
+  @Post('employers/:id/impersonate')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  impersonateEmployer(
+    @CurrentUser() user: { id: string; role?: string },
+    @Param('id') id: string,
+  ) {
+    return this.admin.impersonateEmployer(user.id, id, user.role);
+  }
+
+  @Get('jobs')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  jobs(@Query('query') query?: string, @Query('status') status?: string) {
+    return this.admin.jobs(query, status);
+  }
+
+  @Get('jobs/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  jobDetails(@Param('id') id: string) {
+    return this.admin.jobDetails(id);
+  }
+
+  @Post('jobs/:id/status')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  setJobStatus(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: JobStatusDto,
+  ) {
+    return this.admin.setJobStatus(user.id, id, dto.status);
+  }
+
+  @Post('jobs/:id/approve')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  approveJob(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.admin.approveJob(user.id, id);
+  }
+
+  @Post('jobs/:id/reject')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  rejectJob(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.admin.rejectJob(user.id, id);
+  }
+
+  @Get('applications')
+  applications(@Query('query') query?: string, @Query('status') status?: string) {
+    return this.admin.applications(query, status);
+  }
+
+  @Get('applications/pipeline')
+  applicationPipeline() {
+    return this.admin.applicationPipeline();
+  }
+
+  @Get('applications/:id')
+  applicationDetails(@Param('id') id: string) {
+    return this.admin.applicationDetails(id);
+  }
+
+  @Get('interviews')
+  interviews(@Query('query') query?: string, @Query('status') status?: string) {
+    return this.admin.interviews(query, status);
+  }
+
+  @Get('interviews/:id')
+  interviewDetails(@Param('id') id: string) {
+    return this.admin.interviewDetails(id);
+  }
+
+  @Get('skills')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  skills(@Query('query') query?: string) {
+    return this.admin.skills(query);
+  }
+
+  @Post('skills')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  addSkill(@CurrentUser() user: { id: string }, @Body() dto: CreateSkillDto) {
+    return this.admin.addSkill(user.id, dto.name, dto.category, dto.aliases);
+  }
+
+  @Post('skills/:id/merge')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  mergeSkill(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: MergeSkillDto) {
+    return this.admin.mergeSkill(user.id, id, dto.targetSkillId);
+  }
+
+  @Patch('skills/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  updateSkill(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateSkillDto,
+  ) {
+    return this.admin.updateSkill(user.id, id, dto);
+  }
+
+  @Get('notifications')
+  notifications() {
+    return this.admin.notifications();
+  }
+
+  @Get('reports')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  reports() {
+    return this.admin.reports();
+  }
+
+  @Get('reports/candidate-progress')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  candidateProgress() {
+    return this.admin.candidateProgress();
+  }
+
+  @Get('reports/employer-progress')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  employerProgress() {
+    return this.admin.employerProgress();
+  }
+
+  @Get('reports/employers')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  employerReport(@Query('query') query?: string, @Query('status') status?: string) {
+    return this.admin.employerReport(query, status);
+  }
+
+  @Get('reports/employers/export')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async exportEmployerReport(
+    @CurrentUser() user: { id: string },
+    @Res() res: Response,
+    @Query('query') query?: string,
+    @Query('status') status?: string,
+  ) {
+    sendXlsx(res, await this.admin.employerReportExport(user.id, query, status));
+  }
+
+  @Get('reports/candidates/export')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async exportCandidateReport(
+    @CurrentUser() user: { id: string },
+    @Res() res: Response,
+    @Query('query') query?: string,
+    @Query('location') location?: string,
+    @Query('skill') skill?: string,
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    sendXlsx(res, await this.admin.candidateReportExport(user.id, query, { location, skill, status, from, to }));
+  }
+
+  @Get('revenue')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  revenue() {
+    return this.admin.revenue();
+  }
+
+  @Get('ai-usage')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  aiUsage() {
+    return this.admin.aiUsage();
+  }
+
+  @Get('admins')
+  @Roles(UserType.SUPER_ADMIN)
+  listAdmins() {
+    return this.admin.listAdmins();
+  }
+
+  @Post('admins')
+  @Roles(UserType.SUPER_ADMIN)
+  createAdmin(@CurrentUser() user: { id: string }, @Body() dto: CreateAdminDto) {
+    return this.admin.createAdmin(user.id, dto);
+  }
+
+  @Get('admins/:id/deletion')
+  @Roles(UserType.SUPER_ADMIN)
+  adminDeletionPreview(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.accountDeletion.adminPreview(user.id, id);
+  }
+
+  @Delete('admins/:id')
+  @Roles(UserType.SUPER_ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  deleteAdmin(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.accountDeletion.deleteAdmin(user.id, id);
+  }
+
+  @Post('admins/:id/suspend')
+  @Roles(UserType.SUPER_ADMIN)
+  suspendAdmin(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.admin.setAdminStatus(user.id, id, 'SUSPENDED');
+  }
+
+  @Post('admins/:id/status')
+  @Roles(UserType.SUPER_ADMIN)
+  setAdminStatus(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: StatusDto,
+  ) {
+    return this.admin.setAdminStatus(user.id, id, dto.status);
+  }
+
+  @Post('admins/:id/role')
+  @Roles(UserType.SUPER_ADMIN)
+  setAdminRole(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: AdminRoleDto,
+  ) {
+    return this.admin.setAdminRole(user.id, id, dto.role);
+  }
+
+  @Post('admins/:id/password')
+  @Roles(UserType.SUPER_ADMIN)
+  setAdminPassword(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: AdminPasswordDto,
+  ) {
+    return this.admin.setAdminPassword(user.id, id, dto.password);
+  }
+
+  /** Signed-in staff change their own portal login password; the target is always the caller. */
+  @Post('me/password')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  changeOwnPassword(@CurrentUser() user: { id: string }, @Body() dto: ChangeOwnPasswordDto) {
+    return this.admin.changeOwnPassword(user.id, dto);
+  }
+
+  @Get('settings')
+  @Roles(UserType.SUPER_ADMIN)
+  getSettings() {
+    return this.admin.getSettings();
+  }
+
+  @Post('settings')
+  @Roles(UserType.SUPER_ADMIN)
+  updateSettings(@CurrentUser() user: { id: string }, @Body() dto: SettingsDto) {
+    return this.admin.updateSettings(user.id, dto.settings);
+  }
+
+  @Get('audit')
+  audit(@CurrentUser() user: { role?: string }, @Query('query') query?: string) {
+    return this.admin.audit(query, user.role === 'PLATFORM_OPERATOR');
+  }
+}

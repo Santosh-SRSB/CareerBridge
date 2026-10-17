@@ -1,0 +1,311 @@
+import type { ResumeContent } from '@careerbridge/shared';
+import type { StructuredResumeDraft } from '../ai/ai.types';
+import {
+  classifyLanguageTokens,
+  extractProjectTechnologies,
+  isPageMarkerText,
+  parseExtractedResumeText,
+} from './parse-extracted-resume';
+import {
+  attachPersonalBlock,
+  ensureExperienceDateShape,
+  filterGroundedList,
+  filterGroundedString,
+  groundedInSource,
+} from './resume-extract-normalize';
+
+function richness(content: Pick<ResumeContent, 'skills' | 'education' | 'experiences' | 'projects'>): number {
+  return (
+    (content.skills?.length || 0) +
+    (content.education?.length || 0) * 2 +
+    (content.experiences?.length || 0) * 3 +
+    (content.projects?.length || 0) * 3 +
+    (content.experiences || []).reduce((n, row) => n + (row.description?.length || 0), 0) / 80 +
+    (content.projects || []).reduce((n, row) => n + (row.description?.length || 0), 0) / 80
+  );
+}
+
+function pickRicher<T>(ai: T[], heuristic: T[], aiRich: number, heuristicRich: number): T[] {
+  if (!ai.length) return heuristic;
+  if (!heuristic.length) return ai;
+  // Prefer AI when it captured at least as much structure; otherwise keep heuristic.
+  return aiRich >= heuristicRich * 0.75 ? ai : heuristic;
+}
+
+/**
+ * Merge AI-structured draft with heuristic parse (phone/email/languages/certs often better from heuristic).
+ */
+export function mergeStructuredIntoResumeContent(
+  draft: StructuredResumeDraft,
+  fallback: ResumeContent,
+  sourceText = '',
+): ResumeContent {
+  const grounded = (value: string | null | undefined, fb: string | null = null) =>
+    sourceText ? filterGroundedString(value, sourceText, fb) : String(value || '').trim() || fb;
+
+  const fullName =
+    grounded(
+      [draft.firstName, draft.lastName].filter((part) => String(part || '').trim()).join(' ').trim(),
+      fallback.fullName,
+    ) || fallback.fullName;
+
+  const educationFromAi =
+    Array.isArray(draft.education) && draft.education.length
+      ? draft.education
+          .map((row) => {
+            const yearRaw = String(row.yearCompleted || '').trim();
+            const year = Number.parseInt(yearRaw.replace(/\D/g, '').slice(0, 4), 10);
+            const qualification = [row.qualification, row.fieldOfStudy]
+              .map((v) => String(v || '').trim())
+              .filter(Boolean)
+              .join(' in ');
+            return {
+              qualification: qualification || String(row.qualification || '').trim(),
+              institution: String(row.institution || '').trim() || null,
+              yearCompleted: Number.isFinite(year) ? year : null,
+            };
+          })
+          .filter((row) => row.qualification || row.institution)
+      : [];
+
+  const experiencesFromAi =
+    Array.isArray(draft.experience) && draft.experience.length
+      ? draft.experience
+          .map((row) => ({
+            company: String(row.company || '').trim(),
+            jobTitle: String(row.jobTitle || '').trim(),
+            description: String(row.description || '').trim() || null,
+            isInternship: Boolean(row.isInternship),
+          }))
+          .filter((row) => row.company || row.jobTitle || row.description)
+      : [];
+
+  const projectsFromAi =
+    Array.isArray(draft.projects) && draft.projects.length
+      ? draft.projects
+          .map((row) => {
+            const name = String(row.title || '').trim();
+            const rawDescription = String(row.description || '').trim();
+            const fromAiTech = Array.isArray(row.technologies)
+              ? row.technologies.map((t) => String(t || '').trim()).filter(Boolean)
+              : [];
+            // Older prompts put stack in `role` — treat as tech when it looks like a stack list.
+            const role = String(row.role || '').trim();
+            const roleAsTech =
+              role && /[,|/]/.test(role)
+                ? role.split(/[,;/|]+/).map((t) => t.trim()).filter((t) => t.length > 1 && t.length < 48)
+                : [];
+            const { description, technologies } = extractProjectTechnologies(
+              rawDescription ? rawDescription.split(/\n+/).map((l) => l.trim()).filter(Boolean) : [],
+            );
+            const mergedTech = [...new Set([...fromAiTech, ...roleAsTech, ...technologies])];
+            return {
+              name,
+              description,
+              url: String(row.url || '').trim() || null,
+              ...(mergedTech.length ? { technologies: mergedTech } : {}),
+            };
+          })
+          .filter((row) => row.name)
+      : [];
+
+  const skillsFromAi =
+    Array.isArray(draft.skills) && draft.skills.length
+      ? filterGroundedList(
+          draft.skills.map((s) => String(s || '').trim()).filter(Boolean),
+          sourceText || fallback.summary + ' ' + (fallback.skills || []).join(' '),
+        )
+      : [];
+
+  const languagesFromAiRaw =
+    Array.isArray(draft.languages) && draft.languages.length
+      ? draft.languages.map((s) => String(s || '').trim()).filter(Boolean)
+      : [];
+  const languagesClassified = classifyLanguageTokens(languagesFromAiRaw);
+  const languagesFromAi = languagesClassified.human;
+  const techFromAiLanguages = languagesClassified.tech;
+
+  const certificationsFromAi =
+    Array.isArray(draft.certifications) && draft.certifications.length
+      ? draft.certifications
+          .map((row) => {
+            const name = String(row?.name || '').trim();
+            if (!name) return null;
+            return {
+              name,
+              issuer: String(row?.issuer || '').trim() || null,
+              date: String(row?.date || '').trim() || null,
+            };
+          })
+          .filter((row): row is { name: string; issuer: string | null; date: string | null } => Boolean(row))
+      : [];
+
+  const achievementsFromAi =
+    Array.isArray(draft.achievements) && draft.achievements.length
+      ? draft.achievements
+          .map((row) => {
+            const title = String(row?.title || '').trim();
+            if (!title) return null;
+            if (isPageMarkerText(title, row?.organization, row?.description)) return null;
+            return {
+              title,
+              organization: String(row?.organization || '').trim() || null,
+              description: String(row?.description || '').trim() || null,
+              date: String(row?.date || '').trim() || null,
+            };
+          })
+          .filter(
+            (
+              row,
+            ): row is {
+              title: string;
+              organization: string | null;
+              description: string | null;
+              date: string | null;
+            } => Boolean(row),
+          )
+      : [];
+
+  const aiSlice = {
+    skills: skillsFromAi,
+    education: educationFromAi,
+    experiences: experiencesFromAi,
+    projects: projectsFromAi,
+  };
+  const heuristicProjects = (fallback.projects || []).map((row) => ({
+    name: row.name,
+    description: row.description || null,
+    url: row.url ?? null,
+    ...(row.technologies?.length ? { technologies: row.technologies } : {}),
+  }));
+  const heuristicSlice = {
+    skills: fallback.skills || [],
+    education: fallback.education || [],
+    experiences: fallback.experiences || [],
+    projects: heuristicProjects,
+  };
+  const aiRich = richness(aiSlice);
+  const heuristicRich = richness(heuristicSlice);
+
+  const skills = pickRicher(skillsFromAi, heuristicSlice.skills, skillsFromAi.length, heuristicSlice.skills.length);
+  // Prefer union of skills when both have content (deduped).
+  const mergedSkills =
+    skillsFromAi.length && heuristicSlice.skills.length
+      ? [
+          ...new Set(
+            [...skillsFromAi, ...heuristicSlice.skills, ...techFromAiLanguages]
+              .map((s) => s.trim())
+              .filter(Boolean),
+          ),
+        ]
+      : [...new Set([...skills, ...techFromAiLanguages].map((s) => s.trim()).filter(Boolean))];
+
+  const mergedLanguages = languagesFromAi.length
+    ? languagesFromAi
+    : classifyLanguageTokens(fallback.languages || []).human;
+
+  const pickedExperiences = pickRicher(
+    experiencesFromAi,
+    heuristicSlice.experiences,
+    aiRich,
+    heuristicRich,
+  );
+  // Backfill dates from heuristic when AI rows omit them (same company/title).
+  const experiences: ResumeContent['experiences'] = pickedExperiences.map((row) => {
+    const existing = row as ResumeContent['experiences'][number];
+    // Drop AI rows that invent company+title not present in source when we have source text.
+    if (
+      sourceText &&
+      existing.company &&
+      !groundedInSource(existing.company, sourceText) &&
+      existing.jobTitle &&
+      !groundedInSource(existing.jobTitle, sourceText)
+    ) {
+      return null;
+    }
+    if (existing.startDate || existing.endDate || existing.isCurrent) return existing;
+    const match = heuristicSlice.experiences.find(
+      (h) =>
+        (h.company && row.company && h.company.toLowerCase() === row.company.toLowerCase()) ||
+        (h.jobTitle && row.jobTitle && h.jobTitle.toLowerCase() === row.jobTitle.toLowerCase()),
+    );
+    if (!match) return existing;
+    return {
+      ...existing,
+      ...(match.startDate ? { startDate: match.startDate } : {}),
+      ...(match.endDate ? { endDate: match.endDate } : {}),
+      ...(match.isCurrent ? { isCurrent: true, endDate: null } : {}),
+      ...(match.responsibilities?.length ? { responsibilities: match.responsibilities } : {}),
+    };
+  }).filter(Boolean) as ResumeContent['experiences'];
+
+  const city =
+    grounded(String(draft.city || '').trim(), fallback.city) || fallback.city;
+
+  let merged: ResumeContent = {
+    fullName: fullName || fallback.fullName || 'Candidate',
+    city,
+    phone: fallback.phone,
+    email: fallback.email,
+    summary: grounded(String(draft.about || '').trim(), fallback.summary) || fallback.summary,
+    skills: mergedSkills,
+    programmingLanguages: fallback.programmingLanguages || [],
+    education: pickRicher(educationFromAi, heuristicSlice.education, aiRich, heuristicRich),
+    experiences: experiences.length ? experiences : heuristicSlice.experiences,
+    languages: mergedLanguages,
+    certifications: certificationsFromAi.length
+      ? certificationsFromAi
+      : fallback.certifications || [],
+    achievements: (achievementsFromAi.length ? achievementsFromAi : fallback.achievements || []).filter(
+      (row) => !isPageMarkerText(row.title, row.organization, row.description),
+    ),
+    projects: pickRicher(projectsFromAi, heuristicProjects, aiRich, heuristicRich),
+    includePhoto: false,
+    fieldConfidence: fallback.fieldConfidence,
+    personal: fallback.personal,
+    ...( (() => {
+      const links = {
+        linkedin:
+          String(draft.linkedin || '').trim() ||
+          fallback.links?.linkedin ||
+          undefined,
+        github:
+          String(draft.github || '').trim() ||
+          fallback.links?.github ||
+          undefined,
+        portfolio:
+          String(draft.portfolio || '').trim() ||
+          fallback.links?.portfolio ||
+          undefined,
+        website:
+          String(draft.website || '').trim() ||
+          fallback.links?.website ||
+          undefined,
+      };
+      return links.linkedin || links.github || links.portfolio || links.website
+        ? { links }
+        : fallback.links
+          ? { links: fallback.links }
+          : {};
+    })() ),
+  };
+
+  merged = ensureExperienceDateShape(merged);
+  merged = attachPersonalBlock(merged);
+  return merged;
+}
+
+/** Prefer AI structure when available; always fall back to deterministic parse. */
+export async function parseResumeTextWithOptionalAi(
+  rawText: string,
+  structureFn: (text: string) => Promise<StructuredResumeDraft | null>,
+): Promise<ResumeContent> {
+  const heuristic = parseExtractedResumeText(rawText);
+  try {
+    const structured = await structureFn(rawText);
+    if (structured) return mergeStructuredIntoResumeContent(structured, heuristic, rawText);
+  } catch {
+    /* use heuristic */
+  }
+  return heuristic;
+}

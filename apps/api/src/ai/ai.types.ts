@@ -1,0 +1,133 @@
+import type { AiUnavailableReason } from '@careerbridge/shared';
+
+export type { AiUnavailableReason };
+
+export type AiProviderName = 'gemini' | 'fallback';
+
+export type AiTaskType =
+  | 'RESUME_REVIEW'
+  | 'RESUME_REWRITE'
+  | 'RESUME_STRUCTURE'
+  | 'RESUME_PARSE_STRICT'
+  | 'INTERVIEW_EVALUATION'
+  | 'INTERVIEW_QUESTION'
+  | 'JOB_MATCHING'
+  | 'SKILL_EXTRACTION'
+  | 'EMBEDDING'
+  | 'RAG_RETRIEVE'
+  | 'GENERAL';
+
+export type EmbeddingEntityType =
+  | 'CANDIDATE'
+  | 'JOB'
+  | 'RESUME'
+  | 'SKILL'
+  | 'KNOWLEDGE';
+
+export interface AiRequestOptions {
+  model?: string;
+  provider?: AiProviderName;
+  temperature?: number;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+  /** Cancels in-flight provider calls and pending retries when the caller stops waiting. */
+  signal?: AbortSignal;
+  promptVersion?: string;
+  userId?: string;
+  requestId?: string;
+}
+
+export interface AiGenerateRequest {
+  task: AiTaskType;
+  systemPrompt: string;
+  userPrompt: string;
+  options?: AiRequestOptions;
+}
+
+export interface AiGenerateResponse<T = unknown> {
+  success: boolean;
+  data: T | null;
+  rawText?: string;
+  provider: AiProviderName;
+  model: string;
+  promptVersion: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  latencyMs: number;
+  estimatedCostUsd?: number;
+  error?: string;
+  /** Set when no AI result was produced; tells the UI why instead of hiding the failure. */
+  unavailableReason?: AiUnavailableReason;
+}
+
+export interface AiInteractionRecord {
+  id: string;
+  userId?: string | null;
+  operation: string;
+  provider: string;
+  model: string;
+  promptVersion: string;
+  inputTokens: number;
+  outputTokens: number;
+  latencyMs: number;
+  status: 'SUCCESS' | 'FAILED' | 'FALLBACK';
+  estimatedCostUsd: number;
+  createdAt: Date;
+}
+
+export interface StructuredResumeDraft {
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  city: string;
+  state?: string;
+  about: string;
+  dateOfBirth?: string;
+  fatherName?: string;
+  maritalStatus?: string;
+  gender?: string;
+  permanentAddress?: string;
+  place?: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  website?: string;
+  education: Array<{
+    qualification: string;
+    institution: string;
+    fieldOfStudy: string;
+    yearCompleted: string;
+  }>;
+  skills: string[];
+  careerInterests: string[];
+  experience: Array<{
+    company: string;
+    jobTitle: string;
+    isInternship: boolean;
+    description: string;
+    startDate?: string;
+    endDate?: string;
+    isCurrent?: boolean;
+  }>;
+  projects: Array<{
+    title: string;
+    role: string;
+    year: string;
+    description: string;
+    url: string;
+    technologies?: string[];
+  }>;
+  languages?: string[];
+  certifications?: Array<{
+    name: string;
+    issuer?: string;
+    date?: string;
+  }>;
+  achievements?: Array<{
+    title: string;
+    organization?: string;
+    description?: string;
+    date?: string;
+  }>;
+}

@@ -1,0 +1,332 @@
+name: Deploy PROD
+
+# PROD only: careerbridge-api-prod / careerbridge-web-prod in careerbridgeprod (asia-south1).
+# Manual workflow_dispatch from main only. Does not run on push to dev.
+#
+# Image-only updates (same pattern as deploy-dev.yml): env vars, Secret Manager refs,
+# Cloud SQL, scaling and probes are left as configured on the services.
+# This workflow does NOT run prisma migrate, bind secrets, or change DNS.
+#
+# GitHub Environment "production": referenced for WIF vars and approvals.
+# Environment protection rules / required reviewers are NOT VERIFIED by this YAML —
+# configure them separately in the GitHub UI before relying on them.
+#
+# Rollback (manual): redeploy a previous immutable SHA tag, e.g.
+#   gcloud run services update careerbridge-api-prod --region=asia-south1 --project=careerbridgeprod \
+#     --image=asia-south1-docker.pkg.dev/careerbridgeprod/careerbridge-prod/api:<previous-full-sha>
+# Schema is not rolled back by an image rollback. Keep RUN_PRISMA_MIGRATE=false on PROD
+# until an approved schema-bootstrap plan exists.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: careerbridgeprod
+  GCP_REGION: asia-south1
+  REGISTRY: asia-south1-docker.pkg.dev
+  IMAGE_REPO: asia-south1-docker.pkg.dev/careerbridgeprod/careerbridge-prod
+  API_SERVICE: careerbridge-api-prod
+  WEB_SERVICE: careerbridge-web-prod
+  # Expected runtime identity on the Cloud Run services (not set by this workflow).
+  # RUNTIME_SA=careerbridge-runtime-prod@careerbridgeprod.iam.gserviceaccount.com
+  # PII keyring names/versions only (must already be bound on the API service).
+  PII_KEYS_SECRET: careerbridge-pii-encryption-keys
+  PII_LOOKUP_SECRET: careerbridge-pii-lookup-key
+  PII_SECRET_VERSION: '1'
+  PII_ACTIVE_KEY_ID: k1
+
+jobs:
+  guard:
+    name: Require main ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless workflow runs from refs/heads/main
+        env:
+          TARGET_REF: ${{ github.ref }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "TARGET_REF is set (value compared, not trusted as shell source)."
+          echo "TARGET_SHA=${TARGET_SHA}"
+          if [ "$TARGET_REF" != "refs/heads/main" ]; then
+            echo "::error::Deploy PROD may only run from refs/heads/main (got an unexpected ref). Select the main branch when starting workflow_dispatch."
+            exit 1
+          fi
+
+  # Fails closed before build/deploy if the API service is not bound to the PII keyring.
+  pii-preflight:
+    name: PII keyring preflight · careerbridge-api-prod
+    needs: guard
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Workload Identity Federation settings
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOY_SA: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SA" ]; then
+            echo "::error::Set GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT as variables on the GitHub Environment 'production'."
+            exit 1
+          fi
+          echo "Deploy SA identity (name only): $DEPLOY_SA"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/pii-preflight
+        with:
+          service: ${{ env.API_SERVICE }}
+          region: ${{ env.GCP_REGION }}
+          project: ${{ env.GCP_PROJECT_ID }}
+
+  ci:
+    name: CI
+    needs: [guard, pii-preflight]
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build + push · ${{ matrix.image }}
+    needs: [guard, pii-preflight, ci]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Workload Identity Federation and PROD web API URL
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOY_SA: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          PROD_PUBLIC_API_URL: ${{ vars.PROD_PUBLIC_API_URL }}
+          MATRIX_IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SA" ]; then
+            echo "::error::Set GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT on Environment 'production'."
+            exit 1
+          fi
+          if [ "$MATRIX_IMAGE" = "web" ]; then
+            if [ -z "${PROD_PUBLIC_API_URL:-}" ] || [ "$PROD_PUBLIC_API_URL" = "REQUIRE_OVERRIDE" ]; then
+              echo "::error::Set PROD_PUBLIC_API_URL on Environment 'production' (HTTPS public API base ending in /api/v1). Do not reuse the DEV URL."
+              exit 1
+            fi
+            # Require HTTPS. Denylist alone does not prove the hostname is the approved PROD API.
+            case "$PROD_PUBLIC_API_URL" in
+              https://*) ;;
+              *)
+                echo "::error::PROD_PUBLIC_API_URL must be an https:// URL."
+                exit 1
+                ;;
+            esac
+            case "$PROD_PUBLIC_API_URL" in
+              *careerbridge-api-dev*|*localhost*|*127.0.0.1*|*\[::1\]*|*::1*)
+                echo "::error::PROD_PUBLIC_API_URL looks like a DEV or loopback URL. Refusing to bake it into the PROD web image."
+                exit 1
+                ;;
+            esac
+            echo "PROD_PUBLIC_API_URL passed local denylist and HTTPS checks (value not echoed; hostname still requires owner approval)."
+          fi
+
+      - name: Authenticate to Google Cloud (OIDC)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: false
+
+      - name: Log in to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - uses: ./.github/actions/docker-image
+        with:
+          image: ${{ matrix.image }}
+          tags: ${{ env.IMAGE_REPO }}/${{ matrix.image }}:${{ github.sha }}
+          push: 'true'
+          web_config: infrastructure/cloudbuild.web.prod.yaml
+          web_api_url_override: ${{ vars.PROD_PUBLIC_API_URL }}
+
+  deploy-api:
+    name: Deploy API · careerbridge-api-prod
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: asia-south1-docker.pkg.dev/careerbridgeprod/careerbridge-prod/api:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Record current revision
+        run: |
+          gcloud run services describe "$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)'
+
+      - name: PII keyring preflight (re-check before deploy)
+        uses: ./.github/actions/pii-preflight
+        with:
+          service: ${{ env.API_SERVICE }}
+          region: ${{ env.GCP_REGION }}
+          project: ${{ env.GCP_PROJECT_ID }}
+
+      # Image only. Does not set env, secrets, Cloud SQL, or RUN_PRISMA_MIGRATE.
+      # Keep RUN_PRISMA_MIGRATE=false on the service until schema bootstrap is approved.
+      - name: Deploy new image
+        run: |
+          gcloud run services update "$API_SERVICE" --image="$IMAGE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --quiet
+
+      - name: Verify rollout and health
+        run: |
+          set -euo pipefail
+          svc=$(gcloud run services describe "$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --format=json)
+          created=$(jq -r '.status.latestCreatedRevisionName' <<<"$svc")
+          ready=$(jq -r '.status.latestReadyRevisionName' <<<"$svc")
+          image=$(jq -r '.spec.template.spec.containers[0].image' <<<"$svc")
+          traffic=$(jq -r --arg r "$ready" '[.status.traffic[] | select(.revisionName == $r) | .percent] | add // 0' <<<"$svc")
+          runtime_sa=$(jq -r '.spec.template.spec.serviceAccountName // empty' <<<"$svc")
+          url=$(jq -r '.status.url' <<<"$svc")
+          echo "revision=$ready image=$image traffic=${traffic}% runtime_sa=$runtime_sa"
+          [ "$image" = "$IMAGE" ] || { echo "::error::Service image is $image, expected $IMAGE"; exit 1; }
+          [ "$created" = "$ready" ] || { echo "::error::Latest revision $created is not ready (ready: $ready)"; exit 1; }
+          [ "$traffic" = "100" ] || { echo "::error::Revision $ready serves ${traffic}% of traffic, expected 100%"; exit 1; }
+          expected_sa="careerbridge-runtime-prod@careerbridgeprod.iam.gserviceaccount.com"
+          [ "$runtime_sa" = "$expected_sa" ] || {
+            echo "::error::Runtime service account is '$runtime_sa', expected '$expected_sa'"
+            exit 1
+          }
+          curl --fail --silent --show-error --retry 6 --retry-delay 10 --retry-all-errors --max-time 30 \
+            -o /tmp/health.json "$url/api/v1/health"
+          jq -e '.data.status == "ok"' /tmp/health.json > /dev/null \
+            || { echo "::error::Unexpected health response (body not printed)"; exit 1; }
+          echo "API health OK"
+          {
+            echo "### API · $API_SERVICE"
+            echo "- revision: \`$ready\`"
+            echo "- image: \`$image\`"
+            echo "- runtime SA: \`$runtime_sa\`"
+            echo "- health: ok"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          gcloud run revisions list --service="$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --limit=5
+          latest=$(gcloud run services describe "$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='value(status.latestCreatedRevisionName)')
+          gcloud run revisions describe "$latest" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='yaml(status.conditions)'
+
+  deploy-web:
+    name: Deploy Web · careerbridge-web-prod
+    needs: deploy-api
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: asia-south1-docker.pkg.dev/careerbridgeprod/careerbridge-prod/web:${{ github.sha }}
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Record current revision
+        run: |
+          gcloud run services describe "$WEB_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)'
+
+      - name: Deploy new image
+        run: |
+          gcloud run services update "$WEB_SERVICE" --image="$IMAGE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --quiet
+
+      - name: Verify rollout and response
+        run: |
+          set -euo pipefail
+          svc=$(gcloud run services describe "$WEB_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --format=json)
+          created=$(jq -r '.status.latestCreatedRevisionName' <<<"$svc")
+          ready=$(jq -r '.status.latestReadyRevisionName' <<<"$svc")
+          image=$(jq -r '.spec.template.spec.containers[0].image' <<<"$svc")
+          traffic=$(jq -r --arg r "$ready" '[.status.traffic[] | select(.revisionName == $r) | .percent] | add // 0' <<<"$svc")
+          runtime_sa=$(jq -r '.spec.template.spec.serviceAccountName // empty' <<<"$svc")
+          url=$(jq -r '.status.url' <<<"$svc")
+          echo "revision=$ready image=$image traffic=${traffic}% runtime_sa=$runtime_sa"
+          [ "$image" = "$IMAGE" ] || { echo "::error::Service image is $image, expected $IMAGE"; exit 1; }
+          [ "$created" = "$ready" ] || { echo "::error::Latest revision $created is not ready (ready: $ready)"; exit 1; }
+          [ "$traffic" = "100" ] || { echo "::error::Revision $ready serves ${traffic}% of traffic, expected 100%"; exit 1; }
+          expected_sa="careerbridge-runtime-prod@careerbridgeprod.iam.gserviceaccount.com"
+          [ "$runtime_sa" = "$expected_sa" ] || {
+            echo "::error::Runtime service account is '$runtime_sa', expected '$expected_sa'"
+            exit 1
+          }
+          status=$(curl --silent --show-error --retry 6 --retry-delay 10 --retry-all-errors --max-time 60 \
+            -o /dev/null -w '%{http_code}' "$url/")
+          [ "$status" = "200" ] || { echo "::error::Web returned HTTP $status"; exit 1; }
+          echo "Web OK → 200"
+          {
+            echo "### Web · $WEB_SERVICE"
+            echo "- revision: \`$ready\`"
+            echo "- image: \`$image\`"
+            echo "- runtime SA: \`$runtime_sa\`"
+            echo "- check: HTTP 200"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          gcloud run revisions list --service="$WEB_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --limit=5
+          latest=$(gcloud run services describe "$WEB_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='value(status.latestCreatedRevisionName)')
+          gcloud run revisions describe "$latest" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='yaml(status.conditions)'

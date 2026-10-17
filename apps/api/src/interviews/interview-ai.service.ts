@@ -1,0 +1,1159 @@
+import { Injectable, Logger } from '@nestjs/common';
+import type { InterviewReport, LiveInterviewQuestion, ResumeContent } from '@careerbridge/shared';
+import { detectConduct } from './interview-conduct';
+import { evaluableTextAnswer, isAudioPlaceholderAnswer } from './interview-answer.util';
+import { AiGatewayService } from '../ai/ai-gateway.service';
+import { RagRetrievalService } from '../ai/rag-retrieval.service';
+import {
+  CONTEXT_LIMIT,
+  RETRIEVAL_POOL,
+  buildRetrievalPlan,
+  selectDiverseChunks,
+  type FocusKind,
+} from './interview-retrieval';
+import {
+  buildCategoryAwareImprovedAnswer,
+  classifyQuestionType,
+  evaluationCriteriaFor,
+  localAnalyzeCategoryAware,
+  needsStrongRewrite,
+  questionTypeFromCategory,
+  type InterviewQuestionType,
+} from './interview-evaluation.util';
+
+export type InterviewProfile = {
+  fullName: string;
+  city?: string | null;
+  skills: string[];
+  education: string[];
+  experiences: string[];
+  summary: string;
+  jobRole: string;
+  focusStacks: string[];
+  experienceYears: number;
+  questionLimit?: number;
+  /** Beginner / Intermediate / Advanced chosen on the setup screen. */
+  requestedDifficulty?: string;
+  candidateId?: string;
+  resumeId?: string;
+  interviewId?: string;
+};
+
+type BuiltQuestion = {
+  text: string;
+  category: string;
+  snippet?: string | null;
+  thinkSeconds?: number;
+  /** Resume chunks given to Gemini for this question; used to prefer fresh context next time. */
+  ragChunkIds?: string[];
+  /** Prepared from the profile because AI did not return a usable question. */
+  aiFallback?: boolean;
+};
+
+@Injectable()
+export class InterviewAiService {
+  private readonly logger = new Logger(InterviewAiService.name);
+
+  constructor(
+    private readonly aiGateway: AiGatewayService,
+    private readonly rag: RagRetrievalService,
+  ) {}
+
+  async firstQuestion(profile: InterviewProfile, interviewType = 'MIXED') {
+    if (usesFixedIntro(interviewType)) {
+      return introQuestion(profile, interviewType);
+    }
+    return this.generateQuestion(profile, interviewType, [], undefined);
+  }
+
+  async nextQuestion(
+    profile: InterviewProfile,
+    interviewType: string,
+    _difficulty: string,
+    asked: string[],
+    last?: { question: string; answer: string },
+    usedChunkIds: string[] = [],
+  ) {
+    return this.generateQuestion(profile, interviewType, asked, last, usedChunkIds);
+  }
+
+  private async generateQuestion(
+    profile: InterviewProfile,
+    interviewType: string,
+    asked: string[],
+    last?: { question: string; answer: string },
+    usedChunkIds: string[] = [],
+  ): Promise<BuiltQuestion> {
+    if (!this.aiGateway.isConfigured()) {
+      return { ...emergencyProfileQuestion(profile, interviewType, asked), aiFallback: true };
+    }
+
+    const experienceYears = Number(profile.experienceYears) || 0;
+    const experienceLevel =
+      experienceYears < 1
+        ? 'FRESHER'
+        : experienceYears < 2
+          ? 'YEAR_1'
+          : experienceYears < 4
+            ? 'YEAR_2_3'
+            : 'YEAR_4_PLUS';
+
+    const questionNumber = asked.length + 1;
+    const coverage = coverageFocusForQuestion(questionNumber, interviewType, profile);
+    const plan = buildRetrievalPlan({ focusKind: coverage.kind, profile, asked, lastAnswer: last?.answer });
+    const coverageFocus = plan.focusSkill
+      ? `${coverage.text} — ask specifically about the resume skill "${plan.focusSkill}"`
+      : coverage.text;
+    let retrievedChunks: string[] = [];
+    let ragChunkIds: string[] = [];
+    if (profile.candidateId) {
+      const minScore = this.rag.minScore(Boolean(plan.sections));
+      const pool = await this.rag
+        .retrieve({
+          query: plan.query,
+          candidateId: profile.candidateId,
+          resumeId: profile.resumeId,
+          sections: plan.sections,
+          limit: RETRIEVAL_POOL,
+          minScore,
+        })
+        .catch(() => []);
+      const selected = selectDiverseChunks(pool, usedChunkIds, CONTEXT_LIMIT);
+      retrievedChunks = selected.map((hit) => `[${hit.section}] ${hit.content.slice(0, 700)}`);
+      ragChunkIds = selected.map((hit) => hit.id);
+      const used = new Set(usedChunkIds);
+      this.logger.log(
+        JSON.stringify({
+          msg: 'interview_rag_retrieval',
+          interviewId: profile.interviewId,
+          candidateId: profile.candidateId,
+          resumeId: profile.resumeId || null,
+          questionNumber,
+          focus: plan.focusLabel,
+          sections: plan.sections,
+          threshold: minScore,
+          poolCount: pool.length,
+          retrievedChunkCount: selected.length,
+          reusedChunkCount: selected.filter((hit) => used.has(hit.id)).length,
+          chunkIds: selected.map((hit) => hit.id),
+          chunkSections: selected.map((hit) => hit.section),
+          scores: selected.map((hit) => Math.round(hit.score * 1000) / 1000),
+        }),
+      );
+    }
+    const profilePayload = {
+      fullName: profile.fullName,
+      jobRole: profile.jobRole,
+      skills: profile.skills.slice(0, 25),
+      education: profile.education.slice(0, 8),
+      experiences: profile.experiences.slice(0, 12),
+      focusStacks: profile.focusStacks,
+      experienceYears,
+      experienceLevel,
+      requestedDifficulty: profile.requestedDifficulty || null,
+      summary: profile.summary?.slice(0, 800) || '',
+      city: profile.city || null,
+    };
+
+    // One attempt — retries used to stack multi-minute waits on Submit.
+    const attempts = 1;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const fromAi = await this.aiGateway.generateInterviewQuestion({
+        interviewType,
+        questionNumber,
+        askedQuestions: asked.slice(-10),
+        lastExchange: last || null,
+        profile:
+          attempt === 0
+            ? profilePayload
+            : { ...profilePayload, avoidQuestions: asked.slice(-10), retryAttempt: attempt + 1 },
+        coverageFocus,
+        retrievedChunks,
+      });
+
+      let text = (fromAi?.question || '').trim();
+      if (!fromAi || text.length < 12) continue;
+      if (asked.some((item) => normalizeQuestionText(item) === normalizeQuestionText(text))) continue;
+      if (asked.length > 0 && isPureIntroQuestion(text)) continue;
+
+      return {
+        text,
+        category: (fromAi.category || 'MIXED').toUpperCase(),
+        snippet: fromAi.hint || null,
+        thinkSeconds: clamp(Number(fromAi.thinkSeconds) || 0, 0, 30),
+        ragChunkIds,
+      };
+    }
+
+    // Never block the interview: build a profile-based next question if the LLM fails.
+    return { ...emergencyProfileQuestion(profile, interviewType, asked), aiFallback: true };
+  }
+
+  async analyzeAnswer(
+    profile: InterviewProfile,
+    question: string,
+    answer: string,
+    options?: { answerMode?: 'TEXT' | 'AUDIO'; durationSec?: number; category?: string | null },
+  ): Promise<{
+    analysis: string;
+    improvedAnswer?: string;
+    strengths: string[];
+    weaknesses: string[];
+    whatWasGood?: string[];
+    whatWasMissing?: string[];
+    improvementSuggestion?: string;
+    score: number;
+    scoredWithoutAi?: boolean;
+  }> {
+    const text = answer.trim();
+    const hasEvaluableText = text.length >= 8 && !isAudioPlaceholderAnswer(text);
+
+    if (!hasEvaluableText && (options?.answerMode === 'AUDIO' || isAudioPlaceholderAnswer(text))) {
+      return analyzeAudioOnlyAnswer(options?.durationSec);
+    }
+
+    const conduct = detectConduct(text);
+    if (conduct === 'abuse') {
+      return {
+        analysis:
+          'This response used abusive or vulgar language. That is unprofessional and must not be scored as strong behaviour.',
+        improvedAnswer: buildProperAnswerFromProfile(question, profile),
+        strengths: [] as string[],
+        weaknesses: ['Used abusive or vulgar language', 'Did not answer the question professionally'],
+        whatWasGood: [] as string[],
+        whatWasMissing: ['A professional answer to the question'],
+        improvementSuggestion: 'Rewrite the answer professionally and address the question directly.',
+        score: 0,
+      };
+    }
+    if (conduct === 'nonsense') {
+      return {
+        analysis: 'This response was not a meaningful answer to the interview question.',
+        improvedAnswer: buildProperAnswerFromProfile(question, profile),
+        strengths: [] as string[],
+        weaknesses: ['Answer was meaningless or too vague'],
+        whatWasGood: [] as string[],
+        whatWasMissing: ['A clear, relevant answer to the question'],
+        improvementSuggestion: 'Answer the question in plain language with at least a few concrete sentences.',
+        score: 25,
+      };
+    }
+
+    const questionType = questionTypeFromCategory(options?.category) || classifyQuestionType(question);
+    if (!this.aiGateway.isConfigured()) {
+      return {
+        ...calibrateScore(localAnalyzeCategoryAware(question, text, profile, questionType), text),
+        scoredWithoutAi: true,
+      };
+    }
+
+    const criteria = evaluationCriteriaFor(questionType);
+    const fromAi = await this.aiGateway.evaluateInterviewAnswer(
+      {
+        fullName: profile.fullName,
+        jobRole: profile.jobRole,
+        skills: profile.skills,
+        education: profile.education,
+        experiences: profile.experiences,
+        experienceYears: profile.experienceYears,
+        summary: profile.summary?.slice(0, 500) || '',
+      },
+      question,
+      text,
+      {
+        temperature: 0.35,
+        questionTypeHint: questionType,
+        evaluationCriteria: criteria,
+      },
+    );
+    const local = localAnalyzeCategoryAware(question, text, profile, questionType);
+    if (!fromAi) return { ...calibrateScore(local, text), scoredWithoutAi: true };
+
+    const whatWasMissing = (
+      fromAi.whatWasMissing?.length
+        ? fromAi.whatWasMissing
+        : fromAi.weaknesses?.length
+          ? fromAi.weaknesses
+          : local.whatWasMissing
+    )
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .slice(0, 4);
+
+    const score = clamp(fromAi.score ?? local.score, 0, 100);
+    const resolvedType = normalizeQuestionType(fromAi.questionType) || questionType;
+    let improvedAnswer = sanitizeImprovedAnswer(text, fromAi.improvedAnswer || '', profile);
+
+    if (needsStrongRewrite(score, whatWasMissing, text, improvedAnswer || '')) {
+      improvedAnswer = buildCategoryAwareImprovedAnswer(
+        question,
+        text,
+        profile,
+        resolvedType,
+        whatWasMissing,
+      );
+    }
+    if (!improvedAnswer.trim()) {
+      improvedAnswer =
+        text.split(/\s+/).filter(Boolean).length < 8
+          ? buildProperAnswerFromProfile(question, profile)
+          : buildCategoryAwareImprovedAnswer(question, text, profile, resolvedType, whatWasMissing);
+    }
+
+    const improvementSuggestion =
+      fromAi.improvementSuggestion?.trim() ||
+      local.improvementSuggestion ||
+      'Add specific examples that directly answer each part of the question.';
+
+    return calibrateScore(
+      {
+        analysis: (fromAi.analysis || local.analysis).trim(),
+        improvedAnswer: improvedAnswer || undefined,
+        strengths: (fromAi.strengths?.length
+          ? fromAi.strengths
+          : fromAi.whatWasGood?.length
+            ? fromAi.whatWasGood
+            : local.strengths
+        ).slice(0, 4),
+        weaknesses: (fromAi.weaknesses?.length ? fromAi.weaknesses : whatWasMissing).slice(0, 4),
+        whatWasGood: (fromAi.whatWasGood || fromAi.strengths || local.strengths).slice(0, 4),
+        whatWasMissing,
+        improvementSuggestion,
+        score,
+      },
+      text,
+    );
+  }
+
+  async report(
+    profile: InterviewProfile,
+    questions: LiveInterviewQuestion[],
+    durationSec: number,
+    warningCounts: InterviewReport['integrity'],
+    totalPlanned = 15,
+  ): Promise<InterviewReport> {
+    const answered = questions.filter(
+      (item) => evaluableTextAnswer(item) || item.answerMode === 'AUDIO' || Boolean(item.answer?.trim()),
+    );
+    const answeredCount = answered.length;
+    if (answeredCount === 0) return zeroAnswerReport(profile, warningCounts, totalPlanned);
+    // Overall must match average of per-question scores shown after each answer (/100 and /10);
+    // skipped questions count as 0 so skipping cannot raise the score.
+    const scored = questions.filter((item) => answered.includes(item) || item.answerMode === 'SKIPPED');
+    const overall = Math.round(scored.reduce((sum, item) => sum + (item.score || 0), 0) / scored.length);
+    const overallOutOf10 = Math.round(
+      scored.reduce((sum, item) => sum + Math.max(0, Math.min(10, Math.round((item.score || 0) / 10))), 0) /
+        scored.length,
+    );
+    const communication = scoreCommunication(answered);
+    const behaviour = scoreBehaviour(answered, warningCounts);
+    const listening = scoreListening(answered);
+    const technicalKnowledge = scoreByCategories(answered, /TECHNICAL|PROJECT|EDUCATION|EXPERIENCE|RESUME/i);
+    const problemSolving = scoreByCategories(answered, /SCENARIO|PROBLEM|FOLLOW_UP/i);
+    const roleReadiness = scoreRoleReadiness(answered, communication, technicalKnowledge, overall);
+    const relevance = scoreRelevance(answered);
+    const clarity = scoreClarity(answered);
+    const hasAudioAnswers = answered.some((item) => item.answerMode === 'AUDIO');
+    const confidence = hasAudioAnswers
+      ? scoreConfidenceFromAudio(answered)
+      : null;
+    const confidenceNote = hasAudioAnswers
+      ? null
+      : 'Confidence cannot be reliably measured from text answers alone.';
+
+    const fromAi = await this.askJson<{
+      summary?: string;
+      overallAnalysis?: string;
+      strengths?: string[];
+      weaknesses?: string[];
+      dos?: string[];
+      donts?: string[];
+      recommendation?: string;
+      postInterviewSuggestions?: InterviewReport['postInterviewSuggestions'];
+    }>(
+      [
+        'You are an expert interview evaluator summarizing a completed interview.',
+        'Be accurate and fair. Do NOT inflate praise. Do not invent experience.',
+        'overallAnalysis must explain why the overall score is what it is, based on actual answer quality and question types asked.',
+        'strengths and weaknesses must be specific and actionable (not "completed the interview" or "needs improvement").',
+        'postInterviewSuggestions must be personalized to THIS candidate weaknesses: communication[], technical[], answerStructure[], topicsToRevise[], practicePlan[].',
+        'recommendation must match score bands: 85-100 Strongly Recommended; 70-84 Recommended; 55-69 Needs Improvement; 40-54 Significant Improvement Needed; 0-39 Not Recommended.',
+        'Return JSON { summary, overallAnalysis, strengths, weaknesses, dos, donts, recommendation, postInterviewSuggestions }.',
+      ].join(' '),
+      JSON.stringify({
+        profile: {
+          fullName: profile.fullName,
+          jobRole: profile.jobRole,
+          skills: profile.skills.slice(0, 12),
+          experienceYears: profile.experienceYears,
+        },
+        durationSec,
+        warningCounts,
+        answeredCount,
+        totalPlanned,
+        overallScore: overall,
+        overallOutOf10,
+        perQuestionAvgOutOf10: overallOutOf10,
+        questions: answered.map((item) => ({
+          question: item.text,
+          category: item.category,
+          answer: item.answer,
+          score: item.score,
+          scoreOutOf10: Math.max(0, Math.min(10, Math.round((item.score || 0) / 10))),
+          analysis: item.analysis,
+          whatWasMissing: item.whatWasMissing,
+          weaknesses: item.weaknesses,
+        })),
+      }),
+    );
+    const baseSummary =
+      answeredCount === 0
+        ? `No answers were submitted out of ${totalPlanned} planned questions.`
+        : `You answered ${answeredCount} of ${totalPlanned} questions. Overall score ${overallOutOf10}/10 (${overall}/100) is the average of your per-question scores.`;
+    const integrityNote =
+      (warningCounts.abuseWarnings || 0) > 0
+        ? ` Integrity: ${warningCounts.abuseWarnings} abuse warning(s) were recorded — recommendation cannot be positive.`
+        : '';
+    const recommendation = recFromScore(
+      overall,
+      fromAi?.recommendation,
+      answeredCount,
+      totalPlanned,
+      warningCounts,
+    );
+    const weaknesses = mergeIntegrityWeaknesses(
+      (fromAi?.weaknesses?.length ? fromAi.weaknesses : defaultWeaknesses(answered, answeredCount, totalPlanned)).slice(0, 6),
+      warningCounts,
+    );
+    const postInterviewSuggestions =
+      fromAi?.postInterviewSuggestions ||
+      defaultPostInterviewSuggestions(answered, profile, overall);
+
+    return {
+      overallScore: overall,
+      communication,
+      behaviour,
+      listening,
+      technicalKnowledge,
+      problemSolving,
+      roleReadiness,
+      relevance,
+      clarity,
+      confidence,
+      confidenceNote,
+      recommendation,
+      summary: fromAi?.summary ? `${baseSummary} ${fromAi.summary}${integrityNote}` : `${baseSummary}${integrityNote}`,
+      overallAnalysis:
+        fromAi?.overallAnalysis ||
+        `Average per-question quality is ${overallOutOf10}/10. Scores reflect demonstrated answer depth, not merely completing the interview.`,
+      strengths:
+        (warningCounts.abuseWarnings || 0) >= 2
+          ? []
+          : (fromAi?.strengths?.length ? fromAi.strengths : defaultStrengths(answered)).slice(0, 6),
+      weaknesses,
+      dos: (fromAi?.dos?.length ? fromAi.dos : DEFAULT_DOS).slice(0, 8),
+      donts: mergeIntegrityDonts(
+        (fromAi?.donts?.length ? fromAi.donts : DEFAULT_DONTS).slice(0, 8),
+        warningCounts,
+      ),
+      postInterviewSuggestions,
+      answeredCount,
+      totalPlanned,
+      integrity: warningCounts,
+      aiUnavailable: !fromAi || answered.some((item) => item.scoredWithoutAi),
+    };
+  }
+
+  private async askJson<T>(
+    system: string,
+    user: string,
+    task: 'INTERVIEW_EVALUATION' | 'INTERVIEW_QUESTION' = 'INTERVIEW_EVALUATION',
+  ): Promise<T | null> {
+    if (!this.aiGateway.isConfigured()) return null;
+    const res = await this.aiGateway.generate<T>({
+      task,
+      systemPrompt: system,
+      userPrompt: user.slice(0, 12000),
+      options: {
+        temperature: task === 'INTERVIEW_QUESTION' ? 0.55 : 0.35,
+      },
+    });
+    return res.data;
+  }
+}
+
+export function profileFromResume(content: ResumeContent, jobRole: string): InterviewProfile {
+  const projectBlob = [
+    ...(content.experiences || []).map((item) => [item.jobTitle, item.company, item.description].join(' ')),
+    ...(content.projects || []).map((item) => `${item.name} ${item.description || ''}`),
+    content.summary || '',
+  ].join(' ');
+  return {
+    fullName: content.fullName,
+    city: content.city,
+    skills: content.skills,
+    education: content.education.map((item) =>
+      [item.qualification, item.institution].filter(Boolean).join(' · '),
+    ),
+    experiences: [
+      ...content.experiences.map((item) =>
+        [item.jobTitle, item.company, item.description].filter(Boolean).join(' — '),
+      ),
+      ...(content.projects || []).map((item) => `Project: ${item.name}${item.description ? ` — ${item.description}` : ''}`),
+    ],
+    summary: [content.summary, content.certifications?.length ? `Certifications: ${content.certifications.join(', ')}` : '']
+      .filter(Boolean)
+      .join('\n'),
+    jobRole,
+    focusStacks: pickFocusStacks(content.skills || [], projectBlob),
+    experienceYears: Number((content as ResumeContent & { experienceYears?: number }).experienceYears) || 0,
+  };
+}
+
+function usesFixedIntro(interviewType: string) {
+  const kind = (interviewType || 'MIXED').toUpperCase();
+  return (
+    kind === 'ROLE' ||
+    kind === 'ROLE_BASED' ||
+    kind === 'BEHAVIOURAL' ||
+    kind === 'GENERIC' ||
+    kind === 'HR' ||
+    kind === 'MIXED'
+  );
+}
+
+function introQuestion(profile: InterviewProfile, interviewType: string): BuiltQuestion {
+  const kind = (interviewType || 'MIXED').toUpperCase();
+  const role = profile.jobRole?.trim() || 'this role';
+  if (kind === 'ROLE' || kind === 'ROLE_BASED') {
+    return {
+      text: `Tell me about yourself. Who are you, and walk me through your background as it relates to the ${role} role?`,
+      category: 'INTRO',
+      snippet: null,
+      thinkSeconds: 0,
+    };
+  }
+  return {
+    text: 'Tell me about yourself. Who are you, and walk me through your background?',
+    category: 'INTRO',
+    snippet: null,
+    thinkSeconds: 0,
+  };
+}
+
+function isPureIntroQuestion(text: string) {
+  return /^\s*tell me about yourself\b/i.test(text || '');
+}
+
+export function emergencyProfileQuestion(
+  profile: InterviewProfile,
+  interviewType: string,
+  asked: string[],
+): BuiltQuestion {
+  const kind = (interviewType || 'MIXED').toUpperCase();
+  const skill = profile.skills.find((item) => item.trim().length > 1) || profile.focusStacks[0] || 'your skills';
+  const project =
+    profile.experiences.find((item) => /^Project:/i.test(item))?.replace(/^Project:\s*/i, '').split('—')[0]?.trim() ||
+    '';
+  const job =
+    profile.experiences.find((item) => !/^Project:/i.test(item))?.split('—')[0]?.trim() || '';
+  const education = profile.education[0] || '';
+  const role = profile.jobRole || 'this role';
+
+  const candidates: BuiltQuestion[] = [
+    education
+      ? {
+          text: `Looking at your education (${education}), what did you learn that you can apply in a real ${role} role?`,
+          category: 'EDUCATION',
+          thinkSeconds: 0,
+        }
+      : null,
+    project
+      ? {
+          text: `Tell me about your project ${project}. What was your contribution, and which tools did you use?`,
+          category: 'PROJECT',
+          thinkSeconds: 0,
+          snippet: project,
+        }
+      : null,
+    job
+      ? {
+          text: `Walk me through your experience as ${job}. What were your main responsibilities?`,
+          category: 'EXPERIENCE',
+          thinkSeconds: 0,
+        }
+      : null,
+    {
+      text: `You listed ${skill} on your profile. In simple words, what is it and how have you used it?`,
+      category: 'TECHNICAL',
+      thinkSeconds: 0,
+    },
+    kind === 'ROLE' || kind === 'ROLE_BASED'
+      ? {
+          text: `Why are you interested in the ${role} path, based on your background so far?`,
+          category: 'ROLE',
+          thinkSeconds: 0,
+        }
+      : {
+          text: `Tell me about a challenge you faced while learning or building something related to ${skill}. How did you handle it?`,
+          category: 'BEHAVIOURAL',
+          thinkSeconds: 0,
+        },
+    {
+      text: `Which part of ${role} work do you already feel comfortable with, and which part would you still need to learn?`,
+      category: 'ROLE',
+      thinkSeconds: 0,
+    },
+    ...profile.skills
+      .map((item) => item.trim())
+      .filter((item) => item.length > 1 && item !== skill)
+      .slice(0, 10)
+      .map((item) => ({
+        text: `How have you used ${item} in practice, and what would you do differently next time?`,
+        category: 'TECHNICAL',
+        thinkSeconds: 0,
+      })),
+    {
+      text: `How do you prioritise your work when several ${role} tasks are due at the same time?`,
+      category: 'SCENARIO',
+      thinkSeconds: 0,
+    },
+    {
+      text: 'How do you check your own work for mistakes before you share it with others?',
+      category: 'BEHAVIOURAL',
+      thinkSeconds: 0,
+    },
+    {
+      text: 'Describe how you would learn a new tool or technology quickly if a project needed it.',
+      category: 'SCENARIO',
+      thinkSeconds: 0,
+    },
+    {
+      text: `Where would you like to grow over the next year as a ${role}, and how are you working towards it?`,
+      category: 'ROLE',
+      thinkSeconds: 0,
+    },
+  ].filter(Boolean) as BuiltQuestion[];
+
+  const seen = new Set(asked.map(normalizeQuestionText));
+  const unused = candidates.filter((item) => !seen.has(normalizeQuestionText(item.text)));
+  if (unused.length) return unused[asked.length % unused.length];
+  // Every template is used: a numbered wrap-up prompt is unique per position, so nothing repeats.
+  return {
+    text: `For question ${asked.length + 1}, is there anything about your background for the ${role} role that we have not covered yet?`,
+    category: 'GENERAL',
+    thinkSeconds: 0,
+  };
+}
+
+/** Nothing was answered, so there is nothing to evaluate: no AI call and no minimum scores. */
+export function zeroAnswerReport(
+  profile: InterviewProfile,
+  warningCounts: InterviewReport['integrity'],
+  totalPlanned: number,
+): InterviewReport {
+  const integrityNote =
+    (warningCounts.abuseWarnings || 0) > 0
+      ? ` Integrity: ${warningCounts.abuseWarnings} abuse warning(s) were recorded.`
+      : '';
+  return {
+    overallScore: 0,
+    communication: 0,
+    behaviour: 0,
+    listening: 0,
+    technicalKnowledge: null,
+    problemSolving: null,
+    roleReadiness: 0,
+    relevance: 0,
+    clarity: 0,
+    confidence: null,
+    confidenceNote: 'No answers were submitted, so confidence could not be measured.',
+    recommendation: recFromScore(0, undefined, 0, totalPlanned, warningCounts),
+    summary: `No answers were submitted out of ${totalPlanned} planned questions, so no skills could be evaluated.${integrityNote}`,
+    overallAnalysis:
+      'The interview ended before any question was answered. Scores are 0 because there was nothing to evaluate, not because of answer quality.',
+    strengths: [],
+    weaknesses: mergeIntegrityWeaknesses(
+      [`You answered 0 of ${totalPlanned} planned questions`, 'Complete at least a few questions to receive feedback'],
+      warningCounts,
+    ),
+    dos: DEFAULT_DOS.slice(0, 8),
+    donts: mergeIntegrityDonts(DEFAULT_DONTS.slice(0, 8), warningCounts),
+    postInterviewSuggestions: defaultPostInterviewSuggestions([], profile, 0),
+    answeredCount: 0,
+    totalPlanned,
+    integrity: warningCounts,
+  };
+}
+
+export function normalizeQuestionText(text: string) {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+export function coverageFocusForQuestion(
+  questionNumber: number,
+  interviewType: string,
+  profile: Pick<InterviewProfile, 'experiences' | 'jobRole'>,
+): { kind: FocusKind; text: string } {
+  const kind = (interviewType || 'MIXED').toUpperCase();
+  const hasProjects = profile.experiences.some((item) => /^Project:/i.test(item));
+  const hasJobs = profile.experiences.some((item) => !/^Project:/i.test(item));
+  const rotation: Array<{ kind: FocusKind; text: string }> = [
+    { kind: 'EDUCATION', text: 'education and academic or learning background from the full profile' },
+    hasProjects
+      ? { kind: 'PROJECT', text: 'a project from the profile (pick a different project/topic than prior questions)' }
+      : { kind: 'EXPERIENCE', text: 'a concrete experience or responsibility from the profile' },
+    hasJobs
+      ? { kind: 'EXPERIENCE', text: 'work or internship experience from the profile' }
+      : { kind: 'SKILL', text: 'skills listed on the profile (pick skills not already deeply covered)' },
+    {
+      kind: 'SKILL',
+      text: 'technical skills or tools from the profile (cover a different skill area than earlier questions)',
+    },
+    kind === 'ROLE' || kind === 'ROLE_BASED'
+      ? { kind: 'ROLE', text: `role readiness for ${profile.jobRole || 'this role'} using profile facts` }
+      : { kind: 'BEHAVIOURAL', text: 'behavioural situation using something real from the profile' },
+    {
+      kind: 'GENERAL',
+      text: 'another uncovered part of the profile: education, skills, project, experience, or soft skills',
+    },
+    { kind: 'SKILL', text: 'a scenario tied to the job role using profile skills — do not repeat earlier topics' },
+  ];
+  // With a fixed intro, question 1 is not generated and the rotation starts at question 2.
+  const offset = usesFixedIntro(interviewType) ? 2 : 1;
+  const index = Math.max(0, questionNumber - offset) % rotation.length;
+  return rotation[index];
+}
+
+function pickFocusStacks(skills: string[], projectText: string): string[] {
+  const primary = detectStacks(skills.join(' '));
+  const inProjects = detectStacks(projectText);
+  const overlap = primary.filter((item) => inProjects.includes(item));
+  const ordered = [
+    ...overlap,
+    ...inProjects.filter((item) => !overlap.includes(item)),
+    ...primary.filter((item) => !overlap.includes(item) && !inProjects.includes(item)),
+  ];
+  return [...new Set(ordered)].slice(0, 5);
+}
+
+function detectStacks(raw: string): string[] {
+  const text = ` ${raw.toLowerCase().replace(/[._]/g, ' ')} `;
+  return STACKS.filter((item) => item.keys.some((key) => text.includes(` ${key} `) || text.includes(key))).map((item) => item.id);
+}
+
+const STACKS = [
+  { id: 'JavaScript', keys: ['javascript', ' js ', 'es6', 'ecmascript'] },
+  { id: 'React.js', keys: ['react', 'reactjs'] },
+  { id: 'Node.js', keys: ['node', 'nodejs', 'express'] },
+  { id: 'SQL', keys: ['sql', 'mysql', 'postgres', 'postgresql', 'sqlite'] },
+  { id: 'HTML', keys: ['html', 'html5'] },
+  { id: 'CSS', keys: ['css', 'css3', 'tailwind', 'sass', 'scss'] },
+  { id: 'Java', keys: ['java', 'spring boot', 'spring'] },
+  { id: 'Python', keys: ['python', 'django', 'flask'] },
+  { id: 'TypeScript', keys: ['typescript'] },
+  { id: 'MongoDB', keys: ['mongodb', 'mongo'] },
+];
+
+function analyzeAudioOnlyAnswer(durationSec = 0) {
+  const spokeLongEnough = durationSec >= 12;
+  return {
+    analysis: spokeLongEnough
+      ? 'You submitted an audio answer without usable transcript text, so content quality could not be fully verified. Score reflects attempt length only — not demonstrated technical depth.'
+      : 'Your audio answer was too short to evaluate content quality.',
+    improvedAnswer: '',
+    strengths: spokeLongEnough ? ['Attempted a spoken answer'] : [],
+    weaknesses: spokeLongEnough
+      ? ['Content could not be verified from text — practice clearer speech for scoring']
+      : ['Answer was too short to evaluate'],
+    whatWasGood: spokeLongEnough ? ['Attempted a spoken answer'] : [],
+    whatWasMissing: ['Clear spoken content that can be evaluated against the question'],
+    improvementSuggestion:
+      'Speak for 45–90 seconds and cover the question’s key points with a concrete example.',
+    score: spokeLongEnough ? 35 : 25,
+  };
+}
+
+function localAnalyze(question: string, answer: string, profile: InterviewProfile) {
+  return localAnalyzeCategoryAware(question, answer, profile);
+}
+
+function improveLocal(answer: string, profile: InterviewProfile) {
+  return buildCategoryAwareImprovedAnswer(
+    'Tell me about yourself',
+    answer,
+    profile,
+    classifyQuestionType('Tell me about yourself'),
+    [],
+  );
+}
+
+/** Cap inflated scores for very short answers; never boost. */
+function calibrateScore<T extends { score: number }>(result: T, answerText = ''): T {
+  const score = result.score;
+  if (score <= 0) return result;
+  const words = answerText.trim().split(/\s+/).filter(Boolean).length;
+  let next = score;
+  if (words > 0 && words < 8) next = Math.min(next, 32);
+  else if (words > 0 && words < 15) next = Math.min(next, 48);
+  else if (words > 0 && words < 25) next = Math.min(next, 65);
+  return { ...result, score: clamp(next, 0, 100) };
+}
+
+function buildProperAnswerFromProfile(question: string, profile: InterviewProfile) {
+  return buildCategoryAwareImprovedAnswer(
+    question,
+    '',
+    profile,
+    classifyQuestionType(question),
+    evaluationCriteriaFor(classifyQuestionType(question)).slice(0, 3),
+  );
+}
+
+/**
+ * Keep AI improved answers when truthful; strip fabricated digit-heavy claims.
+ * Do NOT fall back to grammar-only polish — that caused identical "improved" answers.
+ */
+function sanitizeImprovedAnswer(
+  original: string,
+  improved: string,
+  profile: InterviewProfile,
+) {
+  const cleaned = (improved || '').trim();
+  if (!cleaned || isAudioPlaceholderAnswer(cleaned)) return '';
+  if (isAudioPlaceholderAnswer(original)) return cleaned;
+
+  const allowed = `${original} ${profile.fullName} ${profile.skills.join(' ')} ${profile.experiences.join(' ')} ${profile.education.join(' ')} ${profile.summary} ${profile.jobRole}`.toLowerCase();
+  // Reject brand-new large numbers that aren't in candidate data (likely fabricated metrics).
+  if (/\b\d{2,}\b/.test(cleaned) && !/\b\d{2,}\b/.test(original) && !/\b\d{2,}\b/.test(allowed)) {
+    return '';
+  }
+  return cleaned;
+}
+
+function normalizeQuestionType(raw?: string): InterviewQuestionType | null {
+  if (!raw) return null;
+  const key = raw.trim().toUpperCase().replace(/\s+/g, '_');
+  const allowed: InterviewQuestionType[] = [
+    'INTRO',
+    'PROJECT',
+    'TECHNICAL',
+    'CODING',
+    'BEHAVIOURAL',
+    'SITUATIONAL',
+    'EXPERIENCE',
+    'SYSTEM_DESIGN',
+    'HR',
+    'FOLLOW_UP',
+    'GENERAL',
+  ];
+  if (allowed.includes(key as InterviewQuestionType)) return key as InterviewQuestionType;
+  if (/TELL_ME|ABOUT_YOURSELF|INTRODUCTION/.test(key)) return 'INTRO';
+  if (/BEHAVIOR/.test(key)) return 'BEHAVIOURAL';
+  return null;
+}
+
+function sanitizeImproved(
+  original: string,
+  improved: string,
+  profile: InterviewProfile,
+  _allowProfileSample = false,
+) {
+  return sanitizeImprovedAnswer(original, improved, profile);
+}
+
+function scoreCommunication(questions: LiveInterviewQuestion[]) {
+  const textAnswers = questions
+    .map((item) => evaluableTextAnswer(item))
+    .filter(Boolean);
+  if (!textAnswers.length) return 4;
+  const avgWords =
+    textAnswers.reduce((sum, item) => sum + item.split(/\s+/).length, 0) / textAnswers.length;
+  const avgScore =
+    questions.reduce((sum, item) => sum + (item.score || 0), 0) / Math.max(questions.length, 1);
+  // Blend content quality with clarity/length — do not reward length alone.
+  const lengthPart = clamp(Math.round(2 + Math.min(4, avgWords / 25)), 2, 6);
+  const qualityPart = clamp(Math.round(avgScore / 20), 1, 5);
+  return clamp(lengthPart + qualityPart - 1, 1, 10);
+}
+
+function scoreByCategories(questions: LiveInterviewQuestion[], pattern: RegExp): number | null {
+  const matched = questions.filter(
+    (item) => item.score != null && pattern.test(item.category || ''),
+  );
+  if (matched.length < 1) return null;
+  const avg =
+    matched.reduce((sum, item) => sum + (item.score || 0), 0) / matched.length;
+  return clamp(Math.round(avg / 10), 1, 10);
+}
+
+function scoreRoleReadiness(
+  questions: LiveInterviewQuestion[],
+  communication: number,
+  technical: number | null,
+  overall: number,
+) {
+  const roleQs = questions.filter((item) =>
+    /ROLE|INTRO|EXPERIENCE|BEHAVIOURAL/i.test(item.category || ''),
+  );
+  const roleAvg = roleQs.length
+    ? roleQs.reduce((sum, item) => sum + (item.score || 0), 0) / roleQs.length / 10
+    : overall / 10;
+  const tech = technical ?? Math.round(overall / 12);
+  return clamp(Math.round((roleAvg + communication + tech) / 3), 1, 10);
+}
+
+/** Per-question answer quality (AI or rubric) blended with how many answers use the question's key terms. */
+export function scoreRelevance(questions: LiveInterviewQuestion[]) {
+  if (!questions.length) return 0;
+  const avgScore = questions.reduce((sum, item) => sum + (item.score || 0), 0) / questions.length;
+  const onTopic = questions.filter((item) => overlap(item.answer || '', item.text) >= 1).length / questions.length;
+  return clamp((avgScore / 10) * 0.7 + onTopic * 10 * 0.3, 1, 10);
+}
+
+const FILLER_RE = /\b(um+|uh+|like|basically|actually|you know|kind of|sort of)\b/gi;
+
+/** Sentence length, filler words and answer completeness of the typed/transcribed answers. */
+export function scoreClarity(questions: LiveInterviewQuestion[]) {
+  const texts = questions.map((item) => (item.answer || '').trim()).filter(Boolean);
+  if (!texts.length) return 0;
+  const perAnswer = texts.map((text) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    const sentences = text.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
+    const avgSentence = words.length / Math.max(sentences.length, 1);
+    const fillers = (text.match(FILLER_RE) || []).length / Math.max(words.length, 1);
+    let score = 10;
+    if (words.length < 8) score -= 5;
+    else if (words.length < 25) score -= 2;
+    if (avgSentence > 35) score -= 3;
+    else if (avgSentence > 25) score -= 1;
+    if (fillers > 0.08) score -= 3;
+    else if (fillers > 0.03) score -= 1;
+    return score;
+  });
+  return clamp(perAnswer.reduce((a, b) => a + b, 0) / perAnswer.length, 1, 10);
+}
+
+function scoreConfidenceFromAudio(questions: LiveInterviewQuestion[]) {
+  const audio = questions.filter((item) => item.answerMode === 'AUDIO');
+  if (!audio.length) return null;
+  const avgDur =
+    audio.reduce((sum, item) => sum + (item.answerDurationSec || 0), 0) / audio.length;
+  const avgScore = audio.reduce((sum, item) => sum + (item.score || 0), 0) / audio.length;
+  // Duration + content quality proxy only — not a true vocal confidence metric.
+  const durationPart = avgDur >= 45 ? 4 : avgDur >= 20 ? 3 : 2;
+  const qualityPart = clamp(Math.round(avgScore / 25), 1, 4);
+  return clamp(durationPart + qualityPart, 1, 8);
+}
+
+function scoreBehaviour(questions: LiveInterviewQuestion[], integrity?: InterviewReport['integrity']) {
+  if (!questions.length) return 2;
+
+  const abuseInAnswers = questions.filter((item) => detectConduct(item.answer || '') === 'abuse').length;
+  const nonsenseInAnswers = questions.filter((item) => detectConduct(item.answer || '') === 'nonsense').length;
+  const abuse = Math.max(integrity?.abuseWarnings || 0, abuseInAnswers);
+  const nonsense = Math.max(integrity?.nonsenseWarnings || 0, nonsenseInAnswers);
+  const faceMissing = integrity?.faceMissing || 0;
+  const tabSwitches = integrity?.tabSwitches || 0;
+  const multipleFaces = integrity?.multipleFaces || 0;
+
+  if (abuse >= 3) return 1;
+  if (abuse >= 2) return 2;
+  if (abuse >= 1) return 3;
+
+  const rude = questions.some((item) => /stupid|hate|idk lol|whatever|shut up/i.test(item.answer || ''));
+  const complete = questions.filter((item) => (item.answer || '').split(/\s+/).filter(Boolean).length >= 25).length / questions.length;
+  let base = clamp(Math.round((rude ? 3 : 6) + complete * 3), 1, 10);
+  base = clamp(
+    base - nonsense * 2 - faceMissing * 2 - tabSwitches * 1 - multipleFaces * 1,
+    1,
+    10,
+  );
+  return base;
+}
+
+function scoreListening(questions: LiveInterviewQuestion[]) {
+  if (!questions.length) return 2;
+  const hits = questions.filter((item) => overlap(item.answer || '', item.text) >= 1).length;
+  return clamp(Math.round(3 + (hits / questions.length) * 7), 1, 10);
+}
+
+function overlap(a: string, b: string) {
+  const stop = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'for', 'you', 'your', 'me', 'i', 'with']);
+  const words = b
+    .toLowerCase()
+    .split(/[^a-z0-9+#.]+/)
+    .filter((item) => item.length > 3 && !stop.has(item));
+  return words.filter((item) => a.toLowerCase().includes(item)).length;
+}
+
+function recFromScore(
+  score: number,
+  raw?: string,
+  answeredCount = 15,
+  totalPlanned = 15,
+  integrity?: InterviewReport['integrity'],
+): InterviewReport['recommendation'] {
+  const allowed = [
+    'Strongly Recommended',
+    'Recommended',
+    'Needs Improvement',
+    'Significant Improvement Needed',
+    'Not Recommended',
+    'Not Ready',
+  ] as const;
+  let pick: InterviewReport['recommendation'] =
+    score >= 85
+      ? 'Strongly Recommended'
+      : score >= 70
+        ? 'Recommended'
+        : score >= 55
+          ? 'Needs Improvement'
+          : score >= 40
+            ? 'Significant Improvement Needed'
+            : 'Not Recommended';
+  if (answeredCount < Math.ceil(totalPlanned * 0.4)) pick = 'Not Recommended';
+  else if (answeredCount < Math.ceil(totalPlanned * 0.6) && pick === 'Strongly Recommended') {
+    pick = 'Recommended';
+  }
+  if ((integrity?.abuseWarnings || 0) >= 1) pick = 'Not Ready';
+  if ((integrity?.faceMissing || 0) >= 3 && pick === 'Strongly Recommended') {
+    pick = 'Needs Improvement';
+  }
+  if (raw && (allowed as readonly string[]).includes(raw)) {
+    if ((integrity?.abuseWarnings || 0) >= 1) return 'Not Ready';
+    // Never accept a model recommendation higher than the score band allows.
+    const model = raw as InterviewReport['recommendation'];
+    const rank = (r: InterviewReport['recommendation']) =>
+      r === 'Strongly Recommended'
+        ? 5
+        : r === 'Recommended'
+          ? 4
+          : r === 'Needs Improvement'
+            ? 3
+            : r === 'Significant Improvement Needed'
+              ? 2
+              : 1;
+    return rank(model) <= rank(pick) ? model : pick;
+  }
+  return pick;
+}
+
+function mergeIntegrityWeaknesses(base: string[], integrity?: InterviewReport['integrity']) {
+  const extra: string[] = [];
+  if ((integrity?.abuseWarnings || 0) > 0) {
+    extra.push('Used abusive or vulgar language during the interview');
+  }
+  if ((integrity?.faceMissing || 0) > 0) {
+    extra.push('Left the camera / face was not visible while answering');
+  }
+  if ((integrity?.tabSwitches || 0) > 0) {
+    extra.push('Switched away from the interview tab');
+  }
+  return [...extra, ...base.filter((item) => !extra.includes(item))].slice(0, 6);
+}
+
+function mergeIntegrityDonts(base: string[], integrity?: InterviewReport['integrity']) {
+  const extra: string[] = [];
+  if ((integrity?.abuseWarnings || 0) > 0) extra.push('Never use abusive or vulgar language');
+  if ((integrity?.faceMissing || 0) > 0) extra.push('Stay on camera with your face clearly visible');
+  return [...extra, ...base.filter((item) => !extra.includes(item))].slice(0, 8);
+}
+
+function defaultStrengths(questions: LiveInterviewQuestion[]) {
+  const strong = questions.filter((item) => (item.score || 0) >= 70);
+  if (strong.length) {
+    return strong
+      .slice(0, 3)
+      .map((item) => `Answered with useful detail on: ${item.text.slice(0, 60)}${item.text.length > 60 ? '…' : ''}`);
+  }
+  const decent = questions.filter((item) => (item.score || 0) >= 50);
+  if (decent.length) {
+    return ['Showed willingness to answer each question', 'Stayed on topic for at least some responses'];
+  }
+  return questions.length
+    ? ['Attempted the interview questions']
+    : ['Started the interview'];
+}
+
+function defaultWeaknesses(questions: LiveInterviewQuestion[], answeredCount = 0, totalPlanned = 15) {
+  const items: string[] = [];
+  if (answeredCount < totalPlanned) {
+    items.push(`You answered ${answeredCount} of ${totalPlanned} planned questions`);
+  }
+  const shortCount = questions.filter((item) => (item.answer || '').split(/\s+/).filter(Boolean).length < 20).length;
+  if (shortCount > 0) {
+    items.push(
+      `${shortCount} answer${shortCount === 1 ? ' was' : 's were'} too short — cover key points with concrete examples`,
+    );
+  } else {
+    items.push('Project/technical answers need clearer personal contribution and tools used');
+  }
+  items.push('Avoid generic statements; explain why your experience matches the question');
+  return items;
+}
+
+function defaultPostInterviewSuggestions(
+  questions: LiveInterviewQuestion[],
+  profile: InterviewProfile,
+  overall: number,
+): NonNullable<InterviewReport['postInterviewSuggestions']> {
+  const shortHeavy = questions.filter((item) => (item.answer || '').split(/\s+/).filter(Boolean).length < 20).length;
+  const role = profile.jobRole || 'your target role';
+  return {
+    communication: [
+      shortHeavy
+        ? 'Your biggest gap was answer completeness. Aim for 45–90 seconds / 4–6 sentences per question.'
+        : 'Tighten openings: state the direct answer in the first sentence, then support with an example.',
+      'Practice aloud without reading a script so delivery stays natural.',
+    ],
+    technical: [
+      `Revise fundamentals for ${role}: definitions, how it works, one practical example, and where you used it.`,
+      'When asked about a tool/language, explain usage on a real task — not only that you “used it for programming”.',
+    ],
+    answerStructure: [
+      'Behavioral/project: Situation → Task → Action (your contribution) → Result.',
+      'Technical: Definition → How it works → Example → Practical usage.',
+      'Project: Purpose → Your contribution → Technologies → Implementation → Challenge → Result.',
+    ],
+    topicsToRevise:
+      profile.skills.slice(0, 5).length > 0
+        ? profile.skills.slice(0, 5).map((skill) => `Be ready to explain ${skill} with a real example from your work/projects.`)
+        : ['Core concepts for your target role', 'One project end-to-end narrative', 'Basics of APIs, databases, and debugging'],
+    practicePlan: [
+      overall < 55
+        ? 'Re-do this mock focusing on longer answers for the first 3 question types you scored lowest on.'
+        : 'Do one timed mock weekly and rewrite each weak answer using STAR before the next attempt.',
+      'Record yourself once, then check: Did I answer every part of the question? Did I give an example?',
+    ],
+  };
+}
+
+function formatDuration(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m} min ${s} sec`;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+const DEFAULT_DOS = [
+  'Give concise, structured answers.',
+  'Use real examples from your experience.',
+  'Explain your contribution, not only the team.',
+  'Listen to the full question before answering.',
+  'Be honest about what you have not done yet.',
+];
+
+const DEFAULT_DONTS = [
+  'Do not invent companies, tools, or achievements.',
+  'Do not switch tabs during a live interview.',
+  'Do not let someone else answer for you.',
+  'Do not give one-line answers when an example is needed.',
+  'Do not memorize a script word-for-word.',
+];
