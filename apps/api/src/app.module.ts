@@ -26,6 +26,7 @@ import { PiiCryptoModule } from './common/crypto/pii-crypto.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
+import { RetentionModule } from './retention/retention.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
 import { PlatformController } from './platform/platform.controller';
@@ -67,6 +68,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     WhatsAppModule,
     NotificationsModule,
     TestimonialsModule,
+    RetentionModule,
   ],
   controllers: [HealthController, PlatformController],
   providers: [
