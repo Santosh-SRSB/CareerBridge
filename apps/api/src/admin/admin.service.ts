@@ -95,6 +95,9 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   'notifications.enabled': 'true',
   'notifications.remindersEnabled': 'true',
   'notifications.templatesEnabled': 'true',
+  'system.resumeRetentionDays': '365',
+  'system.whatsappRetentionDays': '90',
+  'system.aiInteractionRetentionDays': '90',
   'system.auditRetentionDays': '365',
 };
 

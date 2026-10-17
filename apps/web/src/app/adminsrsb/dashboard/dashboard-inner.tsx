@@ -170,7 +170,12 @@ const SETTINGS_SCHEMA: Array<{
   {
     group: 'system',
     title: 'System',
-    fields: [{ key: 'system.auditRetentionDays', label: 'Audit retention (days)', kind: 'text' }],
+    fields: [
+      { key: 'system.resumeRetentionDays', label: 'Resume retention (days)', kind: 'text' },
+      { key: 'system.whatsappRetentionDays', label: 'WhatsApp retention (days)', kind: 'text' },
+      { key: 'system.aiInteractionRetentionDays', label: 'AI interaction retention (days)', kind: 'text' },
+      { key: 'system.auditRetentionDays', label: 'Audit retention (days)', kind: 'text' },
+    ],
   },
 ];
 
