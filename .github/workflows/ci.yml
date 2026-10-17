@@ -4,7 +4,7 @@ name: CI
 # Also called by deploy-dev.yml so nothing is deployed without passing these checks.
 on:
   pull_request:
-    branches: [dev]
+    branches: [dev, main]
   workflow_call:
 
 permissions:
