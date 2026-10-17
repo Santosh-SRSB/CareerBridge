@@ -15,6 +15,30 @@ type ServiceAccountShape = {
   private_key?: string;
 };
 
+/**
+ * Project ID passed to Firebase Admin (Auth / FCM).
+ * Prefer FIREBASE_PROJECT_ID so the Auth project can differ from GCP_PROJECT_ID
+ * (e.g. PROD Cloud Run in careerbridgeprod verifying tokens from careerbridge-f7b72).
+ * Falls back to GCP_PROJECT_ID / GCLOUD_* when FIREBASE_PROJECT_ID is unset (DEV single-project).
+ */
+export function resolveFirebaseAdminProjectId(env: {
+  FIREBASE_PROJECT_ID?: string;
+  GCP_PROJECT_ID?: string;
+  GCLOUD_PROJECT?: string;
+  GOOGLE_CLOUD_PROJECT?: string;
+}): string | undefined {
+  const pick = (value?: string) => {
+    const trimmed = (value || '').trim();
+    return trimmed || undefined;
+  };
+  return (
+    pick(env.FIREBASE_PROJECT_ID) ||
+    pick(env.GCP_PROJECT_ID) ||
+    pick(env.GCLOUD_PROJECT) ||
+    pick(env.GOOGLE_CLOUD_PROJECT)
+  );
+}
+
 @Injectable()
 export class FirebaseService {
   private readonly logger = new Logger(FirebaseService.name);
@@ -45,18 +69,19 @@ export class FirebaseService {
     }
 
     // Cloud Run / GCE: prefer Application Default Credentials (runtime SA).
-    const gcpProject =
-      this.config.get<string>('GCP_PROJECT_ID') ||
-      this.config.get<string>('FIREBASE_PROJECT_ID') ||
-      process.env.GCLOUD_PROJECT ||
-      process.env.GOOGLE_CLOUD_PROJECT;
+    const firebaseProject = resolveFirebaseAdminProjectId({
+      FIREBASE_PROJECT_ID: this.config.get<string>('FIREBASE_PROJECT_ID'),
+      GCP_PROJECT_ID: this.config.get<string>('GCP_PROJECT_ID'),
+      GCLOUD_PROJECT: process.env.GCLOUD_PROJECT,
+      GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT,
+    });
     try {
       this.app = admin.initializeApp({
         credential: admin.credential.applicationDefault(),
-        ...(gcpProject ? { projectId: gcpProject } : {}),
+        ...(firebaseProject ? { projectId: firebaseProject } : {}),
       });
       this.logger.log(
-        `Firebase Admin initialized with Application Default Credentials${gcpProject ? ` (${gcpProject})` : ''}`,
+        `Firebase Admin initialized with Application Default Credentials${firebaseProject ? ` (${firebaseProject})` : ''}`,
       );
     } catch (err) {
       this.app = null;
