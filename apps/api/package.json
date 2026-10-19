@@ -9,7 +9,7 @@
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:push": "prisma db push --schema prisma/schema.prisma",
-    "test:gst": "node -r ts-node/register/transpile-only --test src/gst/gst.unit.test.ts",
+    "test:gst": "node -r ts-node/register/transpile-only --test src/gst/gst.unit.test.ts src/gst/gstinapi-fallback.unit.test.ts src/gst/gst-health-secrets.unit.test.ts",
     "test:chunking": "node -r ts-node/register/transpile-only --test src/ai/chunking/resume-chunking.test.ts",
     "test:rag": "node -r ts-node/register/transpile-only --test src/ai/rag-retrieval.unit.test.ts src/ai/chunking/resume-chunking.test.ts",
     "test:gst:integration": "node -r ts-node/register/transpile-only --test src/gst/gst.integration.test.ts",

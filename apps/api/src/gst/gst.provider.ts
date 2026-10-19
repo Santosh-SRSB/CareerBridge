@@ -47,7 +47,7 @@ export class IrisIrpGstProvider {
     const cfg = this.gstConfig.get();
     const started = Date.now();
 
-    if (cfg.gstinApiKey) {
+    if (cfg.gstinApiKey || cfg.gstinApiFallbackKey) {
       return this.gstinApiLookup(gstin, cfg, started);
     }
 
@@ -117,6 +117,61 @@ export class IrisIrpGstProvider {
     cfg: GstRuntimeConfig,
     started: number,
   ): Promise<GstProviderLookupResult> {
+    const keys = [cfg.gstinApiKey, cfg.gstinApiFallbackKey]
+      .map((k) => (k || '').trim())
+      .filter(Boolean)
+      .filter((k, i, all) => all.indexOf(k) === i);
+
+    if (!keys.length) {
+      throw new GstConfigError('GSTINAPI_KEY is not configured.');
+    }
+
+    let lastError: unknown;
+    for (let i = 0; i < keys.length; i++) {
+      const keyLabel = i === 0 ? 'primary' : 'fallback';
+      try {
+        const result = await this.gstinApiLookupWithKey(gstin, cfg, started, keys[i]!);
+        if (i > 0) {
+          this.logger.warn(
+            `gstinapi.in primary key failed; ${keyLabel} key succeeded for ${maskGstin(gstin)}.`,
+          );
+        }
+        return result;
+      } catch (err) {
+        lastError = err;
+        const hasNext = i < keys.length - 1;
+        if (!hasNext || !this.shouldFallbackGstinApiKey(err)) {
+          throw err;
+        }
+        const detail =
+          err instanceof GstProviderError
+            ? `http=${err.httpStatus ?? 'ERR'}`
+            : err instanceof Error
+              ? err.name
+              : 'unknown';
+        this.logger.warn(
+          `gstinapi.in ${keyLabel} key failed (${detail}); trying fallback key for ${maskGstin(gstin)}.`,
+        );
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new GstProviderError('gstinapi.in request failed.', 502, true);
+  }
+
+  /** Retry with the fallback key on provider outages / key rejection, not on valid NOT_ACTIVE answers. */
+  private shouldFallbackGstinApiKey(err: unknown): boolean {
+    if (!(err instanceof GstProviderError)) return true;
+    if (err.retryable) return true;
+    return err.httpStatus === 401 || err.httpStatus === 403;
+  }
+
+  private async gstinApiLookupWithKey(
+    gstin: string,
+    cfg: GstRuntimeConfig,
+    started: number,
+    apiKey: string,
+  ): Promise<GstProviderLookupResult> {
     const url = `https://www.gstinapi.in/v1/gstin/${encodeURIComponent(gstin)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
@@ -125,7 +180,7 @@ export class IrisIrpGstProvider {
         method: 'GET',
         headers: {
           Accept: 'application/json',
-          'x-api-key': cfg.gstinApiKey,
+          'x-api-key': apiKey,
         },
         signal: controller.signal,
       });
@@ -145,7 +200,9 @@ export class IrisIrpGstProvider {
       }
 
       const data = unwrapGstPayload(json);
-      const found = json.success === true && Boolean(data && (data.gstin || data.status || data.trade_name || data.legal_name));
+      const found =
+        json.success === true &&
+        Boolean(data && (data.gstin || data.status || data.trade_name || data.legal_name));
       if (!found || res.status === 404) {
         return {
           status: 'NOT_ACTIVE',
