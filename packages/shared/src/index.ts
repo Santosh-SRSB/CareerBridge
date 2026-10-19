@@ -22,6 +22,7 @@ export * from './employer-plan';
 export * from './company-profile';
 export * from './resume-summary';
 export * from './job-roles';
+export * from './job-categories-and-skills';
 export * from './time-slots';
 export * from './employability';
 export * from './catalog';

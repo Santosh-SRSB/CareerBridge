@@ -1,3 +1,5 @@
+import { MASTER_SKILLS } from '@careerbridge/shared';
+
 /** Curated technology & professional skills for searchable combobox */
 export const TECHNOLOGY_SKILLS = [
   // Programming
@@ -160,6 +162,7 @@ export const ALL_SKILL_OPTIONS = Array.from(
     ...TECHNOLOGY_SKILLS,
     ...SUGGESTED_SKILL_POOL,
     ...Object.values(DOMAIN_SKILL_CATALOG).flat(),
+    ...MASTER_SKILLS,
   ]),
 ).sort((a, b) => a.localeCompare(b));
 

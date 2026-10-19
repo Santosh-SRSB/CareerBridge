@@ -1,8 +1,9 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { MASTER_SKILLS } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { hashPassword, hashPlatformPassword } from '../auth/password.util';
 
-const SKILLS = [
+const BASE_SKILLS: Array<[string, string]> = [
   ['Customer Service', 'Service Industry'],
   ['Communication', 'Service Industry'],
   ['Complaint Handling', 'Service Industry'],
@@ -14,6 +15,43 @@ const SKILLS = [
   ['Data Entry', 'Office'],
   ['Sales', 'Sales'],
 ];
+
+function skillCategory(name: string): string {
+  const blob = name.toLowerCase();
+  if (/\b(recruit|talent|hr|payroll|onboarding)\b/.test(blob)) return 'HR';
+  if (/\b(sales|crm|negotiation|lead)\b/.test(blob)) return 'Sales';
+  if (/\b(market|seo|content|brand|ads)\b/.test(blob)) return 'Marketing';
+  if (/\b(account|finance|tax|gst|tally|budget)\b/.test(blob)) return 'Finance';
+  if (/\b(excel|word|powerpoint|office|data entry)\b/.test(blob)) return 'Office';
+  if (/\b(retail|pos|inventory|merchandis)\b/.test(blob)) return 'Retail';
+  if (/\b(customer|communication|complaint)\b/.test(blob)) return 'Service Industry';
+  if (
+    /\b(java|python|javascript|react|sql|aws|docker|kubernetes|git|api|test|qa|devops|cloud|data|ml|ai)\b/.test(
+      blob,
+    )
+  ) {
+    return 'IT';
+  }
+  return 'Professional';
+}
+
+const SKILLS: Array<[string, string]> = (() => {
+  const seen = new Set<string>();
+  const out: Array<[string, string]> = [];
+  for (const [name, category] of BASE_SKILLS) {
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push([name, category]);
+  }
+  for (const name of MASTER_SKILLS) {
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push([name, skillCategory(name)]);
+  }
+  return out;
+})();
 
 const SRSB_ADMIN_EMAIL = (process.env.SRSB_ADMIN_EMAIL || 'srsbhr25@gmail.com').trim().toLowerCase();
 const SRSB_ADMIN_PASSWORD = process.env.SRSB_ADMIN_PASSWORD || 'srsb@suresh25';
