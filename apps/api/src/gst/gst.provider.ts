@@ -117,30 +117,18 @@ export class IrisIrpGstProvider {
     cfg: GstRuntimeConfig,
     started: number,
   ): Promise<GstProviderLookupResult> {
-    const keys = [cfg.gstinApiKey, cfg.gstinApiFallbackKey]
-      .map((k) => (k || '').trim())
-      .filter(Boolean)
-      .filter((k, i, all) => all.indexOf(k) === i);
+    const primary = (cfg.gstinApiKey || '').trim();
+    const appyflowKey = (cfg.gstinApiFallbackKey || '').trim();
 
-    if (!keys.length) {
+    if (!primary && !appyflowKey) {
       throw new GstConfigError('GSTINAPI_KEY is not configured.');
     }
 
-    let lastError: unknown;
-    for (let i = 0; i < keys.length; i++) {
-      const keyLabel = i === 0 ? 'primary' : 'fallback';
+    if (primary) {
       try {
-        const result = await this.gstinApiLookupWithKey(gstin, cfg, started, keys[i]!);
-        if (i > 0) {
-          this.logger.warn(
-            `gstinapi.in primary key failed; ${keyLabel} key succeeded for ${maskGstin(gstin)}.`,
-          );
-        }
-        return result;
+        return await this.gstinApiLookupWithKey(gstin, cfg, started, primary);
       } catch (err) {
-        lastError = err;
-        const hasNext = i < keys.length - 1;
-        if (!hasNext || !this.shouldFallbackGstinApiKey(err)) {
+        if (!appyflowKey || !this.shouldFallbackGstinApiKey(err)) {
           throw err;
         }
         const detail =
@@ -150,16 +138,19 @@ export class IrisIrpGstProvider {
               ? err.name
               : 'unknown';
         this.logger.warn(
-          `gstinapi.in ${keyLabel} key failed (${detail}); trying fallback key for ${maskGstin(gstin)}.`,
+          `gstinapi.in primary failed (${detail}); trying AppyFlow fallback for ${maskGstin(gstin)}.`,
         );
       }
     }
-    throw lastError instanceof Error
-      ? lastError
-      : new GstProviderError('gstinapi.in request failed.', 502, true);
+
+    const result = await this.appyflowLookup(gstin, cfg, started, appyflowKey);
+    if (primary) {
+      this.logger.warn(`AppyFlow fallback succeeded for ${maskGstin(gstin)}.`);
+    }
+    return result;
   }
 
-  /** Retry with the fallback key on provider outages / key rejection, not on valid NOT_ACTIVE answers. */
+  /** Use AppyFlow on gstinapi.in outages / key rejection, not on valid NOT_ACTIVE answers. */
   private shouldFallbackGstinApiKey(err: unknown): boolean {
     if (!(err instanceof GstProviderError)) return true;
     if (err.retryable) return true;
@@ -222,6 +213,92 @@ export class IrisIrpGstProvider {
       if (err instanceof GstProviderError) throw err;
       if (err instanceof Error && err.name === 'AbortError') {
         throw new GstProviderError('gstinapi.in request timed out.', 408, true);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * AppyFlow GST Verify — https://appyflow.in/api/verifyGST
+   * Query: gstNo + key_secret (same secret stored as GSTINAPI_FALLBACK_KEY).
+   */
+  private async appyflowLookup(
+    gstin: string,
+    cfg: GstRuntimeConfig,
+    started: number,
+    keySecret: string,
+  ): Promise<GstProviderLookupResult> {
+    const url = new URL('https://appyflow.in/api/verifyGST');
+    url.searchParams.set('gstNo', gstin);
+    url.searchParams.set('key_secret', keySecret);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
+    try {
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      let json: Record<string, unknown> = {};
+      try {
+        json = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      } catch {
+        throw new GstProviderError('AppyFlow returned a non-JSON response.', 502, true);
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        throw new GstProviderError('AppyFlow rejected the API key.', res.status, false);
+      }
+      if (res.status === 429 || res.status >= 500) {
+        throw new GstProviderError(`AppyFlow returned ${res.status}.`, res.status, true);
+      }
+
+      if (json.error === true) {
+        const msg = String(json.message || 'AppyFlow verification failed.');
+        // Credit / auth style failures should surface as unavailable, not NOT_ACTIVE.
+        if (/credit|wallet|key_secret|unauthor|invalid key|quota/i.test(msg)) {
+          throw new GstProviderError(msg, 502, true);
+        }
+        return {
+          status: 'NOT_ACTIVE',
+          tradeName: null,
+          responseCode: 'APPYFLOW_ERR',
+          durationMs: Date.now() - started,
+        };
+      }
+
+      const taxpayer = (json.taxpayerInfo || {}) as Record<string, unknown>;
+      const sts = taxpayer.sts ?? taxpayer.status;
+      if (!sts && !taxpayer.gstin && !taxpayer.tradeNam) {
+        return {
+          status: 'NOT_ACTIVE',
+          tradeName: null,
+          responseCode: String(res.status),
+          durationMs: Date.now() - started,
+        };
+      }
+
+      const tradeName =
+        typeof taxpayer.tradeNam === 'string' && taxpayer.tradeNam.trim()
+          ? taxpayer.tradeNam.trim()
+          : typeof taxpayer.lgnm === 'string' && taxpayer.lgnm.trim()
+            ? taxpayer.lgnm.trim()
+            : null;
+
+      return {
+        status: normalizeGstStatus(sts),
+        tradeName,
+        responseCode: String(res.status),
+        durationMs: Date.now() - started,
+      };
+    } catch (err) {
+      if (err instanceof GstProviderError) throw err;
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new GstProviderError('AppyFlow request timed out.', 408, true);
       }
       throw err;
     } finally {
