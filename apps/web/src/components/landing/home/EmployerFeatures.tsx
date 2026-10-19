@@ -104,13 +104,13 @@ function MatchWindow() {
   return (
     <>
       <MockHead title="Top matches" badge="12 CANDIDATES" />
-      <PersonRow initials="AR" name="Ananya Rao" role="Customer Success · 3 yrs" at={0.05}>
+      <PersonRow initials="MR" name="Mohan Reddy" role="Customer Success · 3 yrs" at={0.05}>
         <MatchMeter value={94} />
       </PersonRow>
-      <PersonRow initials="AM" name="Arjun Mehta" role="Support Lead · 4 yrs" at={0.2}>
+      <PersonRow initials="HS" name="Harsh Sinha" role="Support Lead · 4 yrs" at={0.2}>
         <MatchMeter value={89} />
       </PersonRow>
-      <PersonRow initials="PS" name="Priya Sharma" role="Customer Service · 2 yrs" at={0.35}>
+      <PersonRow initials="PY" name="Priya Yadav" role="Customer Service · 2 yrs" at={0.35}>
         <MatchMeter value={83} />
       </PersonRow>
       <div className="hl-mock__tip">Ranked by skills, experience and role fit</div>
@@ -124,8 +124,8 @@ function ShortlistWindow() {
     <>
       <MockHead title="Shortlist" badge="3 OF 12" />
       <PersonRow
-        initials="AR"
-        name="Ananya Rao"
+        initials="MR"
+        name="Mohan Reddy"
         role="Customer Success"
         insight="Strong CRM and communication"
         at={0.05}
@@ -133,8 +133,8 @@ function ShortlistWindow() {
         {tag}
       </PersonRow>
       <PersonRow
-        initials="AM"
-        name="Arjun Mehta"
+        initials="HS"
+        name="Harsh Sinha"
         role="Support Lead"
         insight="Led a team of 6"
         at={0.2}
@@ -142,8 +142,8 @@ function ShortlistWindow() {
         {tag}
       </PersonRow>
       <PersonRow
-        initials="PS"
-        name="Priya Sharma"
+        initials="PY"
+        name="Priya Yadav"
         role="Customer Service"
         insight="Verified skills match"
         at={0.35}
@@ -168,10 +168,10 @@ function InterviewWindow() {
         ))}
       </div>
       <div className="hl-win__slot is-active" style={delay(0.1)}>
-        <b>11:00 AM</b> · Interview · Ananya Rao
+        <b>11:00 AM</b> · Interview · Mohan Reddy
       </div>
       <div className="hl-win__slot" style={delay(0.25)}>
-        <b>2:30 PM</b> · Interview · Arjun Mehta
+        <b>2:30 PM</b> · Interview · Harsh Sinha
       </div>
       <div className="hl-win__slot is-free" style={delay(0.4)}>
         4:00 PM · Available

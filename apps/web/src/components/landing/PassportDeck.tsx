@@ -14,8 +14,8 @@ const DECK = [
     skills: ["Communication", "MS Excel"],
   },
   {
-    name: "Priya Sharma",
-    initials: "PS",
+    name: "Priya Yadav",
+    initials: "PY",
     tone: "#14b8a6",
     loc: "Bengaluru · Data Analyst",
     ready: 64,

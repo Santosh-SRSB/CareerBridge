@@ -37,10 +37,10 @@ export function ChoosePath() {
               </Link>
             </div>
             <Image
-              src="/landing/hero-professional.webp"
+              src="/landing/hero-professional.png"
               alt=""
-              width={640}
-              height={718}
+              width={720}
+              height={832}
               className="hl-path-card__image"
             />
           </article>
@@ -64,10 +64,10 @@ export function ChoosePath() {
               </Link>
             </div>
             <Image
-              src="/landing/candidate-student.webp"
+              src="/landing/candidate-boy.png"
               alt=""
-              width={330}
-              height={422}
+              width={520}
+              height={771}
               className="hl-path-card__image"
             />
           </article>

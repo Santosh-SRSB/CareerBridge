@@ -37,10 +37,10 @@ export function HomeHero() {
 
         <div className="hl-hero__visual">
           <Image
-            src="/landing/hero-professional.webp"
+            src="/landing/hero-professional.png"
             alt="Smiling professional pointing at a laptop"
-            width={640}
-            height={718}
+            width={720}
+            height={832}
             className="hl-hero__cutout"
             priority
           />
