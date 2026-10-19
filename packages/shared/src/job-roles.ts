@@ -1,4 +1,6 @@
-export const JOB_ROLE_CATALOG: Record<string, string[]> = {
+import { MASTER_JOB_ROLES } from './job-categories-and-skills';
+
+const BASE_JOB_ROLE_CATALOG: Record<string, string[]> = {
   IT: [
     'Full Stack Developer',
     'Frontend Developer',
@@ -19,6 +21,48 @@ export const JOB_ROLE_CATALOG: Record<string, string[]> = {
   MARKETING: ['Marketing Executive', 'Digital Marketing Executive', 'Content Marketer', 'Brand Executive'],
   GENERAL: ['Customer Service Executive', 'Front Office Executive', 'Business Analyst', 'Operations Executive'],
 };
+
+function categorizeRole(role: string): keyof typeof BASE_JOB_ROLE_CATALOG {
+  const blob = role.toLowerCase();
+  if (
+    /\b(software|developer|engineer|devops|sre|qa|sdet|test|data|ml|ai|cloud|cyber|security|architect|product manager|scrum|cto|it support|ui\/ux|ux designer|graphic designer)\b/.test(
+      blob,
+    )
+  ) {
+    return 'IT';
+  }
+  if (/\b(finance|account|payroll|cfo|procurement|tax|audit)\b/.test(blob)) return 'FINANCE';
+  if (/\b(hr|human resource|talent|recruit|chro)\b/.test(blob)) return 'HR';
+  if (/\b(sales|business development|account manager|customer success|customer support)\b/.test(blob)) {
+    return 'SALES';
+  }
+  if (/\b(market|seo|content|brand|copywriter)\b/.test(blob)) return 'MARKETING';
+  return 'GENERAL';
+}
+
+function mergeCatalog(): Record<string, string[]> {
+  const out: Record<string, string[]> = {
+    IT: [...BASE_JOB_ROLE_CATALOG.IT],
+    FINANCE: [...BASE_JOB_ROLE_CATALOG.FINANCE],
+    HR: [...BASE_JOB_ROLE_CATALOG.HR],
+    SALES: [...BASE_JOB_ROLE_CATALOG.SALES],
+    MARKETING: [...BASE_JOB_ROLE_CATALOG.MARKETING],
+    GENERAL: [...BASE_JOB_ROLE_CATALOG.GENERAL],
+  };
+  const seen = new Set<string>();
+  for (const list of Object.values(out)) {
+    for (const role of list) seen.add(role.toLowerCase());
+  }
+  for (const role of MASTER_JOB_ROLES) {
+    const key = role.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out[categorizeRole(role)].push(role);
+  }
+  return out;
+}
+
+export const JOB_ROLE_CATALOG: Record<string, string[]> = mergeCatalog();
 
 export type JobRoleCategory = keyof typeof JOB_ROLE_CATALOG;
 

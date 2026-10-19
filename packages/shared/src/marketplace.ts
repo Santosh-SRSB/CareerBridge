@@ -1,5 +1,6 @@
 import { parseExperienceRange } from './experience-range';
 import type { AiBudgetStatus } from './ai-availability';
+import { MASTER_JOB_ROLES, MASTER_SKILLS } from './job-categories-and-skills';
 
 export const JOB_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'] as const;
 
@@ -64,7 +65,7 @@ export const JOB_DEPARTMENTS = [
 
 export const SCREENING_QUESTION_TYPES = ['YES_NO', 'SHORT_TEXT', 'SINGLE_CHOICE'] as const;
 
-export const JOB_SKILL_SUGGESTIONS = [
+const CORE_JOB_SKILL_SUGGESTIONS = [
   'Communication',
   'Customer Service',
   'MS Excel',
@@ -82,7 +83,12 @@ export const JOB_SKILL_SUGGESTIONS = [
   'Teamwork',
 ] as const;
 
-export const JOB_TITLE_SUGGESTIONS = [
+/** Employer job-post skill chips — core suggestions first, then full master list. */
+export const JOB_SKILL_SUGGESTIONS = Array.from(
+  new Set<string>([...CORE_JOB_SKILL_SUGGESTIONS, ...MASTER_SKILLS]),
+);
+
+const CORE_JOB_TITLE_SUGGESTIONS = [
   'Customer Service Executive',
   'Sales Executive',
   'Backend Developer',
@@ -94,6 +100,11 @@ export const JOB_TITLE_SUGGESTIONS = [
   'Business Development Executive',
   'Software Engineer',
 ] as const;
+
+/** Employer job title suggestions — core titles first, then full master role list. */
+export const JOB_TITLE_SUGGESTIONS = Array.from(
+  new Set<string>([...CORE_JOB_TITLE_SUGGESTIONS, ...MASTER_JOB_ROLES]),
+);
 
 export type WorkMode = (typeof WORK_MODES)[number];
 export type ScreeningQuestionType = (typeof SCREENING_QUESTION_TYPES)[number];
