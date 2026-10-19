@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { browserReadablePhotoUrl, cacheBustedPhotoSrc } from './photo-url.ts';
+import { browserReadablePhotoUrl, cacheBustedPhotoSrc } from './photo-url';
 
 const OBJECT = 'https://storage.googleapis.com/srsbbucket/Images/profile-photo-837b3954-f983-4ae7-9f0a-b4710414dedc.png';
 
