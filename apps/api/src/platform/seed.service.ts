@@ -208,11 +208,12 @@ export class SeedService implements OnModuleInit {
         },
       });
     } else {
+      // Do not force the default phone onto an existing row — it is often still held by a
+      // legacy Super Admin and would abort the whole seed on a unique constraint.
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           email,
-          phone: SRSB_ADMIN_PHONE,
           passwordHash,
           userType: 'SUPER_ADMIN',
           status: 'ACTIVE',
@@ -255,6 +256,19 @@ export class SeedService implements OnModuleInit {
           data: { status: 'INACTIVE' },
         });
       }
+    }
+
+    // Also retire legacy Super Admin emails even if role/status drifted.
+    for (const legacyEmail of LEGACY_SRSB_ADMIN_EMAILS) {
+      if (legacyEmail === email) continue;
+      await this.prisma.admin.updateMany({
+        where: { email: legacyEmail },
+        data: { status: 'INACTIVE' },
+      });
+      await this.prisma.user.updateMany({
+        where: { email: legacyEmail, userType: 'SUPER_ADMIN' },
+        data: { status: 'INACTIVE' },
+      });
     }
   }
 
