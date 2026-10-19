@@ -289,6 +289,7 @@ describe('SeedService keeps changed staff passwords across restarts', () => {
           userUpdates.push({ id: String(where.id), data });
           return { id: where.id, ...data };
         },
+        updateMany: async () => ({ count: 0 }),
         create: async () => {
           throw new Error('existing accounts must not be recreated');
         },
