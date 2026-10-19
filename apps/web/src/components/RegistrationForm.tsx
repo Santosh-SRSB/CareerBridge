@@ -29,12 +29,12 @@ import {
   sendFirebaseOtp,
 } from '@/lib/firebase';
 import {
-  CITIES_BY_STATE,
   REGISTRATION_PASSWORD_HINT,
   hasRegistrationErrors,
   validateCandidateRegistration,
   type CandidateRegistrationErrors,
 } from '@careerbridge/shared';
+import { LocationSearchSelect } from '@/components/auth/LocationSearchSelect';
 
 type Field = keyof CandidateRegistrationErrors;
 
@@ -47,8 +47,6 @@ const FIELD_ORDER: Array<[Field, string]> = [
   ['otpChannel', 'cand-otp-mobile'],
   ['terms', 'cand-terms'],
 ];
-
-const LOCATION_GROUPS = Object.entries(CITIES_BY_STATE).sort(([a], [b]) => a.localeCompare(b));
 
 export function RegistrationForm() {
   const router = useRouter();
@@ -298,24 +296,12 @@ export function RegistrationForm() {
         </AuthField>
 
         <AuthField id="cand-location" label="Location" optional icon={<MapPinIcon />}>
-          <select
+          <LocationSearchSelect
             id="cand-location"
-            name="location"
             value={location}
-            onChange={(event) => setLocation(event.target.value)}
-            className="cb-auth-field__input"
-          >
-            <option value="">Select your city</option>
-            {LOCATION_GROUPS.map(([state, cities]) => (
-              <optgroup key={state} label={state}>
-                {cities.map((city) => (
-                  <option key={`${state}|${city}`} value={`${state}|${city}`}>
-                    {city}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            onChange={setLocation}
+            placeholder="Search your city…"
+          />
         </AuthField>
 
         <AuthField
