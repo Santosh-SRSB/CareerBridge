@@ -26,9 +26,10 @@ export function gstValidationException(message: string) {
   );
 }
 
-export function gstUnavailableException(
-  message = 'GSTIN verification is temporarily unavailable. Please try again.',
-) {
+export const GST_UNAVAILABLE_MESSAGE =
+  'GSTIN verification is temporarily unavailable due to an issue with the GSTIN portal. Please try again later.';
+
+export function gstUnavailableException(message = GST_UNAVAILABLE_MESSAGE) {
   return new HttpException(
     {
       code: ErrorCode.INTERNAL_ERROR,
