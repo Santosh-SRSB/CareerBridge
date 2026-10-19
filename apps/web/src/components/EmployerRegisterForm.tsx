@@ -13,7 +13,6 @@ import { clearPendingPassword, getPendingPassword, setPendingPassword } from '@/
 import { clearRegistrationDraft, loadRegistrationDraft, saveRegistrationDraft } from '@/lib/registration-draft';
 import { authErrorMessage } from '@/lib/auth-errors';
 import {
-  CITIES_BY_STATE,
   COMPANY_NAME_MAX,
   hasRegistrationErrors,
   REGISTRATION_PASSWORD_HINT,
@@ -26,6 +25,7 @@ import {
   isFirebaseConfigured,
   sendFirebaseOtp,
 } from '@/lib/firebase';
+import { LocationSearchSelect } from '@/components/auth/LocationSearchSelect';
 
 type Field = keyof EmployerRegistrationErrors;
 
@@ -40,8 +40,6 @@ const FIELD_ORDER: Array<[Field, string]> = [
   ['otpChannel', 'emp-otp-mobile'],
   ['terms', 'emp-terms'],
 ];
-
-const LOCATION_GROUPS = Object.entries(CITIES_BY_STATE).sort(([a], [b]) => a.localeCompare(b));
 
 export function EmployerRegisterForm() {
   const router = useRouter();
@@ -315,32 +313,19 @@ export function EmployerRegisterForm() {
           icon={<MapPinIcon />}
           error={locationError}
         >
-          <select
+          <LocationSearchSelect
             id="emp-location"
-            name="location"
+            value={location}
             required
-            aria-required
             aria-invalid={locationError ? true : undefined}
             aria-describedby={authFieldDescribedBy('emp-location', locationError)}
-            value={location}
-            onChange={(event) => {
-              setLocation(event.target.value);
+            onChange={(next) => {
+              setLocation(next);
               touch('location');
             }}
             onBlur={() => touch('location')}
-            className="cb-auth-field__input"
-          >
-            <option value="">Select your city</option>
-            {LOCATION_GROUPS.map(([state, cities]) => (
-              <optgroup key={state} label={state}>
-                {cities.map((city) => (
-                  <option key={`${state}|${city}`} value={`${state}|${city}`}>
-                    {city}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            placeholder="Search your city…"
+          />
         </AuthField>
 
         <AuthField
