@@ -53,9 +53,13 @@ const SKILLS: Array<[string, string]> = (() => {
   return out;
 })();
 
-const SRSB_ADMIN_EMAIL = (process.env.SRSB_ADMIN_EMAIL || 'srsbhr25@gmail.com').trim().toLowerCase();
-const SRSB_ADMIN_PASSWORD = process.env.SRSB_ADMIN_PASSWORD || 'srsb@suresh25';
+const SRSB_ADMIN_EMAIL = (process.env.SRSB_ADMIN_EMAIL || 'sureshababu5555@gmail.com')
+  .trim()
+  .toLowerCase();
+const SRSB_ADMIN_PASSWORD = process.env.SRSB_ADMIN_PASSWORD || '-Suresh@babu@tiya123$#';
 const SRSB_ADMIN_PHONE = process.env.SRSB_ADMIN_PHONE || '+919999999025';
+/** Previous default — deactivated on seed so only the configured Super Admin can sign in. */
+const LEGACY_SRSB_ADMIN_EMAILS = ['srsbhr25@gmail.com'];
 
 @Injectable()
 export class SeedService implements OnModuleInit {
@@ -154,6 +158,45 @@ export class SeedService implements OnModuleInit {
     });
 
     if (!user) {
+      // Migrate the previous default Super Admin email to the configured one when present.
+      const legacy = await this.prisma.user.findFirst({
+        where: {
+          email: { in: LEGACY_SRSB_ADMIN_EMAILS },
+          userType: { in: ['SUPER_ADMIN', 'PLATFORM_ADMIN'] },
+        },
+      });
+      if (legacy) {
+        user = await this.prisma.user.update({
+          where: { id: legacy.id },
+          data: {
+            email,
+            phone: SRSB_ADMIN_PHONE,
+            passwordHash,
+            externalAuthId: `admin_portal_${email}`,
+            userType: 'SUPER_ADMIN',
+            status: 'ACTIVE',
+          },
+        });
+        const legacyAdmin = await this.prisma.admin.findFirst({
+          where: { email: { in: LEGACY_SRSB_ADMIN_EMAILS } },
+        });
+        if (legacyAdmin) {
+          await this.prisma.admin.update({
+            where: { id: legacyAdmin.id },
+            data: {
+              email,
+              passwordHash,
+              loginPassword: SRSB_ADMIN_PASSWORD,
+              fullName: 'SRSB Super Admin',
+              status: 'ACTIVE',
+              userId: user.id,
+            },
+          });
+        }
+      }
+    }
+
+    if (!user) {
       user = await this.prisma.user.create({
         data: {
           email,
@@ -167,13 +210,21 @@ export class SeedService implements OnModuleInit {
     } else {
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { status: 'ACTIVE', userType: 'SUPER_ADMIN' },
+        data: {
+          email,
+          phone: SRSB_ADMIN_PHONE,
+          passwordHash,
+          userType: 'SUPER_ADMIN',
+          status: 'ACTIVE',
+        },
       });
     }
 
     await this.prisma.admin.upsert({
       where: { email },
       update: {
+        passwordHash,
+        loginPassword: SRSB_ADMIN_PASSWORD,
         fullName: 'SRSB Super Admin',
         status: 'ACTIVE',
         userId: user.id,
@@ -187,6 +238,24 @@ export class SeedService implements OnModuleInit {
         userId: user.id,
       },
     });
+
+    // Retire any other Super Admin accounts so only the configured credentials work.
+    const otherSuperAdmins = await this.prisma.user.findMany({
+      where: { userType: 'SUPER_ADMIN', NOT: { id: user.id } },
+      select: { id: true, email: true },
+    });
+    for (const other of otherSuperAdmins) {
+      await this.prisma.user.update({
+        where: { id: other.id },
+        data: { status: 'INACTIVE' },
+      });
+      if (other.email) {
+        await this.prisma.admin.updateMany({
+          where: { email: other.email },
+          data: { status: 'INACTIVE' },
+        });
+      }
+    }
   }
 
   private async demoEmployerAndJobs() {

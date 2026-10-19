@@ -22,16 +22,56 @@ async function hashPlatformPassword(password) {
   return `v2:${salt}:${derived.toString('hex')}`;
 }
 
-const email = (process.env.SRSB_ADMIN_EMAIL || 'srsbhr25@gmail.com').trim().toLowerCase();
-const password = process.env.SRSB_ADMIN_PASSWORD || 'srsb@suresh25';
+const email = (process.env.SRSB_ADMIN_EMAIL || 'sureshababu5555@gmail.com').trim().toLowerCase();
+const password = process.env.SRSB_ADMIN_PASSWORD || '-Suresh@babu@tiya123$#';
 const phone = process.env.SRSB_ADMIN_PHONE || '+919999999025';
+const legacyEmails = ['srsbhr25@gmail.com'];
 
 const prisma = new PrismaClient();
 const passwordHash = await hashPlatformPassword(password);
 
 let user = await prisma.user.findFirst({
-  where: { email, userType: 'PLATFORM_ADMIN' },
+  where: { email, userType: { in: ['SUPER_ADMIN', 'PLATFORM_ADMIN'] } },
 });
+
+if (!user) {
+  const legacy = await prisma.user.findFirst({
+    where: {
+      email: { in: legacyEmails },
+      userType: { in: ['SUPER_ADMIN', 'PLATFORM_ADMIN'] },
+    },
+  });
+  if (legacy) {
+    user = await prisma.user.update({
+      where: { id: legacy.id },
+      data: {
+        email,
+        phone,
+        passwordHash,
+        externalAuthId: `admin_portal_${email}`,
+        userType: 'SUPER_ADMIN',
+        status: 'ACTIVE',
+      },
+    });
+    const legacyAdmin = await prisma.admin.findFirst({
+      where: { email: { in: legacyEmails } },
+    });
+    if (legacyAdmin) {
+      await prisma.admin.update({
+        where: { id: legacyAdmin.id },
+        data: {
+          email,
+          passwordHash,
+          loginPassword: password,
+          fullName: 'SRSB Super Admin',
+          status: 'ACTIVE',
+          userId: user.id,
+        },
+      });
+    }
+    console.log('migrated user', user.id);
+  }
+}
 
 if (!user) {
   user = await prisma.user.create({
@@ -40,7 +80,7 @@ if (!user) {
       phone,
       passwordHash,
       externalAuthId: `admin_portal_${email}`,
-      userType: 'PLATFORM_ADMIN',
+      userType: 'SUPER_ADMIN',
       status: 'ACTIVE',
     },
   });
@@ -48,7 +88,13 @@ if (!user) {
 } else {
   user = await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash, status: 'ACTIVE' },
+    data: {
+      email,
+      phone,
+      passwordHash,
+      userType: 'SUPER_ADMIN',
+      status: 'ACTIVE',
+    },
   });
   console.log('updated user', user.id);
 }
@@ -57,18 +103,37 @@ const admin = await prisma.admin.upsert({
   where: { email },
   update: {
     passwordHash,
-    fullName: 'SRSB Admin',
+    loginPassword: password,
+    fullName: 'SRSB Super Admin',
     status: 'ACTIVE',
     userId: user.id,
   },
   create: {
     email,
     passwordHash,
-    fullName: 'SRSB Admin',
+    loginPassword: password,
+    fullName: 'SRSB Super Admin',
     status: 'ACTIVE',
     userId: user.id,
   },
 });
+
+const otherSuperAdmins = await prisma.user.findMany({
+  where: { userType: 'SUPER_ADMIN', NOT: { id: user.id } },
+  select: { id: true, email: true },
+});
+for (const other of otherSuperAdmins) {
+  await prisma.user.update({
+    where: { id: other.id },
+    data: { status: 'INACTIVE' },
+  });
+  if (other.email) {
+    await prisma.admin.updateMany({
+      where: { email: other.email },
+      data: { status: 'INACTIVE' },
+    });
+  }
+}
 
 console.log('admin ready', admin.id, admin.email);
 await prisma.$disconnect();
