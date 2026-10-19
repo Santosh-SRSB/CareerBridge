@@ -52,6 +52,7 @@ export class GstService {
       environment: cfg.environment,
       provider: cfg.provider,
       mockEnabled: cfg.mockEnabled && !cfg.configured,
+      gstinApiFallbackConfigured: Boolean(cfg.gstinApiFallbackKey),
     };
   }
 
@@ -68,7 +69,8 @@ export class GstService {
     );
 
     const started = Date.now();
-    const usingMock = !cfg.gstinApiKey && cfg.mockEnabled && !cfg.configured;
+    const usingMock =
+      !cfg.gstinApiKey && !cfg.gstinApiFallbackKey && cfg.mockEnabled && !cfg.configured;
     const provider = usingMock ? 'MOCK' : cfg.provider;
     try {
       const result = await this.provider.getGstinDetails(gstin);

@@ -8,6 +8,8 @@ export type GstRuntimeConfig = {
   environment: GstEnvironment;
   provider: 'GSTINAPI' | 'IRIS_IRP' | 'MOCK';
   gstinApiKey: string;
+  /** Optional second gstinapi.in key used only when the primary key fails. */
+  gstinApiFallbackKey: string;
   baseUrl: string;
   authPath: string;
   getGstinPath: string;
@@ -43,7 +45,10 @@ export class GstConfigService implements OnModuleInit {
       );
     }
     if (this.runtime.provider === 'GSTINAPI') {
-      this.logger.log('GST module using gstinapi.in for GSTIN lookup.');
+      this.logger.log(
+        `GST module using gstinapi.in for GSTIN lookup` +
+          (this.runtime.gstinApiFallbackKey ? ' (fallback key configured).' : '.'),
+      );
     } else if (!this.runtime.configured) {
       this.logger.warn(
         `GST module loaded for ${this.runtime.environment} with incomplete/placeholder credentials. ` +
@@ -93,6 +98,7 @@ export class GstConfigService implements OnModuleInit {
     const maxRetries = Number(this.config.get('GST_API_MAX_RETRIES') || 2);
     const mockEnabled = (this.config.get<string>('GST_MOCK_ENABLED') || 'false').toLowerCase() === 'true';
     const gstinApiKey = (this.config.get<string>('GSTINAPI_KEY') || '').trim();
+    const gstinApiFallbackKey = (this.config.get<string>('GSTINAPI_FALLBACK_KEY') || '').trim();
 
     const secrets = [baseUrl, clientId, clientSecret, username, password, requesterGstin];
     const isPlaceholder = secrets.some((v) => !v || PLACEHOLDER_MARKERS.some((m) => v.includes(m)));
@@ -100,16 +106,18 @@ export class GstConfigService implements OnModuleInit {
       Boolean(baseUrl && clientId && clientSecret && username && password && requesterGstin) &&
       !isPlaceholder;
 
-    const provider: GstRuntimeConfig['provider'] = gstinApiKey
-      ? 'GSTINAPI'
-      : configured
-        ? 'IRIS_IRP'
-        : 'MOCK';
+    const provider: GstRuntimeConfig['provider'] =
+      gstinApiKey || gstinApiFallbackKey
+        ? 'GSTINAPI'
+        : configured
+          ? 'IRIS_IRP'
+          : 'MOCK';
 
     return {
       environment,
       provider,
       gstinApiKey,
+      gstinApiFallbackKey,
       baseUrl: baseUrl.replace(/\/$/, ''),
       authPath,
       getGstinPath,
