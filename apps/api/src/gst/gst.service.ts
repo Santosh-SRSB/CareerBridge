@@ -2,7 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PiiCryptoService } from '../common/crypto/pii-crypto.service';
 import { GstConfigService, type GstRuntimeConfig } from './gst.config';
-import { GstConfigError, GstProviderError, gstValidationException } from './gst.errors';
+import {
+  GstConfigError,
+  GstProviderError,
+  GST_UNAVAILABLE_MESSAGE,
+  gstValidationException,
+} from './gst.errors';
 import { IrisIrpGstProvider } from './gst.provider';
 import { type GstInternalStatus } from './gst.status';
 import { maskGstin, normalizeGstin, validateGstinFormat } from './gst.validator';
@@ -26,7 +31,7 @@ export const GST_MOCK_ACTIVE_MESSAGE =
   'Test mode: this server uses a mock GST check, not a live GST lookup. The result is not real verification.';
 export const GST_MOCK_NOT_ACTIVE_MESSAGE =
   'Test mode: this server uses a mock GST check, and this GSTIN is not on its test list. Live GST lookup is not available here.';
-export const GST_UNAVAILABLE_MESSAGE = 'GSTIN verification is temporarily unavailable. Please try again.';
+export { GST_UNAVAILABLE_MESSAGE };
 export const GST_NOT_CONFIGURED_MESSAGE = 'GSTIN verification is not available on this server right now. Please contact support.';
 
 @Injectable()
