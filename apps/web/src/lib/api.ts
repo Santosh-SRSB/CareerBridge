@@ -1899,10 +1899,10 @@ export async function getAdminAccountDeletionPreview(kind: AdminDeletableKind, i
   return request<AdminAccountDeletionPreview>(`/admin/${kind}/${encodeURIComponent(id)}/deletion`);
 }
 
-export async function deleteAdminAccount(kind: AdminDeletableKind, id: string) {
+export async function deleteAdminAccount(kind: AdminDeletableKind, id: string, reason: string) {
   return request<{ deleted: boolean; kind: string; id: string; displayName: string }>(
     `/admin/${kind}/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE', body: JSON.stringify({ reason }) },
   );
 }
 

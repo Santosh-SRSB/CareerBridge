@@ -1,4 +1,11 @@
-import { ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { ErrorCode } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../common/storage/storage.service';
@@ -12,6 +19,10 @@ export const DELETABLE_ACCOUNT_STATUSES = ['SUSPENDED', 'INACTIVE'] as const;
 /** Super Admin accounts are never deletable; only Admin and Operator staff accounts are. */
 export const DELETABLE_STAFF_ROLES = ['PLATFORM_ADMIN', 'PLATFORM_OPERATOR'] as const;
 const EMPLOYER_USER_TYPES = ['EMPLOYER_ADMIN', 'EMPLOYER_RECRUITER'] as const;
+
+/** Matches the DeleteAccountDto bounds; kept here so the service can re-validate. */
+export const DELETE_REASON_MIN_LENGTH = 5;
+export const DELETE_REASON_MAX_LENGTH = 500;
 
 export const ACCOUNT_DELETED_AUDIT_ACTIONS: Record<DeletableAccountKind, string> = {
   CANDIDATE: 'DELETE_CANDIDATE',
@@ -56,6 +67,26 @@ function conflict(message: string) {
 
 function notFound(message: string) {
   return new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message });
+}
+
+function badRequest(message: string) {
+  return new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message });
+}
+
+/** Trim, collapse whitespace, and enforce length so audit rows stay readable. */
+export function normalizeDeletionReason(reason: string): string {
+  const normalized = String(reason ?? '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (normalized.length < DELETE_REASON_MIN_LENGTH) {
+    throw badRequest(
+      `A deletion reason of at least ${DELETE_REASON_MIN_LENGTH} characters is required.`,
+    );
+  }
+  if (normalized.length > DELETE_REASON_MAX_LENGTH) {
+    throw badRequest(`Deletion reason must be at most ${DELETE_REASON_MAX_LENGTH} characters.`);
+  }
+  return normalized;
 }
 
 const RETAINED_AUDIT = 'Audit log history (including this deletion)';
@@ -129,7 +160,8 @@ export class AdminAccountDeletionService {
     };
   }
 
-  async deleteCandidate(actorId: string, id: string) {
+  async deleteCandidate(actorId: string, id: string, reason: string) {
+    const deletionReason = normalizeDeletionReason(reason);
     const preview = await this.candidatePreview(id);
     if (!preview.deletable) throw conflict(preview.blockers.join(' '));
     const row = await this.loadCandidate(id);
@@ -147,7 +179,7 @@ export class AdminAccountDeletionService {
       });
       await tx.profileEmbedding.deleteMany({ where: { entityId: { in: entityIds } } });
       await tx.embedding.deleteMany({ where: { entityId: { in: entityIds } } });
-      await tx.auditLog.create({ data: this.auditData(actorId, preview) });
+      await tx.auditLog.create({ data: this.auditData(actorId, preview, deletionReason) });
     });
 
     const files = row.resumes.flatMap((r) => [r.pdfStoragePath, r.sourceStoragePath]);
@@ -213,7 +245,8 @@ export class AdminAccountDeletionService {
     };
   }
 
-  async deleteEmployer(actorId: string, id: string) {
+  async deleteEmployer(actorId: string, id: string, reason: string) {
+    const deletionReason = normalizeDeletionReason(reason);
     const preview = await this.employerPreview(id);
     if (!preview.deletable) throw conflict(preview.blockers.join(' '));
     const row = await this.loadEmployer(id);
@@ -236,7 +269,7 @@ export class AdminAccountDeletionService {
         await tx.profileEmbedding.deleteMany({ where: { entityId: { in: jobIds } } });
         await tx.embedding.deleteMany({ where: { entityId: { in: jobIds } } });
       }
-      await tx.auditLog.create({ data: this.auditData(actorId, preview) });
+      await tx.auditLog.create({ data: this.auditData(actorId, preview, deletionReason) });
     });
 
     try {
@@ -290,7 +323,8 @@ export class AdminAccountDeletionService {
     };
   }
 
-  async deleteAdmin(actorId: string, id: string) {
+  async deleteAdmin(actorId: string, id: string, reason: string) {
+    const deletionReason = normalizeDeletionReason(reason);
     const preview = await this.adminPreview(actorId, id);
     if (!preview.deletable) throw conflict(preview.blockers.join(' '));
     await this.prisma.$transaction(async (tx) => {
@@ -302,14 +336,14 @@ export class AdminAccountDeletionService {
         },
       });
       if (removed.count !== 1) throw conflict('The account status changed. Refresh and try again.');
-      await tx.auditLog.create({ data: this.auditData(actorId, preview) });
+      await tx.auditLog.create({ data: this.auditData(actorId, preview, deletionReason) });
     });
     return this.result(preview);
   }
 
   /* ---------- shared ---------- */
 
-  private auditData(actorId: string, preview: AccountDeletionPreview) {
+  private auditData(actorId: string, preview: AccountDeletionPreview, reason: string) {
     return {
       userId: actorId,
       action: ACCOUNT_DELETED_AUDIT_ACTIONS[preview.kind],
@@ -324,6 +358,7 @@ export class AdminAccountDeletionService {
       }),
       newValue: JSON.stringify({
         deleted: true,
+        reason,
         removed: Object.fromEntries(preview.related.map((r) => [r.label, r.count])),
       }),
     };

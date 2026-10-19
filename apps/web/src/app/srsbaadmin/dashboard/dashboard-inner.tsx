@@ -47,6 +47,7 @@ import {
 } from '@/lib/admin-portal';
 import { getStoredUser, isPlatformRole, isSuperAdminRole } from '@/lib/session';
 import { RoleDashboardHome, roleDashboardHero } from '@/components/super-admin/role-dashboard-home';
+import { auditDeletionReason } from '@/lib/admin-account-deletion';
 
 const TABS: SuperAdminNavId[] = [
   'dashboard',
@@ -1004,7 +1005,9 @@ export default function SuperAdminDashboardInner() {
                 <p className="p-4 text-sm text-[#888]">Loading audit…</p>
               ) : (
                 <ol className="relative space-y-0 border-l-2 border-[#ffb848]/40 ml-6 py-2">
-                  {auditRows.map((row) => (
+                  {auditRows.map((row) => {
+                    const reason = auditDeletionReason(row.newValue);
+                    return (
                     <li key={String(row.id)} className="relative py-3 pl-6 pr-4">
                       <span className="absolute -left-[7px] top-5 h-3 w-3 rounded-full bg-[#ffb848]" />
                       <p className="text-[11px] font-mono text-[#9a6a12]">{cell(row.time)}</p>
@@ -1012,8 +1015,14 @@ export default function SuperAdminDashboardInner() {
                       <p className="text-xs text-[#777]">
                         {cell(row.actor)} · {cell(row.resourceType)} · {cell(row.resourceId)}
                       </p>
+                      {reason ? (
+                        <p className="mt-1 text-xs text-[#444] [overflow-wrap:anywhere]">
+                          Reason: {reason}
+                        </p>
+                      ) : null}
                     </li>
-                  ))}
+                    );
+                  })}
                   {auditRows.length === 0 && <li className="py-6 pl-6 text-sm text-[#999]">No audit entries.</li>}
                 </ol>
               )}
