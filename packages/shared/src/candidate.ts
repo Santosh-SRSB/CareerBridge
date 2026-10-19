@@ -1,3 +1,6 @@
+import { MASTER_JOB_ROLES } from './job-categories-and-skills';
+import { uniqueRoles } from './job-roles';
+
 export type CandidateProfile = {
   id: string;
   firstName: string | null;
@@ -304,42 +307,22 @@ export const ONBOARDING_DOMAINS = [
 ] as const;
 
 /** Common preferred / target job roles for resume & preferences. */
-export const PREFERRED_JOB_ROLES = [
-  'Full Stack Developer',
-  'Frontend Developer',
-  'Backend Developer',
-  'Software Engineer',
-  'Software Developer',
+export const PREFERRED_JOB_ROLES = uniqueRoles([
+  ...MASTER_JOB_ROLES,
   'Web Developer',
-  'Mobile App Developer',
   'Android Developer',
   'iOS Developer',
   'React Developer',
-  'Java Developer',
-  'Python Developer',
-  'Data Analyst',
-  'Data Engineer',
-  'Business Analyst',
-  'QA / Test Engineer',
-  'DevOps Engineer',
-  'Cloud Engineer',
-  'UI/UX Designer',
   'Product Designer',
-  'Product Manager',
-  'Project Coordinator',
-  'Sales Executive',
   'Business Development',
   'Customer Support',
   'Customer Success',
   'Digital Marketing',
-  'Content Writer',
-  'HR Executive',
-  'Operations Executive',
   'Finance / Accounts',
   'Intern',
   'Fresher / Graduate Trainee',
   'Other',
-] as const;
+]) as readonly string[];
 
 export type PassportSectionKey =
   | 'personal'

@@ -1,3 +1,5 @@
+import { MASTER_SKILLS } from "@careerbridge/shared";
+
 export const DEGREE_OPTIONS = [
   "10th",
   "12th",
@@ -112,7 +114,7 @@ export const COLLEGE_OPTIONS = [
   "Other",
 ];
 
-export const SKILL_OPTIONS = [
+const CORE_SKILL_OPTIONS = [
   "Java",
   "Python",
   "JavaScript",
@@ -221,3 +223,7 @@ export const SKILL_OPTIONS = [
   "Cooking",
   "Housekeeping",
 ];
+
+export const SKILL_OPTIONS = Array.from(
+  new Set([...CORE_SKILL_OPTIONS, ...MASTER_SKILLS]),
+).sort((a, b) => a.localeCompare(b));
