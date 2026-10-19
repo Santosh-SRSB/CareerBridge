@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { EmployerOnboardingFrame } from '@/components/EmployerOnboardingFrame';
 import { Button } from '@/components/ui/Button';
@@ -48,12 +49,9 @@ export default function EmployerKycPage() {
   useEffect(() => {
     getEmployerMe()
       .then((profile) => {
+        // Allow KYC_COMPLETE so step-2 "Back" can reopen GST/tax editing.
         if (profile.verificationStatus === 'PENDING' || profile.verificationStatus === 'VERIFIED') {
           router.replace('/employer');
-          return;
-        }
-        if (profile.verificationStatus === 'KYC_COMPLETE') {
-          router.replace('/employer/verify');
           return;
         }
         setSaved({
@@ -171,6 +169,7 @@ export default function EmployerKycPage() {
       step={1}
       title="Verify your business identity"
       subtitle="Confirm your GSTIN, then your registration and tax IDs."
+      backHref="/employer/welcome"
       sideTitle="Let's verify your GSTIN!"
     >
       <form onSubmit={onSubmit} className="ep-kyc">
@@ -284,9 +283,14 @@ export default function EmployerKycPage() {
 
         {error ? <p className="ep-kyc__error">{error}</p> : null}
 
-        <Button type="submit" loading={loading} loadingLabel="Saving..." className="ep-kyc__cta">
-          Save and continue
-        </Button>
+        <div className="ep-kyc__actions">
+          <Link href="/employer/welcome" className="ep-kyc__back">
+            ← Back
+          </Link>
+          <Button type="submit" loading={loading} loadingLabel="Saving..." className="ep-kyc__cta">
+            Save and continue
+          </Button>
+        </div>
       </form>
     </EmployerOnboardingFrame>
   );

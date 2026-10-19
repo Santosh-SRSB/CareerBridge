@@ -54,6 +54,12 @@ function KycHeroArt() {
   );
 }
 
+/** Default previous step for employer KYC / affiliation onboarding. */
+export const EMPLOYER_ONBOARDING_BACK_HREF: Record<1 | 2, string> = {
+  1: '/employer/welcome',
+  2: '/employer/kyc',
+};
+
 export function EmployerOnboardingFrame({
   step,
   title,
@@ -72,14 +78,13 @@ export function EmployerOnboardingFrame({
   const side =
     sideTitle ||
     (step === 1 ? "Let's verify your GSTIN!" : "Let's confirm your company!");
+  const resolvedBack = backHref ?? EMPLOYER_ONBOARDING_BACK_HREF[step];
 
   return (
     <main className="ep-onboard-page">
-      {backHref ? (
-        <Link href={backHref} className="ep-onboard-page__back">
-          Back ←
-        </Link>
-      ) : null}
+      <Link href={resolvedBack} className="ep-onboard-page__back">
+        ← Back
+      </Link>
 
       <div className="ep-onboard-page__shell">
         <aside className="ep-onboard-page__aside" aria-hidden={false}>
