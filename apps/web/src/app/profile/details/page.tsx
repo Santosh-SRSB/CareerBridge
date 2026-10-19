@@ -10,6 +10,12 @@ import { buildResumeFromResumeContent } from '@/features/resume/build-resume-fro
 import { masterResumeToAtsData } from '@/features/resume/master-to-ats-data';
 import type { MasterResumeDocument } from '@/features/resume/master-resume.types';
 import { getCandidateMe, getResume, listResumes } from '@/lib/api';
+import {
+  cacheBustedPhotoSrc,
+  displayableCandidatePhotoUrl,
+  patchSessionCandidatePhoto,
+  subscribeCandidatePhotoUpdated,
+} from '@/lib/candidate-photo';
 import { formatCandidateExperienceLine, resolveTotalExperienceYears } from '@/lib/format-candidate-experience';
 import { rememberReturnTo } from '@/lib/nav-return';
 import { getStoredUser } from '@/lib/session';
@@ -90,6 +96,7 @@ export default function ProfileDetailsPage() {
     const [nextProfile, nextResumes] = await Promise.all([getCandidateMe(), listResumes()]);
     setProfile(nextProfile);
     setResumes(nextResumes);
+    if (nextProfile.photoUrl) patchSessionCandidatePhoto(nextProfile.photoUrl);
   }, []);
 
   useEffect(() => {
@@ -101,6 +108,13 @@ export default function ProfileDetailsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load profile.'))
       .finally(() => setLoading(false));
   }, [refresh, router]);
+
+  useEffect(() => {
+    return subscribeCandidatePhotoUpdated((url) => {
+      setProfile((prev) => (prev ? { ...prev, photoUrl: url } : prev));
+      if (url) patchSessionCandidatePhoto(url);
+    });
+  }, []);
 
   function closeToDashboard() {
     router.push('/dashboard');
@@ -167,6 +181,7 @@ export default function ProfileDetailsPage() {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join('') || 'C';
+  const photoSrc = cacheBustedPhotoSrc(profile.photoUrl);
   const experienceYears = resolveTotalExperienceYears(profile);
   const experienceLine = formatCandidateExperienceLine(profile) || 'Fresher';
   const roleHint =
@@ -196,6 +211,7 @@ export default function ProfileDetailsPage() {
       title="Candidate Details"
       onBack={closeToDashboard}
       maxWidth="max-w-[880px]"
+      avatarUrl={displayableCandidatePhotoUrl(profile.photoUrl)}
     >
       <div className={`cb-cand-details ${lora.variable}`}>
         <button type="button" className="cb-cand-details__back" onClick={closeToDashboard}>
@@ -230,9 +246,9 @@ export default function ProfileDetailsPage() {
 
           <div className="cb-cand-details__profile">
             <div className="cb-cand-details__photo">
-              {profile.photoUrl ? (
+              {photoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.photoUrl} alt="" />
+                <img src={photoSrc} alt="" />
               ) : (
                 initials
               )}
