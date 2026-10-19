@@ -39,8 +39,8 @@ export function ChoosePath() {
             <Image
               src="/landing/hero-professional.png"
               alt=""
-              width={720}
-              height={832}
+              width={673}
+              height={981}
               className="hl-path-card__image"
             />
           </article>
