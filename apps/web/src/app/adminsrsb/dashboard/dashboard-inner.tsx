@@ -36,7 +36,7 @@ import { ReportExportPanel } from '@/components/super-admin/ReportExportPanel';
 import { EmployerJobReportPanel } from '@/components/super-admin/EmployerJobReportPanel';
 import { CandidateProgressPanel, EmployerProgressPanel } from '@/components/super-admin/ProgressPiePanel';
 import { AccountDeleteDialog } from '@/components/super-admin/AccountDeleteDialog';
-import { type AdminDeletableKind, canOfferAccountDeletion } from '@/lib/admin-account-deletion';
+import { type AdminDeletableKind, auditDeletionReason, canOfferAccountDeletion } from '@/lib/admin-account-deletion';
 import {
   ActionBtn,
   DetailPanel,
@@ -1115,7 +1115,9 @@ export default function SuperAdminDashboardInner() {
                 <p className="sa-muted p-4 text-sm">Loading audit…</p>
               ) : (
                 <ol className="sa-timeline relative ml-6 space-y-0 py-2">
-                  {auditRows.map((row) => (
+                  {auditRows.map((row) => {
+                    const reason = auditDeletionReason(row.newValue);
+                    return (
                     <li key={String(row.id)} className="relative py-3 pl-6 pr-4">
                       <span className="sa-timeline-dot absolute -left-[7px] top-5 h-3 w-3 rounded-full" />
                       <p className="sa-muted font-mono text-[11px]">{cell(row.time)}</p>
@@ -1123,8 +1125,14 @@ export default function SuperAdminDashboardInner() {
                       <p className="sa-muted text-xs [overflow-wrap:anywhere]">
                         {cell(row.actor)} · {cell(row.resourceType)} · {cell(row.resourceId)}
                       </p>
+                      {reason ? (
+                        <p className="sa-ink mt-1 text-xs [overflow-wrap:anywhere]">
+                          Reason: {reason}
+                        </p>
+                      ) : null}
                     </li>
-                  ))}
+                    );
+                  })}
                   {auditRows.length === 0 && <li className="sa-muted py-6 pl-6 text-sm">No audit entries.</li>}
                 </ol>
               )}

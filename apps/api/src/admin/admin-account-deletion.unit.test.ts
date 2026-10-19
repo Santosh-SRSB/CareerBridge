@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
@@ -15,6 +15,7 @@ const SECRET_MARKERS = ['passwordHash', 'password_hash', 'loginPassword', 'token
 const CAND_A = '11111111-1111-4111-8111-111111111111';
 const CAND_B = '22222222-2222-4222-8222-222222222222';
 const EMP_A = '33333333-3333-4333-8333-333333333333';
+const REASON = 'Duplicate test account cleanup';
 
 /* ---------- in-memory store with the schema's cascades ---------- */
 
@@ -277,7 +278,7 @@ function noSecrets(value: unknown) {
 describe('Super Admin deletion — candidates', () => {
   it('deletes a suspended candidate with dependants, vectors, matches and files; other candidates untouched', async () => {
     const { store, service, deleted } = setup();
-    const result = await service.deleteCandidate('u-sa', CAND_A);
+    const result = await service.deleteCandidate('u-sa', CAND_A, REASON);
     assert.deepEqual(result, { deleted: true, kind: 'CANDIDATE', id: CAND_A, displayName: 'Asha R' });
     assert.equal(store.users.some((u) => u.id === 'u-ca'), false);
     assert.equal(store.candidates.some((c) => c.id === CAND_A), false);
@@ -296,16 +297,16 @@ describe('Super Admin deletion — candidates', () => {
 
   it('keeps the employer payment for a hired candidate (hiring fee history is the employer’s)', async () => {
     const { store, service } = setup();
-    await service.deleteCandidate('u-sa', CAND_A);
+    await service.deleteCandidate('u-sa', CAND_A, REASON);
     const payment = store.payments.find((p) => p.id === 'p-a')!;
     assert.ok(payment, 'payment retained');
     assert.equal(payment.hiringOutcomeId, null);
     assert.equal(store.hiringOutcomes.length, 0);
   });
 
-  it('writes one DELETE_CANDIDATE audit row with no passwords, hashes or tokens', async () => {
+  it('writes one DELETE_CANDIDATE audit row with the reason and no passwords, hashes or tokens', async () => {
     const { store, service } = setup();
-    await service.deleteCandidate('u-sa', CAND_A);
+    await service.deleteCandidate('u-sa', CAND_A, REASON);
     assert.equal(store.audits.length, 1);
     const audit = store.audits[0]!;
     assert.equal(audit.action, 'DELETE_CANDIDATE');
@@ -315,21 +316,31 @@ describe('Super Admin deletion — candidates', () => {
     const old = JSON.parse(audit.oldValue);
     assert.equal(old.status, 'SUSPENDED');
     assert.equal(old.userId, 'u-ca');
-    assert.equal(JSON.parse(audit.newValue).removed['Job applications'], 2);
+    const next = JSON.parse(audit.newValue);
+    assert.equal(next.reason, REASON);
+    assert.equal(next.removed['Job applications'], 2);
     noSecrets(audit);
+  });
+
+  it('refuses deletion when the reason is missing or too short', async () => {
+    const { store, service } = setup();
+    const before = JSON.stringify(store);
+    await assert.rejects(service.deleteCandidate('u-sa', CAND_A, ''), BadRequestException);
+    await assert.rejects(service.deleteCandidate('u-sa', CAND_A, '  hi  '), BadRequestException);
+    assert.equal(JSON.stringify(store), before);
   });
 
   it('deletes an inactive account too', async () => {
     const { store, service } = setup();
     store.users.find((u) => u.id === 'u-ca')!.status = 'INACTIVE';
-    await service.deleteCandidate('u-sa', CAND_A);
+    await service.deleteCandidate('u-sa', CAND_A, REASON);
     assert.equal(store.candidates.some((c) => c.id === CAND_A), false);
   });
 
   it('refuses an active candidate with 409 and changes nothing', async () => {
     const { store, service, deleted } = setup();
     const before = JSON.stringify(store);
-    await assert.rejects(service.deleteCandidate('u-sa', CAND_B), (err: unknown) => {
+    await assert.rejects(service.deleteCandidate('u-sa', CAND_B, REASON), (err: unknown) => {
       assert.ok(err instanceof ConflictException);
       assert.match(String((err.getResponse() as Row).message), /suspended or inactive/);
       return true;
@@ -344,7 +355,7 @@ describe('Super Admin deletion — candidates', () => {
         store.users.find((u) => u.id === 'u-ca')!.status = 'ACTIVE';
       },
     });
-    await assert.rejects(service.deleteCandidate('u-sa', CAND_A), ConflictException);
+    await assert.rejects(service.deleteCandidate('u-sa', CAND_A, REASON), ConflictException);
     assert.ok(store.candidates.some((c) => c.id === CAND_A));
     assert.equal(store.matches.length, 3);
     assert.equal(store.audits.length, 0);
@@ -352,7 +363,7 @@ describe('Super Admin deletion — candidates', () => {
 
   it('404 for an unknown candidate', async () => {
     const { service } = setup();
-    await assert.rejects(service.deleteCandidate('u-sa', 'missing'), NotFoundException);
+    await assert.rejects(service.deleteCandidate('u-sa', 'missing', REASON), NotFoundException);
     await assert.rejects(service.candidatePreview('missing'), NotFoundException);
   });
 
@@ -374,7 +385,7 @@ describe('Super Admin deletion — candidates', () => {
 
   it('a storage failure after commit does not undo the deletion', async () => {
     const { store, service } = setup(undefined, true);
-    await service.deleteCandidate('u-sa', CAND_A);
+    await service.deleteCandidate('u-sa', CAND_A, REASON);
     assert.equal(store.candidates.some((c) => c.id === CAND_A), false);
     assert.equal(store.audits.length, 1);
   });
@@ -385,7 +396,7 @@ describe('Super Admin deletion — candidates', () => {
 describe('Super Admin deletion — employers', () => {
   it('deletes an inactive employer with its jobs, interviews, job vectors and ₹0 payment records', async () => {
     const { store, service, deleted } = setup();
-    await service.deleteEmployer('u-sa', EMP_A);
+    await service.deleteEmployer('u-sa', EMP_A, REASON);
     assert.equal(store.employers.some((e) => e.id === EMP_A), false);
     assert.equal(store.users.some((u) => u.id === 'u-ea'), false);
     assert.deepEqual(store.jobs.map((j) => j.id).sort(), ['j-b1', 'j-c1']);
@@ -399,7 +410,9 @@ describe('Super Admin deletion — employers', () => {
     assert.ok(deleted.some((p) => p.includes(EMP_A)), 'company logo removed');
     const audit = store.audits[0]!;
     assert.equal(audit.action, 'DELETE_EMPLOYER');
-    assert.equal(JSON.parse(audit.newValue).removed['Candidate applications to these jobs'], 2);
+    const next = JSON.parse(audit.newValue);
+    assert.equal(next.reason, REASON);
+    assert.equal(next.removed['Candidate applications to these jobs'], 2);
     noSecrets(audit);
   });
 
@@ -409,20 +422,20 @@ describe('Super Admin deletion — employers', () => {
     const preview = await service.employerPreview('e-b');
     assert.equal(preview.deletable, false);
     assert.match(preview.blockers.join(' '), /revenue history/);
-    await assert.rejects(service.deleteEmployer('u-sa', 'e-b'), ConflictException);
+    await assert.rejects(service.deleteEmployer('u-sa', 'e-b', REASON), ConflictException);
     assert.equal(JSON.stringify(store), before);
   });
 
   it('refuses an active employer', async () => {
     const { store, service } = setup();
-    await assert.rejects(service.deleteEmployer('u-sa', 'e-c'), ConflictException);
+    await assert.rejects(service.deleteEmployer('u-sa', 'e-c', REASON), ConflictException);
     assert.ok(store.employers.some((e) => e.id === 'e-c'));
     assert.equal(store.audits.length, 0);
   });
 
   it('404 for an unknown employer', async () => {
     const { service } = setup();
-    await assert.rejects(service.deleteEmployer('u-sa', 'nope'), NotFoundException);
+    await assert.rejects(service.deleteEmployer('u-sa', 'nope', REASON), NotFoundException);
   });
 });
 
@@ -431,7 +444,7 @@ describe('Super Admin deletion — employers', () => {
 describe('Super Admin deletion — admins', () => {
   it('deletes a suspended operator and audits it without the stored login password', async () => {
     const { store, service } = setup();
-    await service.deleteAdmin('u-sa', 'a-ops');
+    await service.deleteAdmin('u-sa', 'a-ops', REASON);
     assert.equal(store.admins.some((a) => a.id === 'a-ops'), false);
     assert.equal(store.users.some((u) => u.id === 'u-ops'), false);
     const audit = store.audits[0]!;
@@ -445,7 +458,7 @@ describe('Super Admin deletion — admins', () => {
     const preview = await service.adminPreview('u-sa', 'a-sa2');
     assert.equal(preview.deletable, false);
     assert.match(preview.blockers.join(' '), /Super Admin accounts cannot be deleted/);
-    await assert.rejects(service.deleteAdmin('u-sa', 'a-sa2'), ConflictException);
+    await assert.rejects(service.deleteAdmin('u-sa', 'a-sa2', REASON), ConflictException);
     assert.ok(store.admins.some((a) => a.id === 'a-sa2'));
   });
 
@@ -453,13 +466,13 @@ describe('Super Admin deletion — admins', () => {
     const { service } = setup();
     const preview = await service.adminPreview('u-ops', 'a-ops');
     assert.match(preview.blockers.join(' '), /your own account/);
-    await assert.rejects(service.deleteAdmin('u-ops', 'a-ops'), ConflictException);
+    await assert.rejects(service.deleteAdmin('u-ops', 'a-ops', REASON), ConflictException);
   });
 
   it('refuses an active admin, and one whose login is still active', async () => {
     const { store, service } = setup();
-    await assert.rejects(service.deleteAdmin('u-sa', 'a-pa'), ConflictException);
-    await assert.rejects(service.deleteAdmin('u-sa', 'a-mixed'), ConflictException);
+    await assert.rejects(service.deleteAdmin('u-sa', 'a-pa', REASON), ConflictException);
+    await assert.rejects(service.deleteAdmin('u-sa', 'a-mixed', REASON), ConflictException);
     assert.equal(store.admins.length, 5);
     assert.equal(store.audits.length, 0);
   });
@@ -516,14 +529,14 @@ describe('Super Admin deletion — authorization', () => {
       deleteAdmin: record('admin'),
       adminPreview: record('adminPreview'),
     } as never);
-    await controller.deleteCandidate({ id: 'u-sa' }, 'c1');
-    await controller.deleteEmployer({ id: 'u-sa' }, 'e1');
-    await controller.deleteAdmin({ id: 'u-sa' }, 'a1');
+    await controller.deleteCandidate({ id: 'u-sa' }, 'c1', { reason: REASON });
+    await controller.deleteEmployer({ id: 'u-sa' }, 'e1', { reason: REASON });
+    await controller.deleteAdmin({ id: 'u-sa' }, 'a1', { reason: REASON });
     await controller.adminDeletionPreview({ id: 'u-sa' }, 'a1');
     assert.deepEqual(calls, [
-      ['candidate', 'u-sa', 'c1'],
-      ['employer', 'u-sa', 'e1'],
-      ['admin', 'u-sa', 'a1'],
+      ['candidate', 'u-sa', 'c1', REASON],
+      ['employer', 'u-sa', 'e1', REASON],
+      ['admin', 'u-sa', 'a1', REASON],
       ['adminPreview', 'u-sa', 'a1'],
     ]);
   });

@@ -2,9 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   DELETE_CONFIRM_WORD,
+  DELETE_REASON_MAX_LENGTH,
+  DELETE_REASON_MIN_LENGTH,
+  auditDeletionReason,
   canOfferAccountDeletion,
   deletionConfirmed,
   deletionKindLabel,
+  deletionReasonValid,
+  normalizeDeletionReason,
 } from './admin-account-deletion';
 
 test('only a Super Admin is offered the Delete action', () => {
@@ -54,4 +59,23 @@ test('kind labels are singular and human readable', () => {
   assert.equal(deletionKindLabel('candidates'), 'candidate');
   assert.equal(deletionKindLabel('employers'), 'employer');
   assert.equal(deletionKindLabel('admins'), 'admin');
+});
+
+test('deletion reason must be a meaningful trimmed string', () => {
+  assert.equal(DELETE_REASON_MIN_LENGTH, 5);
+  assert.equal(DELETE_REASON_MAX_LENGTH, 500);
+  assert.equal(normalizeDeletionReason('  spam account  '), 'spam account');
+  assert.equal(deletionReasonValid('spam'), false);
+  assert.equal(deletionReasonValid('spam account'), true);
+  assert.equal(deletionReasonValid('  ok id  '), true);
+  assert.equal(deletionReasonValid(''), false);
+  assert.equal(deletionReasonValid('a'.repeat(501)), false);
+});
+
+test('auditDeletionReason reads reason from audit newValue JSON', () => {
+  assert.equal(auditDeletionReason(JSON.stringify({ deleted: true, reason: 'Fraudulent signup' })), 'Fraudulent signup');
+  assert.equal(auditDeletionReason({ reason: '  Cleanup  ' }), 'Cleanup');
+  assert.equal(auditDeletionReason(JSON.stringify({ deleted: true })), null);
+  assert.equal(auditDeletionReason(null), null);
+  assert.equal(auditDeletionReason('not-json'), null);
 });

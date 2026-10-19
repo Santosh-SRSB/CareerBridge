@@ -7,8 +7,12 @@ import {
   type AdminAccountDeletionPreview,
   type AdminDeletableKind,
   DELETE_CONFIRM_WORD,
+  DELETE_REASON_MAX_LENGTH,
+  DELETE_REASON_MIN_LENGTH,
   deletionConfirmed,
   deletionKindLabel,
+  deletionReasonValid,
+  normalizeDeletionReason,
 } from '@/lib/admin-account-deletion';
 import { userFacingError } from '@/lib/client-errors';
 import { StatusPill } from '@/components/super-admin/admin-tab-ui';
@@ -31,11 +35,13 @@ export function AccountDeleteDialog({ target, onClose, onDeleted }: Props) {
 function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: DeleteTarget }) {
   const titleId = useId();
   const inputId = useId();
+  const reasonId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [preview, setPreview] = useState<AdminAccountDeletionPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [typed, setTyped] = useState('');
+  const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const busyRef = useRef(false);
   const onCloseRef = useRef(onClose);
@@ -63,7 +69,8 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
   }, [target.kind, target.id]);
 
   const label = deletionKindLabel(target.kind);
-  const canConfirm = Boolean(preview?.deletable) && deletionConfirmed(typed) && !busy;
+  const canConfirm =
+    Boolean(preview?.deletable) && deletionConfirmed(typed) && deletionReasonValid(reason) && !busy;
 
   async function confirm() {
     if (!canConfirm || busyRef.current) return;
@@ -71,7 +78,7 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
     setBusy(true);
     setError('');
     try {
-      const result = await deleteAdminAccount(target.kind, target.id);
+      const result = await deleteAdminAccount(target.kind, target.id, normalizeDeletionReason(reason));
       onDeleted({ kind: target.kind, id: target.id, displayName: result.displayName });
     } catch (err) {
       setError(userFacingError(err, `delete this ${label}`));
@@ -153,6 +160,23 @@ function DeleteDialogBody({ target, onClose, onDeleted }: Props & { target: Dele
                     className="sa-input w-full px-3 py-2 text-sm focus:border-[var(--sa-danger)]"
                     data-testid="delete-confirm-input"
                   />
+                  <label htmlFor={reasonId} className="mt-3 block text-xs font-semibold">
+                    Reason for deleting this {label}
+                  </label>
+                  <textarea
+                    id={reasonId}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    rows={3}
+                    maxLength={DELETE_REASON_MAX_LENGTH}
+                    disabled={busy}
+                    placeholder={`Why is this ${label} being permanently deleted? (min ${DELETE_REASON_MIN_LENGTH} characters)`}
+                    className="sa-input mt-1 w-full resize-y px-3 py-2 text-sm focus:border-[var(--sa-danger)]"
+                    data-testid="delete-reason-input"
+                  />
+                  <p className="sa-muted mt-1 text-[11px]">
+                    This reason is saved in the audit log.
+                  </p>
                 </>
               )}
             </>

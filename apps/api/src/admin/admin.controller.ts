@@ -135,6 +135,14 @@ class ChangeOwnPasswordDto {
   confirmPassword: string;
 }
 
+/** Required on permanent account deletion so the audit trail records why. */
+class DeleteAccountDto {
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  reason: string;
+}
+
 @ApiTags('admin')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
@@ -177,8 +185,12 @@ export class AdminController {
   @Delete('candidates/:id')
   @Roles(UserType.SUPER_ADMIN)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  deleteCandidate(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.accountDeletion.deleteCandidate(user.id, id);
+  deleteCandidate(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.accountDeletion.deleteCandidate(user.id, id, dto.reason);
   }
 
   @Post('candidates/:id/status')
@@ -218,8 +230,12 @@ export class AdminController {
   @Delete('employers/:id')
   @Roles(UserType.SUPER_ADMIN)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  deleteEmployer(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.accountDeletion.deleteEmployer(user.id, id);
+  deleteEmployer(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.accountDeletion.deleteEmployer(user.id, id, dto.reason);
   }
 
   @Post('employers/:id/status')
@@ -422,8 +438,12 @@ export class AdminController {
   @Delete('admins/:id')
   @Roles(UserType.SUPER_ADMIN)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  deleteAdmin(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.accountDeletion.deleteAdmin(user.id, id);
+  deleteAdmin(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.accountDeletion.deleteAdmin(user.id, id, dto.reason);
   }
 
   @Post('admins/:id/suspend')
