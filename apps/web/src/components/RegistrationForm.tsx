@@ -29,13 +29,12 @@ import {
   sendFirebaseOtp,
 } from '@/lib/firebase';
 import {
-  INDIA_STATES,
-  getCitiesForState,
   REGISTRATION_PASSWORD_HINT,
   hasRegistrationErrors,
   validateCandidateRegistration,
   type CandidateRegistrationErrors,
 } from '@careerbridge/shared';
+import { LocationSearchSelect } from '@/components/auth/LocationSearchSelect';
 
 type Field = keyof CandidateRegistrationErrors;
 
@@ -78,7 +77,12 @@ export function RegistrationForm() {
   const [restored, setRestored] = useState(false);
   const replacesRequestId = useRef<string | undefined>(undefined);
   const location = locationState && locationCity ? `${locationState}|${locationCity}` : '';
-  const citiesForState = getCitiesForState(locationState);
+
+  function setLocationValue(next: string) {
+    const parsed = parseLocationDraft(next);
+    setLocationState(parsed.state);
+    setLocationCity(parsed.city);
+  }
 
   // Back from the OTP page ("Change mobile number"): refill everything except what was never stored.
   // The password only survives in memory, so it is refilled after client-side navigation but not after a refresh.
@@ -307,42 +311,13 @@ export function RegistrationForm() {
           />
         </AuthField>
 
-        <AuthField id="cand-location-state" label="State" optional icon={<MapPinIcon />}>
-          <select
-            id="cand-location-state"
-            name="state"
-            value={locationState}
-            onChange={(event) => {
-              setLocationState(event.target.value);
-              setLocationCity('');
-            }}
-            className="cb-auth-field__input"
-          >
-            <option value="">Select your state</option>
-            {INDIA_STATES.map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
-            ))}
-          </select>
-        </AuthField>
-
-        <AuthField id="cand-location-city" label="City" optional icon={<MapPinIcon />}>
-          <select
-            id="cand-location-city"
-            name="city"
-            value={locationCity}
-            disabled={!locationState}
-            onChange={(event) => setLocationCity(event.target.value)}
-            className="cb-auth-field__input"
-          >
-            <option value="">{locationState ? 'Select your city' : 'Select state first'}</option>
-            {citiesForState.map((city) => (
-              <option key={city} value={city}>
-                {city}
-              </option>
-            ))}
-          </select>
+        <AuthField id="cand-location" label="Location" optional icon={<MapPinIcon />}>
+          <LocationSearchSelect
+            id="cand-location"
+            value={location}
+            onChange={setLocationValue}
+            placeholder="Search your city…"
+          />
         </AuthField>
 
         <AuthField

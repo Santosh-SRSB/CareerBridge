@@ -13,8 +13,6 @@ import { clearPendingPassword, getPendingPassword, setPendingPassword } from '@/
 import { clearRegistrationDraft, loadRegistrationDraft, saveRegistrationDraft } from '@/lib/registration-draft';
 import { authErrorMessage } from '@/lib/auth-errors';
 import {
-  INDIA_STATES,
-  getCitiesForState,
   COMPANY_NAME_MAX,
   hasRegistrationErrors,
   REGISTRATION_PASSWORD_HINT,
@@ -27,6 +25,7 @@ import {
   isFirebaseConfigured,
   sendFirebaseOtp,
 } from '@/lib/firebase';
+import { LocationSearchSelect } from '@/components/auth/LocationSearchSelect';
 
 type Field = keyof EmployerRegistrationErrors;
 
@@ -70,7 +69,12 @@ export function EmployerRegisterForm() {
   const [restored, setRestored] = useState(false);
   const replacesRequestId = useRef<string | undefined>(undefined);
   const location = locationState && locationCity ? `${locationState}|${locationCity}` : '';
-  const citiesForState = getCitiesForState(locationState);
+
+  function setLocationValue(next: string) {
+    const parsed = parseLocationDraft(next);
+    setLocationState(parsed.state);
+    setLocationCity(parsed.city);
+  }
 
   // Back from the OTP page ("Change mobile number"): refill everything except what was never stored.
   // The password only survives in memory, so it is refilled after client-side navigation but not after a refresh.
@@ -146,11 +150,7 @@ export function EmployerRegisterForm() {
     if (invalid) {
       setSubmitAttempted(true);
       const first = FIELD_ORDER.find(([field]) => errors[field]);
-      if (first) {
-        const focusId =
-          first[0] === 'location' && locationState && !locationCity ? 'emp-location-city' : first[1];
-        document.getElementById(focusId)?.focus();
-      }
+      if (first) document.getElementById(first[1])?.focus();
       return;
     }
 
@@ -323,66 +323,24 @@ export function EmployerRegisterForm() {
 
         <AuthField
           id="emp-location"
-          label="State"
+          label="Business Location"
           required
           icon={<MapPinIcon />}
-          error={!locationState ? locationError : undefined}
+          error={locationError}
         >
-          <select
+          <LocationSearchSelect
             id="emp-location"
-            name="state"
+            value={location}
             required
-            aria-required
-            aria-invalid={!locationState && locationError ? true : undefined}
-            aria-describedby={authFieldDescribedBy('emp-location', !locationState ? locationError : undefined)}
-            value={locationState}
-            onChange={(event) => {
-              setLocationState(event.target.value);
-              setLocationCity('');
+            aria-invalid={locationError ? true : undefined}
+            aria-describedby={authFieldDescribedBy('emp-location', locationError)}
+            onChange={(next) => {
+              setLocationValue(next);
               touch('location');
             }}
             onBlur={() => touch('location')}
-            className="cb-auth-field__input"
-          >
-            <option value="">Select your state</option>
-            {INDIA_STATES.map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
-            ))}
-          </select>
-        </AuthField>
-
-        <AuthField
-          id="emp-location-city"
-          label="City"
-          required
-          icon={<MapPinIcon />}
-          error={locationState ? locationError : undefined}
-        >
-          <select
-            id="emp-location-city"
-            name="city"
-            required
-            aria-required
-            disabled={!locationState}
-            aria-invalid={locationState && locationError ? true : undefined}
-            aria-describedby={authFieldDescribedBy('emp-location-city', locationState ? locationError : undefined)}
-            value={locationCity}
-            onChange={(event) => {
-              setLocationCity(event.target.value);
-              touch('location');
-            }}
-            onBlur={() => touch('location')}
-            className="cb-auth-field__input"
-          >
-            <option value="">{locationState ? 'Select your city' : 'Select state first'}</option>
-            {citiesForState.map((city) => (
-              <option key={city} value={city}>
-                {city}
-              </option>
-            ))}
-          </select>
+            placeholder="Search your city…"
+          />
         </AuthField>
 
         <AuthField
