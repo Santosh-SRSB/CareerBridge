@@ -24,11 +24,27 @@ export function displayableCandidatePhotoUrl(url: string | null | undefined): st
   return browserReadablePhotoUrl(url);
 }
 
-/** Cache-bust remote URLs when the same object key is overwritten after upload. */
+/**
+ * Browser `<img src>` for a candidate photo.
+ * Never append query params to signed GCS URLs — V4 signatures cover the query string, so an
+ * extra `v=` cache-buster makes the object return 403 and the avatar disappears everywhere.
+ */
 export function cacheBustedPhotoSrc(url: string | null | undefined): string | null {
   const src = browserReadablePhotoUrl(url);
   if (!src) return null;
   if (src.startsWith('data:') || src.startsWith('blob:')) return src;
+  try {
+    const parsed = new URL(src);
+    if (
+      parsed.hostname === GCS_HOST &&
+      SIGNATURE_PARAMS.some((param) => parsed.searchParams.has(param))
+    ) {
+      return src;
+    }
+  } catch {
+    return src;
+  }
+  // Non-GCS remotes only (CDN, etc.)
   const token = src.slice(-24);
   return `${src}${src.includes('?') ? '&' : '?'}v=${encodeURIComponent(token)}`;
 }

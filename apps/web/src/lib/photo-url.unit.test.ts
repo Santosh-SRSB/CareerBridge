@@ -41,10 +41,17 @@ describe('cacheBustedPhotoSrc', () => {
     assert.equal(cacheBustedPhotoSrc('data:image/png;base64,AAAA'), 'data:image/png;base64,AAAA');
   });
 
-  it('appends a cache-buster to signed URLs', () => {
+  it('does not mutate signed GCS URLs (extra query params break the signature)', () => {
     const v4 = `${OBJECT}?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=abc`;
-    const busted = cacheBustedPhotoSrc(v4);
-    assert.ok(busted?.startsWith(v4));
+    const v2 = `${OBJECT}?GoogleAccessId=sa&Expires=1&Signature=abc`;
+    assert.equal(cacheBustedPhotoSrc(v4), v4);
+    assert.equal(cacheBustedPhotoSrc(v2), v2);
+  });
+
+  it('cache-busts non-GCS remote URLs only', () => {
+    const cdn = 'https://cdn.example.com/a.png';
+    const busted = cacheBustedPhotoSrc(cdn);
+    assert.ok(busted?.startsWith(cdn));
     assert.ok(busted?.includes('v='));
   });
 });
