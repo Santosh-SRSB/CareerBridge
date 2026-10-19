@@ -33,7 +33,7 @@ function PassportPreview() {
       <div className="hl-mock__who">
         <Image src="/landing/candidate-graduate.webp" alt="" width={330} height={424} />
         <div>
-          <b>Priya Sharma</b>
+          <b>Priya Yadav</b>
           <span>Chennai · Customer Service</span>
         </div>
       </div>
