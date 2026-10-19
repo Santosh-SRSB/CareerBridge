@@ -10,20 +10,14 @@ import {
   passportPrimaryButtonClass,
 } from '@/components/PassportFrame';
 import { Button } from '@/components/ui/Button';
-import { getStoredUser, patchStoredUser } from '@/lib/session';
+import { getStoredUser } from '@/lib/session';
 import { getCandidateMe, updateCandidateMe, uploadCandidatePhoto } from '@/lib/api';
+import { displayableCandidatePhotoUrl, notifyCandidatePhotoUpdated } from '@/lib/candidate-photo';
 import { goToNextPassportStep } from '@/lib/passport-flow';
 import { goToReturnTo, peekReturnTo } from '@/lib/nav-return';
 import { compressImageBlob } from '@/lib/image';
 
 const ACCEPT = 'image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png';
-
-function notifyPhotoUpdated(photoUrl: string | null) {
-  patchStoredUser({ photoUrl });
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('cb-photo-updated', { detail: { photoUrl } }));
-  }
-}
 
 export default function PassportPhotoPage() {
   const router = useRouter();
@@ -42,8 +36,9 @@ export default function PassportPhotoPage() {
     }
     getCandidateMe()
       .then((profile) => {
-        setPhotoUrl(profile.photoUrl || null);
-        if (profile.photoUrl) notifyPhotoUpdated(profile.photoUrl);
+        const url = displayableCandidatePhotoUrl(profile.photoUrl);
+        setPhotoUrl(url);
+        if (url) notifyCandidatePhotoUpdated(url);
       })
       .finally(() => setReady(true));
   }, [router]);
@@ -79,7 +74,7 @@ export default function PassportPhotoPage() {
         throw new Error('Photo uploaded but was not saved. Please try again.');
       }
       setPhotoUrl(nextUrl);
-      notifyPhotoUpdated(nextUrl);
+      notifyCandidatePhotoUpdated(nextUrl);
       setUploadPct(100);
       await new Promise((r) => setTimeout(r, 350));
     } catch (err) {
@@ -117,7 +112,7 @@ export default function PassportPhotoPage() {
     try {
       await updateCandidateMe({ photoUrl: null });
       setPhotoUrl(null);
-      notifyPhotoUpdated(null);
+      notifyCandidatePhotoUpdated(null);
       setUploadPct(100);
     } catch {
       setError('Could not remove photo. Try again.');

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { logout } from '@/lib/api';
+import { cacheBustedPhotoSrc, sessionCandidatePhotoUrl } from '@/lib/candidate-photo';
 import { getStoredUser } from '@/lib/session';
 
 type DashNavId = 'home' | 'profile' | 'jobs' | 'applications' | 'interviews' | 'ats';
@@ -44,6 +45,8 @@ export function CandidateDashboardShell({
   const [initial, setInitial] = useState('C');
   const [menuOpen, setMenuOpen] = useState(false);
   const active = resolveActive(pathname);
+
+  const photoSrc = cacheBustedPhotoSrc(avatarUrl) ?? cacheBustedPhotoSrc(sessionCandidatePhotoUrl());
 
   useEffect(() => {
     const user = getStoredUser();
@@ -95,9 +98,9 @@ export function CandidateDashboardShell({
               className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#3b82f6] text-sm font-bold text-white"
               aria-label="Open profile"
             >
-              {avatarUrl ? (
+              {photoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                <img src={photoSrc} alt="" className="h-full w-full object-cover" />
               ) : (
                 initial
               )}

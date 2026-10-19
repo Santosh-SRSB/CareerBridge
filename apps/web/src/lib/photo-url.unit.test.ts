@@ -1,6 +1,10 @@
+/**
+ * Run from apps/web:
+ * node --experimental-strip-types --test src/lib/photo-url.unit.test.ts
+ */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { browserReadablePhotoUrl } from '../../../web/src/lib/photo-url';
+import { browserReadablePhotoUrl, cacheBustedPhotoSrc } from './photo-url.ts';
 
 const OBJECT = 'https://storage.googleapis.com/srsbbucket/Images/profile-photo-837b3954-f983-4ae7-9f0a-b4710414dedc.png';
 
@@ -30,3 +34,18 @@ describe('browserReadablePhotoUrl', () => {
     assert.equal(browserReadablePhotoUrl('not a url'), null);
   });
 });
+
+describe('cacheBustedPhotoSrc', () => {
+  it('rejects private GCS and leaves data URLs alone', () => {
+    assert.equal(cacheBustedPhotoSrc(OBJECT), null);
+    assert.equal(cacheBustedPhotoSrc('data:image/png;base64,AAAA'), 'data:image/png;base64,AAAA');
+  });
+
+  it('appends a cache-buster to signed URLs', () => {
+    const v4 = `${OBJECT}?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=abc`;
+    const busted = cacheBustedPhotoSrc(v4);
+    assert.ok(busted?.startsWith(v4));
+    assert.ok(busted?.includes('v='));
+  });
+});
+
