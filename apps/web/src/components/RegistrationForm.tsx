@@ -29,7 +29,8 @@ import {
   sendFirebaseOtp,
 } from '@/lib/firebase';
 import {
-  CITIES_BY_STATE,
+  INDIA_STATES,
+  getCitiesForState,
   REGISTRATION_PASSWORD_HINT,
   hasRegistrationErrors,
   validateCandidateRegistration,
@@ -48,7 +49,11 @@ const FIELD_ORDER: Array<[Field, string]> = [
   ['terms', 'cand-terms'],
 ];
 
-const LOCATION_GROUPS = Object.entries(CITIES_BY_STATE).sort(([a], [b]) => a.localeCompare(b));
+function parseLocationDraft(raw: string | undefined): { state: string; city: string } {
+  if (!raw) return { state: '', city: '' };
+  const [state = '', city = ''] = raw.split('|');
+  return { state, city };
+}
 
 export function RegistrationForm() {
   const router = useRouter();
@@ -56,7 +61,8 @@ export function RegistrationForm() {
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [location, setLocation] = useState('');
+  const [locationState, setLocationState] = useState('');
+  const [locationCity, setLocationCity] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -71,6 +77,8 @@ export function RegistrationForm() {
   const [loading, setLoading] = useState(false);
   const [restored, setRestored] = useState(false);
   const replacesRequestId = useRef<string | undefined>(undefined);
+  const location = locationState && locationCity ? `${locationState}|${locationCity}` : '';
+  const citiesForState = getCitiesForState(locationState);
 
   // Back from the OTP page ("Change mobile number"): refill everything except what was never stored.
   // The password only survives in memory, so it is refilled after client-side navigation but not after a refresh.
@@ -82,7 +90,9 @@ export function RegistrationForm() {
     setEmail(draft.email);
     setDial(draft.dial || DEFAULT_COUNTRY.dial);
     setNational(draft.national);
-    setLocation(draft.location || '');
+    const parsed = parseLocationDraft(draft.location);
+    setLocationState(parsed.state);
+    setLocationCity(parsed.city);
     setOtpChannel(draft.otpChannel);
     setAgreedToTerms(draft.agreedToTerms);
     setWhatsappOptIn(draft.whatsappOptIn !== false);
@@ -105,7 +115,8 @@ export function RegistrationForm() {
     setEmail('');
     setDial(DEFAULT_COUNTRY.dial);
     setNational('');
-    setLocation('');
+    setLocationState('');
+    setLocationCity('');
     setPassword('');
     setConfirmPassword('');
     setOtpChannel(null);
@@ -157,7 +168,6 @@ export function RegistrationForm() {
 
     const phone = toE164(dial, national);
     const trimmedEmail = email.trim();
-    const [locationState, locationCity] = location ? location.split('|') : ['', ''];
     setLoading(true);
     try {
       const result = await requestOtp({
@@ -297,23 +307,40 @@ export function RegistrationForm() {
           />
         </AuthField>
 
-        <AuthField id="cand-location" label="Location" optional icon={<MapPinIcon />}>
+        <AuthField id="cand-location-state" label="State" optional icon={<MapPinIcon />}>
           <select
-            id="cand-location"
-            name="location"
-            value={location}
-            onChange={(event) => setLocation(event.target.value)}
+            id="cand-location-state"
+            name="state"
+            value={locationState}
+            onChange={(event) => {
+              setLocationState(event.target.value);
+              setLocationCity('');
+            }}
             className="cb-auth-field__input"
           >
-            <option value="">Select your city</option>
-            {LOCATION_GROUPS.map(([state, cities]) => (
-              <optgroup key={state} label={state}>
-                {cities.map((city) => (
-                  <option key={`${state}|${city}`} value={`${state}|${city}`}>
-                    {city}
-                  </option>
-                ))}
-              </optgroup>
+            <option value="">Select your state</option>
+            {INDIA_STATES.map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+          </select>
+        </AuthField>
+
+        <AuthField id="cand-location-city" label="City" optional icon={<MapPinIcon />}>
+          <select
+            id="cand-location-city"
+            name="city"
+            value={locationCity}
+            disabled={!locationState}
+            onChange={(event) => setLocationCity(event.target.value)}
+            className="cb-auth-field__input"
+          >
+            <option value="">{locationState ? 'Select your city' : 'Select state first'}</option>
+            {citiesForState.map((city) => (
+              <option key={city} value={city}>
+                {city}
+              </option>
             ))}
           </select>
         </AuthField>
