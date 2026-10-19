@@ -1,5 +1,5 @@
 /**
- * GSTINAPI primary → fallback key behaviour (mocked fetch; no live network).
+ * Primary gstinapi.in → AppyFlow fallback (mocked fetch; no live network).
  */
 import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
@@ -42,69 +42,98 @@ function jsonResponse(status: number, body: unknown) {
   });
 }
 
-describe('gstinapi primary → fallback key', () => {
+function requestUrl(input: string | URL | Request): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  return String(input.url);
+}
+
+describe('gstinapi → AppyFlow fallback', () => {
   afterEach(() => {
     mock.restoreAll();
   });
 
-  it('uses fallback key when primary returns 523', async () => {
-    const calls: string[] = [];
-    mock.method(globalThis, 'fetch', async (_url: string | URL, init?: RequestInit) => {
-      const key = String((init?.headers as Record<string, string>)?.['x-api-key'] || '');
-      calls.push(key);
-      if (key === 'primary-key') {
+  it('uses AppyFlow when primary returns 523', async () => {
+    const urls: string[] = [];
+    mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
+      const url = requestUrl(input);
+      urls.push(url);
+      if (url.includes('gstinapi.in')) {
         return jsonResponse(523, { success: false });
       }
+      assert.match(url, /appyflow\.in\/api\/verifyGST/);
+      assert.match(url, /key_secret=appy-secret/);
+      assert.match(url, new RegExp(`gstNo=${ACTIVE_GSTIN}`));
       return jsonResponse(200, {
-        success: true,
-        data: { gstin: ACTIVE_GSTIN, status: 'Active', trade_name: 'FALLBACK CO' },
+        error: false,
+        taxpayerInfo: {
+          gstin: ACTIVE_GSTIN,
+          sts: 'Active',
+          tradeNam: 'FALLBACK CO',
+          lgnm: 'LEGAL NAME',
+        },
       });
     });
 
     const provider = new IrisIrpGstProvider(
-      cfg({ gstinApiKey: 'primary-key', gstinApiFallbackKey: 'fallback-key' }),
+      cfg({ gstinApiKey: 'primary-key', gstinApiFallbackKey: 'appy-secret' }),
     );
     const result = await provider.getGstinDetails(ACTIVE_GSTIN);
     assert.equal(result.status, 'ACTIVE');
     assert.equal(result.tradeName, 'FALLBACK CO');
-    assert.deepEqual(calls, ['primary-key', 'fallback-key']);
+    assert.equal(urls.length, 2);
+    assert.match(urls[0]!, /gstinapi\.in/);
+    assert.match(urls[1]!, /appyflow\.in/);
   });
 
-  it('does not call fallback when primary returns a valid NOT_ACTIVE answer', async () => {
-    const calls: string[] = [];
-    mock.method(globalThis, 'fetch', async (_url: string | URL, init?: RequestInit) => {
-      const key = String((init?.headers as Record<string, string>)?.['x-api-key'] || '');
-      calls.push(key);
+  it('does not call AppyFlow when primary returns a valid NOT_ACTIVE answer', async () => {
+    const urls: string[] = [];
+    mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
+      urls.push(requestUrl(input));
       return jsonResponse(200, { success: false, code: 404 });
     });
 
     const provider = new IrisIrpGstProvider(
-      cfg({ gstinApiKey: 'primary-key', gstinApiFallbackKey: 'fallback-key' }),
+      cfg({ gstinApiKey: 'primary-key', gstinApiFallbackKey: 'appy-secret' }),
     );
     const result = await provider.getGstinDetails(ACTIVE_GSTIN);
     assert.equal(result.status, 'NOT_ACTIVE');
-    assert.deepEqual(calls, ['primary-key']);
+    assert.equal(urls.length, 1);
+    assert.match(urls[0]!, /gstinapi\.in/);
   });
 
-  it('uses fallback when primary key is rejected (401)', async () => {
-    const calls: string[] = [];
-    mock.method(globalThis, 'fetch', async (_url: string | URL, init?: RequestInit) => {
-      const key = String((init?.headers as Record<string, string>)?.['x-api-key'] || '');
-      calls.push(key);
-      if (key === 'primary-key') {
+  it('uses AppyFlow when primary key is rejected (401)', async () => {
+    mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
+      const url = requestUrl(input);
+      if (url.includes('gstinapi.in')) {
         return jsonResponse(401, { success: false });
       }
       return jsonResponse(200, {
-        success: true,
-        data: { gstin: ACTIVE_GSTIN, status: 'Active', trade_name: 'OK' },
+        error: false,
+        taxpayerInfo: { gstin: ACTIVE_GSTIN, sts: 'Active', tradeNam: 'OK' },
       });
     });
 
     const provider = new IrisIrpGstProvider(
-      cfg({ gstinApiKey: 'primary-key', gstinApiFallbackKey: 'fallback-key' }),
+      cfg({ gstinApiKey: 'primary-key', gstinApiFallbackKey: 'appy-secret' }),
     );
     const result = await provider.getGstinDetails(ACTIVE_GSTIN);
     assert.equal(result.status, 'ACTIVE');
-    assert.deepEqual(calls, ['primary-key', 'fallback-key']);
+    assert.equal(result.tradeName, 'OK');
+  });
+
+  it('maps AppyFlow Inactive sts to NOT_ACTIVE', async () => {
+    mock.method(globalThis, 'fetch', async () =>
+      jsonResponse(200, {
+        error: false,
+        taxpayerInfo: { gstin: ACTIVE_GSTIN, sts: 'Cancelled', tradeNam: 'X' },
+      }),
+    );
+
+    const provider = new IrisIrpGstProvider(
+      cfg({ gstinApiKey: '', gstinApiFallbackKey: 'appy-secret' }),
+    );
+    const result = await provider.getGstinDetails(ACTIVE_GSTIN);
+    assert.equal(result.status, 'NOT_ACTIVE');
   });
 });
