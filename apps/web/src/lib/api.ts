@@ -1017,6 +1017,20 @@ export async function startLiveInterview(id: string) {
   return request<InterviewSession>(`/interviews/${id}/start`, { method: 'POST' });
 }
 
+/** Fixed cloud TTS for AI interview / guided mock speech (Indian-English female, firm tone). */
+export async function synthesizeInterviewSpeech(text: string) {
+  return request<{
+    audioBase64: string;
+    mimeType: string;
+    voice: string;
+    language: string;
+    model: string;
+  }>('/ai/tts', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+}
+
 export async function answerLiveInterview(
   id: string,
   answer: string,

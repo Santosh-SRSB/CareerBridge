@@ -7,3 +7,4 @@ export { GeminiProvider, normalizeVector } from './providers/gemini.provider';
 export * from './prompts/prompt-registry';
 export * from './schemas/ai-response.schemas';
 export * from './utils/vector.util';
+export { TtsService } from './tts.service';
