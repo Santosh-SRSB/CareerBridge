@@ -640,6 +640,7 @@ export default function DashboardPage() {
                       key={displayPhotoUrl || 'photo'}
                       src={cacheBustedPhotoSrc(displayPhotoUrl) || ''}
                       alt=""
+                      referrerPolicy="no-referrer"
                       onLoad={() => {
                         setPhotoBroken(false);
                         // Remote readable URL loaded — drop local preview.

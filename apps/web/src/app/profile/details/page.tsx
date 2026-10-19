@@ -248,7 +248,7 @@ export default function ProfileDetailsPage() {
             <div className="cb-cand-details__photo">
               {photoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={photoSrc} alt="" />
+                <img key={photoSrc} src={photoSrc} alt="" referrerPolicy="no-referrer" />
               ) : (
                 initials
               )}

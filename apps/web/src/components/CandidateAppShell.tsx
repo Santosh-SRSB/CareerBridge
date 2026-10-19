@@ -310,11 +310,14 @@ export function CandidateAppShell({
   useEffect(() => {
     let active = true;
 
-    function applyPhoto(url: string | null | undefined) {
+    function applyPhoto(url: string | null | undefined, opts?: { allowClear?: boolean }) {
       if (!active) return;
-      if (url === null) {
-        setNavPhoto(null);
-        patchSessionCandidatePhoto(null);
+      if (url == null || url === '') {
+        // Avoid wiping a good avatar when /candidates/me briefly fails to resolve a signed URL.
+        if (opts?.allowClear) {
+          setNavPhoto(null);
+          patchSessionCandidatePhoto(null);
+        }
         return;
       }
       const readable = displayableCandidatePhotoUrl(url);
@@ -324,17 +327,27 @@ export function CandidateAppShell({
     }
 
     getCandidateMe()
-      .then((profile) => applyPhoto(profile.photoUrl ?? null))
+      .then((profile) => {
+        if (profile.photoUrl) applyPhoto(profile.photoUrl);
+        else applyPhoto(null, { allowClear: true });
+      })
       .catch(() => undefined);
 
     const stop = subscribeCandidatePhotoUpdated((url) => {
       if (!active) return;
+      if (url === null) {
+        setNavPhoto(null);
+        return;
+      }
       setNavPhoto(url);
     });
 
     function refreshPhoto() {
       getCandidateMe()
-        .then((profile) => applyPhoto(profile.photoUrl ?? null))
+        .then((profile) => {
+          if (profile.photoUrl) applyPhoto(profile.photoUrl);
+          else applyPhoto(null, { allowClear: true });
+        })
         .catch(() => undefined);
     }
     const onVis = () => {
@@ -512,7 +525,13 @@ export function CandidateAppShell({
             >
               {navPhotoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={navPhotoSrc} alt="" className="h-full w-full object-cover" />
+                <img
+                  key={navPhotoSrc}
+                  src={navPhotoSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               ) : (
                 initial
               )}
@@ -613,7 +632,13 @@ export function CandidateAppShell({
             >
               {navPhotoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={navPhotoSrc} alt="" className="h-full w-full object-cover" />
+                <img
+                  key={navPhotoSrc}
+                  src={navPhotoSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               ) : (
                 initial
               )}
