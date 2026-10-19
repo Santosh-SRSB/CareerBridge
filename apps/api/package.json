@@ -22,7 +22,7 @@
     "test:whatsapp-flow": "node -r ts-node/register/transpile-only --test src/whatsapp/whatsapp-flow.unit.test.ts",
     "test:whatsapp-profile": "node -r ts-node/register/transpile-only --test scripts/whatsapp-profile-dev.unit.test.ts",
     "test:email": "node -r ts-node/register/transpile-only --test src/auth/email.service.unit.test.ts",
-    "test:ai": "node -r ts-node/register/transpile-only --test src/ai/ai-gateway.policy.unit.test.ts src/ai/ai-client-error.unit.test.ts src/ai/outer-json-object.unit.test.ts",
+    "test:ai": "node -r ts-node/register/transpile-only --test src/ai/ai-gateway.policy.unit.test.ts src/ai/ai-client-error.unit.test.ts src/ai/outer-json-object.unit.test.ts src/ai/tts-wav.unit.test.ts",
     "test:task-secret": "node -r ts-node/register/transpile-only --test src/common/tasks/assert-task-secret.unit.test.ts",
     "test:retention": "node -r ts-node/register/transpile-only --test src/retention/retention.unit.test.ts",
     "test:request-id": "node -r ts-node/register/transpile-only --test src/common/request-id.unit.test.ts src/common/filters/http-exception.filter.unit.test.ts",

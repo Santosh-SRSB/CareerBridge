@@ -15,7 +15,8 @@ import { clearActiveInterviewTimer, saveActiveInterviewTimer } from '@/lib/inter
 import { isAnsweredInterviewQuestion } from '@/lib/interview-answer-display';
 import { classifyInterviewLoadError, type InterviewLoadError } from '@/lib/interview-load-error';
 import { InterviewLoadErrorPanel } from '@/components/interviews/InterviewLoadErrorPanel';
-import { greetingForHour, pickFemaleVoice, setAiThinking, setAvatarMood, startAiSpeech, stopAiSpeech } from '@/features/interview/ai-speech';
+import { greetingForHour, setAiThinking, setAvatarMood } from '@/features/interview/ai-speech';
+import { cancelInterviewSpeech, speakInterviewLine } from '@/features/interview/cloud-speak';
 import { LOBBY_DONTS, LOBBY_DOS } from '@/features/interview/lobby-rules';
 
 const LiveInterviewer = dynamic(() => import('@/features/interview/LiveInterviewer'), {
@@ -35,57 +36,7 @@ function firstName(full?: string | null) {
 }
 
 function speak(text: string, mood: 'speaking' | 'welcoming' = 'speaking') {
-  return new Promise<void>((resolve) => {
-    const line = text.replace(/\n+/g, ' ').trim();
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      startAiSpeech(line, mood);
-      window.setTimeout(() => {
-        stopAiSpeech('listening');
-        resolve();
-      }, Math.min(12000, 700 + line.length * 55));
-      return;
-    }
-    const synth = window.speechSynthesis;
-    synth.resume();
-    let started = false;
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      stopAiSpeech('listening');
-      resolve();
-    };
-    const run = () => {
-      if (started) return;
-      started = true;
-      startAiSpeech(line, mood);
-      const utter = new SpeechSynthesisUtterance(line);
-      utter.rate = 0.94;
-      utter.pitch = 1.08;
-      utter.lang = 'en-IN';
-      const voice = pickFemaleVoice();
-      if (voice) utter.voice = voice;
-      utter.onend = () => {
-        window.clearTimeout(fallback);
-        finish();
-      };
-      utter.onerror = () => {
-        window.clearTimeout(fallback);
-        finish();
-      };
-      const fallback = window.setTimeout(() => finish(), Math.min(22000, 900 + line.length * 70));
-      synth.speak(utter);
-      window.setTimeout(() => {
-        if (synth.paused) synth.resume();
-      }, 80);
-    };
-    if (synth.getVoices().length) {
-      run();
-      return;
-    }
-    synth.addEventListener('voiceschanged', run, { once: true });
-    window.setTimeout(run, 400);
-  });
+  return speakInterviewLine(text, { mood, rate: 0.94 });
 }
 
 async function naturalPause(ms = 450) {
@@ -228,10 +179,6 @@ export default function LiveInterviewPage() {
   }, []);
 
   useEffect(() => {
-    window.speechSynthesis?.getVoices();
-  }, []);
-
-  useEffect(() => {
     if (videoRef.current && streamRef.current) videoRef.current.srcObject = streamRef.current;
   }, [session?.startAt, camOn, lobbyStep]);
 
@@ -260,7 +207,7 @@ export default function LiveInterviewPage() {
     setStatus('Time is up. Generating your report...');
     notify('Time is up. Generating your report.');
     streamRef.current?.getTracks().forEach((track) => track.stop());
-    window.speechSynthesis?.cancel();
+    cancelInterviewSpeech('neutral');
     void endLiveInterview(params.id)
       .catch(() => null)
       .then(() => {
@@ -292,7 +239,7 @@ export default function LiveInterviewPage() {
           .catch(() => sessionRef.current)
           .finally(() => {
             streamRef.current?.getTracks().forEach((track) => track.stop());
-            window.speechSynthesis?.cancel();
+            cancelInterviewSpeech('neutral');
             void endLiveInterview(session.id)
               .catch(() => null)
               .then(() => {
@@ -411,7 +358,7 @@ export default function LiveInterviewPage() {
           setBusy(true);
           setStatus('Interview ended — face not visible too many times.');
           streamRef.current?.getTracks().forEach((track) => track.stop());
-          window.speechSynthesis?.cancel();
+          cancelInterviewSpeech('neutral');
           const ended = await endLiveInterview(active.id);
           clearActiveInterviewTimer(active.id);
           router.replace(`/interviews/${ended.id}/report`);
@@ -480,7 +427,7 @@ export default function LiveInterviewPage() {
       listenRef.current = false;
       recRef.current?.abort?.();
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      window.speechSynthesis?.cancel();
+      cancelInterviewSpeech('neutral');
     };
   }, []);
 
@@ -754,8 +701,7 @@ export default function LiveInterviewPage() {
   }
 
   async function begin() {
-    window.speechSynthesis?.cancel();
-    stopAiSpeech('welcoming');
+    cancelInterviewSpeech('welcoming');
     const intro = `${greetingForHour()}. Welcome to your Career Bridge interview. Before we begin, could you please introduce yourself? Tell me who you are, what you have been doing, and what you want from this role.`;
     setBusy(true);
     setAwake(true);
@@ -763,7 +709,6 @@ export default function LiveInterviewPage() {
     setListening(false);
     speakingRef.current = true;
     setStatus('AI is speaking...');
-    window.speechSynthesis?.resume();
     await naturalPause(400);
     const voicePromise = speak(intro, 'welcoming');
     try {
@@ -834,8 +779,7 @@ export default function LiveInterviewPage() {
           listenRef.current = false;
           recRef.current?.abort?.();
           streamRef.current?.getTracks().forEach((track) => track.stop());
-          window.speechSynthesis?.cancel();
-          stopAiSpeech('neutral');
+          cancelInterviewSpeech('neutral');
           clearActiveInterviewTimer(next.id);
           router.replace(`/interviews/${next.id}/report`);
           return;
@@ -852,8 +796,7 @@ export default function LiveInterviewPage() {
         listenRef.current = false;
         recRef.current?.abort?.();
         streamRef.current?.getTracks().forEach((track) => track.stop());
-        window.speechSynthesis?.cancel();
-        stopAiSpeech('neutral');
+        cancelInterviewSpeech('neutral');
         router.replace(`/interviews/${next.id}/report`);
         return;
       }
@@ -897,7 +840,7 @@ export default function LiveInterviewPage() {
     setStatus('Generating your report...');
     try {
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      window.speechSynthesis?.cancel();
+      cancelInterviewSpeech('neutral');
       const next = await endLiveInterview(params.id);
       clearActiveInterviewTimer(params.id);
       router.replace(`/interviews/${next.id}/report`);
