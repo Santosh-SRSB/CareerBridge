@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { CandidateProfile, ResumeRecord } from '@careerbridge/shared';
 import { formatCandidateExperienceLine } from '@/lib/format-candidate-experience';
 import { listResumes } from '@/lib/api';
+import { cacheBustedPhotoSrc } from '@/lib/candidate-photo';
 import { resolvePassportSummary } from '@/lib/passport-to-friend-resume';
 
 function prettyText(value: string) {
@@ -75,6 +76,7 @@ export function DashboardCareerPassport({ profile }: { profile: CandidateProfile
   const experienceLine = formatCandidateExperienceLine(profile);
   const summary = resolvePassportSummary(profile, resumeSummary || undefined);
   const completion = profile.profileCompletion || 0;
+  const photoSrc = cacheBustedPhotoSrc(profile.photoUrl);
 
   useEffect(() => {
     let active = true;
@@ -106,9 +108,9 @@ export function DashboardCareerPassport({ profile }: { profile: CandidateProfile
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1a1fc4] text-base font-extrabold text-white ring-2 ring-[#1a1fc4]/20 ring-offset-2">
-              {profile.photoUrl ? (
+              {photoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.photoUrl} alt="" className="h-full w-full object-cover" />
+                <img src={photoSrc} alt="" className="h-full w-full object-cover" />
               ) : (
                 initials || 'C'
               )}

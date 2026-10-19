@@ -1,6 +1,7 @@
 'use client';
 
 import type { CandidateProfile } from '@careerbridge/shared';
+import { cacheBustedPhotoSrc } from '@/lib/candidate-photo';
 
 function pretty(value: string) {
   return value
@@ -39,6 +40,7 @@ export function CandidateResumeSheet({ profile, title = 'Your resume draft', not
   if (!profile.careerInterests.length) missing.push('Career preferences');
   if (!profile.projects?.length) missing.push('Projects');
   if (!profile.certifications?.length) missing.push('Certifications');
+  const photoSrc = cacheBustedPhotoSrc(profile.photoUrl);
 
   return (
     <article className="cb-resume-sheet">
@@ -48,9 +50,9 @@ export function CandidateResumeSheet({ profile, title = 'Your resume draft', not
           <h1>{name}</h1>
           {contact ? <p className="cb-resume-contact">{contact}</p> : null}
         </div>
-        {profile.photoUrl ? (
+        {photoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.photoUrl} alt="" className="cb-resume-photo" />
+          <img src={photoSrc} alt="" className="cb-resume-photo" />
         ) : null}
       </header>
 

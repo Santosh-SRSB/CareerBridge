@@ -26,7 +26,13 @@ import {
   uploadCandidatePhoto,
 } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
-import { browserReadablePhotoUrl } from '@/lib/photo-url';
+import {
+  cacheBustedPhotoSrc,
+  displayableCandidatePhotoUrl,
+  notifyCandidatePhotoUpdated,
+  patchSessionCandidatePhoto,
+  subscribeCandidatePhotoUpdated,
+} from '@/lib/candidate-photo';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { TestimonialPromptCard } from '@/components/TestimonialPromptCard';
 import { formatCandidateExperienceLine, resolveTotalExperienceYears } from '@/lib/format-candidate-experience';
@@ -320,8 +326,9 @@ export default function DashboardPage() {
           firstName: me.firstName ?? stored.firstName,
           onboardingCompleted: onboardingDone,
           dashboardReached,
-          ...(me.photoUrl !== undefined ? { photoUrl: me.photoUrl } : {}),
         });
+        // Auth /me only returns inline-safe photos; never write private GCS URLs into session.
+        if (me.photoUrl !== undefined) patchSessionCandidatePhoto(me.photoUrl);
         if (!onboardingDone) {
           router.replace('/onboarding/continue');
           return;
@@ -356,7 +363,7 @@ export default function DashboardPage() {
         ]).then(([, candidateProfile, completion, jobItems, interviews, applications, resumeSummary]) => {
           setProfile(candidateProfile);
           if (candidateProfile.photoUrl) {
-            patchStoredUser({ photoUrl: candidateProfile.photoUrl });
+            patchSessionCandidatePhoto(candidateProfile.photoUrl);
           }
           setName(formatPersonName(candidateProfile.firstName || me.firstName || stored.firstName || 'there'));
           setCity(
@@ -401,28 +408,21 @@ export default function DashboardPage() {
   }, [router, reloadKey]);
 
   useEffect(() => {
-    const onPhoto = (event: Event) => {
-      const detail = (event as CustomEvent<{ photoUrl?: string | null }>).detail;
-      if (!detail || !('photoUrl' in detail)) return;
-      const url = detail.photoUrl ?? null;
+    return subscribeCandidatePhotoUpdated((url) => {
       setProfile((prev) => (prev ? { ...prev, photoUrl: url } : prev));
-      patchStoredUser({ photoUrl: url });
       setPhotoBroken(false);
       setPhotoPreviewUrl(null);
-    };
-    window.addEventListener('cb-photo-updated', onPhoto);
-    return () => window.removeEventListener('cb-photo-updated', onPhoto);
+    });
   }, []);
 
   useEffect(() => {
     function refreshPhoto() {
       getCandidateMe()
         .then((candidateProfile) => {
-          if (!candidateProfile.photoUrl) return;
-          setProfile((prev) =>
-            prev ? { ...prev, photoUrl: candidateProfile.photoUrl } : prev,
-          );
-          patchStoredUser({ photoUrl: candidateProfile.photoUrl });
+          const url = candidateProfile.photoUrl ?? null;
+          setProfile((prev) => (prev ? { ...prev, photoUrl: url } : prev));
+          if (url) patchSessionCandidatePhoto(url);
+          else patchSessionCandidatePhoto(null);
         })
         .catch(() => undefined);
     }
@@ -445,12 +445,7 @@ export default function DashboardPage() {
     );
   }, [profile, name]);
 
-  function notifyPhotoUpdated(photoUrl: string | null) {
-    patchStoredUser({ photoUrl });
-    window.dispatchEvent(new CustomEvent('cb-photo-updated', { detail: { photoUrl } }));
-  }
-
-  const displayPhotoUrl = photoPreviewUrl || browserReadablePhotoUrl(profile?.photoUrl);
+  const displayPhotoUrl = photoPreviewUrl || displayableCandidatePhotoUrl(profile?.photoUrl);
   // Keep preview visible during upload — hiding it caused a flash of the blue circle.
   const showPhoto = Boolean(displayPhotoUrl) && !photoBroken;
 
@@ -480,11 +475,11 @@ export default function DashboardPage() {
       const nextUrl = updated.photoUrl;
       if (!nextUrl) throw new Error('Photo was not saved. Please try again.');
       setProfile((prev) => (prev ? { ...prev, photoUrl: nextUrl } : prev));
-      notifyPhotoUpdated(nextUrl);
+      notifyCandidatePhotoUpdated(nextUrl);
       setPhotoPct(100);
       await new Promise((r) => setTimeout(r, 280));
       // Prefer server-readable URL (signed / data). Keep local preview only as backup.
-      if (nextUrl.startsWith('data:') || nextUrl.includes('X-Goog-Signature') || nextUrl.includes('Signature=')) {
+      if (displayableCandidatePhotoUrl(nextUrl)) {
         setPhotoPreviewUrl(null);
       }
       setPhotoBroken(false);
@@ -529,7 +524,11 @@ export default function DashboardPage() {
   const widgetsLoading = dataState === 'loading';
 
   return (
-    <CandidateAppShell activeTab="home" maxWidth="max-w-[1180px]" avatarUrl={profile?.photoUrl}>
+    <CandidateAppShell
+      activeTab="home"
+      maxWidth="max-w-[1180px]"
+      avatarUrl={profile ? displayableCandidatePhotoUrl(profile.photoUrl) : undefined}
+    >
       <div className="cd">
         <div className="cd-greet">
           <p className="cd-crumb">Boarding · Career Journey</p>
@@ -639,13 +638,7 @@ export default function DashboardPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       key={displayPhotoUrl || 'photo'}
-                      src={
-                        !displayPhotoUrl
-                          ? ''
-                          : displayPhotoUrl.startsWith('data:') || displayPhotoUrl.startsWith('blob:')
-                            ? displayPhotoUrl
-                            : `${displayPhotoUrl}${displayPhotoUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(displayPhotoUrl.slice(-24))}`
-                      }
+                      src={cacheBustedPhotoSrc(displayPhotoUrl) || ''}
                       alt=""
                       onLoad={() => {
                         setPhotoBroken(false);

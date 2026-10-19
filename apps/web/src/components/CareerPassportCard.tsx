@@ -1,5 +1,6 @@
 ﻿import Link from 'next/link';
 import type { PassportSection } from '@careerbridge/shared';
+import { cacheBustedPhotoSrc } from '@/lib/candidate-photo';
 
 function prettyText(value: string) {
   return value
@@ -87,6 +88,7 @@ export function CareerPassportCard({
     .join('');
   const year = new Date().getFullYear();
   const visibleSections = showSections ? sections : [];
+  const photoSrc = cacheBustedPhotoSrc(photoUrl);
 
   return (
     <article className="cb-passport-light w-full max-w-[360px]">
@@ -103,9 +105,9 @@ export function CareerPassportCard({
 
         <div className="mt-3 flex items-center gap-3">
           <div className="cb-passport-photo relative shrink-0 overflow-hidden">
-            {photoUrl ? (
+            {photoSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+              <img src={photoSrc} alt="" className="h-full w-full object-cover" />
             ) : (
               <span className="text-sm font-extrabold text-white">{initials || 'CB'}</span>
             )}

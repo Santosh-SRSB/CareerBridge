@@ -18,7 +18,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtPayload } from './jwt.strategy';
 import { hashPassword, verifyPassword } from './password.util';
 import { requireJwtAccessSecret, requireJwtRefreshSecret } from './jwt-secrets';
-import { isSafeInlinePhoto, ownedProfilePhotoPath } from '../candidates/profile-photo.util';
+import { isSafeInlinePhoto } from '../candidates/profile-photo.util';
 
 const OTP_TTL_SECONDS = 300;
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -866,13 +866,15 @@ export class AuthService {
     };
   }
 
-  /** Echo only the candidate's own stored photo reference; anything else is dropped. */
+  /**
+   * Session payloads may only carry browser-readable photos (inline data URLs).
+   * Private GCS object URLs 403 in the browser and were poisoning localStorage / header avatars;
+   * clients load displayable photos from GET /candidates/me instead.
+   */
   private sessionPhotoUrl(candidate?: { id?: string; photoUrl?: string | null } | null) {
     const stored = candidate?.photoUrl;
     if (!stored || !candidate?.id) return null;
-    if (isSafeInlinePhoto(stored)) return stored;
-    const bucket = this.config.get<string>('GCS_BUCKET', 'srsbbucket');
-    return ownedProfilePhotoPath(stored, candidate.id, bucket) ? stored : null;
+    return isSafeInlinePhoto(stored) ? stored : null;
   }
 
   async refresh(refreshToken: string) {

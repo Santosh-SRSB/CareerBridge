@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cacheBustedPhotoSrc } from '@/lib/candidate-photo';
 
 function prettyText(value: string) {
   return value
@@ -69,6 +70,7 @@ export function PassportPreview({
     .join('');
   const year = new Date().getFullYear();
   const id = passportId || 'CB-2048';
+  const photoSrc = cacheBustedPhotoSrc(photoUrl);
 
   return (
     <article className="cb-passport-light">
@@ -79,9 +81,9 @@ export function PassportPreview({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="cb-passport-photo relative shrink-0 overflow-hidden">
-              {photoUrl ? (
+              {photoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+                <img src={photoSrc} alt="" className="h-full w-full object-cover" />
               ) : (
                 <span className="text-sm font-extrabold tracking-tight">{initials || 'CB'}</span>
               )}
