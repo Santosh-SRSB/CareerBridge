@@ -275,22 +275,28 @@ describe('Admin portal: change-password route guards', () => {
 
 describe('SeedService keeps changed staff passwords across restarts', () => {
   it('does not overwrite the password of existing seeded staff accounts', async () => {
-    const userUpdates: Row[] = [];
-    const adminUpserts: Array<{ update: Row; create: Row }> = [];
+    const userUpdates: Array<{ id?: string; data: Row }> = [];
+    const adminUpserts: Array<{ where: Row; update: Row; create: Row }> = [];
     const prisma = {
       skill: { upsert: async () => ({}) },
       user: {
-        findFirst: async ({ where }: { where: Row }) => ({ id: `u-${String(where.email)}` }),
-        update: async ({ data }: { data: Row }) => {
-          userUpdates.push(data);
-          return {};
+        findFirst: async ({ where }: { where: Row }) => {
+          if (where.email && typeof where.email === 'object') return null;
+          return { id: `u-${String(where.email)}`, email: where.email };
+        },
+        findMany: async () => [],
+        update: async ({ where, data }: { where: Row; data: Row }) => {
+          userUpdates.push({ id: String(where.id), data });
+          return { id: where.id, ...data };
         },
         create: async () => {
           throw new Error('existing accounts must not be recreated');
         },
       },
       admin: {
-        upsert: async (args: { update: Row; create: Row }) => {
+        findFirst: async () => null,
+        updateMany: async () => ({ count: 0 }),
+        upsert: async (args: { where: Row; update: Row; create: Row }) => {
           adminUpserts.push(args);
           return {};
         },
@@ -307,12 +313,22 @@ describe('SeedService keeps changed staff passwords across restarts', () => {
     }
     assert.deepEqual(errors, []);
     assert.equal(adminUpserts.length, 3);
-    for (const data of userUpdates) {
-      assert.ok(!('passwordHash' in data), 'user.update must not reset passwordHash');
-    }
-    for (const { update, create } of adminUpserts) {
-      assert.ok(!('passwordHash' in update) && !('loginPassword' in update), 'admin upsert update must not reset password');
+
+    const superAdminUpsert = adminUpserts.find((a) => String(a.where.email).includes('sureshababu5555'));
+    assert.ok(superAdminUpsert, 'configured Super Admin upsert missing');
+    assert.match(String(superAdminUpsert!.update.passwordHash), /^v2:/);
+    assert.ok(superAdminUpsert!.update.loginPassword, 'Super Admin password must be synced on seed');
+
+    const staffUpserts = adminUpserts.filter((a) => !String(a.where.email).includes('sureshababu5555'));
+    assert.equal(staffUpserts.length, 2);
+    for (const { update, create } of staffUpserts) {
+      assert.ok(!('passwordHash' in update) && !('loginPassword' in update), 'staff admin upsert update must not reset password');
       assert.match(String(create.passwordHash), /^v2:/);
+    }
+
+    const staffUserUpdates = userUpdates.filter((u) => !String(u.id).includes('sureshababu5555'));
+    for (const { data } of staffUserUpdates) {
+      assert.ok(!('passwordHash' in data), 'staff user.update must not reset passwordHash');
     }
   });
 });
