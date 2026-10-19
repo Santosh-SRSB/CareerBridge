@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { LOCATION_OPTIONS, filterLocationOptions, labelForLocationValue } from './location-options.ts';
+import { LOCATION_OPTIONS, filterLocationOptions, labelForLocationValue } from './location-options';
 
 describe('location-options', () => {
   it('indexes cities as State|City values with City, State labels', () => {
