@@ -528,6 +528,15 @@ export class EmployersController {
     return this.employers.setTalentShortlist(user.id, id, query.jobId.trim(), false);
   }
 
+  @Post('candidates/:id/invite')
+  inviteCandidate(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() body: TalentShortlistDto,
+  ) {
+    return this.employers.inviteCandidateToJob(user.id, id, body.jobId.trim());
+  }
+
   @Get('candidates/:id')
   candidate(
     @CurrentUser() user: { id: string },

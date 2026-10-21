@@ -1788,7 +1788,65 @@ describe('Fix 11 — WhatsApp guards (no Graph calls)', () => {
     assert.equal(confirm.reason, 'reschedule_pending');
     assert.equal(row.status, 'RESCHEDULE_NEEDED');
   });
+});
 
+describe('employer job invite notification', () => {
+  it('sends Invite from Employer with an Apply link to the job', async () => {
+    const { svc, calls } = harness();
+    const res: any = await svc.inviteCandidateToJob('uA', CAND, 'JA3');
+    assert.equal(res.ok, true);
+    assert.equal(res.alreadyNotified, false);
+    const notice = calls.notifications.at(-1);
+    assert.equal(notice?.userId, 'cU');
+    assert.equal(notice?.type, 'JOB_INVITE');
+    assert.equal(notice?.title, 'Invite from Employer');
+    assert.equal(notice?.link, '/jobs/JA3');
+    assert.match(String(notice?.body), /Acme Pvt Ltd/);
+    assert.match(String(notice?.body), /Job A3/);
+  });
+
+  it('does not send a second invite for the same candidate and job', async () => {
+    const { svc, calls } = harness();
+    await svc.inviteCandidateToJob('uA', CAND, 'JA3');
+    const again: any = await svc.inviteCandidateToJob('uA', CAND, 'JA3');
+    assert.equal(again.alreadyNotified, true);
+    assert.equal(calls.notifications.length, 1);
+  });
+
+  it('allows inviting again after a withdrawn application', async () => {
+    const { svc, calls } = harness();
+    const res: any = await svc.inviteCandidateToJob('uA', CAND_OTHER, 'JA2');
+    assert.equal(res.alreadyNotified, false);
+    assert.equal(calls.notifications.at(-1)?.userId, 'cO');
+    assert.equal(calls.notifications.at(-1)?.link, '/jobs/JA2');
+  });
+
+  it('refuses when the candidate already applied', async () => {
+    const { svc, calls } = harness();
+    await assert.rejects(svc.inviteCandidateToJob('uA', CAND, 'JA1'), (err) => {
+      assert.equal(httpStatus(err), 409);
+      assert.match(httpMessage(err), /already applied/);
+      return true;
+    });
+    assert.equal(calls.notifications.length, 0);
+  });
+
+  it('refuses unpublished jobs, other employers, missing candidates, and incomplete KYC', async () => {
+    const { svc, db, calls } = harness();
+    db.jobs.push({ id: 'JA_DRAFT', employerId: EMP_A, title: 'Draft', status: 'DRAFT' });
+    await assert.rejects(svc.inviteCandidateToJob('uA', CAND, 'JA_DRAFT'), (err) => {
+      assert.equal(httpStatus(err), 400);
+      assert.match(httpMessage(err), /active job/);
+      return true;
+    });
+    await assert.rejects(svc.inviteCandidateToJob('uB', CAND, 'JA3'), NotFoundException);
+    await assert.rejects(svc.inviteCandidateToJob('uA', 'missing-candidate', 'JA3'), NotFoundException);
+    await assert.rejects(svc.inviteCandidateToJob('uU', CAND_OTHER, 'JU1'), ForbiddenException);
+    assert.equal(calls.notifications.length, 0);
+  });
+});
+
+describe('WhatsApp inbound action sender checks', () => {
   it('inbound action without a sender id is not treated as the candidate', async () => {
     const svc = new WhatsAppWebhookService(
       {

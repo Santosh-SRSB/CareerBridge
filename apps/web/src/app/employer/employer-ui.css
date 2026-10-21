@@ -2160,14 +2160,23 @@ a.ev-stat:hover {
   color: #9b1c14;
 }
 
+.ev-mcc__actions {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.ev-mcc__notify,
 .ev-mcc__cta {
   width: 100%;
-  margin-top: auto;
   justify-content: center;
+  font-weight: 700;
+}
+
+.ev-mcc__cta {
   border-color: var(--ev-btn);
   background: var(--ev-btn);
   color: var(--ev-btnt);
-  font-weight: 700;
 }
 
 .ev-mcc__cta:hover {

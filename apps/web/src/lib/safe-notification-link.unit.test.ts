@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   SAFE_NOTIFICATION_LINK_SW_SOURCE,
+  jobInviteApplyHref,
   safeNotificationLink,
 } from './safe-notification-link';
 
@@ -47,6 +48,14 @@ describe('SEC-FE-008 safeNotificationLink', () => {
     for (const sample of samples) {
       assert.equal(fn(sample, '/notifications'), safeNotificationLink(sample), String(sample));
     }
+  });
+
+  it('exposes Apply only for employer job invites to /jobs/…', () => {
+    assert.equal(jobInviteApplyHref({ type: 'JOB_INVITE', link: '/jobs/abc' }), '/jobs/abc');
+    assert.equal(jobInviteApplyHref({ type: 'JOB_INVITE', link: '/jobs/abc/apply' }), '/jobs/abc/apply');
+    assert.equal(jobInviteApplyHref({ type: 'JOB_MATCH', link: '/jobs/abc' }), null);
+    assert.equal(jobInviteApplyHref({ type: 'JOB_INVITE', link: 'https://evil.example/jobs/x' }), null);
+    assert.equal(jobInviteApplyHref({ type: 'JOB_INVITE', link: '/notifications' }), null);
   });
 
   it('firebase-messaging-sw route embeds SAFE_NOTIFICATION_LINK_SW_SOURCE', () => {

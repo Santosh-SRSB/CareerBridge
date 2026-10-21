@@ -104,6 +104,7 @@ describe('notification templates', () => {
     const invite = list.find((item) => item.key === 'JOB_INVITE')!;
     assert.equal(invite.customized, false);
     assert.deepEqual(invite.variables, ['company', 'jobTitle']);
+    assert.equal(invite.defaultTitle, 'Invite from Employer');
     assert.ok(list.length >= 13);
   });
 });

@@ -14,7 +14,7 @@ import {
   type InAppNotification,
 } from '@/lib/api';
 import { getStoredUser, isEmployerRole } from '@/lib/session';
-import { safeNotificationLink } from '@/lib/safe-notification-link';
+import { jobInviteApplyHref, safeNotificationLink } from '@/lib/safe-notification-link';
 
 function formatWhen(value: string) {
   const date = new Date(value);
@@ -32,6 +32,7 @@ function NotificationsList({
   loading,
   homeHref,
   onOpen,
+  onApply,
   onMarkAll,
   employer,
 }: {
@@ -39,6 +40,7 @@ function NotificationsList({
   loading: boolean;
   homeHref: string;
   onOpen: (item: InAppNotification) => void;
+  onApply: (item: InAppNotification) => void;
   onMarkAll: () => void;
   employer?: boolean;
 }) {
@@ -64,29 +66,43 @@ function NotificationsList({
         ) : null}
 
         <div className="space-y-3">
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => void onOpen(item)}
-              className={`w-full rounded-2xl border p-4 text-left shadow-sm transition ${
-                item.read ? 'border-slate-200 bg-white' : 'border-emerald-200 bg-emerald-50/40'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-extrabold text-slate-900">{item.title}</p>
-                  <p className="mt-1 text-sm text-slate-600">{item.body}</p>
-                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    {formatWhen(item.createdAt)}
-                  </p>
-                </div>
-                {!item.read ? (
-                  <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#dc2626]" />
+          {items.map((item) => {
+            const applyHref = jobInviteApplyHref(item);
+            return (
+              <article
+                key={item.id}
+                className={`w-full rounded-2xl border p-4 text-left shadow-sm transition ${
+                  item.read ? 'border-slate-200 bg-white' : 'border-emerald-200 bg-emerald-50/40'
+                }`}
+              >
+                <button type="button" onClick={() => void onOpen(item)} className="w-full text-left">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-extrabold text-slate-900">{item.title}</p>
+                      <p className="mt-1 text-sm text-slate-600">{item.body}</p>
+                      <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {formatWhen(item.createdAt)}
+                      </p>
+                    </div>
+                    {!item.read ? (
+                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#dc2626]" />
+                    ) : null}
+                  </div>
+                </button>
+                {applyHref ? (
+                  <Button
+                    type="button"
+                    size="md"
+                    block={false}
+                    className="mt-3"
+                    onClick={() => void onApply(item)}
+                  >
+                    Apply
+                  </Button>
                 ) : null}
-              </div>
-            </button>
-          ))}
+              </article>
+            );
+          })}
         </div>
 
         <Link href={homeHref} className="inline-block text-sm font-bold text-[#10137c] hover:underline">
@@ -180,6 +196,15 @@ export default function NotificationsPage() {
     if (item.link) router.push(safeNotificationLink(item.link));
   }
 
+  async function onApply(item: InAppNotification) {
+    const href = jobInviteApplyHref(item);
+    if (!item.read) {
+      await markNotificationRead(item.id).catch(() => undefined);
+      setItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, read: true } : row)));
+    }
+    if (href) router.push(href);
+  }
+
   async function onMarkAll() {
     await markAllNotificationsRead();
     setItems((prev) => prev.map((row) => ({ ...row, read: true })));
@@ -191,6 +216,7 @@ export default function NotificationsPage() {
       loading={loading}
       homeHref={isEmployer ? '/employer' : '/dashboard'}
       onOpen={onOpen}
+      onApply={onApply}
       onMarkAll={onMarkAll}
       employer={isEmployer}
     />

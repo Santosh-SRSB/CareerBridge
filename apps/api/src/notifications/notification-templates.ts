@@ -97,11 +97,11 @@ export const NOTIFICATION_TEMPLATES = {
     body: 'Your job "{{jobTitle}}" was not approved by the CareerBridge team. Edit the job and publish it again, or contact support.',
   },
   JOB_INVITE: {
-    label: 'Invited to apply',
+    label: 'Invite from employer',
     audience: 'CANDIDATE',
     variables: ['company', 'jobTitle'],
-    title: 'Invited to apply',
-    body: 'You were invited by {{company}} for {{jobTitle}}.',
+    title: 'Invite from Employer',
+    body: '{{company}} invited you to apply for {{jobTitle}}.',
   },
 } as const satisfies Record<string, Omit<NotificationTemplateDefinition, 'key'>>;
 
