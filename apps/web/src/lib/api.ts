@@ -45,6 +45,7 @@ import type {
   VerifyOtpResult,
 } from '@careerbridge/shared';
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './session';
+import { isAuthSession } from './post-otp-auth';
 import { type AdminReportKind, fetchAdminReport, saveBlobFile } from './admin-report-export';
 import type { AdminEmployerReport } from './admin-employer-report';
 import type { AdminProgressReport } from './admin-progress';
@@ -221,7 +222,7 @@ export async function verifyOtp(payload: {
     auth: false,
     body: JSON.stringify(payload),
   });
-  if ('accessToken' in result) {
+  if (isAuthSession(result)) {
     saveSession(result);
   }
   return result;

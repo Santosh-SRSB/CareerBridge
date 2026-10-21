@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { nextOnboardingStepPath, resolveCandidateResumePath, withSkippedStep } from './onboarding-flow';
+import {
+  nextOnboardingStepPath,
+  onboardingGateRedirect,
+  resolveCandidateResumePath,
+  withSkippedStep,
+} from './onboarding-flow';
 
 describe('onboarding flow', () => {
   it('steps run Location → Status → Preferences → Skills → Student Dossier', () => {
@@ -24,6 +29,13 @@ describe('onboarding flow', () => {
     );
     assert.equal(resolveCandidateResumePath({ onboardingCompleted: true }), '/onboarding/complete');
     assert.equal(resolveCandidateResumePath({ dashboardReached: true }), '/dashboard');
+  });
+
+  it('lets a newly registered candidate stay on onboarding and keeps login for anonymous users', () => {
+    assert.equal(onboardingGateRedirect(null), '/login');
+    assert.equal(onboardingGateRedirect({ onboardingCompleted: false, dashboardReached: false }), null);
+    assert.equal(onboardingGateRedirect({ onboardingCompleted: true, dashboardReached: false }), '/onboarding/complete');
+    assert.equal(onboardingGateRedirect({ onboardingCompleted: true, dashboardReached: true }), '/dashboard');
   });
 
   it('answering a step clears its skipped flag; skipping adds it once', () => {
