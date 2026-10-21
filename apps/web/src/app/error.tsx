@@ -21,7 +21,7 @@ export default function Error({
 
   return (
     <div role="alert" className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-6 text-center">
-      <h1 className="text-xl font-bold text-[#0a2e2c]">Something went wrong</h1>
+      <h1 className="text-xl font-bold text-[#10137c]">Something went wrong</h1>
       <p className="max-w-md text-sm font-semibold text-[#4a5f57]">
         We couldn&apos;t load this page. Please try again. If the problem continues, contact support with
         Error ID: <span className="font-mono" data-testid="error-id">{errorId}</span>
@@ -29,7 +29,7 @@ export default function Error({
       <button
         type="button"
         onClick={() => reset()}
-        className="min-h-12 rounded-full bg-[#0a2e2c] px-6 py-3 text-sm font-bold text-white"
+        className="min-h-12 rounded-full bg-[#10137c] px-6 py-3 text-sm font-bold text-white"
       >
         Try Again
       </button>

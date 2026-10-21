@@ -113,7 +113,7 @@ export function PhoneAuthForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       {/* Channel Switcher */}
-      <div className="flex rounded-xl bg-[#eef4f1] p-1 text-xs font-bold border border-primary/10 shadow-inner">
+      <div className="flex rounded-xl bg-[#eef0ff] p-1 text-xs font-bold border border-primary/10 shadow-inner">
         <button
           type="button"
           onClick={() => {
@@ -122,7 +122,7 @@ export function PhoneAuthForm({
             setTouched((prev) => ({ ...prev, national: false }));
           }}
           className={`flex-1 py-2 rounded-lg transition-all duration-200 ${
-            channel === 'MOBILE' ? 'bg-[#0a2e2c] text-white shadow-sm' : 'text-primary/70 hover:text-primary'
+            channel === 'MOBILE' ? 'bg-[#10137c] text-white shadow-sm' : 'text-primary/70 hover:text-primary'
           }`}
         >
           Mobile Number
@@ -135,7 +135,7 @@ export function PhoneAuthForm({
             setTouched((prev) => ({ ...prev, email: false }));
           }}
           className={`flex-1 py-2 rounded-lg transition-all duration-200 ${
-            channel === 'EMAIL' ? 'bg-[#0a2e2c] text-white shadow-sm' : 'text-primary/70 hover:text-primary'
+            channel === 'EMAIL' ? 'bg-[#10137c] text-white shadow-sm' : 'text-primary/70 hover:text-primary'
           }`}
         >
           Email Address
@@ -185,7 +185,7 @@ export function PhoneAuthForm({
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-xl bg-gradient-to-r from-[#0a2e2c] via-[#0d9488] to-[#14b8a6] px-4 py-3.5 text-base font-bold text-white shadow-[0_12px_28px_rgba(13,148,136,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(13,148,136,0.34)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-xl bg-gradient-to-r from-[#10137c] via-[#1a1fc4] to-[#3b5bdb] px-4 py-3.5 text-base font-bold text-white shadow-[0_12px_28px_rgba(26,31,196,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(26,31,196,0.34)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? 'Sending OTP...' : 'Send OTP'}
       </button>

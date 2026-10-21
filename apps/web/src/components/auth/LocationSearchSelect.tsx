@@ -136,7 +136,7 @@ export function LocationSearchSelect({
                   width: '100%',
                   padding: '9px 14px',
                   border: 0,
-                  background: index === highlight ? '#f0fdfa' : 'transparent',
+                  background: index === highlight ? '#eef0ff' : 'transparent',
                   textAlign: 'left',
                   fontSize: 14,
                   fontWeight: index === highlight ? 600 : 500,

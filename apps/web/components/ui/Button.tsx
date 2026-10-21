@@ -19,7 +19,7 @@ export function Button({
 }: Props) {
   const styles = {
     primary:
-      'cb-btn-shine relative overflow-hidden bg-primary text-white shadow-[0_12px_28px_rgba(12,51,64,0.28)] transition duration-300 hover:bg-primary-hover hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(12,51,64,0.36)] active:translate-y-0',
+      'cb-btn-shine relative overflow-hidden bg-primary text-white shadow-[0_12px_28px_rgba(16,19,124,0.28)] transition duration-300 hover:bg-primary-hover hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(16,19,124,0.36)] active:translate-y-0',
     secondary: 'border border-primary text-primary bg-surface hover:bg-primary-soft',
     tertiary: 'bg-accent text-primary hover:bg-accent/90',
     destructive: 'bg-error text-white hover:bg-error/90',

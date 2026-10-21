@@ -16,7 +16,7 @@ const DECK = [
   {
     name: "Priya Yadav",
     initials: "PY",
-    tone: "#14b8a6",
+    tone: "#3b5bdb",
     loc: "Bengaluru · Data Analyst",
     ready: 64,
     resume: 70,
@@ -144,7 +144,7 @@ export function PassportDeck() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <span
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-display text-sm font-extrabold text-[#062120] ring-2 ring-white/25"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-display text-sm font-extrabold text-[#0b0e5e] ring-2 ring-white/25"
               style={{ background: card.tone }}
             >
               {card.initials}

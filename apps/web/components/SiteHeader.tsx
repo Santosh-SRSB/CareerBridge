@@ -21,7 +21,7 @@ export function SiteHeader({ compact = false }: { compact?: boolean }) {
   return (
     <header
       className={`sticky top-0 z-40 backdrop-blur-md transition ${
-        onAuth ? 'bg-primary/95 shadow-[0_8px_30px_rgba(12,51,64,0.28)]' : 'bg-primary/95 shadow-[0_8px_30px_rgba(12,51,64,0.25)]'
+        onAuth ? 'bg-primary/95 shadow-[0_8px_30px_rgba(16,19,124,0.28)]' : 'bg-primary/95 shadow-[0_8px_30px_rgba(16,19,124,0.25)]'
       }`}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3">

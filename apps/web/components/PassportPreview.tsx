@@ -52,7 +52,7 @@ export function PassportPreview({
     .join('');
 
   return (
-    <article className="relative overflow-hidden rounded-lg bg-primary p-5 text-white shadow-[0_30px_80px_rgba(12,51,64,0.32)]">
+    <article className="relative overflow-hidden rounded-lg bg-primary p-5 text-white shadow-[0_30px_80px_rgba(16,19,124,0.32)]">
       <div className="absolute right-4 top-0 h-5 w-8 rounded-b-md bg-white/15" />
       <div className="relative flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
