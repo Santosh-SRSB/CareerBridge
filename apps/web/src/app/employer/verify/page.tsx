@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { designationError, emailError } from '@careerbridge/shared';
 import { EmployerOnboardingFrame } from '@/components/EmployerOnboardingFrame';
@@ -105,15 +106,20 @@ export default function EmployerVerifyPage() {
           onChange={(event) => setDesignation(event.target.value)}
         />
         {error ? <p className="ep-kyc__error">{error}</p> : null}
-        <Button
-          type="submit"
-          variant="primary"
-          loading={loading}
-          loadingLabel="Submitting..."
-          className="ep-kyc__cta"
-        >
-          Submit for verification
-        </Button>
+        <div className="ep-kyc__actions">
+          <Link href="/employer/kyc" className="ep-kyc__back">
+            ← Back
+          </Link>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={loading}
+            loadingLabel="Submitting..."
+            className="ep-kyc__cta"
+          >
+            Submit for verification
+          </Button>
+        </div>
       </form>
     </EmployerOnboardingFrame>
   );
