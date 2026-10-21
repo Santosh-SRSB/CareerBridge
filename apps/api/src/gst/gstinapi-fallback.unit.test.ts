@@ -122,6 +122,30 @@ describe('gstinapi → AppyFlow fallback', () => {
     assert.equal(result.tradeName, 'OK');
   });
 
+  it('enriches missing gstinapi trade name from AppyFlow when primary is ACTIVE', async () => {
+    mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
+      const url = requestUrl(input);
+      if (url.includes('gstinapi.in')) {
+        return jsonResponse(200, {
+          success: true,
+          data: { gstin: ACTIVE_GSTIN, status: 'Active' },
+        });
+      }
+      return jsonResponse(200, {
+        error: false,
+        taxpayerInfo: { gstin: ACTIVE_GSTIN, sts: 'Active', tradeNam: 'REGISTERED MARK', panNo: 'ABCDE1234F' },
+      });
+    });
+
+    const provider = new IrisIrpGstProvider(
+      cfg({ gstinApiKey: 'primary-key', gstinApiFallbackKey: 'appy-secret' }),
+    );
+    const result = await provider.getGstinDetails(ACTIVE_GSTIN);
+    assert.equal(result.status, 'ACTIVE');
+    assert.equal(result.tradeName, 'REGISTERED MARK');
+    assert.equal(result.pan, 'ABCDE1234F');
+  });
+
   it('maps AppyFlow Inactive sts to NOT_ACTIVE', async () => {
     mock.method(globalThis, 'fetch', async () =>
       jsonResponse(200, {

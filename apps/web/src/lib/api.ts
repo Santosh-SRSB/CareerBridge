@@ -1232,6 +1232,7 @@ export type GstVerifyResult = {
   requestId?: string;
   trademark?: string | null;
   tradeName?: string | null;
+  pan?: string | null;
   provider?: 'GSTINAPI' | 'IRIS_IRP' | 'MOCK';
   /** True when the server answered with its local test double, not a live GST lookup. */
   mock?: boolean;

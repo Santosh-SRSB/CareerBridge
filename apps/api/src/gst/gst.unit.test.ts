@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { normalizeGstin, validateGstinFormat, maskGstin } from './gst.validator';
 import { normalizeGstStatus, verifiedFromStatus } from './gst.status';
-import { pickTradeName } from './gst.payload';
+import { pickRegisteredName, pickTradeName, unwrapGstPayload } from './gst.payload';
 
 describe('GSTIN normalization', () => {
   it('trims and uppercases', () => {
@@ -84,5 +84,16 @@ describe('trade name extraction', () => {
 
   it('does not fall back to legal name', () => {
     assert.equal(pickTradeName({ legal_name: 'LEGAL COMPANY PRIVATE LIMITED' }), null);
+  });
+
+  it('reads AppyFlow tradeNam from nested taxpayerInfo', () => {
+    assert.equal(
+      pickRegisteredName(unwrapGstPayload({ taxpayerInfo: { tradeNam: 'REGISTERED MARK', lgnm: 'LEGAL' } })),
+      'REGISTERED MARK',
+    );
+  });
+
+  it('falls back to legal name for KYC auto-fill when trade name is missing', () => {
+    assert.equal(pickRegisteredName({ lgnm: 'LEGAL COMPANY PRIVATE LIMITED' }), 'LEGAL COMPANY PRIVATE LIMITED');
   });
 });
