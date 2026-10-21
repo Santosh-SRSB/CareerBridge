@@ -16,7 +16,12 @@ import { isAnsweredInterviewQuestion } from '@/lib/interview-answer-display';
 import { classifyInterviewLoadError, type InterviewLoadError } from '@/lib/interview-load-error';
 import { InterviewLoadErrorPanel } from '@/components/interviews/InterviewLoadErrorPanel';
 import { greetingForHour, setAiThinking, setAvatarMood } from '@/features/interview/ai-speech';
-import { cancelInterviewSpeech, speakInterviewLine } from '@/features/interview/cloud-speak';
+import {
+  cancelInterviewSpeech,
+  prefetchInterviewSpeech,
+  speakInterviewLine,
+  unlockInterviewAudio,
+} from '@/features/interview/cloud-speak';
 import { LOBBY_DONTS, LOBBY_DOS } from '@/features/interview/lobby-rules';
 
 const LiveInterviewer = dynamic(() => import('@/features/interview/LiveInterviewer'), {
@@ -35,8 +40,20 @@ function firstName(full?: string | null) {
   return part.charAt(0).toUpperCase() + part.slice(1);
 }
 
-function speak(text: string, mood: 'speaking' | 'welcoming' = 'speaking') {
-  return speakInterviewLine(text, { mood, rate: 0.94 });
+function liveWelcomeLine() {
+  return `${greetingForHour()}. Welcome to your Career Bridge interview. Be relaxed, and once you are ready, click Start to begin.`;
+}
+
+function liveIntroLine() {
+  return `${greetingForHour()}. Welcome to your Career Bridge interview. Before we begin, could you please introduce yourself? Tell me who you are, what you have been doing, and what you want from this role.`;
+}
+
+function speak(
+  text: string,
+  mood: 'speaking' | 'welcoming' = 'speaking',
+  onStart?: () => void,
+) {
+  return speakInterviewLine(text, { mood, rate: 0.94, onStart });
 }
 
 async function naturalPause(ms = 450) {
@@ -143,6 +160,15 @@ export default function LiveInterviewPage() {
     const id = window.setTimeout(() => setShowDosPopup(false), 5000);
     return () => window.clearTimeout(id);
   }, [showDosPopup]);
+
+  useEffect(() => {
+    if (lobbyStep === 'mic' || lobbyStep === 'welcome') {
+      void prefetchInterviewSpeech(liveWelcomeLine());
+    }
+    if (lobbyStep === 'welcome') {
+      void prefetchInterviewSpeech(liveIntroLine());
+    }
+  }, [lobbyStep]);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -446,6 +472,7 @@ export default function LiveInterviewPage() {
   }
 
   async function testCamera() {
+    unlockInterviewAudio();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       await attachStream(stream);
@@ -480,6 +507,7 @@ export default function LiveInterviewPage() {
   }
 
   function testMicrophone() {
+    unlockInterviewAudio();
     const Ctor = speechCtor();
     if (!Ctor) {
       setStatus('This browser cannot test speech. You can still type answers.');
@@ -518,10 +546,12 @@ export default function LiveInterviewPage() {
   }
 
   async function playWelcome() {
+    unlockInterviewAudio();
     setLobbyStep('welcome');
     setStartReady(true);
     setAvatarMood('welcoming');
-    const line = `${greetingForHour()}. Welcome to your Career Bridge interview. Be relaxed, and once you are ready, click Start to begin.`;
+    const line = liveWelcomeLine();
+    void prefetchInterviewSpeech(liveIntroLine());
     setStatus('When you are ready, click Start');
     await naturalPause(350);
     await speak(line, 'welcoming');
@@ -701,8 +731,9 @@ export default function LiveInterviewPage() {
   }
 
   async function begin() {
+    unlockInterviewAudio();
     cancelInterviewSpeech('welcoming');
-    const intro = `${greetingForHour()}. Welcome to your Career Bridge interview. Before we begin, could you please introduce yourself? Tell me who you are, what you have been doing, and what you want from this role.`;
+    const intro = liveIntroLine();
     setBusy(true);
     setAwake(true);
     awakeRef.current = true;
@@ -710,7 +741,11 @@ export default function LiveInterviewPage() {
     speakingRef.current = true;
     setStatus('AI is speaking...');
     await naturalPause(400);
-    const voicePromise = speak(intro, 'welcoming');
+    let revealVoice: () => void = () => {};
+    const voiceStarted = new Promise<void>((resolve) => {
+      revealVoice = () => resolve();
+    });
+    const voicePromise = speak(intro, 'welcoming', revealVoice);
     try {
       if (!streamRef.current) {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -718,6 +753,10 @@ export default function LiveInterviewPage() {
         setCamOn(true);
       }
       const next = await startLiveInterview(params.id);
+      await Promise.race([
+        voiceStarted,
+        new Promise<void>((resolve) => window.setTimeout(resolve, 8000)),
+      ]);
       setSession(next);
       saveActiveInterviewTimer(next);
       askedAt.current = Date.now();
@@ -922,6 +961,7 @@ export default function LiveInterviewPage() {
                     type="button"
                     className="is-start"
                     onClick={() => {
+                      unlockInterviewAudio();
                       setLobbyStep('mic');
                       setMicTesting(false);
                       setLobbyHint('Hey Bridge AI, my mic is working?');
