@@ -27,7 +27,7 @@ export class RequestOtpDto {
   phone?: string;
 
   @ApiPropertyOptional()
-  @ValidateIf((dto: RequestOtpDto) => dto.channel === 'EMAIL' || (dto.purpose === 'REGISTER' && Boolean(dto.email)))
+  @ValidateIf((dto: RequestOtpDto) => dto.channel === 'EMAIL' || dto.purpose === 'REGISTER')
   @IsEmail({}, { message: 'Enter a valid email address.' })
   email?: string;
 

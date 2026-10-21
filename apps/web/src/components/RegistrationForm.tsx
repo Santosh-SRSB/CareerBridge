@@ -179,7 +179,7 @@ export function RegistrationForm() {
         purpose: 'REGISTER',
         accountType: 'CANDIDATE',
         phone,
-        email: trimmedEmail || undefined,
+        email: trimmedEmail,
         fullName: fullName.trim(),
         ...(locationCity
           ? { location: `${locationCity}, ${locationState}`, city: locationCity, state: locationState }
@@ -294,12 +294,13 @@ export function RegistrationForm() {
           </div>
         </AuthField>
 
-        <AuthField id="cand-email" label="Email" optional icon={<MailIcon />} error={emailError}>
+        <AuthField id="cand-email" label="Email" required icon={<MailIcon />} error={emailError}>
           <input
             id="cand-email"
             name="email"
             type="email"
-            required={otpChannel === 'EMAIL'}
+            required
+            aria-required
             aria-invalid={emailError ? true : undefined}
             aria-describedby={authFieldDescribedBy('cand-email', emailError)}
             autoComplete="email"
