@@ -26,11 +26,12 @@ function errorCode(err: unknown) {
 
 function harness(
   users: Row[] = [],
-  options: { devOtp?: boolean; emailConfigured?: boolean; nodeEnv?: string } = {},
+  options: { devOtp?: boolean; emailConfigured?: boolean; nodeEnv?: string; failCreate?: boolean } = {},
 ) {
   const otpRequests: Row[] = [];
   const updateManyCalls: Row[] = [];
   const createdUsers: Row[] = [];
+  const refreshTokens: Row[] = [];
   const sentOtps: Array<{ email: string; code: string }> = [];
   let seq = 0;
   const matches = (row: Row, where: Row) =>
@@ -47,6 +48,7 @@ function harness(
       findFirst: async ({ where }: Row) => users.find((u) => matches(u, where)) ?? null,
       update: async ({ where, data }: Row) => Object.assign(users.find((u) => u.id === where.id)!, data),
       create: async ({ data }: Row) => {
+        if (options.failCreate) throw new Error('profile create failed');
         createdUsers.push(data);
         const row = {
           id: randomUUID(),
@@ -58,7 +60,12 @@ function harness(
         return row;
       },
     },
-    refreshToken: { create: async ({ data }: Row) => data },
+    refreshToken: {
+      create: async ({ data }: Row) => {
+        refreshTokens.push(data);
+        return data;
+      },
+    },
     otpRequest: {
       count: async ({ where }: Row) => otpRequests.filter((r) => matches(r, where)).length,
       findFirst: async ({ where }: Row) => otpRequests.find((r) => matches(r, where)) ?? null,
@@ -98,7 +105,7 @@ function harness(
     },
   };
   const svc = new AuthService(prisma, jwt as any, config as any, firebase as any, email as any);
-  return { svc, otpRequests, updateManyCalls, createdUsers, sentOtps };
+  return { svc, otpRequests, updateManyCalls, createdUsers, refreshTokens, sentOtps };
 }
 
 const register = (extra: Row = {}) => ({
@@ -221,6 +228,165 @@ describe('Employer registration business location', () => {
     assert.equal(employer.city, 'Bengaluru');
     assert.equal(employer.state, 'Karnataka');
     assert.equal(employer.companyName, 'Acme Pvt Ltd');
+  });
+});
+
+describe('Candidate registration issues an authenticated session', () => {
+  it('successful OTP verification creates the candidate and returns the same session shape as login', async () => {
+    const { svc, createdUsers, refreshTokens } = harness();
+    const { requestId } = await svc.requestOtp(register());
+    const result = await svc.verifyOtp({ requestId, otp: '123456' } as any);
+    assert.equal('accessToken' in result, true);
+    assert.equal('signInRequired' in result, false);
+    const session = result as { accessToken: string; refreshToken: string; user: Row };
+    assert.equal(session.accessToken, 'signed-token');
+    assert.equal(session.refreshToken, 'signed-token');
+    assert.equal(session.user.role, 'CANDIDATE');
+    assert.equal(session.user.onboardingCompleted, false);
+    assert.equal(session.user.dashboardReached, false);
+    assert.equal(createdUsers.length, 1);
+    assert.equal(createdUsers[0].userType, 'CANDIDATE');
+    assert.equal(createdUsers[0].status, 'ACTIVE');
+    assert.ok(createdUsers[0].candidate?.create);
+    assert.equal(refreshTokens.length, 1);
+    assert.equal(refreshTokens[0].userId, session.user.id);
+  });
+
+  it('the issued session is wrapped as { success, data } for the web client', async () => {
+    const { svc } = harness();
+    const { requestId } = await svc.requestOtp(register());
+    const body = (await asHttpBody(await svc.verifyOtp({ requestId, otp: '123456' } as any))) as Row;
+    assert.equal(body.success, true);
+    assert.ok(body.data?.accessToken);
+    assert.ok(body.data?.refreshToken);
+    assert.equal(body.data?.user?.role, 'CANDIDATE');
+  });
+
+  it('a wrong OTP does not create a user or issue tokens', async () => {
+    const { svc, createdUsers } = harness();
+    const { requestId } = await svc.requestOtp(register());
+    await assert.rejects(svc.verifyOtp({ requestId, otp: '000000' } as any), (err) => {
+      assert.equal(errorCode(err), 'INVALID_OTP');
+      return true;
+    });
+    assert.equal(createdUsers.length, 0);
+  });
+
+  it('reusing a verified OTP does not create a second account', async () => {
+    const { svc, createdUsers } = harness();
+    const { requestId } = await svc.requestOtp(register());
+    await svc.verifyOtp({ requestId, otp: '123456' } as any);
+    await assert.rejects(svc.verifyOtp({ requestId, otp: '123456' } as any), (err) => {
+      assert.equal(errorCode(err), 'INVALID_OTP');
+      return true;
+    });
+    assert.equal(createdUsers.length, 1);
+  });
+
+  it('does not issue a session when candidate profile creation fails', async () => {
+    const { svc, createdUsers } = harness([], { failCreate: true });
+    const { requestId } = await svc.requestOtp(register());
+    await assert.rejects(svc.verifyOtp({ requestId, otp: '123456' } as any), (err) => {
+      assert.equal((err as Error).message, 'profile create failed');
+      return true;
+    });
+    assert.equal(createdUsers.length, 0);
+  });
+
+  it('password sign-in still works after automatic registration login', async () => {
+    const { svc } = harness();
+    const { requestId } = await svc.requestOtp(register());
+    const registered = await svc.verifyOtp({ requestId, otp: '123456' } as any);
+    assert.equal('accessToken' in registered, true);
+    const session = await svc.loginWithPassword('asha@example.test', 'Secret@123', 'CANDIDATE');
+    assert.equal(session.user.role, 'CANDIDATE');
+    assert.ok(session.accessToken);
+  });
+
+  it('employer OTP registration is unchanged and still requires a separate sign-in', async () => {
+    const { svc } = harness();
+    const { requestId } = await svc.requestOtp(
+      register({
+        accountType: 'EMPLOYER',
+        email: 'hr@acme.test',
+        companyName: 'Acme Pvt Ltd',
+        location: 'Bengaluru, Karnataka',
+        state: 'Karnataka',
+        city: 'Bengaluru',
+      }),
+    );
+    const result = await svc.verifyOtp({ requestId, otp: '123456' } as any);
+    assert.deepEqual(result, { registered: true, signInRequired: true });
+  });
+
+  it('existing candidate and employer OTP login still issue sessions', async () => {
+    const users = [
+      {
+        id: 'cand-1',
+        phone: '+919800000001',
+        email: 'asha@example.test',
+        userType: 'CANDIDATE',
+        status: 'ACTIVE',
+        passwordHash: 'x',
+        externalAuthId: 'ext-cand',
+        candidate: { onboardingCompleted: true, dashboardReached: true, firstName: 'Asha' },
+      },
+      {
+        id: 'emp-1',
+        phone: '+919800000022',
+        email: 'hr@acme.test',
+        userType: 'EMPLOYER_ADMIN',
+        status: 'ACTIVE',
+        passwordHash: 'x',
+        externalAuthId: 'ext-emp',
+        employer: { contactName: 'Priya' },
+      },
+    ];
+    const { svc } = harness(users);
+    for (const account of [
+      { accountType: 'CANDIDATE' as const, phone: '+919800000001', role: 'CANDIDATE' },
+      { accountType: 'EMPLOYER' as const, phone: '+919800000022', role: 'EMPLOYER_ADMIN' },
+    ]) {
+      const { requestId } = await svc.requestOtp({
+        channel: 'MOBILE',
+        purpose: 'LOGIN',
+        accountType: account.accountType,
+        phone: account.phone,
+      } as any);
+      const result = await svc.verifyOtp({ requestId, otp: '123456' } as any);
+      assert.equal('accessToken' in result, true);
+      assert.equal((result as { user: Row }).user.role, account.role);
+    }
+  });
+
+  it('suspended candidates cannot obtain a session via OTP login or password login', async () => {
+    const passwordHash = await hashPassword('Secret@123');
+    const users = [
+      {
+        id: 'cand-suspended',
+        phone: '+919800000011',
+        email: 'blocked@example.test',
+        userType: 'CANDIDATE',
+        status: 'SUSPENDED',
+        passwordHash,
+        externalAuthId: 'ext-1',
+      },
+    ];
+    const { svc } = harness(users);
+    await assert.rejects(svc.loginWithPassword('blocked@example.test', 'Secret@123', 'CANDIDATE'), (err) => {
+      assert.equal(errorCode(err), 'UNAUTHORIZED');
+      return true;
+    });
+    const { requestId } = await svc.requestOtp({
+      channel: 'MOBILE',
+      purpose: 'LOGIN',
+      accountType: 'CANDIDATE',
+      phone: '+919800000011',
+    } as any);
+    await assert.rejects(svc.verifyOtp({ requestId, otp: '123456' } as any), (err) => {
+      assert.equal(errorCode(err), 'UNAUTHORIZED');
+      return true;
+    });
   });
 });
 
