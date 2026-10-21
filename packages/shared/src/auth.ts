@@ -203,6 +203,7 @@ export type VerifyOtpPayload = {
   otp?: string;
 };
 
+/** Candidate registration and all logins return a session. Employer registration still requires a separate sign-in. */
 export type VerifyOtpResult = AuthSession | { registered: true; signInRequired: true };
 
 export type PlatformAdminRecord = {

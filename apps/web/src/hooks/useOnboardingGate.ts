@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchMe } from '@/lib/api';
 import { getStoredUser, patchStoredUser } from '@/lib/session';
-import type { OnboardingStep } from '@/lib/onboarding-flow';
+import { onboardingGateRedirect, type OnboardingStep } from '@/lib/onboarding-flow';
 
 export function useOnboardingGate(step: OnboardingStep) {
   const router = useRouter();
@@ -12,7 +12,7 @@ export function useOnboardingGate(step: OnboardingStep) {
 
   useEffect(() => {
     const stored = getStoredUser();
-    if (!stored) {
+    if (!stored || onboardingGateRedirect(stored) === '/login') {
       router.replace('/login');
       return;
     }
@@ -26,24 +26,17 @@ export function useOnboardingGate(step: OnboardingStep) {
           onboardingCompleted,
           dashboardReached,
         });
-        // Completed users must not bounce on step pages when dashboardReached is still false.
-        if (dashboardReached) {
-          router.replace('/dashboard');
-          return;
-        }
-        if (onboardingCompleted) {
-          router.replace('/onboarding/complete');
+        const dest = onboardingGateRedirect({ onboardingCompleted, dashboardReached });
+        if (dest) {
+          router.replace(dest);
           return;
         }
         setReady(true);
       })
       .catch(() => {
-        if (stored.dashboardReached) {
-          router.replace('/dashboard');
-          return;
-        }
-        if (stored.onboardingCompleted) {
-          router.replace('/onboarding/complete');
+        const dest = onboardingGateRedirect(stored);
+        if (dest) {
+          router.replace(dest);
           return;
         }
         setReady(true);

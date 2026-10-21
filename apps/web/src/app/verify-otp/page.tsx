@@ -11,10 +11,9 @@ import { clearPendingPassword, getPendingPassword } from '@/lib/pending-password
 import { clearRegistrationDraft, markRegistrationDraftForChange } from '@/lib/registration-draft';
 import { requestOtp, verifyOtp } from '@/lib/api';
 import { authErrorMessage } from '@/lib/auth-errors';
-import { postAuthPath } from '@/lib/phone';
 import { toast } from '@/components/ui/Toast';
-import { POST_REGISTRATION_PATH } from '@/lib/onboarding-flow';
 import { patchStoredUser } from '@/lib/session';
+import { resolvePostOtpAuthAction } from '@/lib/post-otp-auth';
 import {
   clearFirebaseOtp,
   confirmFirebaseOtp,
@@ -152,24 +151,28 @@ export default function VerifyOtpPage() {
               requestId: flow.requestId,
               idToken: await confirmFirebaseOtp(otp),
             });
+      const action = resolvePostOtpAuthAction(
+        result,
+        flow.purpose,
+        flow.registration?.accountType,
+      );
+      if (action.type === 'invalid') {
+        setError('Verification could not be completed. Please try again.');
+        return;
+      }
       clearOtpFlow();
       clearFirebaseOtp();
       clearPendingPassword();
       clearRegistrationDraft();
-      if ('signInRequired' in result && result.signInRequired) {
-        router.replace('/login?registered=1&role=employer');
+      if (action.type === 'sign-in-required') {
+        router.replace(action.path);
         return;
       }
-      if (!('accessToken' in result)) {
-        return;
-      }
-      const flowPurpose = flow.purpose;
-      if (flowPurpose === 'REGISTER') {
+      if (flow.purpose === 'REGISTER') {
         patchStoredUser({ onboardingCompleted: false });
-        router.replace(POST_REGISTRATION_PATH);
-        return;
+        if (action.toast) toast.success(action.toast);
       }
-      router.replace(postAuthPath(result.user));
+      router.replace(action.path);
     } catch (err) {
       const code =
         err && typeof err === 'object' && 'code' in err ? String((err as { code?: string }).code) : '';
