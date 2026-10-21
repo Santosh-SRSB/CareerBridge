@@ -37,7 +37,7 @@ export function JobFeedCard({ job, cityFallback }: { job: JobCard; cityFallback?
         ) : (
           <Link
             href={`/jobs/${job.id}/apply`}
-            className="inline-flex h-8 flex-1 items-center justify-center rounded-full bg-[#0a2e2c] text-xs font-extrabold text-white"
+            className="inline-flex h-8 flex-1 items-center justify-center rounded-full bg-[#10137c] text-xs font-extrabold text-white"
           >
             Apply
           </Link>
@@ -55,7 +55,7 @@ export function JobListingCard({ job, cityFallback }: { job: JobCard; cityFallba
     <div className="cb-lift-card block p-4">
       <Link href={`/jobs/${job.id}`} className="block">
         <div className="flex items-start gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-teal text-lg font-extrabold text-primary shadow-[0_8px_16px_rgba(10,46,44,0.14)]">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-teal text-lg font-extrabold text-primary shadow-[0_8px_16px_rgba(16,19,124,0.14)]">
             {companyMark}
           </div>
           <div className="min-w-0 flex-1">
@@ -88,7 +88,7 @@ export function JobListingCard({ job, cityFallback }: { job: JobCard; cityFallba
         ) : (
           <Link
             href={`/jobs/${job.id}/apply`}
-            className="inline-flex h-8 flex-1 items-center justify-center rounded-full bg-[#0a2e2c] text-xs font-extrabold text-white"
+            className="inline-flex h-8 flex-1 items-center justify-center rounded-full bg-[#10137c] text-xs font-extrabold text-white"
           >
             Apply
           </Link>

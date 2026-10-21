@@ -290,7 +290,7 @@ export function DayOrbitJourney() {
 
         <section id="how-it-works" aria-labelledby="how-it-works-title" className="mx-auto mt-10 max-w-5xl scroll-mt-24 px-1">
           <p className="day-orbit__k">How it works</p>
-          <h3 id="how-it-works-title" className="font-display text-2xl font-extrabold text-[#0a2e2c]">
+          <h3 id="how-it-works-title" className="font-display text-2xl font-extrabold text-[#10137c]">
             Five steps from profile to offer
           </h3>
           <ol className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -300,13 +300,13 @@ export function DayOrbitJourney() {
                 className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-col"
               >
                 <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0a2e2c] text-sm font-extrabold text-white"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#10137c] text-sm font-extrabold text-white"
                   aria-hidden
                 >
                   {i + 1}
                 </span>
                 <div>
-                  <p className="font-extrabold text-[#0a2e2c]">
+                  <p className="font-extrabold text-[#10137c]">
                     <span className="sr-only">Step {i + 1}: </span>
                     {step.title}
                   </p>

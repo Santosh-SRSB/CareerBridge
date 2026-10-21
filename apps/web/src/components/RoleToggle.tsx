@@ -19,12 +19,12 @@ function SegmentToggle({
 
   return (
     <div
-      className="relative rounded-xl bg-[#e8f0ee] p-1 border border-[#d5e3df] shadow-inner"
+      className="relative rounded-xl bg-[#eef0ff] p-1 border border-[#e5e7f2] shadow-inner"
       style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
     >
       {activeInRow ? (
         <span
-          className="absolute inset-y-1 left-1 rounded-lg bg-[#0d2826] shadow-sm transition-transform duration-300 ease-out"
+          className="absolute inset-y-1 left-1 rounded-lg bg-[#0b0e5e] shadow-sm transition-transform duration-300 ease-out"
           style={{
             width: `calc(${100 / cols}% - 2px)`,
             transform: `translateX(${index * 100}%)`,
@@ -38,7 +38,7 @@ function SegmentToggle({
           onClick={() => onChange(option)}
           suppressHydrationWarning
           className={`relative z-10 rounded-lg py-2 text-xs font-bold transition-colors duration-200 ${
-            value === option ? 'text-white' : 'text-[#4a5d59] hover:text-[#0d2826]'
+            value === option ? 'text-white' : 'text-[#4b4f8f] hover:text-[#0b0e5e]'
           }`}
         >
           {labels[option]}

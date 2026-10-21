@@ -777,8 +777,8 @@ export default function SuperAdminDashboardInner() {
                   onClick={() => setTestimonialFilter(value)}
                   className={`rounded-full px-3 py-1.5 text-xs font-bold ${
                     testimonialFilter === value
-                      ? 'bg-[#0a2e2c] text-white'
-                      : 'border border-[#d7e0dd] bg-white text-[#0a2e2c]'
+                      ? 'bg-[#10137c] text-white'
+                      : 'border border-[#e5e7f2] bg-white text-[#10137c]'
                   }`}
                 >
                   {value || 'ALL'}
@@ -788,13 +788,13 @@ export default function SuperAdminDashboardInner() {
             {listLoading && testimonials.length === 0 ? (
               <p className="text-sm text-[#888]">Loading testimonials…</p>
             ) : testimonials.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-[#d7e0dd] bg-white p-6 text-sm text-[#666]">
+              <p className="rounded-xl border border-dashed border-[#e5e7f2] bg-white p-6 text-sm text-[#666]">
                 No testimonials in this filter.
               </p>
             ) : (
               <div className="space-y-3">
                 {testimonials.map((row) => (
-                  <article key={row.id} className="rounded-xl border border-[#d7e0dd] bg-white p-4 shadow-sm">
+                  <article key={row.id} className="rounded-xl border border-[#e5e7f2] bg-white p-4 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusPill status={row.status} />
@@ -802,7 +802,7 @@ export default function SuperAdminDashboardInner() {
                           {row.audience} · {row.source}
                         </span>
                       </div>
-                      <span className="text-sm font-extrabold text-[#0a2e2c]">{'★'.repeat(row.rating)}</span>
+                      <span className="text-sm font-extrabold text-[#10137c]">{'★'.repeat(row.rating)}</span>
                     </div>
                     <p className="mt-3 text-sm font-semibold leading-relaxed text-[#333]">“{row.quote}”</p>
                     <p className="mt-2 text-xs text-[#666]">

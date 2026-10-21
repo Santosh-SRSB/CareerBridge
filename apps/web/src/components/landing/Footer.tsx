@@ -60,7 +60,7 @@ export function Footer() {
       >
         <path
           d="M0,40 C240,90 480,0 720,40 C960,80 1200,10 1440,50 L1440,90 L0,90 Z"
-          fill="#16382c"
+          fill="#10137c"
         />
       </svg>
       <div className="day-orbit-foot__base">
