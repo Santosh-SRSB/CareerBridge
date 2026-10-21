@@ -45,11 +45,11 @@ export function CandidateTopBar({
   const displayName = prettyText(name);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-primary/8 bg-white/80 shadow-[0_10px_30px_rgba(12,51,64,0.06)] backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-primary/8 bg-white/80 shadow-[0_10px_30px_rgba(16,19,124,0.06)] backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1280px] items-center gap-2 px-3 py-2 md:grid md:grid-cols-[auto_minmax(220px,520px)_1fr] lg:px-4">
         <BackButton fallback="/dashboard" />
         <form action="/jobs" method="get" className="hidden w-full md:block">
-          <div className="flex w-full overflow-hidden rounded-pill border border-primary/10 bg-[#f7fbfb] shadow-[0_8px_20px_rgba(12,51,64,0.06)]">
+          <div className="flex w-full overflow-hidden rounded-pill border border-primary/10 bg-[#f7fbfb] shadow-[0_8px_20px_rgba(16,19,124,0.06)]">
             <input
               name="q"
               type="search"
@@ -70,7 +70,7 @@ export function CandidateTopBar({
           <button
             type="button"
             onClick={onSignOut}
-            className="inline-flex h-8 shrink-0 items-center rounded-full bg-[#1ec8c0] px-3.5 text-xs font-extrabold text-[#0c3340] transition hover:brightness-110"
+            className="inline-flex h-8 shrink-0 items-center rounded-full bg-[#6366f1] px-3.5 text-xs font-extrabold text-[#10137c] transition hover:brightness-110"
           >
             Sign out
           </button>
@@ -153,7 +153,7 @@ function PortalNav() {
             key={item.href}
             href={item.href}
             className={`flex items-center rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-              active ? 'bg-[#0c3340] text-white' : 'text-muted hover:bg-[#f7fbfb] hover:text-primary'
+              active ? 'bg-[#10137c] text-white' : 'text-muted hover:bg-[#f7fbfb] hover:text-primary'
             }`}
           >
             {item.label}

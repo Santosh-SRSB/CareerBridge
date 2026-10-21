@@ -41,8 +41,8 @@ function OtpLoginBody() {
       <div className="mt-5">
         <PhoneAuthForm key={role} purpose="LOGIN" accountType={role} />
       </div>
-      <p className="mt-6 text-center text-xs text-[#4e6864] font-medium">
-        <Link href={`/login?role=${role.toLowerCase()}`} className="font-bold text-[#0d9488] transition hover:underline">
+      <p className="mt-6 text-center text-xs text-[#4b4f8f] font-medium">
+        <Link href={`/login?role=${role.toLowerCase()}`} className="font-bold text-[#1a1fc4] transition hover:underline">
           ← Sign in with password
         </Link>
       </p>

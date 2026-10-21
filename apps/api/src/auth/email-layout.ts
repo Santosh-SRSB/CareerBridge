@@ -9,9 +9,9 @@ const LOGO_WIDTH = 144;
 const LOGO_HEIGHT = 60;
 
 const FONT = 'Arial, Helvetica, sans-serif';
-const INK = '#0c3340';
-const MUTED = '#5b6f70';
-const BRAND = '#004043';
+const INK = '#10137c';
+const MUTED = '#4b4f8f';
+const BRAND = '#1a1fc4';
 const ACCENT = '#f7941d';
 
 export function escapeHtml(value: unknown) {
@@ -50,7 +50,7 @@ export function emailButton(label: string, href: string | null | undefined) {
 }
 
 export function emailLink(label: string, href: string | null | undefined) {
-  return `<a href="${safeHref(href)}" target="_blank" style="color:#0f766e;text-decoration:underline;">${escapeHtml(label)}</a>`;
+  return `<a href="${safeHref(href)}" target="_blank" style="color:#15199f;text-decoration:underline;">${escapeHtml(label)}</a>`;
 }
 
 export function emailParagraph(innerHtml: string, style = '') {
@@ -70,7 +70,7 @@ export function renderBrandedEmail(input: {
 }) {
   const support = input.supportEmail?.trim();
   const supportLine = support
-    ? `<br>Questions? Email <a href="mailto:${escapeHtml(support)}" style="color:#0f766e;text-decoration:underline;">${escapeHtml(support)}</a>`
+    ? `<br>Questions? Email <a href="mailto:${escapeHtml(support)}" style="color:#15199f;text-decoration:underline;">${escapeHtml(support)}</a>`
     : '';
   const preheader = input.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;opacity:0;">${escapeHtml(input.preheader)}</div>`
@@ -83,12 +83,12 @@ export function renderBrandedEmail(input: {
 <meta name="x-apple-disable-message-reformatting">
 <title>${escapeHtml(input.title)}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f3f6f6;">
+<body style="margin:0;padding:0;background-color:#f8f9fc;">
 ${preheader}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f6f6;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8f9fc;">
 <tr><td align="center" style="padding:24px 12px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #dfe7e7;border-radius:12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #e5e7f2;border-radius:12px;">
 <tr><td style="padding:22px 28px 16px;border-bottom:3px solid ${ACCENT};">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
 <td style="vertical-align:middle;"><img src="${escapeHtml(input.logoUrl)}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${EMAIL_BRAND_NAME}" style="display:block;border:0;outline:none;text-decoration:none;width:${LOGO_WIDTH}px;max-width:${LOGO_WIDTH}px;height:auto;"></td>
@@ -98,8 +98,8 @@ ${preheader}
 <tr><td style="padding:24px 28px 10px;font-family:${FONT};font-size:15px;line-height:1.6;color:${INK};">
 ${input.bodyHtml}
 </td></tr>
-<tr><td style="padding:16px 28px 22px;border-top:1px solid #e6eded;font-family:${FONT};font-size:12px;line-height:1.6;color:${MUTED};">
-${EMAIL_BRAND_NAME} &middot; <a href="${EMAIL_BRAND_WEBSITE}" target="_blank" style="color:#0f766e;text-decoration:underline;">www.srsbcareerbridge.com</a>${supportLine}
+<tr><td style="padding:16px 28px 22px;border-top:1px solid #e8eaf6;font-family:${FONT};font-size:12px;line-height:1.6;color:${MUTED};">
+${EMAIL_BRAND_NAME} &middot; <a href="${EMAIL_BRAND_WEBSITE}" target="_blank" style="color:#15199f;text-decoration:underline;">www.srsbcareerbridge.com</a>${supportLine}
 </td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->

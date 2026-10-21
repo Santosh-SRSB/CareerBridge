@@ -21,7 +21,7 @@ export default function GlobalError({
 
   return (
     <html lang="en">
-      <body style={{ fontFamily: 'system-ui, sans-serif', padding: 24, background: '#f7f4ef', color: '#0a2e2c' }}>
+      <body style={{ fontFamily: 'system-ui, sans-serif', padding: 24, background: '#f7f4ef', color: '#10137c' }}>
         <div role="alert">
           <h1 style={{ fontSize: 22, marginBottom: 8 }}>Something went wrong</h1>
           <p style={{ marginBottom: 16, color: '#4a5f57' }}>
@@ -32,7 +32,7 @@ export default function GlobalError({
             type="button"
             onClick={() => reset()}
             style={{
-              background: '#0a2e2c',
+              background: '#10137c',
               color: '#fff',
               border: 0,
               borderRadius: 999,

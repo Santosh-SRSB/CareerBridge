@@ -33,7 +33,7 @@ export function JobListingCard({ job, cityFallback }: { job: JobCard; cityFallba
   return (
     <Link href={`/jobs/${job.id}`} className="cb-lift-card block p-4">
       <div className="flex items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-teal text-lg font-extrabold text-primary shadow-[0_8px_16px_rgba(12,51,64,0.14)]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-teal text-lg font-extrabold text-primary shadow-[0_8px_16px_rgba(16,19,124,0.14)]">
           {companyMark}
         </div>
         <div className="min-w-0 flex-1">
@@ -51,7 +51,7 @@ export function JobListingCard({ job, cityFallback }: { job: JobCard; cityFallba
           <p className="mt-1 text-base font-bold text-primary">{formatSalary(job.salaryMin, job.salaryMax)}</p>
         </div>
       </div>
-      <span className="mt-3 inline-flex h-8 items-center rounded-full bg-[#1ec8c0] px-3.5 text-xs font-extrabold text-[#0c3340]">
+      <span className="mt-3 inline-flex h-8 items-center rounded-full bg-[#6366f1] px-3.5 text-xs font-extrabold text-[#10137c]">
         View Job
       </span>
     </Link>

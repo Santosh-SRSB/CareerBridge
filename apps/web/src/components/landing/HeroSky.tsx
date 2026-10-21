@@ -20,7 +20,7 @@ function PlaneMark({ id }: { id: string }) {
           <stop offset="100%" stopColor="#ca8a04" />
         </linearGradient>
         <filter id={`${id}-soft`} x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="1.5" dy="4" stdDeviation="2.2" floodColor="#062120" floodOpacity="0.28" />
+          <feDropShadow dx="1.5" dy="4" stdDeviation="2.2" floodColor="#0b0e5e" floodOpacity="0.28" />
         </filter>
       </defs>
       <g filter={`url(#${id}-soft)`}>
@@ -29,8 +29,8 @@ function PlaneMark({ id }: { id: string }) {
         <path d="M54 34 L128 28 L72 18 L42 30 Z" fill={`url(#${id}-wing)`} />
         <path d="M54 34 L72 18 L48 22 Z" fill="#e8f0ed" />
         <path d="M54 34 L62 46 L38 50 L42 38 Z" fill={`url(#${id}-gold)`} opacity="0.92" />
-        <path d="M42 38 L38 50 L28 44 Z" fill="#0a2e2c" opacity="0.18" />
-        <path d="M18 40 L128 28" fill="none" stroke="#0a2e2c" strokeWidth="0.7" strokeOpacity="0.22" />
+        <path d="M42 38 L38 50 L28 44 Z" fill="#10137c" opacity="0.18" />
+        <path d="M18 40 L128 28" fill="none" stroke="#10137c" strokeWidth="0.7" strokeOpacity="0.22" />
         <path d="M54 34 L128 28" fill="none" stroke="#ffffff" strokeWidth="0.9" strokeOpacity="0.7" />
         <path d="M118 27.2 L128 28 L119 30.4 Z" fill="#fff" opacity="0.85" />
       </g>

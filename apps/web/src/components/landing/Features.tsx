@@ -33,7 +33,7 @@ function FeatureIcon({ kind }: { kind: (typeof features)[number]["icon"] }) {
   if (kind === "passport") {
     return (
       <svg viewBox="0 0 48 48" className="feat-icon" aria-hidden="true">
-        <rect x="10" y="8" width="28" height="32" rx="6" fill="#0a2e2c" />
+        <rect x="10" y="8" width="28" height="32" rx="6" fill="#10137c" />
         <circle cx="24" cy="20" r="6" fill="#eab308" />
         <rect x="16" y="30" width="16" height="3" rx="1.5" fill="rgba(255,255,255,0.45)" />
       </svg>
@@ -43,10 +43,10 @@ function FeatureIcon({ kind }: { kind: (typeof features)[number]["icon"] }) {
     return (
       <svg viewBox="0 0 48 48" className="feat-icon" aria-hidden="true">
         <rect x="12" y="8" width="20" height="28" rx="4" fill="#fff" />
-        <rect x="16" y="14" width="12" height="2.5" rx="1" fill="#0a2e2c" />
+        <rect x="16" y="14" width="12" height="2.5" rx="1" fill="#10137c" />
         <rect x="16" y="20" width="10" height="2" rx="1" fill="#c5d4d0" />
         <circle cx="34" cy="32" r="8" fill="#eab308" />
-        <text x="34" y="36" textAnchor="middle" fontSize="9" fontWeight="800" fill="#0a2e2c">
+        <text x="34" y="36" textAnchor="middle" fontSize="9" fontWeight="800" fill="#10137c">
           AI
         </text>
       </svg>
@@ -55,16 +55,16 @@ function FeatureIcon({ kind }: { kind: (typeof features)[number]["icon"] }) {
   if (kind === "practice") {
     return (
       <svg viewBox="0 0 48 48" className="feat-icon" aria-hidden="true">
-        <rect x="8" y="12" width="22" height="14" rx="6" fill="#0a2e2c" />
+        <rect x="8" y="12" width="22" height="14" rx="6" fill="#10137c" />
         <rect x="18" y="24" width="22" height="14" rx="6" fill="#eab308" />
       </svg>
     );
   }
   return (
     <svg viewBox="0 0 48 48" className="feat-icon" aria-hidden="true">
-      <rect x="8" y="14" width="32" height="8" rx="4" fill="#0a2e2c" />
+      <rect x="8" y="14" width="32" height="8" rx="4" fill="#10137c" />
       <rect x="8" y="26" width="24" height="8" rx="4" fill="#ca8a04" />
-      <rect x="8" y="38" width="16" height="4" rx="2" fill="#14b8a6" />
+      <rect x="8" y="38" width="16" height="4" rx="2" fill="#3b5bdb" />
     </svg>
   );
 }

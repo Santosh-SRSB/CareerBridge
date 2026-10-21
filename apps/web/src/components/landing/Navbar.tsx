@@ -112,7 +112,7 @@ export function Navbar({ landingLinks = true }: { landingLinks?: boolean }) {
               <button
                 type="button"
                 onClick={() => void onLogout()}
-                className="rounded-full bg-white px-[18px] py-[11px] text-sm font-bold text-[#0a2e2c] transition hover:-translate-y-px"
+                className="rounded-full bg-white px-[18px] py-[11px] text-sm font-bold text-[#10137c] transition hover:-translate-y-px"
               >
                 Logout
               </button>

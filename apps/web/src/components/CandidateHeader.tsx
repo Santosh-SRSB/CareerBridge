@@ -26,7 +26,7 @@ export function CandidateHeader({
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          {title ? <h1 className="text-base font-bold text-[#0a2e2c]">{title}</h1> : null}
+          {title ? <h1 className="text-base font-bold text-[#10137c]">{title}</h1> : null}
         </div>
       </header>
     );

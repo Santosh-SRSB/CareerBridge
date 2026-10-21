@@ -11,12 +11,12 @@ export function ScoreRing({
   const radius = 34;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (safe / 100) * circumference;
-  const stroke = safe >= 70 ? '#1ec8c0' : safe >= 40 ? '#f15a24' : '#b42318';
+  const stroke = safe >= 70 ? '#6366f1' : safe >= 40 ? '#f15a24' : '#b42318';
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg viewBox="0 0 88 88" className="h-full w-full -rotate-90">
-        <circle cx="44" cy="44" r={radius} fill="none" stroke="rgba(12,51,64,0.12)" strokeWidth="8" />
+        <circle cx="44" cy="44" r={radius} fill="none" stroke="rgba(16,19,124,0.12)" strokeWidth="8" />
         <circle
           cx="44"
           cy="44"

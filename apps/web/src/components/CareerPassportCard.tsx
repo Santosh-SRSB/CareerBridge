@@ -11,11 +11,11 @@ function prettyText(value: string) {
 }
 
 function PassportCrest({ light = false }: { light?: boolean }) {
-  const mark = light ? '#0a2e2c' : '#fff';
+  const mark = light ? '#10137c' : '#fff';
   return (
     <svg viewBox="0 0 40 40" className="h-9 w-9 shrink-0" aria-hidden>
       <circle cx="20" cy="20" r="18" fill="none" stroke="#eab308" strokeWidth="1.4" />
-      <circle cx="20" cy="20" r="14" fill="none" stroke="#14b8a6" strokeWidth="1" />
+      <circle cx="20" cy="20" r="14" fill="none" stroke="#3b5bdb" strokeWidth="1" />
       <path d="M10 22c4-8 16-8 20 0" fill="none" stroke="#eab308" strokeWidth="1.6" strokeLinecap="round" />
       <path d="M12 18h16M20 12v14" fill="none" stroke={mark} strokeWidth="1.4" strokeLinecap="round" />
     </svg>
@@ -39,7 +39,7 @@ function PassportSeal({ value }: { value: number }) {
           cy="42"
           r={radius}
           fill="none"
-          stroke="#14b8a6"
+          stroke="#3b5bdb"
           strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -100,7 +100,7 @@ export function CareerPassportCard({
               {doneCount} of {totalCount} complete
             </p>
           </div>
-          <span className="rounded-pill bg-[#14b8a6] px-2.5 py-1 text-[10px] font-bold text-[#0a2e2c]">FREE</span>
+          <span className="rounded-pill bg-[#3b5bdb] px-2.5 py-1 text-[10px] font-bold text-[#10137c]">FREE</span>
         </div>
 
         <div className="mt-3 flex items-center gap-3">
@@ -139,7 +139,7 @@ export function CareerPassportCard({
         {skills.length ? (
           <div className="mt-2.5 flex flex-wrap gap-1">
             {skills.slice(0, 4).map((skill) => (
-              <span key={skill} className="rounded-pill bg-[#14b8a6] px-2 py-0.5 text-[9px] font-semibold text-[#0a2e2c]">
+              <span key={skill} className="rounded-pill bg-[#3b5bdb] px-2 py-0.5 text-[9px] font-semibold text-[#10137c]">
                 {prettyText(skill)}
               </span>
             ))}

@@ -580,7 +580,7 @@
   padding: 0 0.06em;
   background: linear-gradient(
     transparent 68%,
-    color-mix(in srgb, var(--color-success) 50%, transparent) 68% 92%,
+    color-mix(in srgb, var(--color-primary) 22%, transparent) 68% 92%,
     transparent 92%
   );
   color: var(--color-primary);

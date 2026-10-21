@@ -36,17 +36,17 @@ export function LegalPageShell({
       <header className="border-b border-slate-200/80 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
           <Logo />
-          <Link href="/" className="text-sm font-semibold text-[#0d9488] hover:underline">
+          <Link href="/" className="text-sm font-semibold text-[#1a1fc4] hover:underline">
             Back to home
           </Link>
         </div>
       </header>
 
       <article className="mx-auto max-w-3xl px-5 py-10 sm:py-12">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#0d9488]">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#1a1fc4]">
           SRSB CareerBridge
         </p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-[#0a2e2c] sm:text-4xl">
+        <h1 className="mt-2 text-3xl font-black tracking-tight text-[#10137c] sm:text-4xl">
           {title}
         </h1>
         {subtitle ? <p className="mt-3 text-sm leading-relaxed text-slate-600">{subtitle}</p> : null}
@@ -61,7 +61,7 @@ export function LegalPageShell({
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-full border border-[#0d9488]/25 bg-white px-3 py-1.5 text-xs font-bold text-[#0a2e2c] transition hover:border-[#0d9488] hover:text-[#0d9488]"
+                className="rounded-full border border-[#1a1fc4]/25 bg-white px-3 py-1.5 text-xs font-bold text-[#10137c] transition hover:border-[#1a1fc4] hover:text-[#1a1fc4]"
               >
                 {link.label}
               </Link>
@@ -75,7 +75,7 @@ export function LegalPageShell({
               href={pdfHref}
               target="_blank"
               rel="noreferrer"
-              className="text-xs font-bold text-[#0d9488] hover:underline"
+              className="text-xs font-bold text-[#1a1fc4] hover:underline"
             >
               Download PDF
             </a>
@@ -99,7 +99,7 @@ export function LegalSections({ sections }: { sections: LegalSection[] }) {
     <div className="space-y-8">
       {sections.map((section) => (
         <section key={section.id} id={section.id} className="scroll-mt-8">
-          <h2 className="text-lg font-black text-[#0a2e2c]">{section.title}</h2>
+          <h2 className="text-lg font-black text-[#10137c]">{section.title}</h2>
           {section.paragraphs?.map((p) => (
             <p key={p.slice(0, 48)} className="mt-3 text-sm leading-relaxed text-slate-700">
               {p}
@@ -114,7 +114,7 @@ export function LegalSections({ sections }: { sections: LegalSection[] }) {
           ) : null}
           {section.subsections?.map((sub) => (
             <div key={sub.title || sub.paragraphs?.[0]?.slice(0, 40) || sub.bullets?.[0]?.slice(0, 40)} className="mt-5">
-              {sub.title ? <h3 className="text-sm font-bold text-[#0a2e2c]">{sub.title}</h3> : null}
+              {sub.title ? <h3 className="text-sm font-bold text-[#10137c]">{sub.title}</h3> : null}
               {sub.paragraphs?.map((p) => (
                 <p key={p.slice(0, 48)} className="mt-2 text-sm leading-relaxed text-slate-700">
                   {p}

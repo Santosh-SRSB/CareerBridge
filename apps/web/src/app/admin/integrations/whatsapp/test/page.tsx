@@ -120,7 +120,7 @@ export default function WhatsAppIntegrationTestPage() {
           </p>
           <h1 className="text-2xl font-extrabold text-slate-900">WhatsApp Integration Test</h1>
         </div>
-        <Link href="/admin" className="text-sm font-semibold text-[#0a2e2c] hover:underline">
+        <Link href="/admin" className="text-sm font-semibold text-[#10137c] hover:underline">
           ← Admin
         </Link>
       </div>

@@ -20,16 +20,16 @@ function BoyFigure({ professional }: { professional: boolean }) {
     <svg className="cb-growth-boy__svg" viewBox="0 0 64 88" fill="none" aria-hidden="true">
       {professional ? (
         <g>
-          <ellipse cx="32" cy="14" rx="16" ry="5" fill="#0a2e2c" />
-          <path d="M16 14 L32 6 L48 14" fill="#062120" />
+          <ellipse cx="32" cy="14" rx="16" ry="5" fill="#10137c" />
+          <path d="M16 14 L32 6 L48 14" fill="#0b0e5e" />
           <rect x="40" y="12" width="12" height="3" rx="1" fill="#eab308" />
         </g>
       ) : null}
 
       <circle cx="32" cy="22" r="11" fill="#f0c9a0" />
-      <circle cx="28" cy="21" r="1.2" fill="#0a2e2c" />
-      <circle cx="36" cy="21" r="1.2" fill="#0a2e2c" />
-      <path d="M29 26 Q32 28 35 26" stroke="#0a2e2c" strokeWidth="1.2" strokeLinecap="round" />
+      <circle cx="28" cy="21" r="1.2" fill="#10137c" />
+      <circle cx="36" cy="21" r="1.2" fill="#10137c" />
+      <path d="M29 26 Q32 28 35 26" stroke="#10137c" strokeWidth="1.2" strokeLinecap="round" />
       {!professional ? (
         <path d="M22 18 Q32 10 42 18 Q40 14 32 12 Q24 14 22 18Z" fill="#3b2a1e" />
       ) : (
@@ -38,27 +38,27 @@ function BoyFigure({ professional }: { professional: boolean }) {
 
       {professional ? (
         <>
-          <path d="M20 34 L32 38 L44 34 L46 62 L18 62 Z" fill="#0a2e2c" />
+          <path d="M20 34 L32 38 L44 34 L46 62 L18 62 Z" fill="#10137c" />
           <path d="M32 38 L32 62" stroke="#eab308" strokeWidth="1.5" />
-          <path d="M20 34 L32 42 L44 34" fill="none" stroke="#062120" strokeWidth="1.2" />
+          <path d="M20 34 L32 42 L44 34" fill="none" stroke="#0b0e5e" strokeWidth="1.2" />
           <path d="M26 34 L32 40 L38 34" fill="#fff" />
-          <rect x="22" y="62" width="9" height="18" rx="2" fill="#062120" />
-          <rect x="33" y="62" width="9" height="18" rx="2" fill="#062120" />
+          <rect x="22" y="62" width="9" height="18" rx="2" fill="#0b0e5e" />
+          <rect x="33" y="62" width="9" height="18" rx="2" fill="#0b0e5e" />
           <path d="M18 40 Q10 28 16 22" stroke="#f0c9a0" strokeWidth="3.5" strokeLinecap="round" fill="none" />
           <path d="M46 40 Q54 28 48 22" stroke="#f0c9a0" strokeWidth="3.5" strokeLinecap="round" fill="none" />
         </>
       ) : (
         <>
-          <path d="M20 34 L32 38 L44 34 L45 58 L19 58 Z" fill="#14b8a6" />
-          <path d="M20 34 L14 42 L18 44 L22 36Z" fill="#0f766e" />
-          <path d="M44 34 L50 42 L46 44 L42 36Z" fill="#0f766e" />
+          <path d="M20 34 L32 38 L44 34 L45 58 L19 58 Z" fill="#3b5bdb" />
+          <path d="M20 34 L14 42 L18 44 L22 36Z" fill="#15199f" />
+          <path d="M44 34 L50 42 L46 44 L42 36Z" fill="#15199f" />
           <rect x="22" y="58" width="9" height="20" rx="2" fill="#1e3a5f" />
           <rect x="33" y="58" width="9" height="20" rx="2" fill="#1e3a5f" />
         </>
       )}
 
-      <ellipse cx="26.5" cy="80" rx="6" ry="2.5" fill={professional ? '#0a2e2c' : '#334155'} />
-      <ellipse cx="37.5" cy="80" rx="6" ry="2.5" fill={professional ? '#0a2e2c' : '#334155'} />
+      <ellipse cx="26.5" cy="80" rx="6" ry="2.5" fill={professional ? '#10137c' : '#334155'} />
+      <ellipse cx="37.5" cy="80" rx="6" ry="2.5" fill={professional ? '#10137c' : '#334155'} />
     </svg>
   );
 }

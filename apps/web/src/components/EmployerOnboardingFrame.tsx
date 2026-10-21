@@ -8,45 +8,45 @@ function KycHeroArt() {
     <svg viewBox="0 0 300 240" className="ep-onboard__art" aria-hidden>
       <defs>
         <linearGradient id="epProGlow" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#1f6f66" stopOpacity="0.18" />
+          <stop offset="0%" stopColor="#3b5bdb" stopOpacity="0.18" />
           <stop offset="100%" stopColor="#c4b896" stopOpacity="0.12" />
         </linearGradient>
       </defs>
       <circle cx="150" cy="120" r="96" fill="url(#epProGlow)" className="ep-art-pulse" />
         <g className="ep-art-float">
-        <circle cx="128" cy="118" r="58" fill="#fff" stroke="#0d2826" strokeWidth="3" />
-        <circle cx="110" cy="110" r="4" fill="#0d2826" />
-        <circle cx="146" cy="110" r="4" fill="#0d2826" />
+        <circle cx="128" cy="118" r="58" fill="#fff" stroke="#0b0e5e" strokeWidth="3" />
+        <circle cx="110" cy="110" r="4" fill="#0b0e5e" />
+        <circle cx="146" cy="110" r="4" fill="#0b0e5e" />
         <path
           d="M108 132c8 13 32 13 40 0"
           fill="none"
-          stroke="#0d2826"
+          stroke="#0b0e5e"
           strokeWidth="3"
           strokeLinecap="round"
         />
         <path
           d="M88 94c10-16 28-24 40-20"
           fill="none"
-          stroke="#0d2826"
+          stroke="#0b0e5e"
           strokeWidth="2.8"
           strokeLinecap="round"
         />
         <path
           d="M168 94c-8-14-20-22-34-20"
           fill="none"
-          stroke="#0d2826"
+          stroke="#0b0e5e"
           strokeWidth="2.8"
           strokeLinecap="round"
         />
         <g transform="translate(178 52)">
-          <circle cx="28" cy="28" r="24" fill="#fff" stroke="#0d2826" strokeWidth="3" />
-          <circle className="ep-art-pulse" cx="28" cy="28" r="11" fill="none" stroke="#1f6f66" strokeWidth="3" />
-          <path d="M45 45 64 64" stroke="#0d2826" strokeWidth="4" strokeLinecap="round" />
+          <circle cx="28" cy="28" r="24" fill="#fff" stroke="#0b0e5e" strokeWidth="3" />
+          <circle className="ep-art-pulse" cx="28" cy="28" r="11" fill="none" stroke="#3b5bdb" strokeWidth="3" />
+          <path d="M45 45 64 64" stroke="#0b0e5e" strokeWidth="4" strokeLinecap="round" />
         </g>
         <g transform="translate(42 56)">
-          <rect x="0" y="10" width="48" height="58" rx="7" fill="#fff" stroke="#0d2826" strokeWidth="3" />
-          <path d="M12 26h24M12 38h24M12 50h16" stroke="#0d2826" strokeWidth="2.3" strokeLinecap="round" />
-          <circle cx="48" cy="12" r="14" fill="#1f6f66" />
+          <rect x="0" y="10" width="48" height="58" rx="7" fill="#fff" stroke="#0b0e5e" strokeWidth="3" />
+          <path d="M12 26h24M12 38h24M12 50h16" stroke="#0b0e5e" strokeWidth="2.3" strokeLinecap="round" />
+          <circle cx="48" cy="12" r="14" fill="#3b5bdb" />
           <path d="M42 12h12M48 6v12" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
         </g>
       </g>
