@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { AdminDashboard } from '@careerbridge/shared';
 import {
@@ -74,6 +74,7 @@ import {
 import type { AdminFunnelStage, AdminWhatsAppDelivery } from '@/lib/api';
 import { userFacingError } from '@/lib/client-errors';
 import { sortRows } from '@/lib/table-sort';
+import { ADMIN_LIST_POLL_MS, isAdminListPollTab, startVisiblePoll } from '@/lib/visible-poll';
 
 const TABS: SuperAdminNavId[] = [
   'dashboard',
@@ -249,6 +250,11 @@ export default function SuperAdminDashboardInner() {
   const [appliedSearch, setAppliedSearch] = useState('');
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
+  const listRequestSeqRef = useRef(0);
+  const listInFlightCountRef = useRef(0);
+  const reloadListRef = useRef<(nextQuery?: string, opts?: { silent?: boolean }) => Promise<void>>(
+    async () => undefined,
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ kind: AdminDeletableKind; id: string; name: string } | null>(
     null,
@@ -319,6 +325,7 @@ export default function SuperAdminDashboardInner() {
   }, [router]);
 
   useEffect(() => {
+    listRequestSeqRef.current += 1;
     setSearch('');
     setAppliedSearch('');
     setError('');
@@ -335,10 +342,15 @@ export default function SuperAdminDashboardInner() {
     }
   }, [ready, tab, staffRole, router]);
 
-  async function reloadList(nextQuery = appliedSearch) {
+  async function reloadList(nextQuery = appliedSearch, opts?: { silent?: boolean }) {
     if (!LIST_TABS.includes(tab)) return;
-    setListLoading(true);
-    setError('');
+    if (opts?.silent && listInFlightCountRef.current > 0) return;
+    const seq = ++listRequestSeqRef.current;
+    listInFlightCountRef.current += 1;
+    if (!opts?.silent) {
+      setListLoading(true);
+      setError('');
+    }
     try {
       const q = nextQuery.trim();
       const params = new URLSearchParams();
@@ -357,18 +369,27 @@ export default function SuperAdminDashboardInner() {
       }
       const suffix = params.toString() ? `?${params.toString()}` : '';
       const data = await getAdminList(`${tab}${suffix}`);
+      if (seq !== listRequestSeqRef.current) return;
       let next = asRows(data);
       if (statusFilter && (tab === 'employers' || tab === 'admins')) {
         next = next.filter((row) => String(row.accountStatus ?? row.status ?? '') === statusFilter);
       }
       setRows(next);
+      if (opts?.silent) setError('');
     } catch (err) {
+      if (seq !== listRequestSeqRef.current) return;
+      if (opts?.silent) return;
       setRows([]);
       setError(userFacingError(err, `load ${tab}`));
     } finally {
-      setListLoading(false);
+      listInFlightCountRef.current = Math.max(0, listInFlightCountRef.current - 1);
+      if (!opts?.silent && seq === listRequestSeqRef.current) setListLoading(false);
     }
   }
+
+  useEffect(() => {
+    reloadListRef.current = reloadList;
+  });
 
   useEffect(() => {
     if (!ready) return;
@@ -451,6 +472,14 @@ export default function SuperAdminDashboardInner() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, tab, appliedSearch, superAdmin, statusFilter, testimonialFilter, candidateFilters]);
+
+  useEffect(() => {
+    if (!ready || !isAdminListPollTab(tab)) return;
+    return startVisiblePoll({
+      intervalMs: ADMIN_LIST_POLL_MS,
+      refresh: () => reloadListRef.current(undefined, { silent: true }),
+    });
+  }, [ready, tab]);
 
   const reportBlocks = useMemo(() => {
     if (!reports) return [] as Array<{ title: string; entries: Array<[string, unknown]> }>;
@@ -1210,6 +1239,16 @@ export default function SuperAdminDashboardInner() {
                         </option>
                       ))}
                   </select>
+                ) : null}
+                {isAdminListPollTab(tab) ? (
+                  <button
+                    type="button"
+                    className="sa-btn"
+                    onClick={() => void reloadList(appliedSearch)}
+                    disabled={listLoading}
+                  >
+                    {listLoading ? 'Refreshing…' : 'Refresh'}
+                  </button>
                 ) : null}
                 </>
               }
