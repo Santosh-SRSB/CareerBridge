@@ -34,7 +34,7 @@
     "test:testimonials": "node -r ts-node/register/transpile-only --test src/testimonials/testimonials.service.unit.test.ts",
     "test:testimonials:integration": "node -r ts-node/register/transpile-only --test src/testimonials/testimonials.prompt-schedule.integration.test.ts",
     "test:photo": "node -r ts-node/register/transpile-only --test src/candidates/profile-photo.unit.test.ts",
-    "test:interview": "node -r ts-node/register/transpile-only --test src/interviews/interview-lifecycle.unit.test.ts src/interviews/interview-evaluation.util.test.ts src/applications/applications.service.unit.test.ts",
+    "test:interview": "node -r ts-node/register/transpile-only --test src/interviews/interview-lifecycle.unit.test.ts src/interviews/interview-evaluation.util.test.ts src/applications/applications.service.unit.test.ts src/interviews/interviews.auth.unit.test.ts src/human-mocks/human-mocks.auth.unit.test.ts",
     "test:resume-pipeline": "node -r ts-node/register/transpile-only --test src/resumes/resume-pipeline.unit.test.ts src/resumes/isolation.unit.test.ts"
   },
   "dependencies": {

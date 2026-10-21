@@ -1,38 +1,37 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { resolveAuthRedirect } from '@/lib/auth-route-guard';
 
 const AUTH_COOKIE = 'cb_auth';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  if (!pathname.startsWith('/employer')) {
-    return NextResponse.next();
-  }
-
-  // Public employer entry points (no login required)
-  if (pathname === '/employer/register' || pathname.startsWith('/employer/register/')) {
-    return NextResponse.next();
-  }
-  if (pathname === '/employer/welcome' || pathname.startsWith('/employer/welcome/')) {
-    return NextResponse.next();
-  }
-  if (pathname === '/employer/terms' || pathname.startsWith('/employer/terms/')) {
-    return NextResponse.next();
-  }
-
   const signedIn = request.cookies.get(AUTH_COOKIE)?.value === '1';
-  if (signedIn) {
+  const redirect = resolveAuthRedirect({
+    pathname,
+    search: request.nextUrl.searchParams,
+    signedIn,
+  });
+  if (!redirect) {
     return NextResponse.next();
   }
 
   const login = request.nextUrl.clone();
-  login.pathname = '/login';
-  login.searchParams.set('role', 'employer');
-  login.searchParams.set('next', pathname);
+  login.pathname = redirect.pathname;
+  login.search = '';
+  login.searchParams.set('role', redirect.role);
+  login.searchParams.set('next', redirect.next);
   return NextResponse.redirect(login);
 }
 
 export const config = {
-  matcher: ['/employer/:path*'],
+  matcher: [
+    '/employer/:path*',
+    '/resume',
+    '/resume/:path*',
+    '/resumes',
+    '/resumes/:path*',
+    '/interviews',
+    '/interviews/:path*',
+  ],
 };
