@@ -48,11 +48,7 @@ export function validateCandidateRegistration(input: CandidateRegistrationInput)
   const mobile = registrationMobileError(input.national, input.mobileLength);
   if (mobile) errors.mobile = mobile;
   const email = input.email.trim();
-  if (email) {
-    if (validateEmailAddress(email, true)) errors.email = 'Please enter a valid email address';
-  } else if (input.otpChannel === 'EMAIL') {
-    errors.email = 'Email is required to receive the OTP by email.';
-  }
+  if (!email || validateEmailAddress(email, true)) errors.email = 'Please enter a valid email address';
   const password = registrationPasswordError(input.password);
   if (password) errors.password = password;
   if (!input.confirmPassword) errors.confirmPassword = 'Please confirm your password.';

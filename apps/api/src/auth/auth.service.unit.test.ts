@@ -515,6 +515,7 @@ describe('Auth DTO validation (global ValidationPipe settings)', () => {
     );
     await assert.rejects(validate(RequestOtpDto, { ...register(), password: undefined }), BadRequestException);
     await assert.rejects(validate(RequestOtpDto, { ...register(), fullName: undefined }), BadRequestException);
+    await assert.rejects(validate(RequestOtpDto, { ...register(), email: undefined }), BadRequestException);
     await validate(RequestOtpDto, register({ replacesRequestId: 'otp-1' }));
   });
 });
