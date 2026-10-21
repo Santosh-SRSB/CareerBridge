@@ -47,7 +47,7 @@ import {
   syncAnswerTimer,
 } from '@/features/mock-interview/answer-countdown';
 import { AnswerCountdownBar } from '@/components/interviews/AnswerCountdownBar';
-import { cancelGuidedSpeech, speakGuided } from '@/features/mock-interview/guided-voice';
+import { cancelGuidedSpeech, prefetchInterviewSpeech, speakGuided } from '@/features/mock-interview/guided-voice';
 import {
   answerLiveInterview,
   endLiveInterview,
@@ -181,7 +181,23 @@ export default function MockInterviewQuestionPage() {
         setSession(next);
         // Resume mid-session → skip intro, go to current question.
         const answered = (next.liveQuestions || []).filter((q) => q.answer?.trim()).length;
-        setPhase(answered > 0 ? 'QUESTION_DISPLAY' : 'INTRO_GREETING');
+        if (answered > 0) {
+          if (next.currentQuestion?.prompt) void prefetchInterviewSpeech(next.currentQuestion.prompt);
+          setPhase('QUESTION_DISPLAY');
+          return;
+        }
+        const greeting = buildGreetingLine(next.candidateName);
+        void prefetchInterviewSpeech(greeting);
+        void prefetchInterviewSpeech(buildIntroPlanLine(next.totalQuestions));
+        void prefetchInterviewSpeech(buildIntroStartLine());
+        if (next.currentQuestion?.prompt) void prefetchInterviewSpeech(next.currentQuestion.prompt);
+        // Hide the cold-TTS wait in the loading screen so greeting text and voice start together.
+        await Promise.race([
+          prefetchInterviewSpeech(greeting),
+          new Promise<void>((resolve) => window.setTimeout(resolve, 6000)),
+        ]);
+        if (cancelled) return;
+        setPhase('INTRO_GREETING');
       } catch (err) {
         if (!cancelled) {
           setError(userFacingError(err, 'start interview'));
@@ -409,26 +425,30 @@ export default function MockInterviewQuestionPage() {
       const total = activeSession.totalQuestions;
 
       try {
+        const speakLine = (line: string) =>
+          speakGuided(line, {
+            onStart: () => {
+              if (alive()) setCaption(line);
+            },
+          });
+
         if (phase === 'INTRO_GREETING') {
           const line = buildGreetingLine(name);
-          setCaption(line);
-          await speakGuided(line);
+          await speakLine(line);
           if (alive()) setPhase('INTRODUCTION');
           return;
         }
 
         if (phase === 'INTRODUCTION') {
           const line = buildIntroPlanLine(total);
-          setCaption(line);
-          await speakGuided(line);
+          await speakLine(line);
           if (alive()) setPhase('INTRO_START');
           return;
         }
 
         if (phase === 'INTRO_START') {
           const line = buildIntroStartLine();
-          setCaption(line);
-          await speakGuided(line);
+          await speakLine(line);
           if (alive()) setPhase('QUESTION_DISPLAY');
           return;
         }
@@ -437,6 +457,7 @@ export default function MockInterviewQuestionPage() {
           setCaption(qText);
           setThinkRemaining(THINK_SECONDS);
           setThinkProgress(1);
+          void prefetchInterviewSpeech(buildThinkSpokenLine());
           if (questionSpokenForIndex.current !== qIndex) {
             questionSpokenForIndex.current = qIndex;
             await speakGuided(qText);

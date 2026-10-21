@@ -9,6 +9,8 @@ import { InterviewBotFace } from '@/components/interviews/InterviewBotFace';
 import { JobRoleCombobox } from '@/components/marketplace/JobRoleCombobox';
 import { createLiveInterview, getCandidateMe, getJobRoles, startLiveInterview } from '@/lib/api';
 import { detectRoleCategory, uniqueRoles } from '@careerbridge/shared';
+import { buildGreetingLine, buildIntroPlanLine, buildIntroStartLine } from '@/features/mock-interview/guided-scripts';
+import { prefetchInterviewSpeech, unlockInterviewAudio } from '@/features/mock-interview/guided-voice';
 import '../candidate-interviews.css';
 
 const QUESTION_COUNTS = [5, 10, 15];
@@ -54,6 +56,7 @@ export default function MockInterviewSetupPage() {
   const [rolesLoading, setRolesLoading] = useState(true);
   const [rolesError, setRolesError] = useState('');
   const [rolesAttempt, setRolesAttempt] = useState(0);
+  const [candidateName, setCandidateName] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -71,6 +74,7 @@ export default function MockInterviewSetupPage() {
           uniqueRoles([roleFromUrl, ...fromProfile, ...(roles.catalog[category] || []), ...roles.fromJobs, ...otherCatalog]),
         );
         setJobRole((current) => current || roleFromUrl || fromProfile[0] || '');
+        setCandidateName([profile?.firstName, profile?.lastName].filter(Boolean).join(' '));
       })
       .catch(() => {
         if (active) setRolesError(ROLES_ERROR);
@@ -85,6 +89,12 @@ export default function MockInterviewSetupPage() {
 
   const durationLimitMin = useMemo(() => Math.max(45, questionCount * 6), [questionCount]);
 
+  useEffect(() => {
+    void prefetchInterviewSpeech(buildGreetingLine(candidateName));
+    void prefetchInterviewSpeech(buildIntroPlanLine(questionCount));
+    void prefetchInterviewSpeech(buildIntroStartLine());
+  }, [candidateName, questionCount]);
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     const role = jobRole.trim();
@@ -92,6 +102,12 @@ export default function MockInterviewSetupPage() {
       setRoleError('Please select a job role');
       return;
     }
+
+    // Unlock in this click so the next page can play the greeting immediately.
+    unlockInterviewAudio();
+    void prefetchInterviewSpeech(buildGreetingLine(candidateName));
+    void prefetchInterviewSpeech(buildIntroPlanLine(questionCount));
+    void prefetchInterviewSpeech(buildIntroStartLine());
 
     setRoleError('');
     setLoading(true);
@@ -105,7 +121,10 @@ export default function MockInterviewSetupPage() {
         durationLimitMin,
         source: 'PASSPORT',
       });
-      await startLiveInterview(session.id);
+      const started = await startLiveInterview(session.id);
+      if (started.currentQuestion?.prompt) {
+        void prefetchInterviewSpeech(started.currentQuestion.prompt);
+      }
       router.push(`/interviews/mock/${session.id}`);
     } catch (err) {
       setError(userFacingError(err, 'start interview'));
