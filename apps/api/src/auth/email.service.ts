@@ -43,7 +43,7 @@ export class EmailService {
         `Your ${EMAIL_BRAND_NAME} OTP is ${otp}. It expires in 5 minutes. If you did not request this, ignore this email.`,
         [
           emailParagraph('Use this one-time password to verify your email.'),
-          emailParagraph(escapeHtml(otp), 'font-size:32px;letter-spacing:6px;font-weight:700;color:#004043;'),
+          emailParagraph(escapeHtml(otp), 'font-size:32px;letter-spacing:6px;font-weight:700;color:#1a1fc4;'),
           emailNote('This code expires in 5 minutes. If you did not request this, ignore this email.'),
         ].join(''),
       );

@@ -4,7 +4,7 @@ export function MatchBadge({ score }: { score: number }) {
   const label = matchLabel(score);
   const tone =
     score >= 80
-      ? 'bg-[#1ec8c0] text-[#0c3340]'
+      ? 'bg-[#6366f1] text-[#10137c]'
       : score >= 60
         ? 'bg-[#eefbfb] text-primary'
         : score >= 40

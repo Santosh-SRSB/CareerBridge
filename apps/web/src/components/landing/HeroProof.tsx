@@ -42,7 +42,7 @@ type Phase = 0 | 1 | 2 | 3;
 function CheerBoy() {
   return (
     <svg className="cheer-boy" viewBox="0 0 88 96" width="72" height="78" aria-hidden="true">
-      <ellipse cx="44" cy="90" rx="18" ry="4" fill="rgba(10,46,44,0.12)" />
+      <ellipse cx="44" cy="90" rx="18" ry="4" fill="rgba(16,19,124,0.12)" />
       <path
         className="cheer-arm-l"
         d="M28 52 C12 38 8 28 10 18"
@@ -61,7 +61,7 @@ function CheerBoy() {
       />
       <circle cx="10" cy="16" r="4.2" fill="#f4b183" />
       <circle cx="78" cy="16" r="4.2" fill="#f4b183" />
-      <path d="M32 50 Q44 58 56 50 L54 78 Q44 82 34 78 Z" fill="#0a2e2c" />
+      <path d="M32 50 Q44 58 56 50 L54 78 Q44 82 34 78 Z" fill="#10137c" />
       <rect x="34" y="76" width="8" height="14" rx="3" fill="#1e3a36" />
       <rect x="46" y="76" width="8" height="14" rx="3" fill="#1e3a36" />
       <circle cx="44" cy="32" r="14" fill="#f4b183" />

@@ -32,19 +32,19 @@ export function Hero() {
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/register?role=candidate"
-              className="inline-flex min-h-12 items-center rounded-full bg-[#0a2e2c] px-7 py-3 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(10,46,44,0.25)] transition hover:-translate-y-0.5 hover:bg-[#072422]"
+              className="inline-flex min-h-12 items-center rounded-full bg-[#10137c] px-7 py-3 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(16,19,124,0.25)] transition hover:-translate-y-0.5 hover:bg-[#072422]"
             >
               Create Free Profile
             </Link>
             <Link
               href="/jobs"
-              className="inline-flex min-h-12 items-center rounded-full border-2 border-[#0a2e2c] bg-white px-7 py-3 text-sm font-extrabold text-[#0a2e2c] transition hover:-translate-y-0.5 hover:bg-[#0a2e2c] hover:text-white"
+              className="inline-flex min-h-12 items-center rounded-full border-2 border-[#10137c] bg-white px-7 py-3 text-sm font-extrabold text-[#10137c] transition hover:-translate-y-0.5 hover:bg-[#10137c] hover:text-white"
             >
               Find Jobs
             </Link>
             <Link
               href="/employer/welcome"
-              className="inline-flex min-h-12 items-center rounded-full px-4 py-3 text-sm font-extrabold text-[#0a2e2c] underline-offset-4 hover:underline"
+              className="inline-flex min-h-12 items-center rounded-full px-4 py-3 text-sm font-extrabold text-[#10137c] underline-offset-4 hover:underline"
             >
               Hire Candidates
             </Link>
