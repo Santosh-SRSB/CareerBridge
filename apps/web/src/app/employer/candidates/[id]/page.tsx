@@ -10,6 +10,7 @@ import {
   changeApplicationStatus,
   downloadEmployerCandidateResume,
   getEmployerCandidate,
+  inviteCandidateToJob,
   saveBase64File,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
@@ -71,6 +72,7 @@ export default function EmployerCandidateProfilePage() {
   const [message, setMessage] = useState('');
   const [modal, setModal] = useState<'SHORTLIST' | 'REJECT' | null>(null);
   const [modalError, setModalError] = useState('');
+  const [invited, setInvited] = useState(false);
 
   async function load() {
     const next = await getEmployerCandidate(params.id, jobId);
@@ -103,6 +105,29 @@ export default function EmployerCandidateProfilePage() {
     } catch (err) {
       const text = userFacingError(err, action === 'SHORTLIST' ? 'shortlist candidate' : 'reject candidate');
       setModalError(text);
+      toast.error(text);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function notifyCandidate() {
+    if (!resolvedJobId || !profile) return;
+    setBusy('NOTIFY');
+    setError('');
+    setMessage('');
+    try {
+      const result = await inviteCandidateToJob(profile.id, resolvedJobId);
+      setInvited(true);
+      const name = candidateName(profile);
+      const text = result.alreadyNotified
+        ? `${name} was already invited to apply.`
+        : `Invite sent to ${name}. They can apply from their notifications.`;
+      setMessage(text);
+      toast.success(text);
+    } catch (err) {
+      const text = userFacingError(err, 'notify candidate');
+      setError(text);
       toast.error(text);
     } finally {
       setBusy('');
@@ -266,6 +291,16 @@ export default function EmployerCandidateProfilePage() {
               </div>
 
               <div className="ev-actions">
+                {resolvedJobId && !application ? (
+                  <button
+                    type="button"
+                    className="ev-btn"
+                    disabled={busy !== '' || invited}
+                    onClick={() => void notifyCandidate()}
+                  >
+                    {busy === 'NOTIFY' ? 'Sending…' : invited ? 'Notified' : 'Notify candidate'}
+                  </button>
+                ) : null}
                 {application && ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(application.status) ? (
                   <button
                     type="button"

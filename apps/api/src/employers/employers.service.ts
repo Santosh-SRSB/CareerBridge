@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   HttpException,
   HttpStatus,
@@ -1126,6 +1127,64 @@ export class EmployersService {
       await this.prisma.employerTalentShortlist.deleteMany({ where: key });
     }
     return { ok: true as const, candidateId, jobId: job.id, shortlisted };
+  }
+
+  async inviteCandidateToJob(userId: string, candidateId: string, jobId: string) {
+    const employer = await this.requireEmployer(userId);
+    assertKycComplete(employer, 'Complete company KYC before inviting candidates.');
+    const job = await this.requireJob(userId, jobId);
+    if (job.status !== JobStatus.PUBLISHED) {
+      throw new BadRequestException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: 'You can only notify candidates for an active job.',
+      });
+    }
+    await this.matching.assertCandidateVisibleForJob(userId, jobId, candidateId);
+
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id: candidateId },
+      select: { id: true, userId: true },
+    });
+    if (!candidate) {
+      throw new NotFoundException({
+        code: SharedError.RESOURCE_NOT_FOUND,
+        message: 'Candidate profile was not found',
+      });
+    }
+
+    const applied = await this.prisma.application.findFirst({
+      where: { candidateId, jobId: job.id, status: { not: 'WITHDRAWN' } },
+      select: { id: true },
+    });
+    if (applied) {
+      throw new ConflictException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: 'This candidate has already applied for this job.',
+      });
+    }
+
+    const link = `/jobs/${job.id}`;
+    const existing = await this.prisma.notification.findFirst({
+      where: { userId: candidate.userId, type: 'JOB_INVITE', link },
+      select: { id: true },
+    });
+    if (existing) {
+      return { ok: true as const, alreadyNotified: true, candidateId, jobId: job.id };
+    }
+
+    const vars = {
+      company: employer.companyName || 'An employer',
+      jobTitle: job.title,
+    };
+    await this.notifications.create({
+      userId: candidate.userId,
+      ...renderDefaultNotification('JOB_INVITE', vars),
+      templateKey: 'JOB_INVITE',
+      templateVars: vars,
+      type: 'JOB_INVITE',
+      link,
+    });
+    return { ok: true as const, alreadyNotified: false, candidateId, jobId: job.id };
   }
 
   async candidateView(userId: string, candidateId: string, jobId?: string) {

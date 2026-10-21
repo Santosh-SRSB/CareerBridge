@@ -20,6 +20,13 @@ export function safeNotificationLink(
   return trimmed;
 }
 
+/** Apply CTA for employer job invites — only same-origin `/jobs/...` links. */
+export function jobInviteApplyHref(item: { type?: string | null; link?: string | null }): string | null {
+  if (item.type !== 'JOB_INVITE') return null;
+  const href = safeNotificationLink(item.link);
+  return href.startsWith('/jobs/') ? href : null;
+}
+
 /**
  * ES5-compatible function source embedded in firebase-messaging-sw.js (no module imports).
  * Must stay behaviorally identical to {@link safeNotificationLink}.
