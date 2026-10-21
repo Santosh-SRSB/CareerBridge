@@ -50,7 +50,7 @@ const BANDS = [
 
 type Band = (typeof BANDS)[number];
 
-const HERO_LINE = 'Great teams are built, not searched for.';
+const HERO_LINE = 'Post Jobs & Hire Talent at Zero Cost';
 
 function Lightbox({ band, onClose }: { band: Band; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);

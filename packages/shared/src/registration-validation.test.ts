@@ -11,15 +11,19 @@ const candidate = {
   fullName: 'Rahul Kumar',
   national: '9876543210',
   mobileLength: 10,
-  email: '',
+  email: 'rahul@example.com',
   password: 'SecurePass@1',
   confirmPassword: 'SecurePass@1',
   otpChannel: 'MOBILE' as const,
   agreedToTerms: true,
 };
 
-test('candidate email is optional with mobile OTP', () => {
+test('candidate valid form requires email even with mobile OTP', () => {
   assert.equal(hasRegistrationErrors(validateCandidateRegistration(candidate)), false);
+  assert.equal(
+    validateCandidateRegistration({ ...candidate, email: '' }).email,
+    'Please enter a valid email address',
+  );
 });
 
 test('candidate empty form reports every required field with handbook wording', () => {
@@ -27,6 +31,7 @@ test('candidate empty form reports every required field with handbook wording', 
     ...candidate,
     fullName: '',
     national: '',
+    email: '',
     password: '',
     confirmPassword: '',
     otpChannel: null,
@@ -34,6 +39,7 @@ test('candidate empty form reports every required field with handbook wording', 
   });
   assert.equal(errors.fullName, 'Name is required');
   assert.equal(errors.mobile, 'Mobile number is required');
+  assert.equal(errors.email, 'Please enter a valid email address');
   assert.equal(errors.password, 'Password must be at least 8 characters.');
   assert.equal(errors.terms, 'You must accept the Terms and Privacy Policy to continue');
   assert.ok(errors.otpChannel);
@@ -44,7 +50,7 @@ test('candidate field rules', () => {
   assert.equal(errors.fullName, 'Please enter your full name');
   assert.equal(errors.mobile, 'Please enter a valid 10-digit mobile number');
   assert.equal(errors.email, 'Please enter a valid email address');
-  assert.ok(validateCandidateRegistration({ ...candidate, otpChannel: 'EMAIL' }).email);
+  assert.equal(hasRegistrationErrors(validateCandidateRegistration({ ...candidate, otpChannel: 'EMAIL' })), false);
 });
 
 const employer = {
