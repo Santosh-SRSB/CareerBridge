@@ -31,6 +31,19 @@ export type OnboardingResumeProfile = {
 };
 
 /**
+ * Client onboarding-step gate: send unauthenticated or finished users away.
+ * `null` means the current step may render (including a newly registered candidate).
+ */
+export function onboardingGateRedirect(
+  user: { onboardingCompleted?: boolean; dashboardReached?: boolean } | null,
+): '/login' | '/dashboard' | '/onboarding/complete' | null {
+  if (!user) return '/login';
+  if (user.dashboardReached) return '/dashboard';
+  if (user.onboardingCompleted) return '/onboarding/complete';
+  return null;
+}
+
+/**
  * Pick where a candidate should land:
  * - Dashboard if they have opened it at least once
  * - Resume choice if onboarding is done but dashboard not opened yet

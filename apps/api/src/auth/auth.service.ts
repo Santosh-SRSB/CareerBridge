@@ -469,6 +469,7 @@ export class AuthService {
             passwordHash: registration?.passwordHash || null,
             externalAuthId,
             userType: isEmployer ? 'EMPLOYER_ADMIN' : 'CANDIDATE',
+            status: 'ACTIVE',
             lastLoginAt: isEmployer ? null : new Date(),
             ...(isEmployer
               ? {
@@ -521,9 +522,17 @@ export class AuthService {
         throw err;
       }
       if (isEmployer) {
+        // Employer accounts are created here; they sign in separately after KYC/review.
         return { registered: true, signInRequired: true as const };
       }
+      // Candidates are signed in immediately with the same JWT session as password/OTP login.
     } else {
+      if (user.status === 'SUSPENDED' || user.status === 'INACTIVE') {
+        throw new UnauthorizedException({
+          code: ErrorCode.UNAUTHORIZED,
+          message: 'Incorrect email, mobile number, or password.',
+        });
+      }
       user = await this.prisma.user.update({
         where: { id: user.id },
         data: {
