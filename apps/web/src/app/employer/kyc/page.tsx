@@ -85,6 +85,11 @@ export default function EmployerKycPage() {
       if (result.verified && result.status === 'ACTIVE') {
         setGstVerified(true);
         setTrademark(mark);
+        const panFromGst = gstin.length === 15 ? gstin.slice(2, 12) : '';
+        const pan = (result.pan || panFromGst).trim().toUpperCase();
+        if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+          setPanNumber(pan);
+        }
         if (result.mock) {
           setError(result.message || 'Test mode: this is a mock GST check, not a live GST lookup.');
         } else if (!mark) {
@@ -137,6 +142,11 @@ export default function EmployerKycPage() {
       setGstVerified(true);
       const mark = (result.trademark || result.tradeName || '').trim();
       if (mark) setTrademark(mark);
+      const panFromGst = gstin.length === 15 ? gstin.slice(2, 12) : '';
+      const panFromVerify = (result.pan || panFromGst).trim().toUpperCase();
+      if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panFromVerify) && !panNumber.trim()) {
+        setPanNumber(panFromVerify);
+      }
       await saveEmployerKyc({
         gstNumber: gstin,
         ...kycCinPayload(cinValue, removeSavedCin && Boolean(saved.cin)),
@@ -217,6 +227,7 @@ export default function EmployerKycPage() {
             autoComplete="organization"
             placeholder="Auto-filled after verify"
             value={trademark}
+            readOnly={gstVerified && Boolean(trademark)}
             onChange={(event) => setTrademark(event.target.value)}
             className={`ep-kyc__input${gstVerified && trademark ? ' ep-kyc__input--ok' : ''}`}
           />

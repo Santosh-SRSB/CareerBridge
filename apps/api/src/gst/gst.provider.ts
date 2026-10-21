@@ -2,13 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createDecipheriv, publicEncrypt, randomBytes, constants } from 'crypto';
 import { GstConfigService, GstRuntimeConfig } from './gst.config';
 import { GstConfigError, GstProviderError } from './gst.errors';
-import { pickTradeName, unwrapGstPayload } from './gst.payload';
+import { pickRegisteredName, unwrapGstPayload } from './gst.payload';
 import { maskGstin } from './gst.validator';
 import { normalizeGstStatus, type GstInternalStatus } from './gst.status';
 
 export type GstProviderLookupResult = {
   status: GstInternalStatus;
   tradeName: string | null;
+  /** PAN registered on the GSTIN when the provider returns it. */
+  pan?: string | null;
   responseCode?: string;
   durationMs: number;
 };
@@ -67,7 +69,7 @@ export class IrisIrpGstProvider {
       const status = this.extractStatus(payload);
       return {
         status,
-        tradeName: pickTradeName(unwrapGstPayload(payload)),
+        tradeName: pickRegisteredName(unwrapGstPayload(payload)),
         responseCode: String((payload as { Status?: string | number }).Status ?? 'OK'),
         durationMs: Date.now() - started,
       };
@@ -80,7 +82,7 @@ export class IrisIrpGstProvider {
           const status = this.extractStatus(payload);
           return {
             status,
-            tradeName: pickTradeName(unwrapGstPayload(payload)),
+            tradeName: pickRegisteredName(unwrapGstPayload(payload)),
             responseCode: String((payload as { Status?: string | number }).Status ?? 'OK'),
             durationMs: Date.now() - started,
           };
@@ -126,7 +128,31 @@ export class IrisIrpGstProvider {
 
     if (primary) {
       try {
-        return await this.gstinApiLookupWithKey(gstin, cfg, started, primary);
+        const primaryResult = await this.gstinApiLookupWithKey(gstin, cfg, started, primary);
+        if (primaryResult.status === 'ACTIVE' && !primaryResult.tradeName && appyflowKey) {
+          try {
+            const fallback = await this.appyflowLookup(gstin, cfg, started, appyflowKey);
+            if (fallback.tradeName) {
+              this.logger.warn(
+                `gstinapi.in had no trade name; AppyFlow filled it for ${maskGstin(gstin)}.`,
+              );
+              return {
+                ...primaryResult,
+                tradeName: fallback.tradeName,
+                pan: fallback.pan || primaryResult.pan,
+              };
+            }
+          } catch (enrichErr) {
+            const detail =
+              enrichErr instanceof GstProviderError
+                ? `http=${enrichErr.httpStatus ?? 'ERR'}`
+                : 'unknown';
+            this.logger.warn(
+              `AppyFlow trade-name enrich failed (${detail}) for ${maskGstin(gstin)}; keeping primary result.`,
+            );
+          }
+        }
+        return primaryResult;
       } catch (err) {
         if (!appyflowKey || !this.shouldFallbackGstinApiKey(err)) {
           throw err;
@@ -155,6 +181,18 @@ export class IrisIrpGstProvider {
     if (!(err instanceof GstProviderError)) return true;
     if (err.retryable) return true;
     return err.httpStatus === 401 || err.httpStatus === 403;
+  }
+
+  private pickPan(data: Record<string, unknown>, gstin: string): string | null {
+    for (const key of ['panNo', 'pan', 'PAN', 'pan_number', 'panNumber']) {
+      const raw = data[key];
+      if (typeof raw === 'string') {
+        const pan = raw.trim().toUpperCase();
+        if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) return pan;
+      }
+    }
+    const fromGstin = gstin.length === 15 ? gstin.slice(2, 12) : '';
+    return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(fromGstin) ? fromGstin : null;
   }
 
   private async gstinApiLookupWithKey(
@@ -193,11 +231,12 @@ export class IrisIrpGstProvider {
       const data = unwrapGstPayload(json);
       const found =
         json.success === true &&
-        Boolean(data && (data.gstin || data.status || data.trade_name || data.legal_name));
+        Boolean(data && (data.gstin || data.status || data.trade_name || data.legal_name || data.tradeNam));
       if (!found || res.status === 404) {
         return {
           status: 'NOT_ACTIVE',
           tradeName: null,
+          pan: null,
           responseCode: String(json.code ?? res.status),
           durationMs: Date.now() - started,
         };
@@ -205,7 +244,8 @@ export class IrisIrpGstProvider {
 
       return {
         status: normalizeGstStatus(data.status),
-        tradeName: pickTradeName(data),
+        tradeName: pickRegisteredName(data),
+        pan: this.pickPan(data, gstin),
         responseCode: String(json.code ?? res.status),
         durationMs: Date.now() - started,
       };
@@ -271,27 +311,22 @@ export class IrisIrpGstProvider {
         };
       }
 
-      const taxpayer = (json.taxpayerInfo || {}) as Record<string, unknown>;
+      const taxpayer = unwrapGstPayload(json);
       const sts = taxpayer.sts ?? taxpayer.status;
-      if (!sts && !taxpayer.gstin && !taxpayer.tradeNam) {
+      if (!sts && !taxpayer.gstin && !taxpayer.tradeNam && !taxpayer.lgnm) {
         return {
           status: 'NOT_ACTIVE',
           tradeName: null,
+          pan: null,
           responseCode: String(res.status),
           durationMs: Date.now() - started,
         };
       }
 
-      const tradeName =
-        typeof taxpayer.tradeNam === 'string' && taxpayer.tradeNam.trim()
-          ? taxpayer.tradeNam.trim()
-          : typeof taxpayer.lgnm === 'string' && taxpayer.lgnm.trim()
-            ? taxpayer.lgnm.trim()
-            : null;
-
       return {
         status: normalizeGstStatus(sts),
-        tradeName,
+        tradeName: pickRegisteredName(taxpayer),
+        pan: this.pickPan(taxpayer, gstin),
         responseCode: String(res.status),
         durationMs: Date.now() - started,
       };

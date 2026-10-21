@@ -22,6 +22,8 @@ export type GstVerifyResult = {
   status: GstInternalStatus;
   message?: string;
   trademark?: string | null;
+  /** PAN from the GST record or derived from the GSTIN (chars 3–12). */
+  pan?: string | null;
   /** Which lookup answered; MOCK is a local test double, never a live GST lookup. */
   provider: GstRuntimeConfig['provider'];
   mock: boolean;
@@ -93,6 +95,7 @@ export class GstService {
                 verified: true,
                 status: 'ACTIVE',
                 trademark: result.tradeName,
+                pan: result.pan || (gstin.length === 15 ? gstin.slice(2, 12) : null),
                 provider,
                 mock: usingMock,
                 ...(usingMock ? { message: GST_MOCK_ACTIVE_MESSAGE } : {}),
@@ -123,7 +126,7 @@ export class GstService {
       });
 
       this.logger.log(
-        `GST verification completed gstin=${maskGstin(gstin)} verified=${payload.verified} status=${payload.status} durationMs=${Date.now() - started}`,
+        `GST verification completed gstin=${maskGstin(gstin)} verified=${payload.verified} status=${payload.status} tradeName=${payload.trademark ? 'yes' : 'no'} durationMs=${Date.now() - started}`,
       );
       return payload;
     } catch (err) {
