@@ -5,10 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { EmployabilityScore, ProfileCompletion } from '@careerbridge/shared';
 import { EMPLOYABILITY_READY_COMPLETION, PROFILE_OVERVIEW_SECTION_KEYS } from '@careerbridge/shared';
-import { getEmployabilityScore, getProfileCompletion } from '@/lib/api';
-import { getStoredUser } from '@/lib/session';
-import { markResumeSeedFromProfile } from '@/features/resume/resume-wizard-draft';
-import { rememberReturnTo } from '@/lib/nav-return';
+import { getEmployabilityScore, getProfileCompletion, updateCandidateMe } from '@/lib/api';
+import { getStoredUser, patchStoredUser } from '@/lib/session';
 import { userFacingError } from '@/lib/client-errors';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { Button } from '@/components/ui/Button';
@@ -220,9 +218,15 @@ function PassportOverviewPage() {
           type="button"
           onClick={() => {
             if (allSectionsComplete) {
-              markResumeSeedFromProfile();
-              rememberReturnTo('/passport');
-              router.push('/resume?from=build');
+              void (async () => {
+                patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
+                try {
+                  await updateCandidateMe({ dashboardReached: true, onboardingCompleted: true });
+                } catch {
+                  /* local flags already set so dashboard will not bounce back */
+                }
+                router.replace('/dashboard');
+              })();
               return;
             }
             router.push(firstIncompleteSectionHref(completion));
