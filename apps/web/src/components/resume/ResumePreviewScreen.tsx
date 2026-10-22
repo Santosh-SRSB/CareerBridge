@@ -621,13 +621,13 @@ export function ResumePreviewScreen({
     } catch {
       /* still navigate */
     }
+    patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
     try {
       await updateCandidateMe({ dashboardReached: true, onboardingCompleted: true });
-      patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
     } catch {
-      patchStoredUser({ dashboardReached: true, onboardingCompleted: true });
+      /* local flags already set so dashboard will not bounce back */
     }
-    router.push('/dashboard');
+    router.replace('/dashboard');
   }
 
   async function handleDownload() {

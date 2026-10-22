@@ -320,16 +320,17 @@ export default function DashboardPage() {
     fetchMe()
       .then((me) => {
         meLoaded = true;
-        const onboardingDone = me.onboardingCompleted ?? stored.onboardingCompleted;
-        const dashboardReached = me.dashboardReached ?? stored.dashboardReached ?? false;
+        // Completion flags only move false → true; a stale API false must not bounce off dashboard.
+        const onboardingDone = Boolean(me.onboardingCompleted || stored.onboardingCompleted);
+        const dashboardReached = Boolean(me.dashboardReached || stored.dashboardReached);
         patchStoredUser({
           firstName: me.firstName ?? stored.firstName,
           onboardingCompleted: onboardingDone,
-          dashboardReached,
+          dashboardReached: true,
         });
         // Auth /me only returns inline-safe photos; never write private GCS URLs into session.
         if (me.photoUrl !== undefined) patchSessionCandidatePhoto(me.photoUrl);
-        if (!onboardingDone) {
+        if (!onboardingDone && !dashboardReached && !stored.dashboardReached) {
           router.replace('/onboarding/continue');
           return;
         }
@@ -337,11 +338,12 @@ export default function DashboardPage() {
         setName(formatPersonName(me.firstName || stored.firstName || 'there'));
         setReady(true);
 
-        const markDashboard = dashboardReached
-          ? Promise.resolve()
-          : updateCandidateMe({ dashboardReached: true })
-              .then(() => patchStoredUser({ dashboardReached: true }))
-              .catch(() => undefined);
+        const markDashboard =
+          dashboardReached && onboardingDone
+            ? Promise.resolve()
+            : updateCandidateMe({ dashboardReached: true, onboardingCompleted: true })
+                .then(() => patchStoredUser({ dashboardReached: true, onboardingCompleted: true }))
+                .catch(() => undefined);
 
         return Promise.all([
           markDashboard,
@@ -397,7 +399,7 @@ export default function DashboardPage() {
       })
       .catch((err) => {
         if (isUnauthorizedError(err)) return;
-        if (!meLoaded && !stored.onboardingCompleted) {
+        if (!meLoaded && !stored.onboardingCompleted && !stored.dashboardReached) {
           router.replace('/onboarding/continue');
           return;
         }
