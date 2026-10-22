@@ -1,6 +1,7 @@
 import type { ApplicationRecord, JobDetail, NearbyJobsResponse, PagedJobs } from '@careerbridge/shared';
 import {
   applyToJob,
+  withdrawApplication,
   confirmCandidateScheduledInterview,
   getApplication,
   getCandidateScheduledInterview,
@@ -120,6 +121,10 @@ export async function fetchJobDetails(id: string): Promise<JobDetail> {
 
 export async function submitApplication(jobId: string, resumeId?: string): Promise<ApplicationRecord> {
   return applyToJob(jobId, resumeId);
+}
+
+export async function withdrawJobApplication(applicationId: string): Promise<ApplicationRecord> {
+  return withdrawApplication(applicationId);
 }
 
 export async function fetchApplications(): Promise<ApplicationRecord[]> {
