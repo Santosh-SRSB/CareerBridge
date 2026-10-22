@@ -1063,7 +1063,7 @@ describe('Fix 7 — only PUBLISHED jobs are public', () => {
     const svc = new JobsService(
       {
         job: { findUnique: async () => ({ id: 'J', status, description: 'd', experience: 'x', benefits: null, employer: {} }) },
-        application: { findUnique: async () => (applied ? { id: 'A' } : null) },
+        application: { findFirst: async () => (applied ? { id: 'A' } : null) },
         savedJob: { findUnique: async () => null },
       } as any,
       {} as any,
@@ -1086,7 +1086,7 @@ describe('Fix 7 — only PUBLISHED jobs are public', () => {
       const jobs = new JobsService(
         {
           job: { findUnique: async () => ({ ...published, status, benefits: null, employer: {} }) },
-          application: { findUnique: async () => null },
+          application: { findFirst: async () => null },
           savedJob: { findUnique: async () => null },
         } as any,
         {} as any,
