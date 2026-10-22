@@ -113,6 +113,7 @@ function serializeCities(cities: string[]): string {
 export default function OnboardingLocationPage() {
   const router = useRouter();
   const [state, setState] = useState('');
+  const [stateOpen, setStateOpen] = useState(false);
   const [workCities, setWorkCities] = useState<string[]>([]);
   const [customCity, setCustomCity] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -281,23 +282,47 @@ export default function OnboardingLocationPage() {
                 <OnboardingFieldIcon>
                   <OnboardingIcon name="pin" size={18} />
                 </OnboardingFieldIcon>
-                <select
+                <button
                   id="current-state"
+                  type="button"
+                  className="obx-select-btn"
                   aria-label="Current location"
+                  aria-haspopup="listbox"
+                  aria-expanded={stateOpen}
                   aria-invalid={error === 'Please select your current location' || undefined}
-                  value={state}
-                  onChange={(event) => {
-                    setState(event.target.value);
-                    if (event.target.value) setError('');
+                  onClick={() => {
+                    setSearchOpen(false);
+                    setStateOpen((open) => !open);
+                  }}
+                  onBlur={() => {
+                    window.setTimeout(() => setStateOpen(false), 150);
                   }}
                 >
-                  <option value="">Select state</option>
-                  {(states.includes(state) || !state ? states : [state, ...states]).map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
+                  <span className={state ? undefined : 'obx-select-placeholder'}>
+                    {state || 'Select state'}
+                  </span>
+                </button>
+                {stateOpen ? (
+                  <ul className="obx-menu" role="listbox" aria-label="Select state">
+                    {(states.includes(state) || !state ? states : [state, ...states]).map((item) => (
+                      <li key={item}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={item === state}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setState(item);
+                            setError('');
+                            setStateOpen(false);
+                          }}
+                        >
+                          {item}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             )}
           </OnboardingQuestion>
@@ -333,9 +358,13 @@ export default function OnboardingLocationPage() {
                 value={customCity}
                 onChange={(e) => {
                   setCustomCity(e.target.value);
+                  setStateOpen(false);
                   setSearchOpen(true);
                 }}
-                onFocus={() => setSearchOpen(true)}
+                onFocus={() => {
+                  setStateOpen(false);
+                  setSearchOpen(true);
+                }}
                 onBlur={() => {
                   window.setTimeout(() => setSearchOpen(false), 150);
                 }}

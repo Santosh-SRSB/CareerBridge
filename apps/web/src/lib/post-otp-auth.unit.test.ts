@@ -85,6 +85,17 @@ describe('resolvePostOtpAuthAction', () => {
     assert.equal(action.toast, undefined);
   });
 
+  it('candidate login with completed onboarding goes to dashboard even before dashboardReached', () => {
+    const onboarded: AuthSession = {
+      ...session,
+      user: { ...candidate, onboardingCompleted: true, dashboardReached: false },
+    };
+    const action = resolvePostOtpAuthAction(onboarded, 'LOGIN', 'CANDIDATE');
+    assert.equal(action.type, 'authenticated');
+    if (action.type !== 'authenticated') return;
+    assert.equal(action.path, '/dashboard');
+  });
+
   it('a signed-in candidate can open protected onboarding immediately after registration', () => {
     const action = resolvePostOtpAuthAction(session, 'REGISTER', 'CANDIDATE');
     assert.equal(action.type, 'authenticated');

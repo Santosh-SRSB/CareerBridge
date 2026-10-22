@@ -19,8 +19,9 @@ export function useOnboardingGate(step: OnboardingStep) {
 
     fetchMe()
       .then((me) => {
-        const onboardingCompleted = me.onboardingCompleted ?? stored.onboardingCompleted;
-        const dashboardReached = me.dashboardReached ?? stored.dashboardReached;
+        // Completion flags only move false → true; never let a stale false wipe a local true.
+        const onboardingCompleted = Boolean(me.onboardingCompleted || stored.onboardingCompleted);
+        const dashboardReached = Boolean(me.dashboardReached || stored.dashboardReached);
         patchStoredUser({
           firstName: me.firstName ?? stored.firstName,
           onboardingCompleted,

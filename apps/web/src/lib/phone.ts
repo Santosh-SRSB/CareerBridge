@@ -46,11 +46,8 @@ export function postAuthPath(user: {
   if (user.purpose === 'REGISTER') {
     return POST_REGISTRATION_PATH;
   }
-  if (user.dashboardReached) {
+  if (user.dashboardReached || user.onboardingCompleted) {
     return '/dashboard';
-  }
-  if (user.onboardingCompleted) {
-    return '/onboarding/complete';
   }
   return ONBOARDING_CONTINUE_PATH;
 }
