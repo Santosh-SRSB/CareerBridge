@@ -513,6 +513,8 @@ export type JobDetail = JobCard & {
   benefits: string | null;
   status: string;
   applied: boolean;
+  /** Present when the candidate has an active (non-withdrawn) application for this job. */
+  applicationId?: string | null;
 };
 
 export type PagedJobs = {
