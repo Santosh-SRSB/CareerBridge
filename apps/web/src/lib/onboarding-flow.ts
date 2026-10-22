@@ -33,25 +33,23 @@ export type OnboardingResumeProfile = {
 /**
  * Client onboarding-step gate: send unauthenticated or finished users away.
  * `null` means the current step may render (including a newly registered candidate).
+ * Completed candidates go to the dashboard (not back through resume/profile steps).
  */
 export function onboardingGateRedirect(
   user: { onboardingCompleted?: boolean; dashboardReached?: boolean } | null,
-): '/login' | '/dashboard' | '/onboarding/complete' | null {
+): '/login' | '/dashboard' | null {
   if (!user) return '/login';
-  if (user.dashboardReached) return '/dashboard';
-  if (user.onboardingCompleted) return '/onboarding/complete';
+  if (user.dashboardReached || user.onboardingCompleted) return '/dashboard';
   return null;
 }
 
 /**
  * Pick where a candidate should land:
- * - Dashboard if they have opened it at least once
- * - Resume choice if onboarding is done but dashboard not opened yet
+ * - Dashboard if they finished onboarding or have opened it at least once
  * - Otherwise the first step that is neither answered nor skipped
  */
 export function resolveCandidateResumePath(profile: OnboardingResumeProfile): string {
-  if (profile.dashboardReached) return '/dashboard';
-  if (profile.onboardingCompleted) return '/onboarding/complete';
+  if (profile.dashboardReached || profile.onboardingCompleted) return '/dashboard';
   const skipped = new Set(profile.onboardingSkippedSteps ?? []);
 
   const hasLocation = Boolean(

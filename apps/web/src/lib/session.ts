@@ -140,8 +140,7 @@ export function homePathForUser(user?: AuthUser | null) {
   if (!user?.id) return '/';
   if (isPlatformRole(user.role)) return '/adminsrsb/dashboard';
   if (isEmployerRole(user.role)) return '/employer';
-  if (user.dashboardReached) return '/dashboard';
-  if (user.onboardingCompleted) return '/onboarding/complete';
+  if (user.dashboardReached || user.onboardingCompleted) return '/dashboard';
   return '/onboarding/continue';
 }
 

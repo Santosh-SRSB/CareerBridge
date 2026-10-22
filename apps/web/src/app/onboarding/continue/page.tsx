@@ -16,23 +16,31 @@ export default function OnboardingContinuePage() {
       router.replace('/login');
       return;
     }
-    if (stored.dashboardReached) {
+    if (stored.dashboardReached || stored.onboardingCompleted) {
       router.replace('/dashboard');
       return;
     }
 
     getCandidateMe()
       .then((profile) => {
+        const onboardingCompleted = Boolean(profile.onboardingCompleted || stored.onboardingCompleted);
+        const dashboardReached = Boolean(profile.dashboardReached || stored.dashboardReached);
         patchStoredUser({
           firstName: profile.firstName,
-          onboardingCompleted: profile.onboardingCompleted,
-          dashboardReached: profile.dashboardReached ?? false,
+          onboardingCompleted,
+          dashboardReached,
         });
-        router.replace(resolveCandidateResumePath(profile));
+        router.replace(
+          resolveCandidateResumePath({
+            ...profile,
+            onboardingCompleted,
+            dashboardReached,
+          }),
+        );
       })
       .catch(() => {
-        if (stored.onboardingCompleted) {
-          router.replace('/onboarding/complete');
+        if (stored.onboardingCompleted || stored.dashboardReached) {
+          router.replace('/dashboard');
           return;
         }
         router.replace('/onboarding');

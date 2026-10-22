@@ -27,14 +27,14 @@ describe('onboarding flow', () => {
       resolveCandidateResumePath({ state: 'Kerala', onboardingSkippedSteps: [2, 3] }),
       '/onboarding/skills',
     );
-    assert.equal(resolveCandidateResumePath({ onboardingCompleted: true }), '/onboarding/complete');
+    assert.equal(resolveCandidateResumePath({ onboardingCompleted: true }), '/dashboard');
     assert.equal(resolveCandidateResumePath({ dashboardReached: true }), '/dashboard');
   });
 
-  it('lets a newly registered candidate stay on onboarding and keeps login for anonymous users', () => {
+  it('lets a newly registered candidate stay on onboarding and sends finished users to dashboard', () => {
     assert.equal(onboardingGateRedirect(null), '/login');
     assert.equal(onboardingGateRedirect({ onboardingCompleted: false, dashboardReached: false }), null);
-    assert.equal(onboardingGateRedirect({ onboardingCompleted: true, dashboardReached: false }), '/onboarding/complete');
+    assert.equal(onboardingGateRedirect({ onboardingCompleted: true, dashboardReached: false }), '/dashboard');
     assert.equal(onboardingGateRedirect({ onboardingCompleted: true, dashboardReached: true }), '/dashboard');
   });
 
