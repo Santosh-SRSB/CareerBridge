@@ -6,9 +6,10 @@ import { Lora } from 'next/font/google';
 import { useParams, useRouter } from 'next/navigation';
 import type { JobDetail } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { getStoredUser } from '@/lib/session';
 import { formatJobType, formatSalary, matchLabel } from '@/lib/match';
-import { fetchJobDetails, submitApplication } from '@/lib/candidate-marketplace-api';
+import { fetchJobDetails, submitApplication, withdrawJobApplication } from '@/lib/candidate-marketplace-api';
 import { saveJob, unsaveJob } from '@/lib/api';
 
 const lora = Lora({
@@ -27,6 +28,8 @@ export default function JobDetailPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [matchPct, setMatchPct] = useState(0);
   const [ringOffset, setRingOffset] = useState(RING_C);
 
@@ -91,7 +94,7 @@ export default function JobDetailPage() {
     setError('');
     try {
       const application = await submitApplication(job.id);
-      setJob({ ...job, applied: true });
+      setJob({ ...job, applied: true, applicationId: application.id });
       router.replace(`/applications/${application.id}/confirmation`);
     } catch (err) {
       const message =
@@ -101,6 +104,24 @@ export default function JobDetailPage() {
       }
       setError(message);
       setApplying(false);
+    }
+  }
+
+  async function onConfirmWithdraw() {
+    if (!job?.applicationId || withdrawing) return;
+    setWithdrawing(true);
+    setError('');
+    try {
+      await withdrawJobApplication(job.applicationId);
+      setJob({ ...job, applied: false, applicationId: null });
+      setConfirmWithdraw(false);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'We could not withdraw your application right now.';
+      setError(message);
+      setConfirmWithdraw(false);
+    } finally {
+      setWithdrawing(false);
     }
   }
 
@@ -328,7 +349,19 @@ export default function JobDetailPage() {
                   ? 'You have already applied for this role.'
                   : <>Ready to apply for <b>{job.title}</b>?</>}
               </p>
-              {job.applied ? (
+              {job.applied && job.applicationId ? (
+                <button
+                  type="button"
+                  className="cb-job-detail__btn-apply"
+                  disabled={withdrawing}
+                  onClick={() => {
+                    setError('');
+                    setConfirmWithdraw(true);
+                  }}
+                >
+                  {withdrawing ? 'Withdrawing…' : 'Withdraw Application'}
+                </button>
+              ) : job.applied ? (
                 <Link href="/applications" className="cb-job-detail__btn-apply is-applied">
                   Applied
                 </Link>
@@ -345,6 +378,20 @@ export default function JobDetailPage() {
             </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmWithdraw}
+        title="Withdraw application?"
+        message="Are you sure you want to withdraw your application?"
+        confirmLabel="Withdraw Application"
+        cancelLabel="Cancel"
+        destructive
+        busy={withdrawing}
+        onCancel={() => {
+          if (!withdrawing) setConfirmWithdraw(false);
+        }}
+        onConfirm={() => void onConfirmWithdraw()}
+      />
     </CandidateAppShell>
   );
 }
