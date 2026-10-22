@@ -135,14 +135,7 @@ export class JobsService {
         )
       : new Set<string>();
     const appliedJobIds = candidate
-      ? new Set(
-          (
-            await this.prisma.application.findMany({
-              where: { candidateId: candidate.id, jobId: { in: jobIds } },
-              select: { jobId: true },
-            })
-          ).map((row) => row.jobId),
-        )
+      ? await this.activeAppliedJobIds(candidate.id, jobIds)
       : new Set<string>();
     return {
       items: rows.map((job) =>
@@ -301,14 +294,7 @@ export class JobsService {
         )
       : new Set<string>();
     const appliedJobIds = candidate
-      ? new Set(
-          (
-            await this.prisma.application.findMany({
-              where: { candidateId: candidate.id, jobId: { in: ids } },
-              select: { jobId: true },
-            })
-          ).map((row) => row.jobId),
-        )
+      ? await this.activeAppliedJobIds(candidate.id, ids)
       : new Set<string>();
 
     const items = ordered.map((job) =>
@@ -392,14 +378,7 @@ export class JobsService {
         )
       : new Set<string>();
     const appliedJobIds = candidate
-      ? new Set(
-          (
-            await this.prisma.application.findMany({
-              where: { candidateId: candidate.id, jobId: { in: jobIds } },
-              select: { jobId: true },
-            })
-          ).map((row) => row.jobId),
-        )
+      ? await this.activeAppliedJobIds(candidate.id, jobIds)
       : new Set<string>();
 
     const hasMoreInBucket = page * pageSize < totalInBucket;
@@ -451,13 +430,13 @@ export class JobsService {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Job was not found' });
     }
     const candidate = userId ? await this.loadCandidate(userId) : null;
-    const applied = candidate
-      ? Boolean(
-          await this.prisma.application.findUnique({
-            where: { candidateId_jobId: { candidateId: candidate.id, jobId: id } },
-          }),
-        )
-      : false;
+    const activeApplication = candidate
+      ? await this.prisma.application.findFirst({
+          where: { candidateId: candidate.id, jobId: id, status: { not: 'WITHDRAWN' } },
+          select: { id: true },
+        })
+      : null;
+    const applied = Boolean(activeApplication);
     // Only published jobs are public; a candidate who applied can still open a paused/closed job.
     if (job.status !== 'PUBLISHED' && !(applied && job.status !== 'DRAFT')) {
       throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Job was not found' });
@@ -476,6 +455,7 @@ export class JobsService {
       benefits: job.benefits,
       status: job.status,
       applied,
+      applicationId: activeApplication?.id ?? null,
     };
   }
 
@@ -574,19 +554,22 @@ export class JobsService {
     });
     const published = rows.filter((row) => row.job.status === 'PUBLISHED');
     const jobIds = published.map((row) => row.job.id);
-    const appliedJobIds = new Set(
-      (
-        await this.prisma.application.findMany({
-          where: { candidateId: candidate.id, jobId: { in: jobIds } },
-          select: { jobId: true },
-        })
-      ).map((row) => row.jobId),
-    );
+    const appliedJobIds = await this.activeAppliedJobIds(candidate.id, jobIds);
     return {
       items: published.map((row) =>
         this.toCard(row.job, candidate, true, null, appliedJobIds.has(row.job.id)),
       ),
     };
+  }
+
+  /** Job IDs where the candidate has a non-withdrawn application. */
+  private async activeAppliedJobIds(candidateId: string, jobIds: string[]) {
+    if (!jobIds.length) return new Set<string>();
+    const rows = await this.prisma.application.findMany({
+      where: { candidateId, jobId: { in: jobIds }, status: { not: 'WITHDRAWN' } },
+      select: { jobId: true },
+    });
+    return new Set(rows.map((row) => row.jobId));
   }
 
   async saveJob(userId: string, jobId: string) {

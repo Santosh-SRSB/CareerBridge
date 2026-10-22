@@ -187,8 +187,29 @@ export class ApplicationsService {
   }
 
   async withdraw(userId: string, id: string) {
-    await this.get(userId, id);
-    await this.prisma.application.update({ where: { id }, data: { status: 'WITHDRAWN' } });
+    const candidate = await this.requireCandidate(userId);
+    const existing = await this.prisma.application.findFirst({
+      where: { id, candidateId: candidate.id },
+    });
+    if (!existing) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Application was not found' });
+    }
+    if (existing.status === 'WITHDRAWN') {
+      throw new ConflictException({
+        code: ErrorCode.DUPLICATE_RESOURCE,
+        message: 'This application has already been withdrawn.',
+      });
+    }
+    const updated = await this.prisma.application.updateMany({
+      where: { id, candidateId: candidate.id, status: { not: 'WITHDRAWN' } },
+      data: { status: 'WITHDRAWN' },
+    });
+    if (updated.count === 0) {
+      throw new ConflictException({
+        code: ErrorCode.DUPLICATE_RESOURCE,
+        message: 'This application has already been withdrawn.',
+      });
+    }
     return this.get(userId, id);
   }
 
