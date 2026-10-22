@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Lora } from 'next/font/google';
 import { useParams, useRouter } from 'next/navigation';
 import type { JobDetail } from '@careerbridge/shared';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
@@ -11,13 +10,6 @@ import { getStoredUser } from '@/lib/session';
 import { formatJobType, formatSalary, matchLabel } from '@/lib/match';
 import { fetchJobDetails, submitApplication, withdrawJobApplication } from '@/lib/candidate-marketplace-api';
 import { saveJob, unsaveJob } from '@/lib/api';
-
-const lora = Lora({
-  subsets: ['latin'],
-  weight: ['600', '700'],
-  variable: '--font-lora-job',
-  display: 'swap',
-});
 
 const RING_C = 2 * Math.PI * 30;
 
@@ -159,7 +151,8 @@ export default function JobDetailPage() {
 
   return (
     <CandidateAppShell activeTab="jobs" maxWidth="max-w-[1440px]">
-      <div className={`cb-job-detail ${lora.variable}`}>
+      {/* Use layout Fraunces for job serif titles — avoids next/font Google fetch during Docker builds. */}
+      <div className="cb-job-detail" style={{ ['--font-lora-job' as string]: 'var(--font-fraunces)' }}>
         <Link href="/jobs" className="cb-job-detail__back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
             <line x1="19" y1="12" x2="5" y2="12" />
