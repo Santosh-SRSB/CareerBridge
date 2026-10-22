@@ -347,13 +347,13 @@ export default function DashboardPage() {
 
         return Promise.all([
           markDashboard,
-          getCandidateMe(),
-          getProfileCompletion(),
+          getCandidateMe().catch(() => null),
+          getProfileCompletion().catch(() => null),
           recommendedJobs()
             .then((result) => result.items || [])
             .catch(() => listJobs({ limit: 8 }).then((result) => result.items || []).catch(() => [])),
-          fetchScheduledInterviews(),
-          listApplications(),
+          fetchScheduledInterviews().catch(() => [] as ScheduledJobInterview[]),
+          listApplications().catch(() => [] as ApplicationRecord[]),
           listResumes()
             .then((items) => {
               const latest = [...items].sort(
@@ -363,6 +363,10 @@ export default function DashboardPage() {
             })
             .catch(() => ''),
         ]).then(([, candidateProfile, completion, jobItems, interviews, applications, resumeSummary]) => {
+          if (!candidateProfile) {
+            setDataState('error');
+            return;
+          }
           setProfile(candidateProfile);
           if (candidateProfile.photoUrl) {
             patchSessionCandidatePhoto(candidateProfile.photoUrl);

@@ -40,8 +40,10 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
     ThrottlerModule.forRoot([
       {
+        // Dashboard + shell fire many parallel GETs (me, completion, jobs, apps, notifications).
+        // 60/min was starving real candidates with 429 and a blank "couldn't load" dashboard.
         ttl: 60000,
-        limit: process.env.NODE_ENV === 'production' ? 60 : 300,
+        limit: process.env.NODE_ENV === 'production' ? 300 : 600,
       },
     ]),
     PrismaModule,
