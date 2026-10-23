@@ -176,6 +176,12 @@ export class AdminController {
     return this.admin.candidateDetails(id);
   }
 
+  @Get('candidates/:id/resumes/:resumeId/download')
+  @Throttle({ default: { limit: 40, ttl: 60000 } })
+  downloadCandidateResume(@Param('id') id: string, @Param('resumeId') resumeId: string) {
+    return this.admin.downloadCandidateResume(id, resumeId);
+  }
+
   @Get('candidates/:id/deletion')
   @Roles(UserType.SUPER_ADMIN)
   candidateDeletionPreview(@Param('id') id: string) {

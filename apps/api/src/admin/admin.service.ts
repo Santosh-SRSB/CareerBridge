@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { hashPlatformPassword, verifyPassword } from '../auth/password.util';
 import { EmployersService } from '../employers/employers.service';
+import { ResumesService } from '../resumes/resumes.service';
 import { PII_UNAVAILABLE, PiiCryptoService } from '../common/crypto/pii-crypto.service';
 import { employerPlanUsage, usagePeriod } from '../employers/employer-plan';
 import { closedAtForStatusChange } from '../employers/job-lifecycle';
@@ -196,6 +197,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
     private readonly employerService: EmployersService,
+    private readonly resumes: ResumesService,
     private readonly pii: PiiCryptoService,
   ) {}
 
@@ -559,7 +561,7 @@ export class AdminService {
         skills: true,
         education: true,
         experiences: true,
-        resumes: { orderBy: { updatedAt: 'desc' }, take: 5 },
+        resumes: { orderBy: { updatedAt: 'desc' }, take: 20 },
         applications: {
           include: {
             job: {
@@ -611,6 +613,7 @@ export class AdminService {
         score: r.score,
         kind: r.kind,
         updatedAt: r.updatedAt.toISOString(),
+        downloadable: true,
       })),
       applications: row.applications.map((a) => ({
         id: a.id,
@@ -633,6 +636,28 @@ export class AdminService {
           .slice(0, 25);
       }),
     };
+  }
+
+  /** Staff can download any resume that belongs to the given candidate. */
+  async downloadCandidateResume(candidateId: string, resumeId: string) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id: candidateId },
+      select: { userId: true },
+    });
+    if (!candidate) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Candidate not found' });
+    }
+    const resume = await this.prisma.resume.findFirst({
+      where: { id: resumeId, candidateId },
+      select: { id: true },
+    });
+    if (!resume) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'Resume not found for this candidate',
+      });
+    }
+    return this.resumes.download(candidate.userId, resume.id);
   }
 
   async setCandidateStatus(actorId: string, candidateId: string, status: UserStatus) {

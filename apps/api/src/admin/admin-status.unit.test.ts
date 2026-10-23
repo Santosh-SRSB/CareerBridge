@@ -57,7 +57,7 @@ function store() {
     auditLog: { create: async ({ data }: any) => (audit.push(data), data) },
     $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
   };
-  const service = new AdminService(prisma as never, {} as never, {} as never, {} as never);
+  const service = new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never);
   return { service, users, admins, audit };
 }
 
