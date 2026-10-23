@@ -21,6 +21,7 @@
   background: var(--ep-saas-bg);
   color: var(--ep-saas-ink);
   font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 14px;
   display: grid;
   grid-template-columns: 1fr;
   width: 100%;
@@ -129,7 +130,7 @@
 
 .ep-app--saas .ep-aside__head-note {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(238, 243, 241, 0.55);
 }
 
@@ -179,7 +180,7 @@
 
 .ep-app--saas .ep-aside__brand-text strong {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 19px;
+  font-size: 17.5px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #fff;
@@ -189,7 +190,7 @@
 .ep-app--saas .ep-aside__brand-text em {
   display: block;
   font-style: normal;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -209,7 +210,7 @@
   color: #9db3ad;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
 }
 
@@ -235,7 +236,7 @@
   color: #e5e7f2;
   border-radius: 9px;
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
   padding: 11px 12px;
   text-decoration: none;
   transition: background 0.15s ease, color 0.15s ease;
@@ -293,7 +294,7 @@
 
 .ep-app--saas .ep-aside__progress {
   color: #9db3ad;
-  font-size: 12.5px;
+  font-size: 11.5px;
 }
 
 .ep-app--saas .ep-aside__bar {
@@ -311,7 +312,7 @@
   box-shadow: none;
   animation: none;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
@@ -322,7 +323,7 @@
 
 .ep-app--saas .ep-aside__org-name {
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,7 +338,7 @@
   background: transparent;
   color: rgba(255, 255, 255, 0.7);
   text-align: left;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   padding: 10px 12px;
   border-radius: 9px;
@@ -443,7 +444,7 @@
 
 .ep-app--saas .ep-deskbar__brand-name {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: #fff;
   letter-spacing: -0.02em;
@@ -452,7 +453,7 @@
 
 .ep-app--saas .ep-deskbar__brand-tag {
   font-style: normal;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -481,7 +482,7 @@
 .ep-app--saas .ep-deskbar__nav-link {
   color: rgba(255, 255, 255, 0.82);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   padding: 8px 14px;
   border-radius: 10px;
@@ -529,7 +530,7 @@
 }
 
 .ep-app--saas .ep-deskbar__who-label {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -539,7 +540,7 @@
 
 .ep-app--saas .ep-deskbar__who-name {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #fff;
   line-height: 1.25;
@@ -573,7 +574,7 @@
   display: grid;
   place-items: center;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   box-shadow: none;
 }
 
@@ -599,7 +600,7 @@
   background: transparent;
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ep-saas-ink);
   text-decoration: none;
@@ -645,7 +646,7 @@
   border-radius: 10px !important;
   background: rgba(255, 255, 255, 0.06) !important;
   color: #eef0ff !important;
-  font-size: 15px !important;
+  font-size: 14px!important;
   font-weight: 600 !important;
   text-decoration: none;
   text-align: left;
@@ -695,7 +696,7 @@
   align-items: center;
   gap: 8px;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.45rem, 2.4vw, 1.75rem);
+  font-size: clamp(1.341rem, 2.4vw, 1.619rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ep-saas-ink);
@@ -708,7 +709,7 @@
 .ep-app--saas .ep-pagehead__sub {
   margin: 6px 0 0;
   color: var(--ep-saas-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-app--saas .ep-btn-gold,
@@ -894,7 +895,7 @@
 
 .ep-saas-hinge__board strong {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 700;
   line-height: 1.3;
   max-width: 10ch;
@@ -946,7 +947,7 @@
   border: 1.5px solid #10137c;
   box-shadow: 2px 2px 0 #10137c;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 700;
   color: #10137c;
   text-align: center;
@@ -1102,7 +1103,7 @@
   }
 
   .ep-saas-dash__title {
-    font-size: clamp(1.25rem, 5.5vw, 1.55rem);
+    font-size: clamp(1.156rem, 5.5vw, 1.434rem);
   }
 
   .ep-saas-dash__write {
@@ -1193,7 +1194,7 @@
 .ep-saas-dash__eyebrow {
   margin: 0 0 8px;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1207,7 +1208,7 @@
 .ep-saas-dash__title {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  font-size: clamp(1.249rem, 2.4vw, 1.85rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ep-saas-ink);
@@ -1273,7 +1274,7 @@
 .ep-saas-dash__sub {
   margin: 10px 0 0;
   color: var(--ep-saas-muted);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.5;
   max-width: min(56rem, 100%);
   margin-inline: auto;
@@ -1292,7 +1293,7 @@
 }
 
 .ep-saas-dash__process-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1424,7 +1425,7 @@
   min-height: 42px;
   padding: 10px 18px;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   text-decoration: none;
   border: 1px solid transparent;
@@ -1458,7 +1459,7 @@
 .ep-saas-btn--sm {
   min-height: 36px;
   padding: 8px 14px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .ep-saas-metrics {
@@ -1485,7 +1486,7 @@
 
 .ep-saas-metric__label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--ep-saas-muted);
 }
@@ -1493,7 +1494,7 @@
 .ep-saas-metric__value {
   margin: 8px 0 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ep-saas-ink);
@@ -1520,13 +1521,13 @@
 
 .ep-saas-quick__card strong {
   color: var(--ep-saas-ink);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .ep-saas-quick__card span {
   color: var(--ep-saas-muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -1568,14 +1569,14 @@
 }
 
 .ep-saas-bars__value {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #10137c;
   line-height: 1;
 }
 
 .ep-saas-bars__label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #4b4f8f;
   line-height: 1;
@@ -1583,7 +1584,7 @@
 
 .ep-saas-bars__caption {
   margin: 12px 0 0;
-  font-size: 12px;
+  font-size: 11px;
   color: #4b4f8f;
 }
 
@@ -1612,7 +1613,7 @@
 .ep-saas-panel__head h2 {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--ep-saas-ink);
@@ -1624,7 +1625,7 @@
   padding: 22px;
   text-align: center;
   color: var(--ep-saas-muted);
-  font-size: 14px;
+  font-size: 13px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1642,7 +1643,7 @@
 
 .ep-saas-panel__head h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.971rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--ep-saas-ink);
@@ -1650,7 +1651,7 @@
 
 .ep-saas-panel__head p {
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: var(--ep-saas-muted);
 }
 
@@ -1661,7 +1662,7 @@
 }
 
 .ep-saas-link {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ep-saas-indigo);
   text-decoration: none;
@@ -1690,7 +1691,7 @@
 
 .ep-saas-chart__axis {
   fill: #94a3b8;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
 }
 
@@ -1725,7 +1726,7 @@
 .ep-saas-chart__legend {
   display: flex;
   gap: 16px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--ep-saas-muted);
 }
@@ -1768,24 +1769,24 @@
 
 .ep-saas-interview__when strong {
   display: block;
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: var(--ep-saas-ink);
 }
 
 .ep-saas-interview__when em {
   font-style: normal;
-  font-size: 11.5px;
+  font-size: 10.5px;
   color: var(--ep-saas-muted);
 }
 
 .ep-saas-interview__body strong {
   display: block;
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: var(--ep-saas-ink);
 }
 
 .ep-saas-interview__body span {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ep-saas-muted);
 }
 
@@ -1798,13 +1799,13 @@
   width: 100%;
   border-collapse: collapse;
   min-width: 760px;
-  font-size: 13.5px;
+  font-size: 12.5px;
 }
 
 .ep-saas-table th {
   text-align: left;
   padding: 10px 12px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1844,7 +1845,7 @@
 }
 
 .ep-saas-row-actions a {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--ep-saas-indigo);
   text-decoration: none;
@@ -1859,7 +1860,7 @@
   align-items: center;
   border-radius: 999px;
   padding: 4px 9px;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1936,7 +1937,7 @@
   place-items: center;
   background: #dde1ff;
   color: #10137c;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   border: 2px solid #fff;
   box-shadow: 0 0 0 1px rgba(16, 19, 124, 0.08);
@@ -1945,16 +1946,16 @@
 .ep-saas-applicant__body strong,
 .ep-saas-applicant__body a {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-saas-applicant__body span {
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: var(--ep-saas-muted);
 }
 
 .ep-saas-applicant__date {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ep-saas-muted);
   white-space: nowrap;
 }
@@ -1973,13 +1974,13 @@
 
 .ep-saas-empty p {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ep-saas-muted);
 }
 
 .ep-saas-empty span {
-  font-size: 13px;
+  font-size: 12px;
   margin-bottom: 0;
 }
 
@@ -2007,7 +2008,7 @@
 
 .ep-saas-modal__card h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.018rem;
   font-weight: 800;
   color: var(--ep-saas-ink);
 }
@@ -2015,7 +2016,7 @@
 .ep-saas-modal__card p {
   margin: 8px 0 0;
   color: var(--ep-saas-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-saas-modal__actions {
@@ -2125,7 +2126,7 @@
 }
 
 .ep-onboard-page--loading {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #64748b;
 }
@@ -2135,7 +2136,7 @@
   top: 18px;
   right: 22px;
   z-index: 5;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #64748b;
   text-decoration: none;
@@ -2168,7 +2169,7 @@
 
 .ep-onboard-page__aside-copy {
   margin: 18px 0 0;
-  font-size: 22px;
+  font-size: 20.5px;
   font-weight: 750;
   letter-spacing: -0.03em;
   color: #0f172a;
@@ -2193,14 +2194,14 @@
 .ep-onboard__step,
 .ep-onboard__hint {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #94a3b8;
 }
 
 .ep-onboard__title {
   margin: 0;
-  font-size: clamp(1.45rem, 2.4vw, 1.85rem);
+  font-size: clamp(1.341rem, 2.4vw, 1.711rem);
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #0f172a;
@@ -2208,7 +2209,7 @@
 
 .ep-onboard__sub {
   margin: 8px 0 0;
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: #64748b;
 }
 
@@ -2240,7 +2241,7 @@
   background: #fff;
   border-radius: 11px;
   padding: 11px 12px;
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: #0f172a;
   outline: none;
 }
@@ -2265,7 +2266,7 @@
   justify-content: center;
   min-height: 44px;
   padding: 0 14px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #475569;
   text-decoration: none;
@@ -2294,7 +2295,7 @@
 
 .ep-kyc__error {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #b42318;
 }
@@ -2302,7 +2303,7 @@
 .ep-kyc__saved {
   display: block;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
   color: #4b4f8f;
 }
@@ -2311,7 +2312,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 12px;
   color: #3f4b48;
 }
 
@@ -2351,7 +2352,7 @@
 .ep-kyc__label-row {
   grid-template-columns: 1fr auto;
   align-items: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -2436,7 +2437,7 @@
 .ep-app--saas .ep-mobile-nav a {
   min-width: 0;
   padding-inline: 4px;
-  font-size: 10px;
+  font-size: 9.5px;
 }
 
 .ep-app--saas .ep-mobile-nav a span {
@@ -2461,7 +2462,7 @@
   .ep-saas-dash__cluster--right .ep-saas-btn {
     min-height: 34px;
     padding: 6px 12px;
-    font-size: 12px;
+    font-size: 11px;
   }
 }
 
@@ -2504,7 +2505,7 @@
 }
 
 .ep-saas-metric__value {
-  font-size: clamp(1.4rem, 3.5vw, 1.75rem);
+  font-size: clamp(1.295rem, 3.5vw, 1.619rem);
 }
 
 .ep-saas-metric__label {
@@ -2640,7 +2641,7 @@
 
   .ep-saas-table--responsive td::before {
     content: attr(data-label);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -2807,7 +2808,7 @@
   }
 
   .ep-onboard-page__aside-copy {
-    font-size: clamp(1.05rem, 4.5vw, 1.25rem);
+    font-size: clamp(0.971rem, 4.5vw, 1.156rem);
   }
 }
 
@@ -2837,16 +2838,16 @@
 
 @media (max-width: 380px) {
   .ep-saas-dash__title {
-    font-size: 1.35rem;
+    font-size: 1.249rem;
   }
 
   .ep-saas-metric__value {
-    font-size: 1.3rem;
+    font-size: 1.203rem;
   }
 
   .ep-saas-btn {
     min-height: 38px;
-    font-size: 13px;
+    font-size: 12px;
     padding-inline: 12px;
   }
 }
@@ -2932,7 +2933,7 @@
 
 .ep-ats-panel__eyebrow {
   margin: 0;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2949,21 +2950,21 @@
 
 .ep-ats-panel__score strong {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 2rem;
+  font-size: 1.85rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
 }
 
 .ep-ats-panel__score span {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #8a9692;
 }
 
 .ep-ats-panel__band {
   margin: 6px 0 0;
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 800;
 }
 
@@ -3028,7 +3029,7 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #3f4f4b;
 }
@@ -3070,7 +3071,7 @@
 
 .ep-ats-panel__explain h3 {
   margin: 0 0 6px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -3089,7 +3090,7 @@
 .ep-ats-panel__gap {
   position: relative;
   padding-left: 16px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   color: #10137c;
 }
@@ -3112,7 +3113,7 @@
 
 .ep-ats-panel__note {
   margin: 12px 0 0;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.4;
   color: #8a9692;
 }
@@ -3129,7 +3130,7 @@
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   background: #eef0ff;
   letter-spacing: 0.01em;
@@ -3168,7 +3169,7 @@
   }
 
   .ep-ats-panel__score strong {
-    font-size: 1.7rem;
+    font-size: 1.573rem;
   }
 }
 
@@ -3178,7 +3179,7 @@
   }
 
   .ep-ats-panel__factor-row {
-    font-size: 11.5px;
+    font-size: 10.5px;
   }
 }
 
@@ -3236,7 +3237,7 @@
 .ep-apps__sheet-table th {
   text-align: left;
   padding: 12px 14px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3249,7 +3250,7 @@
 .ep-apps__sheet-table td {
   padding: 12px 14px;
   border-bottom: 1px solid #eef1f4;
-  font-size: 14px;
+  font-size: 13px;
   color: #1a2330;
   vertical-align: middle;
 }
@@ -3263,7 +3264,7 @@
   display: block;
   margin-top: 2px;
   font-style: normal;
-  font-size: 12px;
+  font-size: 11px;
   color: #5f6b7a;
 }
 
@@ -3286,13 +3287,13 @@
   min-height: 28px;
   padding: 0 10px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 .ep-page--applications .ep-apps__match em {
   font-style: normal;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   opacity: 0.85;
 }
@@ -3322,7 +3323,7 @@
   border: 1px solid #e6ebf0;
   background: #fff;
   color: #1a2330;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   text-decoration: none;
   cursor: pointer;
@@ -3343,7 +3344,7 @@
   border: 1px dashed #d5dbe3;
   background: #fff;
   color: #5f6b7a;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-apps__profile {
@@ -3374,7 +3375,7 @@
 
 .ep-apps__side-eyebrow {
   margin: 0 0 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3383,7 +3384,7 @@
 
 .ep-apps__side-title {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.11rem;
   font-weight: 800;
   color: #1a2330;
   letter-spacing: -0.02em;
@@ -3391,7 +3392,7 @@
 
 .ep-apps__side-sub {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #5f6b7a;
 }
 
@@ -3408,7 +3409,7 @@
   border-radius: 12px;
   background: #f7f9fb;
   color: #5f6b7a;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-page--applications .ep-apps__view {
@@ -3420,7 +3421,7 @@
   border-radius: 11px;
   background: #3b5bdb;
   color: #1a2330;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   text-decoration: none;
   border: 0;
@@ -3465,7 +3466,7 @@
 }
 
 .ep-cprof__back {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--cprof-muted);
   text-decoration: none;
@@ -3504,7 +3505,7 @@
   border-radius: 18px;
   display: grid;
   place-items: center;
-  font-size: 20px;
+  font-size: 18.5px;
   font-weight: 800;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -3513,7 +3514,7 @@
 
 .ep-cprof__eyebrow {
   margin: 0 0 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3523,7 +3524,7 @@
 .ep-cprof__name {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.4rem, 2.4vw, 1.85rem);
+  font-size: clamp(1.295rem, 2.4vw, 1.711rem);
   font-weight: 700;
   letter-spacing: -0.03em;
 }
@@ -3531,7 +3532,7 @@
 .ep-cprof__meta,
 .ep-cprof__role {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.75);
 }
 
@@ -3558,13 +3559,13 @@
 }
 
 .ep-cprof__score-pill strong {
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1;
   letter-spacing: -0.03em;
 }
 
 .ep-cprof__score-pill span {
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.75);
 }
 
@@ -3581,12 +3582,12 @@
 }
 
 .ep-cprof__mini span {
-  font-size: 11px;
+  font-size: 10px;
   color: rgba(255, 255, 255, 0.65);
 }
 
 .ep-cprof__mini strong {
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .ep-cprof__grid {
@@ -3618,7 +3619,7 @@
 
 .ep-cprof__card h2 {
   margin: 0 0 12px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3671,7 +3672,7 @@
 
 .ep-cprof__copy {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--cprof-ink);
 }
@@ -3687,7 +3688,7 @@
   border-radius: 999px;
   background: var(--cprof-soft);
   border: 1px solid var(--cprof-line);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--cprof-ink);
 }
@@ -3711,12 +3712,12 @@
 
 .ep-cprof__list strong {
   color: var(--cprof-ink);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-cprof__list span {
   color: var(--cprof-muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .ep-cprof__actions {
@@ -3732,7 +3733,7 @@
   border-radius: 11px;
   background: var(--cprof-amber);
   color: #1c2434;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   text-decoration: none;
 }
@@ -3750,7 +3751,7 @@
   border: 0;
   background: transparent;
   color: var(--cprof-blue);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
@@ -3771,7 +3772,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-cprof__dl dt {
@@ -3786,20 +3787,20 @@
 
 .ep-cprof__muted {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--cprof-muted);
 }
 
 .ep-cprof__error {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #dc2626;
 }
 
 .ep-cprof__ok {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #059669;
 }
@@ -3828,7 +3829,7 @@
 }
 
 .ep-hero--compact .ep-hero__title {
-  font-size: clamp(1.25rem, 2.2vw, 1.55rem);
+  font-size: clamp(1.156rem, 2.2vw, 1.434rem);
 }
 
 .ep-hero--compact .ep-hero__glow {
@@ -3868,7 +3869,7 @@
 
 .ep-hero__eyebrow {
   margin: 0 0 6px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3877,7 +3878,7 @@
 .ep-hero__title {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-size: clamp(1.249rem, 2.4vw, 1.619rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -3885,7 +3886,7 @@
 
 .ep-hero__sub {
   margin: 8px 0 0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.45;
   max-width: 48ch;
   opacity: 0.9;
@@ -3904,7 +3905,7 @@
   min-height: 40px;
   padding: 0 16px;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   text-decoration: none;
   transition: background 0.15s ease, transform 0.15s ease;
@@ -4082,7 +4083,7 @@
 }
 .ep-page--candidates .ep-cand__top-eyebrow {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -4091,14 +4092,14 @@
 .ep-page--candidates .ep-cand__top-title {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.35rem, 2.4vw, 1.7rem);
+  font-size: clamp(1.249rem, 2.4vw, 1.573rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: #1a2330;
 }
 .ep-page--candidates .ep-cand__top-sub {
   margin: 8px 0 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #5f6b7a;
   max-width: 42ch;
   line-height: 1.45;
@@ -4156,12 +4157,12 @@
 }
 .ep-page--candidates .ep-cand__empty-state p {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #1a2330;
 }
 .ep-page--candidates .ep-cand__empty-state span {
-  font-size: 14px;
+  font-size: 13px;
   color: #5f6b7a;
   max-width: 36ch;
 }
@@ -4382,7 +4383,7 @@
 .ep-an-stat--d .ep-an-stat__dot { background: #64748b; box-shadow: 0 0 0 4px #eef2f5; }
 .ep-an-stat__label {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -4392,7 +4393,7 @@
   display: block;
   margin-top: 10px;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--ep-an-ink);
   letter-spacing: -0.03em;
@@ -4401,7 +4402,7 @@
 .ep-an-stat__hint {
   display: block;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
   color: var(--ep-an-muted);
 }
@@ -4430,7 +4431,7 @@
 }
 .ep-an-funnel__title {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -4438,7 +4439,7 @@
 }
 .ep-an-funnel__sub {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ep-an-muted);
 }
 .ep-an-funnel__list {
@@ -4453,7 +4454,7 @@
   gap: 8px;
   padding: 0;
   border: 0;
-  font-size: 14px;
+  font-size: 13px;
 }
 .ep-an-funnel__row {
   display: flex;
@@ -4464,7 +4465,7 @@
 }
 .ep-an-funnel__row strong {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 18px;
+  font-size: 16.5px;
   letter-spacing: -0.02em;
 }
 .ep-an-funnel__track {
@@ -4498,7 +4499,7 @@
 }
 .ep-an-panel__title {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -4516,7 +4517,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  font-size: 14px;
+  font-size: 13px;
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--ep-an-soft);
@@ -4543,7 +4544,7 @@
   border: 1px solid var(--ep-an-line);
   border-radius: 999px;
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 /* Shared empty + cartoon cue */
@@ -4613,13 +4614,13 @@
 }
 .ep-polished-empty__title {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #10137c;
 }
 .ep-polished-empty__copy {
   margin: 6px 0 12px;
-  font-size: 14px;
+  font-size: 13px;
   color: #5c6f6a;
   max-width: 42ch;
   line-height: 1.45;
@@ -4640,13 +4641,13 @@
 }
 .ep-page--schedule .ep-schedule__title {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-size: clamp(1.249rem, 2.4vw, 1.619rem);
   font-weight: 700;
   color: #10137c;
 }
 .ep-page--schedule .ep-schedule__sub {
   color: #5c6f6a;
-  font-size: 14px;
+  font-size: 13px;
   max-width: 48ch;
 }
 .ep-page--schedule .ep-schedule__card {
@@ -4656,13 +4657,13 @@
   padding: 24px;
 }
 .ep-page--schedule .ep-schedule__section-title {
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   color: #5c6f6a;
 }
 .ep-page--schedule .ep-schedule__field > span {
   color: #10137c;
-  font-size: 14px;
+  font-size: 13px;
 }
 .ep-page--schedule .ep-schedule__field input,
 .ep-page--schedule .ep-schedule__field select,
@@ -4718,7 +4719,7 @@
 
 .ep-create-prohead__eyebrow {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -4727,7 +4728,7 @@
 
 .ep-create-prohead__title {
   margin: 0;
-  font-size: clamp(1.45rem, 2.4vw, 1.75rem);
+  font-size: clamp(1.341rem, 2.4vw, 1.619rem);
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--ep-create-ink);
@@ -4737,13 +4738,13 @@
 .ep-create-prohead__sub {
   margin: 6px 0 0;
   max-width: 46ch;
-  font-size: 13.5px;
+  font-size: 12.5px;
   line-height: 1.45;
   color: var(--ep-create-muted);
 }
 
 .ep-create-prohead__back {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #5f6b7a;
   text-decoration: none;
@@ -4785,7 +4786,7 @@
 
 .ep-page--create .ep-flow-card__head h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.971rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--ep-create-ink);
@@ -4793,7 +4794,7 @@
 
 .ep-page--create .ep-flow-card__head p {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ep-create-muted);
 }
 
@@ -4822,7 +4823,7 @@
   border: 1px solid transparent;
   background: transparent;
   color: var(--ep-create-muted);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
   cursor: default;
 }
@@ -4848,7 +4849,7 @@
   border-radius: 999px;
   background: #dce8e4;
   color: var(--ep-create-ink);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   flex: none;
 }
@@ -4863,7 +4864,7 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 700;
   color: var(--ep-create-muted);
   text-transform: uppercase;
@@ -4907,7 +4908,7 @@
 
 .ep-create-hero__crumb {
   margin: 0 0 6px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--ep-create-muted);
@@ -4916,7 +4917,7 @@
 .ep-create-hero__title {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.5rem, 2.6vw, 1.9rem);
+  font-size: clamp(1.388rem, 2.6vw, 1.758rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.15;
@@ -4925,7 +4926,7 @@
 
 .ep-create-hero__sub {
   margin: 8px 0 0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.45;
   color: var(--ep-create-muted);
   max-width: 42ch;
@@ -5085,7 +5086,7 @@
 
 .ep-page--create .ep-flow-card__step-tag {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -5094,7 +5095,7 @@
 
 .ep-page--create .ep-flow-card__head h2 {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 22px;
+  font-size: 20.5px;
   font-weight: 700;
   color: var(--ep-create-ink);
   letter-spacing: -0.02em;
@@ -5102,7 +5103,7 @@
 
 .ep-page--create .ep-flow-card__head p {
   color: var(--ep-create-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-page--create .ep-flow-card__tip {
@@ -5111,7 +5112,7 @@
   background: #eef0ff;
   border: 1px solid #dde1ff;
   padding: 12px 14px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ep-create-ink);
   line-height: 1.4;
   animation: ep-create-tip-in 0.55s ease 0.15s both;
@@ -5208,7 +5209,7 @@
 
 .ep-page--create .ep-flow-foot__hint {
   color: #5c6f6a;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-page--create .ep-btn-save {
@@ -5314,7 +5315,7 @@
 
 .ep-app--saas .ep-aside__brand-text strong {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #fff;
@@ -5528,7 +5529,7 @@
 
 .ep-prohead__eyebrow {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -5538,7 +5539,7 @@
 .ep-prohead__title {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.35rem, 2vw, 1.65rem);
+  font-size: clamp(1.249rem, 2vw, 1.526rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: #10137c !important;
@@ -5548,7 +5549,7 @@
 .ep-prohead__sub {
   margin: 6px 0 0;
   max-width: 54ch;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.45;
   color: #5a6f6a !important;
   opacity: 1 !important;
@@ -5569,7 +5570,7 @@ a.ep-prohead__cta {
   border-radius: 8px !important;
   background: #10137c !important;
   color: #fff !important;
-  font-size: 13px !important;
+  font-size: 12px!important;
   font-weight: 650 !important;
   letter-spacing: 0.01em;
   text-decoration: none !important;
@@ -5592,13 +5593,13 @@ a.ep-prohead__cta {
   border-radius: 8px;
   background: #fef2f2;
   color: #991b1b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .ep-pro-muted {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #4b4f8f;
 }
 
@@ -5611,7 +5612,7 @@ a.ep-prohead__cta {
 
 .ep-pro-empty h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #10137c;
 }
@@ -5619,13 +5620,13 @@ a.ep-prohead__cta {
 .ep-pro-empty p {
   margin: 8px 0 14px;
   max-width: 48ch;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   color: #5a6f6a;
 }
 
 .ep-pro-textlink {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #10137c;
   text-decoration: underline;
@@ -5652,7 +5653,7 @@ a.ep-prohead__cta {
 
 .ep-iv-panel__head h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -5668,7 +5669,7 @@ a.ep-prohead__cta {
   place-items: center;
   background: #eef0ff;
   color: #10137c;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -5700,7 +5701,7 @@ a.ep-prohead__cta {
 
 .ep-iv-row__who h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: #10137c;
   text-transform: capitalize;
@@ -5708,7 +5709,7 @@ a.ep-prohead__cta {
 
 .ep-iv-row__who p {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #5a6f6a;
 }
 
@@ -5721,7 +5722,7 @@ a.ep-prohead__cta {
 
 .ep-iv-row__meta dt {
   margin: 0;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5730,7 +5731,7 @@ a.ep-prohead__cta {
 
 .ep-iv-row__meta dd {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #10137c;
 }
@@ -5741,7 +5742,7 @@ a.ep-prohead__cta {
   min-height: 22px;
   padding: 0 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -5785,7 +5786,7 @@ a.ep-prohead__cta {
   min-height: 34px;
   padding: 0 12px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
   cursor: pointer;
   text-decoration: none;
@@ -5831,7 +5832,7 @@ a.ep-prohead__cta {
 
 .ep-iv-row__note {
   margin: 12px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #0b5f8a;
 }
@@ -5851,7 +5852,7 @@ a.ep-prohead__cta {
 .ep-iv-reschedule label {
   display: grid;
   gap: 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -5864,7 +5865,7 @@ a.ep-prohead__cta {
   border: 1px solid #e5e7f2;
   border-radius: 7px;
   background: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #10137c;
 }
@@ -5876,7 +5877,7 @@ a.ep-prohead__cta {
 }
 
 .ep-iv-notes label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -5890,7 +5891,7 @@ a.ep-prohead__cta {
   border: 1px solid #e5e7f2;
   border-radius: 8px;
   background: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: #10137c;
   resize: vertical;
@@ -5922,14 +5923,14 @@ a.ep-prohead__cta {
 
 .ep-iv-past strong {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   color: #10137c;
 }
 
 .ep-iv-past span {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 11px;
   color: #5a6f6a;
 }
 
@@ -5995,7 +5996,7 @@ a.ep-prohead__cta {
 .ep-kyc__optional {
   font-style: normal;
   font-weight: 500;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0;
   text-transform: none;
   color: #4b4f8f;
@@ -6020,7 +6021,7 @@ a.ep-prohead__cta {
 .ep-ivdesk__eyebrow {
   margin: 0 0 8px;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 15px;
+  font-size: 14px;
   font-style: italic;
   font-weight: 500;
   color: #15199f;
@@ -6029,7 +6030,7 @@ a.ep-prohead__cta {
 .ep-ivdesk__title {
   margin: 0;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(2rem, 4vw, 2.6rem);
+  font-size: clamp(1.85rem, 4vw, 2.405rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #0b0e5e;
@@ -6039,7 +6040,7 @@ a.ep-prohead__cta {
 .ep-ivdesk__sub {
   margin: 10px 0 0;
   max-width: 42ch;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.45;
   color: #4b4f8f;
 }
@@ -6053,7 +6054,7 @@ a.ep-prohead__cta {
   border-radius: 10px;
   background: #10137c;
   color: #fff !important;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
@@ -6076,7 +6077,7 @@ a.ep-prohead__cta {
   border-radius: 999px;
   background: #e8eeeb;
   color: #4a5a56;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -6093,7 +6094,7 @@ a.ep-prohead__cta {
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #991b1b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -6106,7 +6107,7 @@ a.ep-prohead__cta {
 .ep-ivdesk__muted {
   margin: 0;
   color: #4b4f8f;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-ivdesk__empty {
@@ -6119,7 +6120,7 @@ a.ep-prohead__cta {
 
 .ep-ivdesk__empty h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.064rem;
   color: #10137c;
 }
 
@@ -6127,7 +6128,7 @@ a.ep-prohead__cta {
   margin: 8px auto 18px;
   max-width: 42ch;
   color: #4b4f8f;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ep-ivdesk__table-wrap {
@@ -6146,7 +6147,7 @@ a.ep-prohead__cta {
 .ep-ivdesk__table th {
   padding: 14px 16px;
   text-align: left;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -6172,18 +6173,18 @@ a.ep-prohead__cta {
 }
 
 .ep-ivdesk__who strong {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: #0b0e5e;
 }
 
 .ep-ivdesk__who span {
-  font-size: 13px;
+  font-size: 12px;
   color: #4b4f8f;
 }
 
 .ep-ivdesk__cell {
-  font-size: 14px;
+  font-size: 13px;
   color: #4a5a56;
   white-space: nowrap;
 }
@@ -6195,7 +6196,7 @@ a.ep-prohead__cta {
   min-height: 28px;
   padding: 0 12px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
   background: #eef0ff;
@@ -6272,7 +6273,7 @@ a.ep-prohead__cta {
   min-height: 34px !important;
   padding: 0 12px !important;
   border-radius: 8px !important;
-  font-size: 12px !important;
+  font-size: 11px!important;
   font-weight: 700 !important;
   text-decoration: none;
   white-space: nowrap;
@@ -6322,7 +6323,7 @@ a.ep-prohead__cta {
 
 .ep-page--candidates .ep-cand__intro-eyebrow {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -6332,7 +6333,7 @@ a.ep-prohead__cta {
 .ep-page--candidates .ep-cand__intro-title {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.5rem, 2.6vw, 1.85rem);
+  font-size: clamp(1.388rem, 2.6vw, 1.711rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: #10137c;
@@ -6341,7 +6342,7 @@ a.ep-prohead__cta {
 .ep-page--candidates .ep-cand__intro-sub {
   margin: 8px 0 0;
   max-width: 46ch;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.45;
   color: #5f6b7a;
 }
@@ -6357,7 +6358,7 @@ a.ep-prohead__cta {
 }
 
 .ep-page--candidates .ep-cand__intro-job span {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -6365,7 +6366,7 @@ a.ep-prohead__cta {
 }
 
 .ep-page--candidates .ep-cand__intro-job strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #10137c;
   line-height: 1.3;
@@ -6410,7 +6411,7 @@ a.ep-prohead__cta {
   border: 1px solid #d5dbe3 !important;
   border-radius: 10px !important;
   background: #fff !important;
-  font-size: 14px;
+  font-size: 13px;
   color: #10137c !important;
 }
 
@@ -6434,7 +6435,7 @@ a.ep-prohead__cta {
   border: 0;
   background: transparent;
   color: #5f6b7a;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   padding: 8px 10px;
@@ -6467,14 +6468,14 @@ a.ep-prohead__cta {
 
 .ep-page--candidates .ep-cand__results-title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.971rem;
   font-weight: 800;
   color: #10137c;
 }
 
 .ep-page--candidates .ep-cand__results-meta {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #5f6b7a;
 }
@@ -6527,7 +6528,7 @@ a.ep-prohead__cta {
   place-items: center;
   background: #10137c;
   color: #eef0ff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -6538,7 +6539,7 @@ a.ep-prohead__cta {
 .ep-page--candidates .ep-cand__name {
   margin: 0;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 1.15rem;
+  font-size: 1.064rem;
   font-weight: 700;
   color: #0b0e5e;
   line-height: 1.2;
@@ -6546,7 +6547,7 @@ a.ep-prohead__cta {
 
 .ep-page--candidates .ep-cand__meta {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #4b4f8f;
   line-height: 1.35;
@@ -6561,7 +6562,7 @@ a.ep-prohead__cta {
   border-radius: 999px;
   background: #eef0ff !important;
   color: #10137c !important;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -6583,7 +6584,7 @@ a.ep-prohead__cta {
 .ep-page--candidates .ep-cand__stats span {
   display: block;
   margin-bottom: 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -6591,7 +6592,7 @@ a.ep-prohead__cta {
 }
 
 .ep-page--candidates .ep-cand__stats strong {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: #0b0e5e;
 }
@@ -6621,7 +6622,7 @@ a.ep-prohead__cta {
   background: #f1f5f4;
   border: 1px solid #e2eae7;
   color: #334155;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -6653,7 +6654,7 @@ a.ep-prohead__cta {
   min-height: 40px;
   padding: 0 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   text-align: center;
   text-decoration: none;
@@ -6726,21 +6727,21 @@ a.ep-prohead__cta {
 
 .ep-ivdesk__modal-head h2 {
   margin: 4px 0 0;
-  font-size: 1.15rem;
+  font-size: 1.064rem;
   font-weight: 800;
   color: #10137c;
 }
 
 .ep-ivdesk__modal-head p:last-child {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #5f6b7a;
 }
 
 .ep-ivdesk__modal-close {
   border: 0;
   background: transparent;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1;
   color: #5f6b7a;
   cursor: pointer;
@@ -6754,7 +6755,7 @@ a.ep-prohead__cta {
 
 .ep-ivdesk__feedback-rating {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #334155;
 }
 
@@ -6764,7 +6765,7 @@ a.ep-prohead__cta {
   border-radius: 12px;
   background: #f4f7f6;
   border: 1px solid #e5e7f2;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   color: #10137c;
   white-space: pre-wrap;
@@ -6797,7 +6798,7 @@ a.ep-prohead__cta {
   background: #eef0ff;
   border: 1px solid #dde1ff;
   color: #10137c;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -6808,7 +6809,7 @@ a.ep-prohead__cta {
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #991b1b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -6822,7 +6823,7 @@ a.ep-prohead__cta {
 
 .ep-page--candidates .ep-cand__empty-state p {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: #10137c;
 }
@@ -6830,7 +6831,7 @@ a.ep-prohead__cta {
 .ep-page--candidates .ep-cand__empty-state span {
   display: block;
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 12px;
   color: #5f6b7a;
 }
 
@@ -6850,7 +6851,7 @@ a.ep-prohead__cta {
 }
 
 .ep-pass__back {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #4b4f8f;
   text-decoration: none;
@@ -6864,7 +6865,7 @@ a.ep-prohead__cta {
   margin: 0;
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -6914,14 +6915,14 @@ a.ep-prohead__cta {
   place-items: center;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  font-size: 18px;
+  font-size: 16.5px;
   font-weight: 800;
 }
 
 .ep-pass__name {
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.6rem, 3vw, 2rem);
+  font-size: clamp(1.48rem, 3vw, 1.85rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -6929,7 +6930,7 @@ a.ep-prohead__cta {
 
 .ep-pass__meta {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.78);
   line-height: 1.35;
 }
@@ -6941,7 +6942,7 @@ a.ep-prohead__cta {
 .ep-pass__score strong {
   display: block;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.8rem, 3vw, 2.2rem);
+  font-size: clamp(1.665rem, 3vw, 2.035rem);
   font-weight: 700;
   line-height: 1;
 }
@@ -6955,7 +6956,7 @@ a.ep-prohead__cta {
 .ep-pass__score span {
   display: block;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.72);
 }
@@ -6987,7 +6988,7 @@ a.ep-prohead__cta {
 .ep-pass__block h2,
 .ep-pass__block h3 {
   margin: 0 0 10px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7009,7 +7010,7 @@ a.ep-prohead__cta {
   border-radius: 999px;
   background: #eef0ff;
   color: #10137c;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -7029,7 +7030,7 @@ a.ep-prohead__cta {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 6px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .ep-pass__meter-row span {
@@ -7058,7 +7059,7 @@ a.ep-prohead__cta {
 
 .ep-pass__copy {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.55;
   color: #334155;
 }
@@ -7080,14 +7081,14 @@ a.ep-prohead__cta {
 
 .ep-pass__edu strong,
 .ep-pass__exp strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   color: #0b0e5e;
 }
 
 .ep-pass__edu span,
 .ep-pass__exp span {
-  font-size: 13px;
+  font-size: 12px;
   color: #4b4f8f;
 }
 
@@ -7103,7 +7104,7 @@ a.ep-prohead__cta {
   border: 1px solid #e2eae7;
   background: #f7f9f8;
   color: #334155;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -7121,7 +7122,7 @@ a.ep-prohead__cta {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 6px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .ep-pass__factor-row span {
@@ -7175,7 +7176,7 @@ a.ep-prohead__cta {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #334155;
   line-height: 1.4;
@@ -7195,14 +7196,14 @@ a.ep-prohead__cta {
   border-radius: 999px;
   background: #fef3c7;
   color: #b45309;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   flex-shrink: 0;
 }
 
 .ep-pass__muted {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #4b4f8f;
 }
 
@@ -7224,7 +7225,7 @@ a.ep-prohead__cta {
   border-radius: 999px;
   background: #eef0ff;
   color: #475569;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -7242,7 +7243,7 @@ a.ep-prohead__cta {
   min-height: 40px !important;
   padding: 0 14px !important;
   border-radius: 10px !important;
-  font-size: 13px !important;
+  font-size: 12px!important;
   font-weight: 800 !important;
   text-decoration: none;
   cursor: pointer;
@@ -7354,14 +7355,14 @@ a.ep-prohead__cta {
 
 .ep-page--create .ep-flow-card__head h2 {
   margin: 0;
-  font-size: 1.1rem !important;
+  font-size: 1.018rem!important;
   font-weight: 800;
   color: #10137c;
 }
 
 .ep-page--create .ep-flow-card__head p {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #5f6b7a;
 }
 
@@ -7408,7 +7409,7 @@ a.ep-prohead__cta {
 
 .ep-match-section__toolbar h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.064rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #10137c;
@@ -7416,7 +7417,7 @@ a.ep-prohead__cta {
 
 .ep-match-section__toolbar p {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #4b4f8f;
 }
 
@@ -7472,7 +7473,7 @@ a.ep-prohead__cta {
 }
 
 .ep-talent__rank {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.1em;
   color: rgba(244, 250, 248, 0.62);
@@ -7480,7 +7481,7 @@ a.ep-prohead__cta {
 
 .ep-talent__score-num {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 1.65rem;
+  font-size: 1.526rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -7489,7 +7490,7 @@ a.ep-prohead__cta {
 
 .ep-talent__score-label {
   font-style: normal;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   color: rgba(244, 250, 248, 0.48);
 }
@@ -7522,7 +7523,7 @@ a.ep-prohead__cta {
 
 .ep-talent__title h3 {
   margin: 0;
-  font-size: 1.02rem;
+  font-size: 0.944rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #10137c;
@@ -7536,7 +7537,7 @@ a.ep-prohead__cta {
   border-radius: 999px;
   background: #eef0ff;
   color: #15199f;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -7552,7 +7553,7 @@ a.ep-prohead__cta {
   align-items: center;
   padding: 3px 8px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -7574,7 +7575,7 @@ a.ep-prohead__cta {
 
 .ep-talent__loc {
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: #4b4f8f;
 }
 
@@ -7589,7 +7590,7 @@ a.ep-prohead__cta {
   border-radius: 999px;
   border: 1px solid #e5e7f2;
   background: #f7faf9;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: #10137c;
   text-decoration: none;
@@ -7631,7 +7632,7 @@ a.ep-prohead__cta {
 
 .ep-talent__metric strong {
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 1.05rem;
+  font-size: 0.971rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #10137c;
@@ -7641,14 +7642,14 @@ a.ep-prohead__cta {
 
 .ep-talent__metric strong em {
   font-style: normal;
-  font-size: 0.7rem;
+  font-size: 0.648rem;
   font-weight: 700;
   color: #8a9692;
   margin-left: 1px;
 }
 
 .ep-talent__metric span {
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 800;
   color: #8a9692;
   text-transform: uppercase;
@@ -7671,7 +7672,7 @@ a.ep-prohead__cta {
   background: #fff;
   border: 1px solid #eef0ff;
   color: #10137c;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   max-width: 140px;
   white-space: nowrap;
@@ -7695,7 +7696,7 @@ a.ep-prohead__cta {
 
 .ep-talent__note {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 11.5px;
   line-height: 1.45;
   color: #3f4f4b;
 }
@@ -7706,7 +7707,7 @@ a.ep-prohead__cta {
   margin-right: 7px;
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -7740,11 +7741,11 @@ a.ep-prohead__cta {
   }
 
   .ep-talent__score-num {
-    font-size: 1.2rem;
+    font-size: 1.11rem;
   }
 
   .ep-talent__score-label {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .ep-talent__body {
@@ -7790,7 +7791,7 @@ a.ep-prohead__cta {
 
 .ep-applicant-list__title {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -7838,13 +7839,13 @@ a.ep-prohead__cta {
   border-radius: 999px;
   background: #10137c;
   color: #f4faf8;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
 }
 
 .ep-applicant__name {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.064rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #10137c;
@@ -7856,7 +7857,7 @@ a.ep-prohead__cta {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 13px;
+  font-size: 12px;
   color: #4b4f8f;
 }
 
@@ -7891,7 +7892,7 @@ a.ep-prohead__cta {
 
 .ep-applicant__stat span {
   display: block;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -7902,7 +7903,7 @@ a.ep-prohead__cta {
   display: block;
   margin-top: 4px;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: 1.2rem;
+  font-size: 1.11rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #10137c;
@@ -7921,7 +7922,7 @@ a.ep-prohead__cta {
 
 .ep-applicant__notes-label {
   margin: 0 0 6px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7940,7 +7941,7 @@ a.ep-prohead__cta {
 .ep-applicant__gap {
   position: relative;
   padding-left: 16px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   color: #3f4f4b;
 }
@@ -7973,7 +7974,7 @@ a.ep-prohead__cta {
   background: none;
   padding: 0;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: #15199f;
   text-decoration: none;
@@ -8000,7 +8001,7 @@ a.ep-prohead__cta {
   border: 1px solid #e5e7f2;
   background: #fff;
   color: #10137c;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
@@ -8032,7 +8033,7 @@ a.ep-prohead__cta {
 }
 
 .ep-applicant__outcome-label {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -8047,7 +8048,7 @@ a.ep-prohead__cta {
   border: 1px solid #eef0ff;
   background: #f7faf9;
   color: #10137c;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -8065,7 +8066,7 @@ a.ep-prohead__cta {
   }
 
   .ep-applicant__name {
-    font-size: 1.05rem;
+    font-size: 0.971rem;
   }
 
   .ep-applicant__pipeline {
@@ -8139,7 +8140,7 @@ a.ep-prohead__cta {
 
 .ep-job-detail__eyebrow {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -8149,7 +8150,7 @@ a.ep-prohead__cta {
 .ep-job-detail__title {
   margin: 0;
   font-family: var(--font-space-grotesk), var(--font-poppins), sans-serif;
-  font-size: clamp(1.35rem, 2.2vw, 1.7rem);
+  font-size: clamp(1.249rem, 2.2vw, 1.573rem);
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #10137c;
@@ -8171,7 +8172,7 @@ a.ep-prohead__cta {
   background: #f3f5f4;
   border: 1px solid #e6e2d8;
   color: #10137c;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -8212,7 +8213,7 @@ a.ep-prohead__cta {
 .ep-job-detail__fact span {
   display: block;
   padding-left: 8px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -8223,7 +8224,7 @@ a.ep-prohead__cta {
   display: block;
   margin-top: 5px;
   padding-left: 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   color: #10137c;
   letter-spacing: -0.015em;
@@ -8241,7 +8242,7 @@ a.ep-prohead__cta {
 
 .ep-job-detail__desc span {
   display: block;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -8250,7 +8251,7 @@ a.ep-prohead__cta {
 
 .ep-job-detail__desc p {
   margin: 8px 0 0;
-  font-size: 13.5px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: #3f4f4b;
   white-space: pre-wrap;
@@ -8272,7 +8273,7 @@ a.ep-prohead__cta {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: #10137c;
   text-decoration: none;
@@ -8315,7 +8316,7 @@ a.ep-prohead__cta {
   border: 1px solid #d5ddd9;
   background: #fff;
   color: #10137c;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   font-family: inherit;
   cursor: pointer;
@@ -8412,7 +8413,7 @@ a.ep-prohead__cta {
 }
 .ep-modal__eyebrow {
   margin: 0;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -8420,20 +8421,20 @@ a.ep-prohead__cta {
 }
 .ep-modal__title {
   margin: 4px 0 0;
-  font-size: 1.15rem;
+  font-size: 1.064rem;
   font-weight: 800;
   color: #10137c;
 }
 .ep-modal__sub {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #4b4f8f;
 }
 .ep-modal__field {
   display: grid;
   gap: 6px;
   margin-top: 14px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #3f4f4b;
 }
@@ -8450,7 +8451,7 @@ a.ep-prohead__cta {
 }
 .ep-modal__field em {
   font-style: normal;
-  font-size: 11px;
+  font-size: 10px;
   color: #8a9692;
   justify-self: end;
 }
@@ -8470,7 +8471,7 @@ a.ep-prohead__cta {
 }
 
 .ep-saas-panel__link {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #15199f;
   text-decoration: none;
@@ -8478,7 +8479,7 @@ a.ep-prohead__cta {
 .ep-saas-panel__link:hover { text-decoration: underline; }
 .ep-saas-panel__hint {
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: #4b4f8f;
 }
 .ep-saas-panel--wide {
@@ -8490,12 +8491,12 @@ a.ep-prohead__cta {
   border-radius: 999px;
   background: #eef0ff;
   color: #10137c;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: capitalize;
 }
 .ep-saas-table__link {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #15199f;
   text-decoration: none;
@@ -8512,7 +8513,7 @@ a.ep-prohead__cta {
   gap: 2px;
 }
 .ep-ivdesk__detail dt {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -8520,7 +8521,7 @@ a.ep-prohead__cta {
 }
 .ep-ivdesk__detail dd {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #10137c;
 }
 
@@ -8540,7 +8541,7 @@ a.ep-prohead__cta {
 }
 .ep-billing__eyebrow {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -8548,17 +8549,17 @@ a.ep-prohead__cta {
 }
 .ep-billing__title {
   margin: 4px 0 0;
-  font-size: 1.55rem;
+  font-size: 1.434rem;
   font-weight: 800;
   color: #10137c;
 }
 .ep-billing__sub {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #4b4f8f;
 }
 .ep-billing__back {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: #15199f;
   text-decoration: none;
@@ -8569,13 +8570,13 @@ a.ep-prohead__cta {
   border-radius: 10px;
   background: #fef2f2;
   color: #991b1b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 .ep-billing__muted {
   margin: 0;
   color: #4b4f8f;
-  font-size: 14px;
+  font-size: 13px;
 }
 .ep-billing__plan {
   display: grid;
@@ -8589,17 +8590,17 @@ a.ep-prohead__cta {
 }
 .ep-billing__plan h2 {
   margin: 4px 0 6px;
-  font-size: 1.25rem;
+  font-size: 1.156rem;
   color: #10137c;
 }
 .ep-billing__plan p {
   margin: 0;
   color: #4b4f8f;
-  font-size: 14px;
+  font-size: 13px;
 }
 .ep-billing__plan-label {
   margin: 0;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -8608,7 +8609,7 @@ a.ep-prohead__cta {
 .ep-billing__credits strong {
   display: block;
   margin: 4px 0 8px;
-  font-size: 1.4rem;
+  font-size: 1.295rem;
   color: #10137c;
 }
 .ep-billing__bar {
@@ -8626,7 +8627,7 @@ a.ep-prohead__cta {
   display: block;
   margin-top: 8px;
   font-style: normal;
-  font-size: 12px;
+  font-size: 11px;
   color: #4b4f8f;
 }
 .ep-billing__usage,
@@ -8639,7 +8640,7 @@ a.ep-prohead__cta {
 .ep-billing__usage h3,
 .ep-billing__history h3 {
   margin: 0 0 12px;
-  font-size: 1rem;
+  font-size: 0.925rem;
   color: #10137c;
 }
 .ep-billing__usage ul {
@@ -8658,14 +8659,14 @@ a.ep-prohead__cta {
   gap: 4px;
 }
 .ep-billing__usage span {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #8a9692;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .ep-billing__usage strong {
-  font-size: 1.35rem;
+  font-size: 1.249rem;
   color: #10137c;
 }
 @media (max-width: 720px) {
@@ -8735,7 +8736,7 @@ a.ep-prohead__cta {
 .ep-talent__match-label {
   display: block;
   margin-top: 2px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
