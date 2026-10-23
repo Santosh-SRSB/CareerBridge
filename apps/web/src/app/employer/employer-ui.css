@@ -28,8 +28,8 @@
   min-height: 100dvh;
   background: var(--ev-bg);
   color: var(--ev-txt);
-  /* Match candidate dashboard body (--type-body: 16px). */
-  font: 16px/1.5 var(--ev-sans);
+  /* Compact employer type: headings/display 10px, body/UI 8px. */
+  font: 8px/1.5 var(--ev-sans);
 }
 
 .ev-app *,
@@ -99,7 +99,7 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 14px;
+  font-size: 8px;
   white-space: nowrap;
 }
 
@@ -113,14 +113,14 @@
 
 .ev-brand__meta small {
   margin: 0;
-  font-size: 13px;
+  font-size: 8px;
   opacity: 0.85;
 }
 
 .ev-brand small {
   display: block;
   margin-top: 0;
-  font-size: 14px;
+  font-size: 8px;
   opacity: 0.85;
 }
 
@@ -157,7 +157,7 @@
 
 .ev-lab {
   margin: 12px 14px 6px;
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 500;
   letter-spacing: 0.1em;
   opacity: 0.75;
@@ -175,7 +175,7 @@
   padding: 10px 14px;
   border: 1.5px solid transparent;
   border-radius: 12px;
-  font-size: 15px;
+  font-size: 8px;
   font-weight: 600;
   color: #fff;
   cursor: pointer;
@@ -212,7 +212,7 @@
   border-radius: 99px;
   background: var(--ev-amber);
   color: var(--ev-side);
-  font-size: 11px;
+  font-size: 8px;
   font-weight: 700;
 }
 
@@ -221,7 +221,7 @@
   padding: 11px 14px;
   border: 1px solid #ffffff55;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
 }
 
@@ -240,7 +240,7 @@
 .ev-me-actions button {
   all: unset;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   color: #ffffffc0;
   text-decoration: underline;
@@ -256,7 +256,7 @@
   padding: 8px 12px;
   border-radius: 10px;
   background: #ffffff1f;
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 600;
 }
 
@@ -317,7 +317,7 @@
 
 .ev-app h2 {
   margin: 0 0 14px;
-  font-size: 22px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--ev-ink);
 }
@@ -329,7 +329,7 @@
 
 .ev-pg {
   margin: 4px 0;
-  font: 700 34px/1.15 var(--ev-serif);
+  font: 700 10px/1.15 var(--ev-serif);
   color: var(--ev-ink);
 }
 
@@ -368,7 +368,7 @@
 }
 
 .ev-phead small {
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.12em;
   color: #ffffffb8;
@@ -423,14 +423,14 @@
 
 .ev-jh h1 {
   margin: 0 0 6px;
-  font: 700 clamp(28px, 4.4vw, 36px)/1.1 var(--ev-sans);
+  font: 700 10px/1.1 var(--ev-sans);
   letter-spacing: -0.03em;
   color: var(--ev-ink);
 }
 
 .ev-jh p {
   margin: 0;
-  font-size: 16px;
+  font-size: 8px;
   color: var(--ev-mut);
 }
 
@@ -447,7 +447,7 @@
   border-radius: 12px;
   background: var(--ev-btn);
   color: var(--ev-btnt);
-  font-size: 15px;
+  font-size: 8px;
   font-weight: 700;
   line-height: 1.3;
   text-align: center;
@@ -498,7 +498,7 @@
 
 .ev-btn--sm {
   padding: 8px 14px;
-  font-size: 14px;
+  font-size: 8px;
 }
 
 .ev-btn--block {
@@ -609,7 +609,7 @@
 .ev-results-head h2 {
   margin: 0;
   font-family: var(--ev-serif);
-  font-size: 22px;
+  font-size: 10px;
   color: var(--ev-ink);
 }
 
@@ -658,7 +658,7 @@
 }
 
 .ev-note-item small {
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 700;
   color: var(--ev-mut);
 }
@@ -673,7 +673,7 @@
   border-radius: 99px;
   background: var(--ev-amber);
   color: var(--ev-side);
-  font-size: 11px;
+  font-size: 8px;
   font-weight: 700;
   vertical-align: 2px;
 }
@@ -708,7 +708,7 @@
   background: var(--ev-soft);
   color: var(--ev-ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
   text-overflow: ellipsis;
   cursor: pointer;
@@ -733,7 +733,7 @@
 
 .ev-proposed {
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 8px;
   color: #6a3fb5;
 }
 
@@ -783,7 +783,7 @@
 .ev-note-line {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 8px;
   color: var(--ev-mut);
   overflow-wrap: anywhere;
 }
@@ -823,7 +823,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
-  font-size: 19px;
+  font-size: 10px;
 }
 
 .ev-app .ev-h2:not(:first-child) {
@@ -845,7 +845,7 @@
   background: var(--ev-amber);
   color: var(--ev-side);
   font-family: var(--ev-sans, inherit);
-  font-size: 16px;
+  font-size: 8px;
 }
 
 .ev-actions {
@@ -883,7 +883,7 @@
 }
 
 .ev-eyebrow {
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--ev-mut);
@@ -942,7 +942,7 @@
 }
 
 .ev-linkrows small {
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 500;
   color: var(--ev-mut);
 }
@@ -966,7 +966,7 @@
 
 .ev-form em.ev-count {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 500;
   color: var(--ev-mut);
   text-align: right;
@@ -1017,7 +1017,7 @@
 
 .ev-plan-value {
   font-family: var(--ev-serif);
-  font-size: 26px;
+  font-size: 10px;
   color: var(--ev-ink);
 }
 
@@ -1036,7 +1036,7 @@
   background: var(--ev-amber);
   color: var(--ev-side);
   font-family: var(--ev-serif);
-  font-size: 30px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -1051,7 +1051,7 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  font-size: 20px;
+  font-size: 10px;
 }
 
 .ev-ident {
@@ -1081,7 +1081,7 @@
   gap: 6px;
   padding-top: 10px;
   border-top: 1px solid var(--ev-line);
-  font-size: 14px;
+  font-size: 8px;
   color: var(--ev-txt);
   overflow-wrap: anywhere;
 }
@@ -1091,7 +1091,7 @@
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
   text-align: center;
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   color: var(--ev-txt);
 }
@@ -1105,7 +1105,7 @@
 
 .ev-cal--week {
   margin-bottom: 4px;
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 700;
   color: var(--ev-mut);
 }
@@ -1129,14 +1129,14 @@
   border-radius: 12px;
   background: var(--ev-soft);
   color: var(--ev-ink);
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   text-align: center;
   overflow-wrap: anywhere;
 }
 
 .ev-iconrow span {
-  font-size: 20px;
+  font-size: 10px;
 }
 
 .ev-checklist li {
@@ -1162,7 +1162,7 @@
   height: 24px;
   border: 2px solid var(--ev-line);
   border-radius: 50%;
-  font-size: 13px;
+  font-size: 8px;
 }
 
 .ev-checklist .is-done .ev-check {
@@ -1194,7 +1194,7 @@ a.ev-stat:hover {
 }
 
 .ev-stat b {
-  font-size: 40px;
+  font-size: 10px;
   line-height: 1.1;
   color: var(--ev-ink);
 }
@@ -1225,7 +1225,7 @@ a.ev-stat:hover {
   border-radius: 99px;
   background: var(--ev-line);
   color: var(--ev-ink);
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1271,7 +1271,7 @@ a.ev-stat:hover {
   border-radius: 99px;
   background: var(--ev-soft);
   color: var(--ev-mut);
-  font-size: 11px;
+  font-size: 8px;
   font-weight: 700;
   vertical-align: middle;
 }
@@ -1286,7 +1286,7 @@ a.ev-stat:hover {
   border-radius: 99px;
   background: #dfe2fb;
   color: var(--ev-side);
-  font-size: 15px;
+  font-size: 8px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1334,7 +1334,7 @@ a.ev-stat:hover {
 .ev-table th {
   padding: 10px 8px;
   border-bottom: 1px solid var(--ev-line);
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   color: var(--ev-mut);
   text-align: left;
@@ -1387,7 +1387,7 @@ a.ev-stat:hover {
   border-radius: 99px;
   background: var(--ev-card);
   color: var(--ev-ink);
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -1464,7 +1464,7 @@ a.ev-stat:hover {
 .ev-form label {
   display: block;
   margin: 12px 0 5px;
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
   color: var(--ev-ink);
 }
@@ -1504,7 +1504,7 @@ a.ev-stat:hover {
 .ev-flabel {
   display: block;
   margin: 0 0 5px;
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
   color: var(--ev-ink);
 }
@@ -1552,13 +1552,13 @@ a.ev-stat:hover {
 
 .ev-hint {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 8px;
   color: var(--ev-mut);
 }
 
 .ev-error {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   color: var(--ev-red);
 }
@@ -1681,7 +1681,7 @@ a.ev-stat:hover {
 .ev-candcard__who h3 {
   margin: 0;
   font-family: var(--ev-serif);
-  font-size: 17px;
+  font-size: 8px;
   font-weight: 700;
   line-height: 1.25;
   color: var(--ev-ink);
@@ -1694,7 +1694,7 @@ a.ev-stat:hover {
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 8px;
   line-height: 1.35;
   color: var(--ev-mut);
 }
@@ -1746,7 +1746,7 @@ a.ev-stat:hover {
 }
 
 .ev-candcard__score {
-  font-size: 20px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -1754,7 +1754,7 @@ a.ev-stat:hover {
 }
 
 .ev-candcard__score-label {
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -1788,7 +1788,7 @@ a.ev-stat:hover {
 .ev-candcard__stats small {
   display: block;
   margin-bottom: 4px;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1799,7 +1799,7 @@ a.ev-stat:hover {
 .ev-candcard__edu {
   display: block;
   max-width: 100%;
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 700;
   line-height: 1.3;
   color: var(--ev-ink);
@@ -1834,7 +1834,7 @@ a.ev-stat:hover {
   border: 1px solid #e2e6f5;
   background: #f8f9fd;
   color: var(--ev-txt);
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 500;
 }
 
@@ -1898,7 +1898,7 @@ a.ev-stat:hover {
   border-radius: 12px;
   background: #eefaf4;
   color: #0f7a55;
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 700;
 }
 
@@ -1978,7 +1978,7 @@ a.ev-stat:hover {
   margin: 0;
   overflow-wrap: anywhere;
   font-family: var(--ev-serif);
-  font-size: 18px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1.25;
   color: var(--ev-ink);
@@ -1990,7 +1990,7 @@ a.ev-stat:hover {
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 13px;
+  font-size: 8px;
   line-height: 1.35;
   color: var(--ev-mut);
 }
@@ -2026,7 +2026,7 @@ a.ev-stat:hover {
 }
 
 .ev-mcc__score-val {
-  font-size: 18px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -2034,7 +2034,7 @@ a.ev-stat:hover {
 }
 
 .ev-mcc__score-label {
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2048,7 +2048,7 @@ a.ev-stat:hover {
 }
 
 .ev-mcc__badges .ev-pill {
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 600;
   padding: 3px 10px;
 }
@@ -2075,7 +2075,7 @@ a.ev-stat:hover {
 .ev-mcc__metrics small {
   display: block;
   margin-bottom: 3px;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2084,7 +2084,7 @@ a.ev-stat:hover {
 
 .ev-mcc__metrics b {
   display: block;
-  font-size: 18px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -2093,7 +2093,7 @@ a.ev-stat:hover {
 
 .ev-mcc__metrics b span {
   margin-left: 1px;
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   color: var(--ev-mut);
 }
@@ -2114,7 +2114,7 @@ a.ev-stat:hover {
   border: 1px solid #e4e7f5;
   background: #f8f9fd;
   color: var(--ev-txt);
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 500;
 }
 
@@ -2141,7 +2141,7 @@ a.ev-stat:hover {
   -webkit-line-clamp: 2;
   margin: 0;
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: 8px;
   line-height: 1.4;
   color: var(--ev-mut);
 }
@@ -2150,7 +2150,7 @@ a.ev-stat:hover {
 .ev-mcc__gaps span {
   display: inline-block;
   margin-right: 6px;
-  font-size: 11px;
+  font-size: 8px;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2198,7 +2198,7 @@ a.ev-stat:hover {
 .ev-cand h3 {
   margin: 0;
   font-family: var(--ev-serif);
-  font-size: 19px;
+  font-size: 10px;
   color: var(--ev-ink);
   overflow-wrap: anywhere;
 }
@@ -2244,13 +2244,13 @@ a.ev-stat:hover {
 .ev-av--sm {
   width: 34px;
   height: 34px;
-  font-size: 13px;
+  font-size: 8px;
 }
 
 .ev-av--md {
   width: 38px;
   height: 38px;
-  font-size: 14px;
+  font-size: 8px;
 }
 
 .ev-av--photo {
@@ -2274,7 +2274,7 @@ a.ev-stat:hover {
   padding: 3px 10px;
   border-radius: 8px;
   background: var(--ev-soft);
-  font-size: 13px;
+  font-size: 8px;
 }
 
 .ev-kv {
@@ -2286,7 +2286,7 @@ a.ev-stat:hover {
 .ev-kv small,
 .ev-kvl small {
   display: block;
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 700;
   color: var(--ev-mut);
 }
@@ -2331,7 +2331,7 @@ a.ev-stat:hover {
 
 .ev-foot {
   margin-top: 34px;
-  font-size: 14px;
+  font-size: 8px;
   color: var(--ev-mut);
   text-align: center;
 }
@@ -2370,7 +2370,7 @@ a.ev-stat:hover {
 }
 
 .ev-ats--compact .ev-ring b {
-  font-size: 28px;
+  font-size: 10px;
 }
 
 .ev-ats--compact .ev-hint {
@@ -2403,7 +2403,7 @@ a.ev-stat:hover {
 }
 
 .ev-ring b {
-  font-size: 34px;
+  font-size: 10px;
   color: var(--ev-ink);
 }
 
@@ -2446,7 +2446,7 @@ a.ev-stat:hover {
   gap: 8px;
   margin: 0;
   font-family: var(--ev-serif);
-  font-size: 20px;
+  font-size: 10px;
   line-height: 1.2;
   color: var(--ev-ink);
 }
@@ -2512,7 +2512,7 @@ a.ev-stat:hover {
 
 .ev-pipe__label {
   margin: 0;
-  font-size: 12px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2538,7 +2538,7 @@ a.ev-stat:hover {
 
 .ev-explain h3 {
   margin: 8px 0 6px;
-  font-size: 14px;
+  font-size: 8px;
   color: var(--ev-ink);
 }
 
@@ -2548,7 +2548,7 @@ a.ev-stat:hover {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 14px;
+  font-size: 8px;
 }
 
 .ev-list li {
@@ -2576,7 +2576,7 @@ a.ev-stat:hover {
 .ev-mrow {
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
 }
 
@@ -2623,7 +2623,7 @@ a.ev-stat:hover {
   border-radius: 10px;
   background: var(--ev-soft);
   color: var(--ev-mut);
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   text-align: center;
 }
@@ -2668,7 +2668,7 @@ a.ev-stat:hover {
 
 .ev-stp h2 {
   margin: 0;
-  font-size: 19px;
+  font-size: 10px;
 }
 
 .ev-stp small {
@@ -2684,7 +2684,7 @@ a.ev-stat:hover {
 
 .ev-sub2 {
   margin: 16px 0 8px;
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 700;
   color: var(--ev-mut);
 }
@@ -2697,7 +2697,7 @@ a.ev-stat:hover {
   border-radius: 99px;
   background: var(--ev-card);
   color: var(--ev-ink);
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -2867,7 +2867,7 @@ a.ev-stat:hover {
   gap: 10px;
   padding: 10px 0;
   border-bottom: 1px solid var(--ev-line);
-  font-size: 14px;
+  font-size: 8px;
 }
 
 .ev-r > span:first-child {
@@ -2913,7 +2913,7 @@ a.ev-stat:hover {
 
 .ev-jstats b {
   display: block;
-  font-size: 40px;
+  font-size: 10px;
   line-height: 1.2;
   color: var(--ev-accent);
 }
@@ -2921,7 +2921,7 @@ a.ev-stat:hover {
 .ev-jstats small {
   display: block;
   margin-top: 2px;
-  font-size: 15px;
+  font-size: 8px;
   line-height: 1.35;
   color: var(--ev-mut);
 }
@@ -2967,7 +2967,7 @@ a.ev-stat:hover {
   border-radius: 99px;
   background: var(--ev-soft);
   color: var(--ev-ink);
-  font-size: 12px;
+  font-size: 8px;
   font-style: normal;
   font-weight: 700;
 }
@@ -3028,7 +3028,7 @@ a.ev-stat:hover {
 
 .ev-jt b {
   display: block;
-  font-size: 19px;
+  font-size: 10px;
   color: var(--ev-ink);
   overflow-wrap: anywhere;
 }
@@ -3036,18 +3036,18 @@ a.ev-stat:hover {
 .ev-jt span {
   display: block;
   margin-top: 2px;
-  font-size: 15px;
+  font-size: 8px;
   color: var(--ev-mut);
 }
 
 .ev-ja b {
-  font-size: 26px;
+  font-size: 10px;
   color: var(--ev-ink);
 }
 
 .ev-ja small {
   display: block;
-  font-size: 15px;
+  font-size: 8px;
   color: var(--ev-mut);
 }
 
@@ -3116,7 +3116,7 @@ a.ev-stat:hover {
 }
 
 .ev-jx-note {
-  font-size: 13px;
+  font-size: 8px;
   font-weight: 600;
   color: var(--ev-mut);
 }
@@ -3152,7 +3152,7 @@ a.ev-stat:hover {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
   color: var(--ev-mut);
   text-align: center;
@@ -3273,7 +3273,7 @@ a.ev-stat:hover {
 
 .ev-rvh h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 8px;
 }
 
 .ev-r2 {
@@ -3306,7 +3306,7 @@ a.ev-stat:hover {
   border-radius: 99px;
   background: var(--ev-soft);
   color: var(--ev-ink);
-  font-size: 14px;
+  font-size: 8px;
   font-weight: 600;
 }
 
@@ -3379,7 +3379,7 @@ a.ev-stat:hover {
 }
 
 .ev-hero-in small {
-  font-size: 15px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -3387,7 +3387,7 @@ a.ev-stat:hover {
 
 .ev-hero h1 {
   margin: 22px 0;
-  font: 700 clamp(32px, 4.6vw, 72px)/1.04 var(--ev-serif);
+  font: 700 10px/1.04 var(--ev-serif);
   letter-spacing: -0.01em;
 }
 
@@ -3410,7 +3410,7 @@ a.ev-stat:hover {
 .ev-hero p {
   max-width: 560px;
   margin: 0 0 28px;
-  font-size: clamp(16px, 1.6vw, 20px);
+  font-size: 10px;
 }
 
 .ev-hbar {
@@ -3497,7 +3497,7 @@ a.ev-stat:hover {
   background: none;
   color: var(--ev-ink);
   font: inherit;
-  font-size: 18px;
+  font-size: 10px;
   outline: 0;
 }
 
@@ -3578,7 +3578,7 @@ a.ev-stat:hover {
 .ev-app .ep-ivdesk__modal-head .ep-ivdesk__eyebrow {
   margin: 0;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 8px;
   font-style: normal;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -3590,7 +3590,7 @@ a.ev-stat:hover {
 .ev-app .ep-ivdesk__modal-head h2 {
   margin: 4px 0 0;
   font-family: var(--ev-serif);
-  font-size: 22px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--ev-ink);
 }
@@ -3605,7 +3605,7 @@ a.ev-stat:hover {
 }
 
 .ev-app .ep-modal__field {
-  font-size: 13px;
+  font-size: 8px;
   color: var(--ev-ink);
 }
 
@@ -3732,7 +3732,7 @@ a.ev-stat:hover {
 @media (min-width: 1700px) {
   .ev-app {
     grid-template-columns: 288px minmax(0, 1fr);
-    font-size: 16px;
+    font-size: 8px;
   }
 }
 
@@ -3891,7 +3891,7 @@ a.ev-stat:hover {
   .ev-input,
   .ev-search input,
   .ev-jsearch input {
-    font-size: 16px;
+    font-size: 8px;
   }
 
   .ev-phead {
@@ -3899,7 +3899,7 @@ a.ev-stat:hover {
   }
 
   .ev-phead .ev-pg {
-    font-size: 28px;
+    font-size: 10px;
   }
 
   .ev-jbar select,
@@ -3912,7 +3912,7 @@ a.ev-stat:hover {
   }
 
   .ev-stat b {
-    font-size: 34px;
+    font-size: 10px;
   }
 
   .ev-card {
@@ -3960,7 +3960,7 @@ a.ev-stat:hover {
 
 @media (max-width: 700px) {
   .ev-wz button {
-    font-size: 11px;
+    font-size: 8px;
   }
 
   .ev-wzp > .ev-card {
@@ -3992,7 +3992,7 @@ a.ev-stat:hover {
   }
 
   .ev-jstats b {
-    font-size: 32px;
+    font-size: 10px;
   }
 
   .ev-jcard {
@@ -4020,13 +4020,13 @@ a.ev-stat:hover {
   }
 
   .ev-wz button.on {
-    font-size: 12px;
+    font-size: 8px;
   }
 
   .ev-wz button::before {
     width: 36px;
     height: 36px;
-    font-size: 15px;
+    font-size: 8px;
   }
 
   .ev-wz button:not(:first-child)::after {
@@ -4053,7 +4053,7 @@ a.ev-stat:hover {
   .ev-stepper span {
     min-width: 0;
     padding: 8px 2px;
-    font-size: 12px;
+    font-size: 8px;
   }
 
   .ev-g4,
@@ -4075,17 +4075,17 @@ a.ev-stat:hover {
   .ev-g4 > .ev-stat > span,
   .ev-g5 > .ev-stat > span {
     padding-right: 0;
-    font-size: 14px;
+    font-size: 8px;
   }
 
   .ev-g4 > .ev-stat b,
   .ev-g5 > .ev-stat b {
-    font-size: 30px;
+    font-size: 10px;
   }
 
   .ev-g4 > .ev-stat em,
   .ev-g5 > .ev-stat em {
-    font-size: 13px;
+    font-size: 8px;
   }
 
   .ev-wnav small {
@@ -4132,7 +4132,7 @@ a.ev-stat:hover {
   }
 
   .ev-stat b {
-    font-size: 30px;
+    font-size: 10px;
   }
 
   .ev-jstats {
@@ -4157,7 +4157,7 @@ a.ev-stat:hover {
   }
 
   .ev-phead .ev-pg {
-    font-size: 24px;
+    font-size: 10px;
   }
 }
 
