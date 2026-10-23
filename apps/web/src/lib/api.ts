@@ -1821,6 +1821,15 @@ export async function getAdminRecord(path: string) {
   return request<Record<string, unknown>>(`/admin/${path}`);
 }
 
+export async function downloadAdminCandidateResume(candidateId: string, resumeId: string) {
+  return request<{
+    html?: string;
+    pdf?: string;
+    fileName: string;
+    mimeType?: string;
+  }>(`/admin/candidates/${encodeURIComponent(candidateId)}/resumes/${encodeURIComponent(resumeId)}/download`);
+}
+
 export async function updateAdminSkill(
   id: string,
   payload: { name?: string; category?: string; aliases?: string; active?: boolean },

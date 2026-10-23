@@ -53,7 +53,7 @@ function harness(overrides: Record<string, unknown>) {
     auditLog: { create: async () => ({}), findMany: async () => [] },
     user: { findMany: async () => [] },
   };
-  return { service: new AdminService(prisma as never, {} as never, {} as never, pii), updates };
+  return { service: new AdminService(prisma as never, {} as never, {} as never, {} as never, pii), updates };
 }
 
 function assertNoSensitiveIdentifiers(result: unknown) {

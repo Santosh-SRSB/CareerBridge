@@ -4,9 +4,10 @@ import { AdminService } from './admin.service';
 import { AdminAccountDeletionService } from './admin-account-deletion.service';
 import { AuthModule } from '../auth/auth.module';
 import { EmployersModule } from '../employers/employers.module';
+import { ResumesModule } from '../resumes/resumes.module';
 
 @Module({
-  imports: [AuthModule, EmployersModule],
+  imports: [AuthModule, EmployersModule, ResumesModule],
   controllers: [AdminController],
   providers: [AdminService, AdminAccountDeletionService],
 })
