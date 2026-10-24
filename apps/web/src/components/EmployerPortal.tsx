@@ -23,11 +23,11 @@ export type EmployerShellProfile = Pick<
 const PRIMARY_NAV = [
   { href: '/employer', label: 'Dashboard', key: 'home' },
   { href: '/employer/jobs', label: 'Jobs', key: 'jobs' },
-  { href: '/employer/history', label: 'History', key: 'history' },
   { href: '/employer/candidates', label: 'Candidates', key: 'candidates' },
   { href: '/employer/applications', label: 'Applications', key: 'applications' },
   { href: '/employer/interviews', label: 'Interviews', key: 'interviews' },
   { href: '/notifications', label: 'Notifications', key: 'notifications' },
+  { href: '/employer/history', label: 'History', key: 'history' },
   { href: '/employer/reports', label: 'Analytics', key: 'analytics' },
 ] as const;
 
