@@ -7,7 +7,11 @@ export const JOB_STATUS_FILTERS = [
   { value: 'CLOSED', label: 'Closed' },
 ] as const;
 
+/** Jobs board filters — closed roles live under History. */
+export const JOB_BOARD_FILTERS = JOB_STATUS_FILTERS.filter((item) => item.value !== 'CLOSED');
+
 export type JobStatusFilter = (typeof JOB_STATUS_FILTERS)[number]['value'];
+export type JobBoardFilter = (typeof JOB_BOARD_FILTERS)[number]['value'];
 
 export function jobStatusLabel(status: string) {
   if (status === 'PUBLISHED') return 'Active';
