@@ -2563,7 +2563,7 @@ a.ev-stat:hover {
 }
 
 .ev-list--ok li::before {
-  content: 'ÃÂ¢ÃÂÃÂ';
+  content: '\2713';
   color: #0b6a4f;
 }
 
