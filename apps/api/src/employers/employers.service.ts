@@ -20,7 +20,9 @@ import {
   emailError,
   experienceFilterRange,
   lookupCityCentroid,
+  candidatePassOutYear,
   meetsEducationFilter,
+  meetsPassOutYearFilter,
   normalizeHttpUrl,
   COMPANY_ABOUT_MAX,
   cinFormatError,
@@ -874,6 +876,7 @@ export class EmployersService {
       experience?: string;
       language?: string;
       education?: string;
+      passOutYear?: number;
       availability?: string;
       sort?: CandidateSearchSort;
       page?: number;
@@ -952,6 +955,7 @@ export class EmployersService {
       where: { id: { in: matchRows.map((row) => row.candidateId) } },
       include: {
         skills: true,
+        education: { select: { yearCompleted: true }, orderBy: { yearCompleted: 'desc' }, take: 8 },
         experiences: { orderBy: { startDate: 'desc' }, take: 3 },
         applications: {
           where: { jobId: job.id, status: { not: 'WITHDRAWN' } },
@@ -1004,6 +1008,17 @@ export class EmployersService {
           return null;
         }
         if (!meetsEducationFilter(candidate.highestEducation, query.education)) return null;
+        if (
+          !meetsPassOutYearFilter(
+            candidatePassOutYear({
+              educationEnd: candidate.educationEnd,
+              education: candidate.education,
+            }),
+            query.passOutYear,
+          )
+        ) {
+          return null;
+        }
         if (q) {
           const haystack = [
             candidate.firstName,

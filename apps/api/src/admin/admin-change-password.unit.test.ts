@@ -317,8 +317,11 @@ describe('SeedService keeps changed staff passwords across restarts', () => {
 
     const superAdminUpsert = adminUpserts.find((a) => String(a.where.email).includes('sureshababu5555'));
     assert.ok(superAdminUpsert, 'configured Super Admin upsert missing');
-    assert.match(String(superAdminUpsert!.update.passwordHash), /^v2:/);
-    assert.ok(superAdminUpsert!.update.loginPassword, 'Super Admin password must be synced on seed');
+    assert.ok(
+      !('passwordHash' in superAdminUpsert!.update) && !('loginPassword' in superAdminUpsert!.update),
+      'Super Admin upsert update must not reset password',
+    );
+    assert.match(String(superAdminUpsert!.create.passwordHash), /^v2:/);
 
     const staffUpserts = adminUpserts.filter((a) => !String(a.where.email).includes('sureshababu5555'));
     assert.equal(staffUpserts.length, 2);
@@ -327,9 +330,8 @@ describe('SeedService keeps changed staff passwords across restarts', () => {
       assert.match(String(create.passwordHash), /^v2:/);
     }
 
-    const staffUserUpdates = userUpdates.filter((u) => !String(u.id).includes('sureshababu5555'));
-    for (const { data } of staffUserUpdates) {
-      assert.ok(!('passwordHash' in data), 'staff user.update must not reset passwordHash');
+    for (const { data } of userUpdates) {
+      assert.ok(!('passwordHash' in data), 'existing user.update must not reset passwordHash');
     }
   });
 });

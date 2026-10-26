@@ -1480,6 +1480,7 @@ export async function searchEmployerCandidates(params: {
   experience?: string;
   language?: string;
   education?: string;
+  passOutYear?: number;
   availability?: string;
   sort?: string;
   page?: number;
@@ -1495,6 +1496,7 @@ export async function searchEmployerCandidates(params: {
   if (params.experience) query.set('experience', params.experience);
   if (params.language) query.set('language', params.language);
   if (params.education) query.set('education', params.education);
+  if (params.passOutYear) query.set('passOutYear', String(params.passOutYear));
   if (params.availability) query.set('availability', params.availability);
   if (params.sort) query.set('sort', params.sort);
   if (params.page) query.set('page', String(params.page));
@@ -2092,6 +2094,20 @@ export async function getPlatformStats() {
     cities: number;
     updatedAt: string;
   }>('/platform/stats', { auth: false });
+}
+
+export async function requestDemo(payload: {
+  name: string;
+  companyName: string;
+  workEmail: string;
+  phone?: string;
+  message?: string;
+}) {
+  return request<{ ok: boolean }>('/platform/demo-request', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    auth: false,
+  });
 }
 
 export async function getTestimonialPrompt() {

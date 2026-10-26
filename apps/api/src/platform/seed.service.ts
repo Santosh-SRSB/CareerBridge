@@ -210,11 +210,12 @@ export class SeedService implements OnModuleInit {
     } else {
       // Do not force the default phone onto an existing row — it is often still held by a
       // legacy Super Admin and would abort the whole seed on a unique constraint.
+      // Passwords are seeded on create (and legacy email migration) only, so a changed
+      // Super Admin password survives API restarts — same rule as portalStaff().
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           email,
-          passwordHash,
           userType: 'SUPER_ADMIN',
           status: 'ACTIVE',
         },
@@ -224,8 +225,6 @@ export class SeedService implements OnModuleInit {
     await this.prisma.admin.upsert({
       where: { email },
       update: {
-        passwordHash,
-        loginPassword: SRSB_ADMIN_PASSWORD,
         fullName: 'SRSB Super Admin',
         status: 'ACTIVE',
         userId: user.id,

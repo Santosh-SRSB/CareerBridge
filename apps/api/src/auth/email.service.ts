@@ -305,6 +305,78 @@ export class EmailService {
     return { from, replyTo };
   }
 
+  /** Support inbox for inbound product requests (demo, contact). */
+  supportInbox() {
+    return (
+      this.config.get<string>('SUPPORT_INBOX')?.trim() ||
+      this.config.get<string>('SMTP_REPLY_TO')?.trim() ||
+      'support@srsbcareerbridge.com'
+    );
+  }
+
+  async sendDemoRequest(input: {
+    name: string;
+    companyName: string;
+    workEmail: string;
+    phone?: string;
+    message?: string;
+  }) {
+    if (!this.isConfigured()) {
+      this.logger.error('Demo request email skipped: SMTP is not configured.');
+      throw new HttpException(
+        {
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Could not send the demo request right now. Please try again later or email support.',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    const to = this.supportInbox();
+    const phone = input.phone?.trim() || 'Not provided';
+    const notes = input.message?.trim() || 'No additional notes.';
+    const text = [
+      'New Request for Demo',
+      '',
+      `Name: ${input.name}`,
+      `Company: ${input.companyName}`,
+      `Work email: ${input.workEmail}`,
+      `Phone: ${phone}`,
+      '',
+      'Message:',
+      notes,
+    ].join('\n');
+    try {
+      const sent = await this.sendMail(
+        to,
+        `Request for Demo — ${input.companyName}`,
+        text,
+        [
+          emailParagraph('A new <strong>Request for Demo</strong> was submitted from the CareerBridge landing page.'),
+          emailParagraph(`<strong>Name:</strong> ${escapeHtml(input.name)}`),
+          emailParagraph(`<strong>Company:</strong> ${escapeHtml(input.companyName)}`),
+          emailParagraph(`<strong>Work email:</strong> ${escapeHtml(input.workEmail)}`),
+          emailParagraph(`<strong>Phone:</strong> ${escapeHtml(phone)}`),
+          emailParagraph(`<strong>Message:</strong><br/>${escapeHtml(notes).replace(/\n/g, '<br/>')}`),
+        ].join(''),
+        { replyTo: input.workEmail },
+      );
+      if (!sent) {
+        throw new Error('sendMail returned false');
+      }
+      return true;
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      this.logger.error('Failed to send demo request email');
+      throw new HttpException(
+        {
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Could not send the demo request right now. Please try again later or email support.',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+  }
+
   renderHtml(subject: string, bodyHtml: string) {
     return renderBrandedEmail({
       title: subject,
@@ -321,7 +393,13 @@ export class EmailService {
     return nodemailer.createTransport(options);
   }
 
-  private async sendMail(to: string, subject: string, text: string, bodyHtml: string) {
+  private async sendMail(
+    to: string,
+    subject: string,
+    text: string,
+    bodyHtml: string,
+    opts?: { replyTo?: string },
+  ) {
     if (!this.isConfigured()) {
       this.logger.error(`Email not sent ("${subject}"): SMTP is not configured (SMTP_USER / SMTP_PASS missing).`);
       return false;
@@ -330,7 +408,8 @@ export class EmailService {
     const port = Number(this.config.get('SMTP_PORT') || 587);
     const user = this.config.get<string>('SMTP_USER')!;
     const pass = this.config.get<string>('SMTP_PASS')!;
-    const { from, replyTo } = this.senderHeaders();
+    const { from, replyTo: defaultReplyTo } = this.senderHeaders();
+    const replyTo = opts?.replyTo?.trim() || defaultReplyTo;
     const transporter = this.createTransport({
       host,
       port,

@@ -86,12 +86,12 @@ if (!user) {
   });
   console.log('created user', user.id);
 } else {
+  // Do not reset passwordHash on existing Super Admin — change-password must survive seed.
   user = await prisma.user.update({
     where: { id: user.id },
     data: {
       email,
       phone,
-      passwordHash,
       userType: 'SUPER_ADMIN',
       status: 'ACTIVE',
     },
@@ -102,8 +102,6 @@ if (!user) {
 const admin = await prisma.admin.upsert({
   where: { email },
   update: {
-    passwordHash,
-    loginPassword: password,
     fullName: 'SRSB Super Admin',
     status: 'ACTIVE',
     userId: user.id,

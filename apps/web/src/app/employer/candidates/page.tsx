@@ -50,6 +50,7 @@ type CandidateFilters = {
   experience: string;
   language: string;
   education: string;
+  passOutYear: string;
   availability: string;
   sort: string;
 };
@@ -61,9 +62,17 @@ const EMPTY_FILTERS: CandidateFilters = {
   experience: '',
   language: '',
   education: '',
+  passOutYear: '',
   availability: '',
   sort: 'match',
 };
+
+const PASS_OUT_YEAR_OPTIONS = (() => {
+  const current = new Date().getFullYear();
+  const years: number[] = [];
+  for (let y = current + 1; y >= 1990; y -= 1) years.push(y);
+  return years;
+})();
 
 function titleCaseName(value: string) {
   return value
@@ -177,6 +186,7 @@ export default function EmployerCandidatesPage() {
         experience: f.experience || undefined,
         language: f.language || undefined,
         education: f.education || undefined,
+        passOutYear: f.passOutYear ? Number(f.passOutYear) : undefined,
         availability: f.availability || undefined,
         sort: f.sort && f.sort !== 'match' ? f.sort : undefined,
         page: nextPage,
@@ -420,6 +430,17 @@ export default function EmployerCandidatesPage() {
               {CANDIDATE_EDUCATION_FILTERS.map((item) => (
                 <option key={item.value} value={item.value === 'any' ? '' : item.value}>
                   {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Pass out year
+            <select value={filters.passOutYear} onChange={(e) => patchFilters({ passOutYear: e.target.value })}>
+              <option value="">Any year</option>
+              {PASS_OUT_YEAR_OPTIONS.map((year) => (
+                <option key={year} value={String(year)}>
+                  {year}
                 </option>
               ))}
             </select>

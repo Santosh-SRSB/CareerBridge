@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import { barWidth, useInView } from "./home-motion";
 import { ArrowRightIcon } from "./icons";
+import { RequestDemoForm } from "./RequestDemoForm";
 
 const MOBILE_QUERY = "(max-width: 760px)";
 
@@ -274,6 +275,7 @@ export function EmployerFeatures() {
   const sectionRef = useRef<HTMLElement>(null);
   const [active, setActive] = useState(0);
   const [holding, setHolding] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
   const isMobile = useSyncExternalStore(subscribeToMobile, readMobile, readMobileOnServer);
   const { inView, revealed } = useInView(sectionRef, 0.1);
 
@@ -366,6 +368,12 @@ export function EmployerFeatures() {
             <ArrowRightIcon size={18} />
           </span>
         </Link>
+        <button type="button" className="hl-pill hl-pill--outline" onClick={() => setDemoOpen(true)}>
+          Request for Demo
+          <span className="hl-pill__arrow">
+            <ArrowRightIcon size={18} />
+          </span>
+        </button>
         <Link href="/employer/register" className="hl-pill hl-pill--outline">
           Post a job
           <span className="hl-pill__arrow">
@@ -373,6 +381,7 @@ export function EmployerFeatures() {
           </span>
         </Link>
       </div>
+      <RequestDemoForm open={demoOpen} onClose={() => setDemoOpen(false)} />
     </section>
   );
 }

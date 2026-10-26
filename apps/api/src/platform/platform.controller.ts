@@ -1,9 +1,10 @@
 import { Body, Controller, Get, HttpCode, Logger, Post } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
-import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobStatus } from '../prisma/client';
+import { EmailService } from '../auth/email.service';
 import { formatClientErrorLogLine } from './client-error-sanitize';
 
 class ClientErrorReportDto {
@@ -27,12 +28,41 @@ class ClientErrorReportDto {
   path?: string;
 }
 
+class DemoRequestDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  name!: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  companyName!: string;
+
+  @IsEmail()
+  @MaxLength(160)
+  workEmail!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  message?: string;
+}
+
 @SkipThrottle()
 @Controller('platform')
 export class PlatformController {
   private readonly logger = new Logger('ClientError');
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly email: EmailService,
+  ) {}
 
   @Public()
   @Get('stats')
@@ -68,6 +98,23 @@ export class PlatformController {
       cities: citySet.size,
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  /** Landing-page "Request for Demo" — emailed to CareerBridge support. */
+  @Public()
+  @SkipThrottle({ default: false })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('demo-request')
+  @HttpCode(200)
+  async demoRequest(@Body() body: DemoRequestDto) {
+    await this.email.sendDemoRequest({
+      name: body.name.trim().replace(/\s+/g, ' '),
+      companyName: body.companyName.trim().replace(/\s+/g, ' '),
+      workEmail: body.workEmail.trim().toLowerCase(),
+      phone: body.phone?.trim(),
+      message: body.message?.trim(),
+    });
+    return { ok: true };
   }
 
   /** Error-boundary incidents from the web app, logged under the id shown to the user. */

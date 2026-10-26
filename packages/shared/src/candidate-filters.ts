@@ -47,3 +47,32 @@ export function meetsEducationFilter(text: string | null | undefined, filterValu
   if (!option || option.rank === 0) return true;
   return educationRank(text) >= option.rank;
 }
+
+/** Latest pass-out / graduation year from education rows or educationEnd (YYYY…). */
+export function candidatePassOutYear(candidate: {
+  educationEnd?: string | null;
+  education?: Array<{ yearCompleted?: number | null }>;
+}): number | null {
+  const years: number[] = [];
+  for (const row of candidate.education || []) {
+    const y = Number(row.yearCompleted);
+    if (Number.isFinite(y) && y >= 1950 && y <= 2100) years.push(Math.trunc(y));
+  }
+  const end = String(candidate.educationEnd || '').trim();
+  const match = end.match(/^(19|20)\d{2}/);
+  if (match) {
+    const y = Number(match[0]);
+    if (y >= 1950 && y <= 2100) years.push(y);
+  }
+  if (!years.length) return null;
+  return Math.max(...years);
+}
+
+export function meetsPassOutYearFilter(
+  year: number | null | undefined,
+  filterValue: number | string | null | undefined,
+) {
+  const wanted = Number(filterValue);
+  if (!Number.isFinite(wanted) || wanted <= 0) return true;
+  return year === Math.trunc(wanted);
+}

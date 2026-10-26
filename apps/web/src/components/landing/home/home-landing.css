@@ -2408,6 +2408,126 @@
   }
 }
 
+/* ---------- Request for Demo ---------- */
+.hl-demo-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: rgba(12, 18, 38, 0.55);
+}
+
+.hl-demo-popup__panel {
+  position: relative;
+  width: min(480px, 100%);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  padding: 28px 24px 22px;
+  border-radius: 16px;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 24px 64px rgba(12, 18, 38, 0.28);
+}
+
+.hl-demo-popup__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hl-demo-popup__close:hover {
+  background: var(--color-primary-light);
+}
+
+.hl-demo-popup__title {
+  margin: 0 36px 8px 0;
+  font-size: 1.35rem;
+}
+
+.hl-demo-popup__lede {
+  margin: 0 0 18px;
+  color: var(--color-muted, #5b6475);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.hl-demo-popup__form {
+  display: grid;
+  gap: 12px;
+}
+
+.hl-demo-popup__form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.hl-demo-popup__form label span {
+  font-weight: 500;
+  color: var(--color-muted, #5b6475);
+}
+
+.hl-demo-popup__form input,
+.hl-demo-popup__form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(20, 28, 48, 0.16);
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 400;
+  background: #fff;
+}
+
+.hl-demo-popup__form button[type="submit"] {
+  justify-self: start;
+  margin-top: 4px;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.hl-demo-popup__error {
+  margin: 0;
+  color: #b42318;
+  font-size: 0.9rem;
+}
+
+.hl-demo-popup__hint {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--color-muted, #5b6475);
+}
+
+.hl-demo-popup__done {
+  display: grid;
+  gap: 16px;
+}
+
+.hl-demo-popup__done .hl-pill {
+  justify-self: start;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+button.hl-pill {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
 /* ---------- Keyframes ---------- */
 @keyframes hl-float {
   0%,
