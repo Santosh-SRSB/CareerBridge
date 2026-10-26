@@ -512,15 +512,25 @@ describe('Fix 2 — one verification state everywhere', () => {
     await assert.rejects(svc.setStatus('uU', 'JU1', 'PUBLISHED' as any), ForbiddenException);
     assert.equal(calls.jobUpdates.length, 0);
   });
-  it('KYC-complete / legacy-verified employers pass the gate', async () => {
+  it('PENDING employer cannot search or post until admin Verify', async () => {
+    const { svc, calls } = harness();
+    await assert.rejects(svc.searchCandidates('uB', { jobId: 'JB1' }), (err) => {
+      assert.ok(err instanceof ForbiddenException);
+      assert.match(httpMessage(err), /Waiting for administration approval/);
+      return true;
+    });
+    await assert.rejects(svc.createJob('uB', jobDto() as any), ForbiddenException);
+    assert.equal(calls.jobUpdates.length, 0);
+  });
+  it('admin-verified (legacy verified boolean) employers pass the gate', async () => {
     const { svc } = harness();
-    // Passes the KYC gate, then fails on the next (unrelated) validation.
+    // Passes the admin Verify gate, then fails on the next (unrelated) validation.
     await assert.rejects(svc.searchCandidates('uA', {}), (err) => {
       assert.ok(err instanceof BadRequestException);
       assert.match(httpMessage(err), /Select a job/);
       return true;
     });
-    await assert.rejects(svc.searchCandidates('uB', {}), BadRequestException);
+    await assert.rejects(svc.searchCandidates('uB', {}), ForbiddenException);
   });
   it('submitVerification keeps the boolean in sync with the status', async () => {
     const { svc, calls } = harness();
@@ -1285,7 +1295,7 @@ describe('Fix 9 — application transitions', () => {
   });
   it('Starter plan: publishing beyond the active-job limit is refused; nothing written', async () => {
     const { svc, calls, db } = harness();
-    db.employers.find((e) => e.id === EMP_A)!.verificationStatus = 'KYC_COMPLETE';
+    db.employers.find((e) => e.id === EMP_A)!.verificationStatus = 'VERIFIED';
     db.jobs.push(
       { id: 'JA4', employerId: EMP_A, title: 'Job A4', status: 'PENDING_REVIEW' },
       { id: 'JA5', employerId: EMP_A, title: 'Job A5', status: 'PUBLISHED' },
@@ -1329,7 +1339,7 @@ describe('Fix 9 — application transitions', () => {
     );
     await assert.rejects(matching.recordHiringOutcome('uA', 'APP4', 'HIRED'), ConflictException);
   });
-  it('ATS recompute/list require KYC and job ownership', async () => {
+  it('ATS recompute/list require admin Verify and job ownership', async () => {
     const jobs = [{ id: 'JA1', employerId: EMP_A }];
     const employers: Record<string, Row> = {
       uU: { id: EMP_U, verified: false, verificationStatus: 'UNVERIFIED' },
@@ -1349,7 +1359,7 @@ describe('Fix 9 — application transitions', () => {
     );
     await assert.rejects(matching.recomputeMatches('uU', 'JA1'), ForbiddenException);
     await assert.rejects(matching.listMatches('uU', 'JA1'), ForbiddenException);
-    await assert.rejects(matching.recomputeMatches('uB', 'JA1'), NotFoundException);
+    await assert.rejects(matching.recomputeMatches('uB', 'JA1'), ForbiddenException);
   });
 });
 
@@ -1837,7 +1847,7 @@ describe('employer job invite notification', () => {
     assert.equal(calls.notifications.length, 0);
   });
 
-  it('refuses unpublished jobs, other employers, missing candidates, and incomplete KYC', async () => {
+  it('refuses unpublished jobs, other employers, missing candidates, and unverified employers', async () => {
     const { svc, db, calls } = harness();
     db.jobs.push({ id: 'JA_DRAFT', employerId: EMP_A, title: 'Draft', status: 'DRAFT' });
     await assert.rejects(svc.inviteCandidateToJob('uA', CAND, 'JA_DRAFT'), (err) => {
@@ -1845,7 +1855,7 @@ describe('employer job invite notification', () => {
       assert.match(httpMessage(err), /active job/);
       return true;
     });
-    await assert.rejects(svc.inviteCandidateToJob('uB', CAND, 'JA3'), NotFoundException);
+    await assert.rejects(svc.inviteCandidateToJob('uB', CAND, 'JA3'), ForbiddenException);
     await assert.rejects(svc.inviteCandidateToJob('uA', 'missing-candidate', 'JA3'), NotFoundException);
     await assert.rejects(svc.inviteCandidateToJob('uU', CAND_OTHER, 'JU1'), ForbiddenException);
     assert.equal(calls.notifications.length, 0);

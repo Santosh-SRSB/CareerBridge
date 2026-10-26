@@ -27,18 +27,23 @@ import {
   createEmployerJob,
   extractEmployerJobSkills,
   getEmployerJob,
+  getEmployerMe,
   publishEmployerJob,
   saveEmployerJobSkillProfile,
   updateEmployerJob,
 } from '@/lib/api';
-import { EmployerShellFallback } from '@/components/EmployerPortal';
+import {
+  EmployerShellFallback,
+  WAITING_FOR_ADMINISTRATION_APPROVAL,
+  isEmployerAdminVerified,
+} from '@/components/EmployerPortal';
 import { Input } from '@/components/ui/Input';
 import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { CategorySelect } from '@/components/ui/CategorySelect';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkillSearchCombobox } from '@/components/resume/SkillSearchCombobox';
-import { EvAlert, EvSkeleton, EvStepHead } from '@/components/employer/ui';
+import { EvAlert, EvEmpty, EvSkeleton, EvStepHead } from '@/components/employer/ui';
 
 const STEPS = [
   {
@@ -197,11 +202,32 @@ export default function NewJobPage() {
   const [salaryErrors, setSalaryErrors] = useState<{ min?: string; max?: string }>({});
   const [draftSaving, setDraftSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [bootLoading, setBootLoading] = useState(Boolean(editJobId));
+  const [bootLoading, setBootLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [awaitingAdmin, setAwaitingAdmin] = useState(false);
 
   useEffect(() => {
-    if (!editJobId) return;
+    let cancelled = false;
+    getEmployerMe()
+      .then((profile) => {
+        if (cancelled) return;
+        if (!isEmployerAdminVerified(profile.verificationStatus)) {
+          setAwaitingAdmin(true);
+          setBootLoading(false);
+        } else if (!editJobId) {
+          setBootLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setBootLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editJobId]);
+
+  useEffect(() => {
+    if (!editJobId || awaitingAdmin) return;
     let cancelled = false;
     setBootLoading(true);
     getEmployerJob(editJobId)
@@ -572,6 +598,21 @@ export default function NewJobPage() {
             <EvSkeleton height={320} />
           </div>
           <p className="ev-status">Loading job…</p>
+        </div>
+      </EmployerShellFallback>
+    );
+  }
+
+  if (awaitingAdmin) {
+    return (
+      <EmployerShellFallback title="Submit Job">
+        <div className="ev-wzp">
+          <div className="ev-card ev-mt">
+            <EvEmpty
+              title={WAITING_FOR_ADMINISTRATION_APPROVAL}
+              body="CareerBridge must verify your company before you can post jobs."
+            />
+          </div>
         </div>
       </EmployerShellFallback>
     );

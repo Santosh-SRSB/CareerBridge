@@ -29,6 +29,24 @@ export function assertKycComplete(employer: EmployerVerificationFields, message:
   }
 }
 
+/** Super Admin / Admin has clicked Verify on this employer (`VERIFIED`). */
+export function isAdminVerified(employer: EmployerVerificationFields): boolean {
+  return effectiveVerificationStatus(employer) === 'VERIFIED';
+}
+
+export const WAITING_FOR_ADMINISTRATION_APPROVAL =
+  'Waiting for administration approval. CareerBridge must verify your company before you can post jobs or view candidates.';
+
+/** Gate for posting jobs and viewing candidates / match scores — requires admin Verify. */
+export function assertAdminVerified(
+  employer: EmployerVerificationFields,
+  message = WAITING_FOR_ADMINISTRATION_APPROVAL,
+) {
+  if (!isAdminVerified(employer)) {
+    throw new ForbiddenException({ code: ErrorCode.BUSINESS_RULE_VIOLATION, message });
+  }
+}
+
 /* ---------- Company website ---------- */
 
 const SCHEME_RE = /^([a-z][a-z0-9+.-]*):(?!\d)/i;

@@ -39,10 +39,10 @@ import { maskedBusinessIdentifiers } from './employer-identifiers';
 import {
   ACTIVE_INTERVIEW_STATUSES,
   applicationTransitionError,
-  assertKycComplete,
+  assertAdminVerified,
   DEFAULT_INTERVIEW_TIMEZONE,
   formatAvailabilityWindow,
-  hasCompletedKyc,
+  isAdminVerified,
   INTERVIEW_RESCHEDULED_AUDIT_ACTION,
   intervalsOverlap,
   interviewActionCheck,
@@ -537,7 +537,7 @@ export class EmployersService {
 
   async createJob(userId: string, dto: CreateJobInput) {
     const employer = await this.requireEmployer(userId);
-    assertKycComplete(employer, 'Complete company KYC before posting jobs.');
+    assertAdminVerified(employer);
     if (dto.publish) this.assertPublishSalary(dto.salaryMin, dto.salaryMax);
     this.assertSalaryRange(dto.salaryMin, dto.salaryMax);
     await this.assertJobCategory(dto.category);
@@ -637,7 +637,7 @@ export class EmployersService {
     if (status === 'PUBLISHED' && !resumingApproved) status = 'PENDING_REVIEW';
 
     if (status === 'PENDING_REVIEW' || (status === 'PUBLISHED' && resumingApproved)) {
-      assertKycComplete(employer, 'Complete company KYC before publishing jobs.');
+      assertAdminVerified(employer);
       if (!job.publishedAt) this.assertPublishSalary(job.salaryMin, job.salaryMax);
       if (job.status !== 'PUBLISHED' && job.status !== 'PENDING_REVIEW') {
         await this.assertActiveJobAllowance(employer.id);
@@ -882,7 +882,7 @@ export class EmployersService {
     },
   ) {
     const employer = await this.requireEmployer(userId);
-    assertKycComplete(employer, 'Complete company KYC before searching candidates.');
+    assertAdminVerified(employer);
 
     const jobId = query.jobId?.trim();
     if (!jobId) {
@@ -1116,7 +1116,7 @@ export class EmployersService {
     note?: string,
   ) {
     const employer = await this.requireEmployer(userId);
-    assertKycComplete(employer, 'Complete company KYC before shortlisting candidates.');
+    assertAdminVerified(employer);
     const job = await this.requireJob(userId, jobId);
     await this.matching.assertCandidateVisibleForJob(userId, jobId, candidateId);
 
@@ -1136,7 +1136,7 @@ export class EmployersService {
 
   async inviteCandidateToJob(userId: string, candidateId: string, jobId: string) {
     const employer = await this.requireEmployer(userId);
-    assertKycComplete(employer, 'Complete company KYC before inviting candidates.');
+    assertAdminVerified(employer);
     const job = await this.requireJob(userId, jobId);
     if (job.status !== JobStatus.PUBLISHED) {
       throw new BadRequestException({
@@ -1229,10 +1229,11 @@ export class EmployersService {
       });
     }
 
-    if (!hasCompletedKyc(employer) && !applied) {
+    if (!isAdminVerified(employer) && !applied) {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: 'Complete company KYC before viewing candidate profiles.',
+        message:
+          'Waiting for administration approval. CareerBridge must verify your company before you can view candidates.',
       });
     }
 

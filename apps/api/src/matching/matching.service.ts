@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { ErrorCode as SharedError, employerCandidateUnlockLimit } from '@careerbridge/shared';
 import {
   applicationTransitionError,
-  assertKycComplete,
+  assertAdminVerified,
   withEffectiveVerification,
 } from '../employers/employer-policy';
 import { PrismaService } from '../prisma/prisma.service';
@@ -118,7 +118,7 @@ export class MatchingService {
   }
 
   async recomputeMatches(userId: string, jobId: string) {
-    assertKycComplete(await this.requireEmployer(userId), 'Complete company KYC before viewing candidate matches.');
+    assertAdminVerified(await this.requireEmployer(userId));
     await this.requireJob(userId, jobId);
     await this.assertJobUnlocked(userId, jobId);
     await this.recomputeMatchesForJob(jobId);
@@ -494,7 +494,7 @@ export class MatchingService {
   }
 
   async listMatches(userId: string, jobId: string) {
-    assertKycComplete(await this.requireEmployer(userId), 'Complete company KYC before viewing candidate matches.');
+    assertAdminVerified(await this.requireEmployer(userId));
     await this.assertJobUnlocked(userId, jobId);
     const employer = await this.requireEmployer(userId);
     const job = await this.requireJob(userId, jobId);

@@ -18,7 +18,13 @@ import {
   listEmployerInterviews,
   listEmployerJobs,
 } from '@/lib/api';
-import { EmployerShell, EmployerShellSkeleton, useEmployerShell } from '@/components/EmployerPortal';
+import {
+  EmployerShell,
+  EmployerShellSkeleton,
+  WAITING_FOR_ADMINISTRATION_APPROVAL,
+  isEmployerAdminVerified,
+  useEmployerShell,
+} from '@/components/EmployerPortal';
 import {
   EvApplicationPill,
   EvAvatar,
@@ -229,6 +235,21 @@ export default function EmployerDashboardPage() {
           return;
         }
         setProfile(employer);
+        if (!isEmployerAdminVerified(employer.verificationStatus)) {
+          setData({
+            openJobs: 0,
+            applications: 0,
+            shortlisted: 0,
+            interviews: 0,
+            applicationsByMonth: [],
+            jobPerformance: [],
+            recent: [],
+          });
+          setApplications([]);
+          setInterviews([]);
+          setJobs([]);
+          return;
+        }
         const [dash, appRows, interviewRows, jobRows] = await Promise.all([
           getEmployerDashboard(),
           listAllEmployerApplications().catch(() => [] as EmployerApplication[]),
@@ -287,6 +308,7 @@ export default function EmployerDashboardPage() {
     return <EmployerShellSkeleton />;
   }
 
+  const awaitingAdmin = !isEmployerAdminVerified(profile.verificationStatus);
   const isNewEmployer = data.openJobs === 0 && data.applications === 0 && data.interviews === 0;
   const companyLabel = profile.companyName?.trim() || 'your company';
   const months = data.applicationsByMonth || [];
@@ -296,8 +318,34 @@ export default function EmployerDashboardPage() {
 
   function onSearch(event: FormEvent) {
     event.preventDefault();
+    if (awaitingAdmin) return;
     const q = query.trim();
     router.push(q ? `/employer/candidates?q=${encodeURIComponent(q)}` : '/employer/candidates');
+  }
+
+  if (awaitingAdmin) {
+    return (
+      <EmployerShell profile={profile} bleed>
+        <DashboardHero companyLabel={companyLabel} />
+        <div className="ev-pad">
+          <div className="ev-card ev-mt">
+            <EvEmpty
+              title={WAITING_FOR_ADMINISTRATION_APPROVAL}
+              body={
+                profile.verificationStatus === 'REJECTED'
+                  ? 'Your company verification needs changes. Update your profile and wait for CareerBridge to review again.'
+                  : 'CareerBridge must verify your company before you can post jobs or view candidates and match rates.'
+              }
+              action={
+                <Link href="/employer/profile" className="ev-btn">
+                  Company profile
+                </Link>
+              }
+            />
+          </div>
+        </div>
+      </EmployerShell>
+    );
   }
 
   return (

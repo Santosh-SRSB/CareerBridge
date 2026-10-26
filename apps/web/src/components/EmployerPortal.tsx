@@ -81,11 +81,18 @@ function isActive(pathname: string, key: string) {
   return false;
 }
 
+/** True only after Super Admin / Admin clicks Verify on the employer. */
+export function isEmployerAdminVerified(status?: EmployerVerificationStatus | string | null) {
+  return status === 'VERIFIED';
+}
+
+export const WAITING_FOR_ADMINISTRATION_APPROVAL = 'Waiting for administration approval';
+
 function statusLabel(status?: EmployerVerificationStatus | string | null) {
   if (status === 'VERIFIED') return 'Verified';
-  if (status === 'PENDING') return 'Pending';
+  if (status === 'PENDING') return WAITING_FOR_ADMINISTRATION_APPROVAL;
   if (status === 'REJECTED') return 'Needs fix';
-  if (status === 'KYC_COMPLETE') return 'In review';
+  if (status === 'KYC_COMPLETE') return WAITING_FOR_ADMINISTRATION_APPROVAL;
   return 'Setup';
 }
 

@@ -9,6 +9,7 @@ import {
   effectiveVerificationStatus,
   formatAvailabilityWindow,
   hasCompletedKyc,
+  isAdminVerified,
   interviewActionCheck,
   intervalsOverlap,
   parseCandidateAvailability,
@@ -61,6 +62,14 @@ describe('Employer verification — verificationStatus is authoritative', () => 
     for (const s of ['KYC_COMPLETE', 'PENDING', 'VERIFIED']) {
       assert.equal(hasCompletedKyc({ verified: false, verificationStatus: s }), true, s);
     }
+  });
+  it('only VERIFIED (or legacy verified boolean) passes the admin Verify gate', () => {
+    assert.equal(isAdminVerified({ verified: false, verificationStatus: 'UNVERIFIED' }), false);
+    assert.equal(isAdminVerified({ verified: false, verificationStatus: 'KYC_COMPLETE' }), false);
+    assert.equal(isAdminVerified({ verified: false, verificationStatus: 'PENDING' }), false);
+    assert.equal(isAdminVerified({ verified: false, verificationStatus: 'REJECTED' }), false);
+    assert.equal(isAdminVerified({ verified: false, verificationStatus: 'VERIFIED' }), true);
+    assert.equal(isAdminVerified({ verified: true, verificationStatus: 'UNVERIFIED' }), true);
   });
 });
 

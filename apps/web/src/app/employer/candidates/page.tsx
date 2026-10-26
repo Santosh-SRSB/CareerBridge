@@ -15,12 +15,17 @@ import {
   atsMatchBandInfo,
 } from '@careerbridge/shared';
 import {
+  getEmployerMe,
   listEmployerJobs,
   searchEmployerCandidates,
   changeApplicationStatus,
   setTalentShortlist,
 } from '@/lib/api';
-import { EmployerShellFallback } from '@/components/EmployerPortal';
+import {
+  EmployerShellFallback,
+  WAITING_FOR_ADMINISTRATION_APPROVAL,
+  isEmployerAdminVerified,
+} from '@/components/EmployerPortal';
 import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
 import { EvAlert, EvAvatar, EvEmpty, EvPageHead, EvSkeleton } from '@/components/employer/ui';
 import { CitySelect } from '@/components/ui/CitySelect';
@@ -149,6 +154,7 @@ export default function EmployerCandidatesPage() {
     applicationId: string | null;
     name: string;
   } | null>(null);
+  const [awaitingAdmin, setAwaitingAdmin] = useState(false);
 
   function patchFilters(patch: Partial<CandidateFilters>) {
     setFilters((prev) => ({ ...prev, ...patch }));
@@ -219,7 +225,20 @@ export default function EmployerCandidatesPage() {
     const q = (new URLSearchParams(window.location.search).get('q') || '').trim().slice(0, 100);
     const initial = q ? { ...EMPTY_FILTERS, q } : EMPTY_FILTERS;
     if (q) setFilters(initial);
-    loadJobs(initial);
+    setLoading(true);
+    getEmployerMe()
+      .then((profile) => {
+        if (!isEmployerAdminVerified(profile.verificationStatus)) {
+          setAwaitingAdmin(true);
+          setLoading(false);
+          return;
+        }
+        loadJobs(initial);
+      })
+      .catch(() => {
+        setJobsError(true);
+        setLoading(false);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
   }, []);
 
@@ -283,6 +302,20 @@ export default function EmployerCandidatesPage() {
     } finally {
       setBusyId('');
     }
+  }
+
+  if (awaitingAdmin) {
+    return (
+      <EmployerShellFallback title="Candidates">
+        <EvPageHead eyebrow="Talent pool" title="Candidates" subtitle={WAITING_FOR_ADMINISTRATION_APPROVAL} />
+        <div className="ev-card ev-mt">
+          <EvEmpty
+            title={WAITING_FOR_ADMINISTRATION_APPROVAL}
+            body="CareerBridge must verify your company before you can view candidates and match rates."
+          />
+        </div>
+      </EmployerShellFallback>
+    );
   }
 
   return (
