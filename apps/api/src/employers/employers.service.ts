@@ -566,15 +566,14 @@ export class EmployersService {
         preferredSkills: JSON.stringify(dto.preferredSkills || []),
         benefits: dto.benefits,
         screeningQuestionsJson: JSON.stringify(screeningQuestions),
-        status: dto.publish ? 'PUBLISHED' : 'DRAFT',
-        publishedAt: dto.publish ? new Date() : null,
+        // Publish submits for Super Admin review — candidates only see PUBLISHED jobs.
+        status: dto.publish ? 'PENDING_REVIEW' : 'DRAFT',
+        publishedAt: null,
       },
     });
     if (dto.publish) {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
-      const followUps = await this.runPublishFollowUps(job.id);
-      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
-      return { ...job, ...followUps };
+      return job;
     }
     return job;
   }
@@ -624,31 +623,37 @@ export class EmployersService {
   }
 
   /**
-   * Employer publish makes the job live (PUBLISHED, shown as Active) immediately; there is no admin approval step.
-   * A job still in the legacy PENDING_REVIEW state is published the same way and already counts against the plan.
+   * Employer "publish" from Draft submits for Super Admin approval (PENDING_REVIEW).
+   * Resuming a previously approved PAUSED job returns it to PUBLISHED without a second review.
+   * Matching/alerts for first-time go-live run on Super Admin approval (completeJobApproval).
    */
   async setStatus(userId: string, id: string, status: JobStatus) {
     const job = await this.requireJob(userId, id);
     const employer = await this.requireEmployer(userId);
-    if (status === 'PENDING_REVIEW') status = 'PUBLISHED';
-    if (status === 'PUBLISHED') {
+    const resumingApproved =
+      status === 'PUBLISHED' && job.status === 'PAUSED' && Boolean(job.publishedAt);
+    // New posts need Super Admin approval; employer cannot force a never-approved job live.
+    if (status === 'PUBLISHED' && !resumingApproved) status = 'PENDING_REVIEW';
+
+    if (status === 'PENDING_REVIEW' || (status === 'PUBLISHED' && resumingApproved)) {
       assertKycComplete(employer, 'Complete company KYC before publishing jobs.');
       if (!job.publishedAt) this.assertPublishSalary(job.salaryMin, job.salaryMax);
-      if (job.status !== 'PUBLISHED' && job.status !== 'PENDING_REVIEW') await this.assertActiveJobAllowance(employer.id);
-      await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
+      if (job.status !== 'PUBLISHED' && job.status !== 'PENDING_REVIEW') {
+        await this.assertActiveJobAllowance(employer.id);
+      }
+      if (status === 'PENDING_REVIEW') {
+        await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
+      }
     }
+
     const updated = await this.prisma.job.update({
       where: { id },
       data: {
         status,
-        publishedAt: status === 'PUBLISHED' ? new Date() : undefined,
         closedAt: closedAtForStatusChange(job.status, status, new Date()),
       },
     });
-    if (status !== 'PUBLISHED') return updated;
-    const followUps = await this.runPublishFollowUps(job.id);
-    await this.maybeFirstJobPublishedPrompt(userId, employer.id);
-    return { ...updated, ...followUps };
+    return updated;
   }
 
   /** Called after an admin approves a PENDING_REVIEW job: the job is live, so matching and alerts run now. */
