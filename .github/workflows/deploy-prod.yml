@@ -115,7 +115,8 @@ jobs:
       contents: read
       id-token: write
     strategy:
-      fail-fast: true
+      # Keep API deployable if the web image build fails (job-approval lives in the API).
+      fail-fast: false
       matrix:
         image: [api, web]
     steps:
@@ -182,7 +183,8 @@ jobs:
   deploy-api:
     name: Deploy API · careerbridge-api-prod
     needs: build
-    if: github.ref == 'refs/heads/main'
+    # Run even if the web matrix leg failed, as long as the API image was pushed.
+    if: github.ref == 'refs/heads/main' && always() && needs.build.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
@@ -200,6 +202,15 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Require API image from this commit
+        run: |
+          set -euo pipefail
+          if ! gcloud artifacts docker images describe "$IMAGE" --project="$GCP_PROJECT_ID" >/dev/null 2>&1; then
+            echo "::error::API image $IMAGE was not pushed (build/api likely failed). Cannot deploy."
+            exit 1
+          fi
+          echo "API image present: $IMAGE"
 
       - name: Record current revision
         run: |
@@ -263,8 +274,9 @@ jobs:
 
   deploy-web:
     name: Deploy Web · careerbridge-web-prod
-    needs: deploy-api
-    if: github.ref == 'refs/heads/main'
+    needs: [build, deploy-api]
+    # Only when both matrix images built and API deploy succeeded.
+    if: github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.deploy-api.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
