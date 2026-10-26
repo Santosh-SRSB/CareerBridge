@@ -107,15 +107,28 @@ const EMAILS: Array<{ name: string; send: (s: EmailService) => Promise<unknown>;
     mustContain: ['Acme cancelled your interview for Peon scheduled for 9 Oct, 1:00 PM.', 'Reason: Role &lt;filled&gt;'],
     hrefs: [],
   },
+  {
+    name: 'sendDemoRequest',
+    send: (s) =>
+      s.sendDemoRequest({
+        name: HOSTILE,
+        companyName: 'Acme & Sons',
+        workEmail: 'hr@acme.example',
+        phone: '+91 98765 43210',
+        message: 'Want a walkthrough <soon>',
+      }),
+    mustContain: ['Request for Demo', 'Acme &amp; Sons', 'hr@acme.example', 'Want a walkthrough &lt;soon&gt;'],
+    hrefs: [],
+  },
 ];
 
 const escapedHref = (url: string) => `href="${url.replace(/&/g, '&amp;')}"`;
 
 describe('branded transactional emails', () => {
-  it('covers every email the service can send (8)', () => {
+  it('covers every email the service can send (9)', () => {
     const senders = Object.getOwnPropertyNames(EmailService.prototype).filter((n) => /^send[A-Z]/.test(n) && n !== 'sendMail');
     assert.deepEqual(senders.sort(), EMAILS.map((e) => e.name).sort());
-    assert.equal(EMAILS.length, 8);
+    assert.equal(EMAILS.length, 9);
   });
 
   for (const email of EMAILS) {
@@ -126,7 +139,9 @@ describe('branded transactional emails', () => {
       const mail = s.sent[0];
 
       assert.equal(mail.from, 'SRSB CareerBridge <support@srsbcareerbridge.com>');
-      assert.equal(mail.replyTo, SUPPORT);
+      // Demo requests go to support with Reply-To set to the requester.
+      assert.equal(mail.replyTo, email.name === 'sendDemoRequest' ? 'hr@acme.example' : SUPPORT);
+      if (email.name === 'sendDemoRequest') assert.equal(mail.to, SUPPORT);
 
       assert.match(mail.html, /^<!DOCTYPE html>/);
       assert.match(mail.html, /role="presentation"/);
