@@ -117,7 +117,7 @@ function JobPostedBody() {
           <>
             <b>{title || 'Your role'}</b>
             {pendingReview
-              ? ' is waiting for CareerBridge approval. Candidates will see it once it is approved.'
+              ? ' is waiting for Super Admin approval. Candidates will see it once it is approved.'
               : status === 'PUBLISHED'
                 ? ' is live on CareerBridge.'
                 : ' has been saved.'}

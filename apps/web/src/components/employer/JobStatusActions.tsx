@@ -53,7 +53,7 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
     if (compact) return null;
     return (
       <p className="ev-jx-note">
-        Waiting for CareerBridge approval. Candidates will see this job once it is approved.
+        Waiting for Super Admin approval. Candidates will see this job once it is approved.
       </p>
     );
   }

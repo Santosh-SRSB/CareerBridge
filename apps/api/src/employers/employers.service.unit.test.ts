@@ -1079,13 +1079,14 @@ describe('Fix 7 — only PUBLISHED jobs are public', () => {
       await assert.rejects(make(status, false).detail('J', 'cU'), NotFoundException, status);
     }
   });
-  it('EDGE-07: a job the employer just published is visible to anonymous users and candidates', async () => {
+  it('EDGE-07: a job the employer just submitted stays PENDING_REVIEW and is hidden from candidates until Super Admin approves', async () => {
     const { svc } = harness();
-    const published: any = await svc.createJob('uA', jobDto({ publish: true }) as any);
+    const submitted: any = await svc.createJob('uA', jobDto({ publish: true }) as any);
+    assert.equal(submitted.status, 'PENDING_REVIEW');
     const make = (status: string) => {
       const jobs = new JobsService(
         {
-          job: { findUnique: async () => ({ ...published, status, benefits: null, employer: {} }) },
+          job: { findUnique: async () => ({ ...submitted, status, benefits: null, employer: {} }) },
           application: { findFirst: async () => null },
           savedJob: { findUnique: async () => null },
         } as any,
@@ -1096,9 +1097,9 @@ describe('Fix 7 — only PUBLISHED jobs are public', () => {
       (jobs as any).toCard = (row: Row) => ({ id: row.id });
       return jobs;
     };
-    assert.equal((await make(published.status).detail(published.id)).status, 'PUBLISHED');
-    assert.equal((await make(published.status).detail(published.id, 'cU')).status, 'PUBLISHED');
-    await assert.rejects(make('PENDING_REVIEW').detail(published.id), NotFoundException);
+    await assert.rejects(make('PENDING_REVIEW').detail(submitted.id), NotFoundException);
+    await assert.rejects(make('PENDING_REVIEW').detail(submitted.id, 'cU'), NotFoundException);
+    assert.equal((await make('PUBLISHED').detail(submitted.id)).status, 'PUBLISHED');
   });
   it('PUBLISHED is visible; an applicant can still open their PAUSED/CLOSED job but not a DRAFT', async () => {
     assert.equal((await make('PUBLISHED', false).detail('J')).status, 'PUBLISHED');
@@ -1109,52 +1110,49 @@ describe('Fix 7 — only PUBLISHED jobs are public', () => {
 });
 
 describe('Fix 8 — publish survives an ATS recompute failure', () => {
-  it('recompute throws → resumed (previously approved) job persisted, matching FAILED (no 500)', async () => {
+  it('resuming a previously approved PAUSED job returns PUBLISHED without a second Super Admin review', async () => {
     const { svc, calls, db } = harness({ recomputeThrows: true });
     Object.assign(db.jobs.find((j) => j.id === 'JA1')!, { status: 'PAUSED', publishedAt: new Date(1) });
     const res = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
     assert.equal(res.status, 'PUBLISHED');
-    assert.equal((res as any).matching.status, 'FAILED');
-    assert.match((res as any).matching.message, /job is saved/);
+    assert.equal((res as any).matching, undefined);
     assert.equal(db.jobs.find((j) => j.id === 'JA1')!.status, 'PUBLISHED');
-    assert.equal(calls.recompute, 1);
+    assert.equal(calls.recompute, 0);
   });
-  it('UT-E11: createJob(publish) is live immediately — PUBLISHED (Active), matching and alerts run, no admin approval', async () => {
+  it('UT-E11: createJob(publish) submits PENDING_REVIEW — not live until Super Admin approves', async () => {
     const { svc, calls, db } = harness({ recomputeThrows: true });
     const res: any = await svc.createJob('uA', jobDto({ publish: true }) as any);
-    assert.equal(res.status, 'PUBLISHED');
-    assert.ok(res.publishedAt instanceof Date);
-    assert.equal(res.reviewRequired, undefined);
-    assert.equal(res.matching.status, 'FAILED');
-    assert.equal(calls.recompute, 1);
-    assert.equal(calls.alerts, 1);
-    assert.equal(db.jobs.find((j) => j.id === res.id)!.status, 'PUBLISHED');
+    assert.equal(res.status, 'PENDING_REVIEW');
+    assert.equal(res.publishedAt, null);
+    assert.equal(res.matching, undefined);
+    assert.equal(calls.recompute, 0);
+    assert.equal(calls.alerts, 0);
+    assert.equal(db.jobs.find((j) => j.id === res.id)!.status, 'PENDING_REVIEW');
   });
-  it('API-17 / UT-E127: POST /employers/jobs/:id/publish on a never-published draft returns and persists PUBLISHED, never PENDING_REVIEW', async () => {
+  it('API-17 / UT-E127: POST /employers/jobs/:id/publish on a draft submits PENDING_REVIEW for Super Admin', async () => {
     const { svc, calls, db } = harness();
     const job = db.jobs.find((j) => j.id === 'JA1')!;
     Object.assign(job, { status: 'DRAFT', publishedAt: null });
     const controller = new EmployersController(svc);
     const res: any = await controller.publish({ id: 'uA' }, 'JA1');
-    assert.equal(res.status, 'PUBLISHED');
-    assert.equal(res.reviewRequired, undefined);
-    assert.equal(res.matching.status, 'COMPUTED');
-    assert.equal(job.status, 'PUBLISHED');
-    assert.ok(job.publishedAt instanceof Date);
-    assert.equal(calls.recompute, 1);
-    assert.equal(calls.alerts, 1);
-    assert.ok(!calls.jobUpdates.some((u) => u.status === 'PENDING_REVIEW'));
+    assert.equal(res.status, 'PENDING_REVIEW');
+    assert.equal(res.matching, undefined);
+    assert.equal(job.status, 'PENDING_REVIEW');
+    assert.equal(job.publishedAt, null);
+    assert.equal(calls.recompute, 0);
+    assert.equal(calls.alerts, 0);
+    assert.ok(calls.jobUpdates.some((u) => u.status === 'PENDING_REVIEW'));
     await assert.rejects(controller.publish({ id: 'uB' }, 'JA1'), NotFoundException);
   });
-  it('a job left in the legacy PENDING_REVIEW state is published by the employer without admin approval', async () => {
+  it('employer cannot force a PENDING_REVIEW job live — stays pending until Super Admin approves', async () => {
     const { svc, calls, db } = harness();
     db.settings.push({ key: 'billing.starterActiveJobLimit', value: '1' });
     const job = db.jobs.find((j) => j.id === 'JA1')!;
     Object.assign(job, { status: 'PENDING_REVIEW', publishedAt: null });
     const res: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
-    assert.equal(res.status, 'PUBLISHED');
-    assert.equal(job.status, 'PUBLISHED');
-    assert.equal(calls.recompute, 1);
+    assert.equal(res.status, 'PENDING_REVIEW');
+    assert.equal(job.status, 'PENDING_REVIEW');
+    assert.equal(calls.recompute, 0);
   });
   it('publish still enforces the salary rule; nothing is written', async () => {
     const { svc, calls, db } = harness();
@@ -1173,17 +1171,25 @@ describe('Fix 8 — publish survives an ATS recompute failure', () => {
     assert.equal(calls.recompute, 1);
     assert.ok(calls.notifications.some((n) => n.userId === 'uA' && n.title === 'Job approved'));
   });
-  it('successful recompute → COMPUTED; close does not recompute; re-publish works', async () => {
-    const { svc, calls } = harness();
-    const published: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
-    assert.equal(published.matching.status, 'COMPUTED');
+  it('successful recompute on Super Admin approval; close does not recompute; resume from pause works', async () => {
+    const { svc, calls, db } = harness();
+    const job = db.jobs.find((j) => j.id === 'JA1')!;
+    Object.assign(job, { status: 'DRAFT', publishedAt: null });
+    const pending: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
+    assert.equal(pending.status, 'PENDING_REVIEW');
+    assert.equal(calls.recompute, 0);
+    Object.assign(job, { status: 'PUBLISHED', publishedAt: new Date(), employer: db.employers.find((e) => e.id === EMP_A) });
+    const approved: any = await svc.completeJobApproval('JA1');
+    assert.equal(approved.matching.status, 'COMPUTED');
+    assert.equal(calls.recompute, 1);
     const closed: any = await svc.setStatus('uA', 'JA1', 'CLOSED' as any);
     assert.equal(closed.status, 'CLOSED');
     assert.equal(closed.matching, undefined);
     assert.equal(calls.recompute, 1);
+    Object.assign(job, { status: 'PAUSED', publishedAt: new Date(1) });
     const again: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
     assert.equal(again.status, 'PUBLISHED');
-    assert.equal(calls.recompute, 2);
+    assert.equal(calls.recompute, 1);
   });
   it('closedAtForStatusChange: entering CLOSED stamps, staying CLOSED keeps, leaving CLOSED clears', () => {
     const now = new Date('2026-10-08T06:30:00.000Z');
@@ -1217,12 +1223,12 @@ describe('Fix 8 — publish survives an ATS recompute failure', () => {
     assert.equal(job.status, 'CLOSED');
     assert.equal(job.closedAt, original);
   });
-  it('J. reopening clears closedAt and closing again records the new close; pausing never sets it', async () => {
+  it('J. reopening a closed job goes to Super Admin review; pausing never sets closedAt', async () => {
     const { svc, db } = harness();
     const job = db.jobs.find((j) => j.id === 'JA1')!;
-    Object.assign(job, { status: 'CLOSED', closedAt: new Date('2026-10-02T05:00:00.000Z') });
+    Object.assign(job, { status: 'CLOSED', closedAt: new Date('2026-10-02T05:00:00.000Z'), publishedAt: new Date(1) });
     const reopened: any = await svc.setStatus('uA', 'JA1', 'PUBLISHED' as any);
-    assert.equal(reopened.status, 'PUBLISHED');
+    assert.equal(reopened.status, 'PENDING_REVIEW');
     assert.equal(job.closedAt, null);
     const paused: any = await svc.setStatus('uA', 'JA1', 'PAUSED' as any);
     assert.equal(paused.status, 'PAUSED');
@@ -1293,7 +1299,7 @@ describe('Fix 9 — application transitions', () => {
     assert.equal(calls.jobUpdates.length, 0);
     db.settings.push({ key: 'billing.starterActiveJobLimit', value: '0' });
     const res: any = await svc.setStatus('uA', 'JA6', 'PUBLISHED' as any);
-    assert.equal(res.status, 'PUBLISHED');
+    assert.equal(res.status, 'PENDING_REVIEW');
   });
   it('Starter plan: candidate view credits are counted once per candidate per month and enforced', async () => {
     const { svc, db } = harness();

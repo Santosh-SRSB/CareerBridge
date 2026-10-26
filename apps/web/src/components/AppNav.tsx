@@ -1,6 +1,6 @@
 const STATUS_LABELS: Record<string, string> = {
   PUBLISHED: 'Active',
-  PENDING_REVIEW: 'Pending Review',
+  PENDING_REVIEW: 'Waiting for Super Admin approval',
   UNDER_REVIEW: 'Under Review',
   ON_HOLD: 'On Hold',
 };
