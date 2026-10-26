@@ -9,7 +9,7 @@ import { JobStatusActions } from '@/components/employer/JobStatusActions';
 import { EvEmpty, EvJobStatus, EvPlainHead, EvSkeleton } from '@/components/employer/ui';
 import { ErrorState } from '@/components/ui/StateViews';
 import { LOAD_ERROR_MESSAGE } from '@/lib/client-errors';
-import { JOB_STATUS_FILTERS, type JobStatusFilter } from '@/lib/job-status';
+import { JOB_BOARD_FILTERS, type JobBoardFilter } from '@/lib/job-status';
 
 type JobSort = 'new' | 'old' | 'apps';
 
@@ -37,10 +37,12 @@ export default function EmployerJobsPage() {
   const [views, setViews] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState<JobStatusFilter>('ALL');
+  const [filter, setFilter] = useState<JobBoardFilter>('ALL');
   const [sort, setSort] = useState<JobSort>('new');
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const boardJobs = useMemo(() => jobs.filter((job) => job.status !== 'CLOSED'), [jobs]);
 
   async function load() {
     setError('');
@@ -74,30 +76,28 @@ export default function EmployerJobsPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const active = jobs.filter((job) => job.status === 'PUBLISHED').length;
-    const drafts = jobs.filter((job) => job.status === 'DRAFT' || job.status === 'PAUSED').length;
-    const applicants = jobs.reduce((sum, job) => sum + (job.applicantCount || 0), 0);
+    const active = boardJobs.filter((job) => job.status === 'PUBLISHED').length;
+    const drafts = boardJobs.filter((job) => job.status === 'DRAFT' || job.status === 'PAUSED').length;
+    const applicants = boardJobs.reduce((sum, job) => sum + (job.applicantCount || 0), 0);
     let totalViews = 0;
-    views.forEach((value) => {
-      totalViews += value;
-    });
-    return { active, drafts, applicants, total: jobs.length, views: totalViews };
-  }, [jobs, views]);
+    for (const job of boardJobs) totalViews += views.get(job.id) || 0;
+    return { active, drafts, applicants, total: boardJobs.length, views: totalViews };
+  }, [boardJobs, views]);
 
   const counts = useMemo(() => {
-    const out: Record<string, number> = { ALL: jobs.length };
-    for (const job of jobs) out[job.status] = (out[job.status] || 0) + 1;
+    const out: Record<string, number> = { ALL: boardJobs.length };
+    for (const job of boardJobs) out[job.status] = (out[job.status] || 0) + 1;
     return out;
-  }, [jobs]);
+  }, [boardJobs]);
 
   const visibleJobs = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = jobs.filter(
+    const list = boardJobs.filter(
       (job) => (filter === 'ALL' || job.status === filter) && (!q || job.title.toLowerCase().includes(q)),
     );
     if (sort === 'apps') return [...list].sort((a, b) => (b.applicantCount || 0) - (a.applicantCount || 0));
     return [...list].sort((a, b) => (sort === 'new' ? postedTime(b) - postedTime(a) : postedTime(a) - postedTime(b)));
-  }, [jobs, filter, query, sort]);
+  }, [boardJobs, filter, query, sort]);
 
   return (
     <EmployerShellFallback title="My Jobs">
@@ -120,11 +120,15 @@ export default function EmployerJobsPage() {
       ) : null}
       {error && !loading ? <ErrorState message={error} onRetry={() => void load()} /> : null}
 
-      {!loading && !error && !jobs.length ? (
+      {!loading && !error && !boardJobs.length ? (
         <div className="ev-card">
           <EvEmpty
-            title="No jobs yet"
-            body="Create your first job posting to start hiring."
+            title={jobs.some((job) => job.status === 'CLOSED') ? 'No open jobs' : 'No jobs yet'}
+            body={
+              jobs.some((job) => job.status === 'CLOSED')
+                ? 'Closed roles are in History. Post a new job to keep hiring.'
+                : 'Create your first job posting to start hiring.'
+            }
             action={
               <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
                 + Create Job
@@ -134,17 +138,17 @@ export default function EmployerJobsPage() {
         </div>
       ) : null}
 
-      {!loading && !error && jobs.length > 0 ? (
+      {!loading && !error && boardJobs.length > 0 ? (
         <>
           <div className="ev-jstats">
             {[
-              { label: 'Total roles', value: stats.total, hint: 'All openings' },
+              { label: 'Total roles', value: stats.total, hint: 'Open board' },
               { label: 'Active', value: stats.active, hint: 'Live now' },
               { label: 'Draft or paused', value: stats.drafts, hint: 'Need action' },
               {
                 label: 'Applicants',
                 value: stats.applicants,
-                hint: views.size ? `Views across roles · ${stats.views}` : 'Across roles',
+                hint: stats.views ? `Views across roles · ${stats.views}` : 'Across roles',
               },
             ].map((item) => (
               <div key={item.label}>
@@ -157,7 +161,7 @@ export default function EmployerJobsPage() {
 
           <div className="ev-jbar">
             <div className="ev-jtabs" role="group" aria-label="Filter jobs by status">
-              {JOB_STATUS_FILTERS.map((item) => (
+              {JOB_BOARD_FILTERS.map((item) => (
                 <button
                   key={item.value}
                   type="button"

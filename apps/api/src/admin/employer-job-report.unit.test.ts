@@ -162,7 +162,7 @@ function harness(seed: Seed) {
       },
     },
   };
-  const service = new AdminService(prisma as never, {} as never, {} as never, {} as never);
+  const service = new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never);
   (service as any).reports = async () => ({
     employer: { jobsCreated: jobs.length, jobsPublished: 2, applicationsReceived: applications.length, interviewsConducted: interviews.length, hires: 1 },
   });

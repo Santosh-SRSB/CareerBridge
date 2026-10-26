@@ -1,12 +1,14 @@
 'use client';
 
-import type { FormEvent, ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import type { SuperAdminNavId } from '@/lib/admin-portal';
 import {
   adminInterviewFlowSteps,
   adminInterviewStatusLabel,
   adminWhatsAppStatusLabel,
 } from '@/lib/admin-interview-status';
+import { downloadAdminCandidateResume, saveBase64File } from '@/lib/api';
+import { userFacingError } from '@/lib/client-errors';
 
 /** Every module shares the portal palette; values resolve against the tokens on `.role-shell`. */
 const SA_TONE = {
@@ -271,10 +273,33 @@ export function DetailPanel({
   onClose: () => void;
 }) {
   const kind = String(data.kind || '');
+  const candidateId = String(data.id ?? '');
+  const [resumeBusyId, setResumeBusyId] = useState('');
+  const [resumeError, setResumeError] = useState('');
   const adminStatus = typeof data.adminStatus === 'string' ? data.adminStatus : '';
   const adminStatusLabel = adminInterviewStatusLabel(adminStatus);
   const status = adminStatus || String(data.accountStatus ?? data.status ?? '');
   const statusEvents = asList(data.statusEvents);
+
+  async function onDownloadResume(resumeId: string) {
+    if (!candidateId || !resumeId || resumeBusyId) return;
+    setResumeError('');
+    setResumeBusyId(resumeId);
+    try {
+      const file = await downloadAdminCandidateResume(candidateId, resumeId);
+      if (file.pdf) {
+        saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
+      } else if (file.html) {
+        saveBase64File(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
+      } else {
+        throw new Error('Resume file was empty.');
+      }
+    } catch (err) {
+      setResumeError(userFacingError(err, 'download this resume'));
+    } finally {
+      setResumeBusyId('');
+    }
+  }
   const email =
     data.email ??
     (data.user && typeof data.user === 'object' ? (data.user as Record<string, unknown>).email : null);
@@ -515,21 +540,43 @@ export function DetailPanel({
           </Section>
         )}
 
-        {resumes.length > 0 && (
+        {(kind === 'candidates' || resumes.length > 0) && (
           <Section title="Resumes">
-            <ul className="space-y-2">
-              {resumes.slice(0, 6).map((row, i) => (
-                <li
-                  key={String(row.id ?? i)}
-                  className="flex items-center justify-between gap-2 border-b border-[var(--sa-tint2)] pb-2 text-xs last:border-0"
-                >
-                  <span className="sa-ink font-semibold">{txt(row.title)}</span>
-                  <span className="sa-muted">
-                    Score {txt(row.score)} · {txt(row.kind)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {resumes.length === 0 ? (
+              <p className="sa-muted text-xs">No resume on file for this candidate.</p>
+            ) : (
+              <ul className="space-y-2">
+                {resumes.slice(0, 12).map((row, i) => {
+                  const resumeId = String(row.id ?? '');
+                  const busy = resumeBusyId === resumeId;
+                  return (
+                    <li
+                      key={resumeId || String(i)}
+                      className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--sa-tint2)] pb-2 text-xs last:border-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="sa-ink font-semibold">{txt(row.title)}</p>
+                        <p className="sa-muted">
+                          Score {txt(row.score)} · {txt(row.kind)}
+                          {row.updatedAt ? ` · ${txt(row.updatedAt)}` : ''}
+                        </p>
+                      </div>
+                      {kind === 'candidates' && resumeId ? (
+                        <button
+                          type="button"
+                          className="sa-btn sa-btn--line min-h-9 shrink-0 px-3 text-[11px] font-bold"
+                          disabled={Boolean(resumeBusyId)}
+                          onClick={() => void onDownloadResume(resumeId)}
+                        >
+                          {busy ? 'Downloading…' : 'Download'}
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {resumeError ? <p className="mt-2 text-xs font-semibold text-[var(--sa-danger)]">{resumeError}</p> : null}
           </Section>
         )}
 

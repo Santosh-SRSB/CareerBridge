@@ -21,6 +21,9 @@ export type MatchedCandidateCardProps = {
   href?: string;
   jobId?: string;
   candidateId?: string | null;
+  invited?: boolean;
+  notifying?: boolean;
+  onNotify?: () => void;
 };
 
 function cleanLocation(city?: string | null) {
@@ -94,6 +97,9 @@ export function MatchedCandidateCard({
   href,
   jobId,
   candidateId,
+  invited = false,
+  notifying = false,
+  onNotify,
 }: MatchedCandidateCardProps) {
   const info = atsMatchBandInfo(totalScore);
   const location = cleanLocation(city);
@@ -106,6 +112,8 @@ export function MatchedCandidateCard({
       ? `/employer/candidates/${candidateId}${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`
       : null);
   const score = Math.round(totalScore);
+  const applied = badge === 'applied';
+  const canNotify = Boolean(onNotify && candidateId && jobId && !applied);
 
   return (
     <article className="ev-card ev-mcc">
@@ -190,11 +198,23 @@ export function MatchedCandidateCard({
         )}
       </div>
 
-      {profileHref ? (
-        <Link href={profileHref} className="ev-btn ev-mcc__cta">
-          Open profile
-        </Link>
-      ) : null}
+      <div className="ev-mcc__actions">
+        {canNotify ? (
+          <button
+            type="button"
+            className="ev-btn ev-btn--ghost ev-mcc__notify"
+            disabled={notifying || invited}
+            onClick={() => onNotify?.()}
+          >
+            {notifying ? 'Sending…' : invited ? 'Notified' : 'Notify candidate'}
+          </button>
+        ) : null}
+        {profileHref ? (
+          <Link href={profileHref} className="ev-btn ev-mcc__cta">
+            Open profile
+          </Link>
+        ) : null}
+      </div>
     </article>
   );
 }

@@ -32,7 +32,7 @@ describe('listAdmins — no handoff password in list (SEC-DB-005)', () => {
         ],
       },
     };
-    const service = new AdminService(prisma as never, {} as never, {} as never, {} as never);
+    const service = new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never);
     const rows = await service.listAdmins();
     assert.equal(rows.length, 1);
     const row = rows[0] as Record<string, unknown>;
@@ -71,7 +71,7 @@ describe('listAdmins — no handoff password in list (SEC-DB-005)', () => {
       $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
       auditLog: { create: async () => ({}) },
     };
-    const service = new AdminService(prisma as never, {} as never, {} as never, {} as never);
+    const service = new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never);
     const result = await service.setAdminPassword('u-sa', 'a-op', 'TempHandoff2!');
     assert.equal(result.password, 'TempHandoff2!');
     assert.equal(adminUpdate?.loginPassword, 'TempHandoff2!');

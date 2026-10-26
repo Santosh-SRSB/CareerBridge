@@ -38,7 +38,7 @@ describe('createAdmin phone collision', () => {
         }),
       auditLog: { create: async () => ({ id: 'audit-1' }) },
     };
-    const service = new AdminService(prisma as never, {} as never, {} as never, {} as never);
+    const service = new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never);
     const result = await service.createAdmin('actor-1', {
       email: 'Ops@Example.test',
       password: 'Secret@123',

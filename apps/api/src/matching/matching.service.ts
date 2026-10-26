@@ -517,6 +517,18 @@ export class MatchingService {
       seenCandidates.add(row.candidateId);
       uniqueRows.push(row);
     }
+    const invitedUserIds = new Set<string>();
+    if (candidates.length) {
+      const invites = await this.prisma.notification.findMany({
+        where: {
+          userId: { in: candidates.map((item) => item.userId) },
+          type: 'JOB_INVITE',
+          link: `/jobs/${job.id}`,
+        },
+        select: { userId: true },
+      });
+      for (const invite of invites) invitedUserIds.add(invite.userId);
+    }
     return Promise.all(
       uniqueRows.map(async (row, index) => {
         const candidate = byId.get(row.candidateId);
@@ -535,6 +547,7 @@ export class MatchingService {
           reasons: parseList(row.reasonsJson),
           gaps: parseList(row.gapsJson),
           computedAt: row.computedAt.toISOString(),
+          invited: candidate ? invitedUserIds.has(candidate.userId) : false,
           candidate: candidate
             ? {
                 id: candidate.id,

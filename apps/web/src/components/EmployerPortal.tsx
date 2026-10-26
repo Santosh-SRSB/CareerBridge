@@ -27,6 +27,7 @@ const PRIMARY_NAV = [
   { href: '/employer/applications', label: 'Applications', key: 'applications' },
   { href: '/employer/interviews', label: 'Interviews', key: 'interviews' },
   { href: '/notifications', label: 'Notifications', key: 'notifications' },
+  { href: '/employer/history', label: 'History', key: 'history' },
   { href: '/employer/reports', label: 'Analytics', key: 'analytics' },
 ] as const;
 
@@ -38,6 +39,7 @@ const ACCOUNT_NAV = [
 const NAV_GLYPH: Record<string, string> = {
   home: '▦',
   jobs: '▤',
+  history: '◷',
   candidates: '☺',
   applications: '▣',
   interviews: '▥',
@@ -68,6 +70,7 @@ function isActive(pathname: string, key: string) {
       (pathname.startsWith('/employer/jobs/') && !pathname.startsWith('/employer/jobs/new'))
     );
   }
+  if (key === 'history') return pathname.startsWith('/employer/history');
   if (key === 'candidates') return pathname.startsWith('/employer/candidates');
   if (key === 'interviews') return pathname.startsWith('/employer/interviews');
   if (key === 'applications') return pathname.startsWith('/employer/applications');

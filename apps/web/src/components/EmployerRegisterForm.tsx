@@ -41,12 +41,6 @@ const FIELD_ORDER: Array<[Field, string]> = [
   ['terms', 'emp-terms'],
 ];
 
-function parseLocationDraft(raw: string | undefined): { state: string; city: string } {
-  if (!raw) return { state: '', city: '' };
-  const [state = '', city = ''] = raw.split('|');
-  return { state, city };
-}
-
 export function EmployerRegisterForm() {
   const router = useRouter();
   const [yourName, setYourName] = useState('');
@@ -54,8 +48,8 @@ export function EmployerRegisterForm() {
   const [workEmail, setWorkEmail] = useState('');
   const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
-  const [locationState, setLocationState] = useState('');
-  const [locationCity, setLocationCity] = useState('');
+  /** "State|City" option value. */
+  const [location, setLocation] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -68,13 +62,6 @@ export function EmployerRegisterForm() {
   const [loading, setLoading] = useState(false);
   const [restored, setRestored] = useState(false);
   const replacesRequestId = useRef<string | undefined>(undefined);
-  const location = locationState && locationCity ? `${locationState}|${locationCity}` : '';
-
-  function setLocationValue(next: string) {
-    const parsed = parseLocationDraft(next);
-    setLocationState(parsed.state);
-    setLocationCity(parsed.city);
-  }
 
   // Back from the OTP page ("Change mobile number"): refill everything except what was never stored.
   // The password only survives in memory, so it is refilled after client-side navigation but not after a refresh.
@@ -87,9 +74,7 @@ export function EmployerRegisterForm() {
     setWorkEmail(draft.email);
     setDial(draft.dial || DEFAULT_COUNTRY.dial);
     setNational(draft.national);
-    const parsed = parseLocationDraft(draft.location);
-    setLocationState(parsed.state);
-    setLocationCity(parsed.city);
+    setLocation(draft.location || '');
     setOtpChannel(draft.otpChannel);
     setAgreeTerms(draft.agreedToTerms);
     const pendingPassword = getPendingPassword();
@@ -112,8 +97,7 @@ export function EmployerRegisterForm() {
     setWorkEmail('');
     setDial(DEFAULT_COUNTRY.dial);
     setNational('');
-    setLocationState('');
-    setLocationCity('');
+    setLocation('');
     setPassword('');
     setConfirmPassword('');
     setOtpChannel(null);
@@ -125,6 +109,7 @@ export function EmployerRegisterForm() {
   }
 
   const country = COUNTRIES.find((item) => item.dial === dial) || DEFAULT_COUNTRY;
+  const [locationState = '', locationCity = ''] = location ? location.split('|') : [];
   const errors = validateEmployerRegistration({
     yourName,
     companyName,
@@ -335,7 +320,7 @@ export function EmployerRegisterForm() {
             aria-invalid={locationError ? true : undefined}
             aria-describedby={authFieldDescribedBy('emp-location', locationError)}
             onChange={(next) => {
-              setLocationValue(next);
+              setLocation(next);
               touch('location');
             }}
             onBlur={() => touch('location')}

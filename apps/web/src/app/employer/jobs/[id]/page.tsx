@@ -10,6 +10,7 @@ import {
   downloadEmployerCandidateResume,
   getEmployerJob,
   listEmployerApplications,
+  inviteCandidateToJob,
   listJobMatches,
   recomputeJobMatches,
   recordHiringOutcome,
@@ -86,6 +87,8 @@ export default function EmployerJobApplicationsPage() {
   const [jobDetail, setJobDetail] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [ranking, setRanking] = useState(false);
+  const [notifyingId, setNotifyingId] = useState('');
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(() => new Set());
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -133,6 +136,13 @@ export default function EmployerJobApplicationsPage() {
 
     const nextMatches = await listJobMatches(params.id).catch(() => [] as JobMatchRow[]);
     setMatches(nextMatches);
+    setInvitedIds((prev) => {
+      const next = new Set(prev);
+      for (const row of nextMatches) {
+        if (row.invited && row.candidate?.id) next.add(row.candidate.id);
+      }
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -185,6 +195,25 @@ export default function EmployerJobApplicationsPage() {
       await load();
     } catch (err) {
       setError(userFacingError(err, action === 'SHORTLIST' ? 'shortlist candidate' : 'update candidate status'));
+    }
+  }
+
+  async function onNotifyCandidate(candidateId: string, name: string) {
+    setError('');
+    setMessage('');
+    setNotifyingId(candidateId);
+    try {
+      const result = await inviteCandidateToJob(candidateId, params.id);
+      setInvitedIds((prev) => new Set(prev).add(candidateId));
+      setMessage(
+        result.alreadyNotified
+          ? `${name} was already invited to apply.`
+          : `Invite sent to ${name}. They can apply from their notifications.`,
+      );
+    } catch (err) {
+      setError(userFacingError(err, 'notify candidate'));
+    } finally {
+      setNotifyingId('');
     }
   }
 
@@ -314,11 +343,12 @@ export default function EmployerJobApplicationsPage() {
         {!loading && uniqueMatches.length > 0 ? (
           <div className="ev-match-grid">
             {uniqueMatches.map((row) => {
+              const candidateId = row.candidate?.id;
               const name =
                 [row.candidate?.firstName, row.candidate?.lastName].filter(Boolean).join(' ') || 'Candidate';
               return (
                 <MatchedCandidateCard
-                  key={row.candidate?.id || row.id}
+                  key={candidateId || row.id}
                   rank={row.rank}
                   name={name}
                   city={row.candidate?.city}
@@ -331,7 +361,10 @@ export default function EmployerJobApplicationsPage() {
                   gaps={row.gaps}
                   badge={row.applicationId ? 'applied' : 'matched'}
                   jobId={params.id}
-                  candidateId={row.candidate?.id}
+                  candidateId={candidateId}
+                  invited={Boolean(candidateId && invitedIds.has(candidateId))}
+                  notifying={notifyingId === candidateId}
+                  onNotify={candidateId ? () => void onNotifyCandidate(candidateId, name) : undefined}
                 />
               );
             })}

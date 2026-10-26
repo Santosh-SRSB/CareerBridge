@@ -404,7 +404,7 @@ describe('Progress report routes', () => {
   }
 
   it('the service delegates to the shared builders', async () => {
-    const service = new AdminService(fakePrisma(empty()) as never, {} as never, {} as never, {} as never);
+    const service = new AdminService(fakePrisma(empty()) as never, {} as never, {} as never, {} as never, {} as never);
     const [cand, emp] = await Promise.all([service.candidateProgress(NOW), service.employerProgress(NOW)]);
     assert.equal(cand.stages.length, 7);
     assert.equal(emp.stages.length, 5);

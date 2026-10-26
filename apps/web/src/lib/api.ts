@@ -1364,6 +1364,7 @@ export type JobMatchRow = {
   reasons: string[];
   gaps: string[];
   computedAt: string;
+  invited?: boolean;
   candidate: {
     id: string;
     firstName: string | null;
@@ -1458,6 +1459,16 @@ export async function setTalentShortlist(candidateId: string, jobId: string, sho
     : request<{ ok: boolean; shortlisted: boolean }>(`${path}?jobId=${encodeURIComponent(jobId)}`, {
         method: 'DELETE',
       });
+}
+
+export async function inviteCandidateToJob(candidateId: string, jobId: string) {
+  return request<{ ok: boolean; alreadyNotified: boolean; candidateId: string; jobId: string }>(
+    `/employers/candidates/${candidateId}/invite`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ jobId }),
+    },
+  );
 }
 
 export async function searchEmployerCandidates(params: {
@@ -1808,6 +1819,15 @@ export async function setAdminEmployerStatus(
 
 export async function getAdminRecord(path: string) {
   return request<Record<string, unknown>>(`/admin/${path}`);
+}
+
+export async function downloadAdminCandidateResume(candidateId: string, resumeId: string) {
+  return request<{
+    html?: string;
+    pdf?: string;
+    fileName: string;
+    mimeType?: string;
+  }>(`/admin/candidates/${encodeURIComponent(candidateId)}/resumes/${encodeURIComponent(resumeId)}/download`);
 }
 
 export async function updateAdminSkill(

@@ -483,7 +483,7 @@ export function CandidateAppShell({
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--color-background)] font-sans text-[var(--color-text-primary)]">
-      <header className="sticky top-0 z-40 w-full rounded-none bg-[var(--color-primary-dark)] shadow-[0_8px_24px_rgba(16,19,124,0.22)]">
+      <header className="fixed inset-x-0 top-0 z-50 w-full rounded-none bg-[var(--color-primary-dark)] shadow-[0_8px_24px_rgba(16,19,124,0.22)]">
         {/* Mobile: compact full-width row */}
         <div className="relative flex h-14 w-full items-center justify-between gap-2 px-3 md:hidden">
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
@@ -675,6 +675,8 @@ export function CandidateAppShell({
           </>
         ) : null}
       </header>
+      {/* Reserve header height so content is not under the fixed bar */}
+      <div className="h-14 shrink-0 md:h-[68px]" aria-hidden />
 
       <main className="flex-1 pb-[3.25rem] pt-4 sm:pt-6 md:pb-12 md:pt-7">
         <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${maxWidth}`}>{children}</div>
