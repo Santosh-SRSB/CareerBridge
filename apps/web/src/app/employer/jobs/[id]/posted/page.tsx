@@ -217,11 +217,11 @@ function JobPostedBody() {
 
       <div className="ev-grid ev-g2 ev-mt">
         <article className="ev-card">
-          <h2>{pendingReview ? 'Awaiting approval' : 'Ready to hire'}</h2>
+          <h2>{status === 'PUBLISHED' ? 'Ready to hire' : 'Job saved'}</h2>
           <p className="ev-sub" style={{ marginBottom: 14 }}>
-            {pendingReview
-              ? 'Candidate matching starts as soon as the job is approved.'
-              : 'Matched profiles are available for this role.'}
+            {status === 'PUBLISHED'
+              ? 'Matched profiles are available for this role.'
+              : 'Publish this role when you are ready for candidates to apply.'}
           </p>
           <Link href={`/employer/jobs/${params.id}`} className="ev-btn">
             View job &amp; candidates
