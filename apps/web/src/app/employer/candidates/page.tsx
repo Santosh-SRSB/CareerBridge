@@ -603,49 +603,38 @@ export default function EmployerCandidatesPage() {
                   <li key={row.id} className="ev-card ev-candcard">
                     <header className="ev-candcard__head">
                       <div className="ev-candcard__avatar">
-                        <EvAvatar name={name} photoUrl={row.photoUrl} size="lg" />
+                        <EvAvatar name={name} photoUrl={row.photoUrl} size="md" />
                       </div>
                       <div className="ev-candcard__who">
-                        <h3>{name}</h3>
-                        <p className="ev-candcard__meta">
-                          <span className="ev-candcard__loc">{location}</span>
-                          {band ? (
-                            <>
-                              <span className="ev-candcard__dot" aria-hidden>
-                                ·
-                              </span>
-                              <span className={`ev-candcard__band ev-candcard__band--${band.color}`}>
-                                {band.shortLabel}
-                              </span>
-                            </>
-                          ) : null}
-                        </p>
+                        <h3 title={name}>{name}</h3>
+                        <p className="ev-candcard__loc">{location}</p>
                       </div>
                       {band && row.matchScore !== null ? (
                         <div
-                          className="ev-candcard__match"
+                          className={`ev-candcard__match ev-candcard__match--${band.color}`}
                           title={`${PROFILE_MATCH_LABEL} for the selected job · ${band.label}`}
-                          aria-label={`${PROFILE_MATCH_LABEL} ${row.matchScore} out of 100`}
+                          aria-label={`${PROFILE_MATCH_LABEL} ${row.matchScore} out of 100 · ${band.label}`}
                         >
                           <span className="ev-candcard__score">{row.matchScore}</span>
                           <span className="ev-candcard__score-label">Match</span>
+                          <span className="ev-candcard__band">{band.shortLabel}</span>
                         </div>
                       ) : null}
                     </header>
 
                     <div className="ev-candcard__stats" aria-label="Candidate summary">
                       <div>
-                        <small>Experience</small>
+                        <span className="ev-candcard__stat-label">Exp</span>
                         <b>{formatExperience(row)}</b>
                       </div>
                       <div>
-                        <small>Education</small>
+                        <span className="ev-candcard__stat-label">Education</span>
                         <b className="ev-candcard__edu" title={educationFull}>
                           {education}
                         </b>
                       </div>
                       <div>
-                        <small>Availability</small>
+                        <span className="ev-candcard__stat-label">Available</span>
                         <b className={`ev-avail ev-avail--${availabilityTone}`}>
                           {row.availabilityLabel || 'Available'}
                         </b>

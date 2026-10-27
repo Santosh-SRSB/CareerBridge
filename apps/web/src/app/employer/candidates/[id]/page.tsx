@@ -210,17 +210,17 @@ export default function EmployerCandidateProfilePage() {
       ) : null}
 
       {profile ? (
-        <>
-          <div className="ev-grid ev-g2-wide">
-            <section className="ev-card">
-              <h2 className="ev-h2">{PROFILE_MATCH_LABEL}</h2>
-              {profile.match ? (
-                <EmployerAtsPanel match={profile.match} />
-              ) : (
-                <p className="ev-sub">Select a job to see the Profile Match breakdown for this profile.</p>
-              )}
-            </section>
+        <div className="ev-cand-profile">
+          <section className="ev-card ev-cand-profile__match">
+            <h2 className="ev-h2">{PROFILE_MATCH_LABEL}</h2>
+            {profile.match ? (
+              <EmployerAtsPanel match={profile.match} />
+            ) : (
+              <p className="ev-sub">Select a job to see the Profile Match breakdown for this profile.</p>
+            )}
+          </section>
 
+          <div className="ev-cand-profile__main">
             <section className="ev-card">
               <h2 className="ev-h2">Application status</h2>
               {application ? (
@@ -352,9 +352,7 @@ export default function EmployerCandidateProfilePage() {
                 ) : null}
               </div>
             </section>
-          </div>
 
-          <div className="ev-grid ev-g2 ev-mt">
             <section className="ev-card">
               {profile.about ? (
                 <>
@@ -410,7 +408,7 @@ export default function EmployerCandidateProfilePage() {
               )}
             </section>
           </div>
-        </>
+        </div>
       ) : null}
       <ShortlistConfirmModal
         open={modal === 'SHORTLIST'}
