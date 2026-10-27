@@ -49,15 +49,6 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
     return <p className="ev-jx-note">This position is closed.</p>;
   }
 
-  if (status === 'PENDING_REVIEW') {
-    if (compact) return null;
-    return (
-      <p className="ev-jx-note">
-        Waiting for Super Admin approval. Candidates will see this job once it is approved.
-      </p>
-    );
-  }
-
   const buttons = (
     <>
       {status === 'PUBLISHED' ? (
@@ -75,7 +66,7 @@ export function JobStatusActions({ jobId, status, onUpdated, compact = false }: 
           </button>
         </>
       ) : null}
-      {status === 'PAUSED' || status === 'DRAFT' ? (
+      {status === 'PAUSED' || status === 'DRAFT' || status === 'PENDING_REVIEW' ? (
         <>
           <button
             type="button"

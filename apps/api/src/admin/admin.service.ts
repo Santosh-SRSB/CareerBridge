@@ -219,6 +219,50 @@ export class AdminService {
         newValue: input.newValue == null ? null : JSON.stringify(input.newValue),
       },
     });
+    // Admin/Operator actions notify Super Admins. Super Admin actions do not notify Admin/Operator.
+    await this.notifySuperAdminsOfStaffAction(input).catch(() => undefined);
+  }
+
+  private async notifySuperAdminsOfStaffAction(input: {
+    userId?: string | null;
+    action: string;
+    resourceType: string;
+    resourceId?: string | null;
+  }) {
+    if (!input.userId) return;
+    const actor = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, email: true, userType: true },
+    });
+    if (!actor) return;
+    if (actor.userType === 'SUPER_ADMIN') return;
+    if (actor.userType !== 'PLATFORM_ADMIN' && actor.userType !== 'PLATFORM_OPERATOR') return;
+
+    const supers = await this.prisma.user.findMany({
+      where: { userType: 'SUPER_ADMIN', status: 'ACTIVE', NOT: { id: actor.id } },
+      select: { id: true },
+    });
+    if (!supers.length) return;
+
+    const who = actor.email || 'Staff';
+    const what = `${input.action} · ${input.resourceType}${input.resourceId ? ` · ${input.resourceId}` : ''}`;
+    const title = 'Staff action';
+    const body = `${who}: ${what}`.slice(0, 280);
+    await Promise.all(
+      supers.map((row) =>
+        this.prisma.notification
+          .create({
+            data: {
+              userId: row.id,
+              title,
+              body,
+              type: 'SYSTEM',
+              link: '/adminsrsb',
+            },
+          })
+          .catch(() => undefined),
+      ),
+    );
   }
 
   private async resourceActivity(resourceType: string, resourceId: string, take = 20) {
@@ -2391,7 +2435,7 @@ export class AdminService {
     return this.getSettings();
   }
 
-  async audit(query?: string, limited = false) {
+  async audit(query?: string, limited = false, viewerRole?: string) {
     const q = query?.trim();
     const rows = await this.prisma.auditLog.findMany({
       where: q
@@ -2414,7 +2458,7 @@ export class AdminService {
         })
       : [];
     const byId = new Map(users.map((u) => [u.id, u]));
-    return rows.map((row) => ({
+    const mapped = rows.map((row) => ({
       id: row.id,
       time: row.createdAt.toISOString(),
       userId: row.userId,
@@ -2426,5 +2470,10 @@ export class AdminService {
       requestId: row.requestId,
       ...(limited ? {} : { oldValue: row.oldValue, newValue: row.newValue }),
     }));
+    // Super Admin actions stay visible only to Super Admin — not Admin/Operator.
+    if (viewerRole === 'PLATFORM_ADMIN' || viewerRole === 'PLATFORM_OPERATOR') {
+      return mapped.filter((row) => row.actorRole !== 'SUPER_ADMIN');
+    }
+    return mapped;
   }
 }

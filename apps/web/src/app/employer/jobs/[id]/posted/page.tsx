@@ -78,8 +78,6 @@ function JobPostedBody() {
   const [job, setJob] = useState<JobDetail | null>(null);
   const [title, setTitle] = useState('');
   const [status, setStatus] = useState('');
-  const pendingReview = status === 'PENDING_REVIEW';
-
   useEffect(() => {
     const fromQuery = searchParams.get('title')?.trim() || '';
     if (fromQuery) setTitle(fromQuery);
@@ -112,15 +110,11 @@ function JobPostedBody() {
     <EmployerShellFallback title="Job posted">
       <EvPageHead
         eyebrow="✓ Job posted"
-        title={pendingReview ? 'Job submitted for review' : 'Job posted successfully'}
+        title={status === 'PUBLISHED' ? 'Job posted successfully' : 'Job saved'}
         subtitle={
           <>
             <b>{title || 'Your role'}</b>
-            {pendingReview
-              ? ' is waiting for Super Admin approval. Candidates will see it once it is approved.'
-              : status === 'PUBLISHED'
-                ? ' is live on CareerBridge.'
-                : ' has been saved.'}
+            {status === 'PUBLISHED' ? ' is live on CareerBridge.' : ' has been saved.'}
           </>
         }
         actions={

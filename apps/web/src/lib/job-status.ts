@@ -2,7 +2,7 @@ export const JOB_STATUS_FILTERS = [
   { value: 'ALL', label: 'All' },
   { value: 'DRAFT', label: 'Draft' },
   { value: 'PUBLISHED', label: 'Active' },
-  { value: 'PENDING_REVIEW', label: 'Waiting for Super Admin approval' },
+  { value: 'PENDING_REVIEW', label: 'Needs publish' },
   { value: 'PAUSED', label: 'Paused' },
   { value: 'CLOSED', label: 'Closed' },
 ] as const;
@@ -15,7 +15,7 @@ export type JobBoardFilter = (typeof JOB_BOARD_FILTERS)[number]['value'];
 
 export function jobStatusLabel(status: string) {
   if (status === 'PUBLISHED') return 'Active';
-  if (status === 'PENDING_REVIEW') return 'Waiting for Super Admin approval';
+  if (status === 'PENDING_REVIEW') return 'Needs publish';
   if (status === 'CLOSED') return 'Closed';
   if (status === 'PAUSED') return 'Paused';
   if (status === 'DRAFT') return 'Draft';
@@ -32,7 +32,5 @@ export function jobStatusTone(status: string) {
 
 export function jobPublishToast(result: unknown) {
   const status = (result as { status?: string } | null)?.status;
-  return status === 'PENDING_REVIEW'
-    ? 'Job submitted. Waiting for Super Admin approval before candidates can see it.'
-    : 'Job published successfully';
+  return status === 'PUBLISHED' ? 'Job published successfully' : 'Job saved';
 }

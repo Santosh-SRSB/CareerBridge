@@ -35,7 +35,7 @@ export function isAdminVerified(employer: EmployerVerificationFields): boolean {
 }
 
 export const WAITING_FOR_ADMINISTRATION_APPROVAL =
-  'Waiting for administration approval. CareerBridge must verify your company before you can post jobs or view candidates.';
+  'Waiting for administration verification. CareerBridge must verify your company before you can post jobs or view candidates.';
 
 /** Gate for posting jobs and viewing candidates / match scores — requires admin Verify. */
 export function assertAdminVerified(

@@ -86,7 +86,7 @@ export function isEmployerAdminVerified(status?: EmployerVerificationStatus | st
   return status === 'VERIFIED';
 }
 
-export const WAITING_FOR_ADMINISTRATION_APPROVAL = 'Waiting for administration approval';
+export const WAITING_FOR_ADMINISTRATION_APPROVAL = 'Waiting for administration verification';
 
 function statusLabel(status?: EmployerVerificationStatus | string | null) {
   if (status === 'VERIFIED') return 'Verified';

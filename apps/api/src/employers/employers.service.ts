@@ -547,6 +547,7 @@ export class EmployersService {
     const city = dto.city.trim();
     const geo = lookupCityCentroid(city);
     if (dto.publish) await this.assertActiveJobAllowance(employer.id);
+    const now = new Date();
     const job = await this.prisma.job.create({
       data: {
         employerId: employer.id,
@@ -569,14 +570,16 @@ export class EmployersService {
         preferredSkills: JSON.stringify(dto.preferredSkills || []),
         benefits: dto.benefits,
         screeningQuestionsJson: JSON.stringify(screeningQuestions),
-        // Publish submits for Super Admin review — candidates only see PUBLISHED jobs.
-        status: dto.publish ? 'PENDING_REVIEW' : 'DRAFT',
-        publishedAt: null,
+        // Verified employers publish live; unverified are blocked by assertAdminVerified above.
+        status: dto.publish ? 'PUBLISHED' : 'DRAFT',
+        publishedAt: dto.publish ? now : null,
       },
     });
     if (dto.publish) {
       await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
-      return job;
+      const followUps = await this.runPublishFollowUps(job.id);
+      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
+      return { ...job, ...followUps };
     }
     return job;
   }
@@ -626,25 +629,22 @@ export class EmployersService {
   }
 
   /**
-   * Employer "publish" from Draft submits for Super Admin approval (PENDING_REVIEW).
-   * Resuming a previously approved PAUSED job returns it to PUBLISHED without a second review.
-   * Matching/alerts for first-time go-live run on Super Admin approval (completeJobApproval).
+   * Verified employers publish live (PUBLISHED). Unverified employers are blocked by assertAdminVerified.
+   * Matching/alerts run on first go-live. Legacy PENDING_REVIEW rows can still be published here.
    */
   async setStatus(userId: string, id: string, status: JobStatus) {
     const job = await this.requireJob(userId, id);
     const employer = await this.requireEmployer(userId);
-    const resumingApproved =
-      status === 'PUBLISHED' && job.status === 'PAUSED' && Boolean(job.publishedAt);
-    // New posts need Super Admin approval; employer cannot force a never-approved job live.
-    if (status === 'PUBLISHED' && !resumingApproved) status = 'PENDING_REVIEW';
+    const goingLive = status === 'PUBLISHED' && job.status !== 'PUBLISHED';
+    const resumingApproved = goingLive && job.status === 'PAUSED' && Boolean(job.publishedAt);
 
-    if (status === 'PENDING_REVIEW' || (status === 'PUBLISHED' && resumingApproved)) {
+    if (goingLive) {
       assertAdminVerified(employer);
       if (!job.publishedAt) this.assertPublishSalary(job.salaryMin, job.salaryMax);
-      if (job.status !== 'PUBLISHED' && job.status !== 'PENDING_REVIEW') {
+      if (job.status !== 'PENDING_REVIEW') {
         await this.assertActiveJobAllowance(employer.id);
       }
-      if (status === 'PENDING_REVIEW') {
+      if (!resumingApproved) {
         await this.matching.ensureJobPostingPayment(employer.id, job.id, job.title);
       }
     }
@@ -653,9 +653,15 @@ export class EmployersService {
       where: { id },
       data: {
         status,
+        publishedAt: status === 'PUBLISHED' ? job.publishedAt || new Date() : job.publishedAt,
         closedAt: closedAtForStatusChange(job.status, status, new Date()),
       },
     });
+    if (goingLive && !resumingApproved) {
+      const followUps = await this.runPublishFollowUps(id);
+      await this.maybeFirstJobPublishedPrompt(userId, employer.id);
+      return { ...updated, ...followUps };
+    }
     return updated;
   }
 
@@ -1248,7 +1254,7 @@ export class EmployersService {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
         message:
-          'Waiting for administration approval. CareerBridge must verify your company before you can view candidates.',
+          'Waiting for administration verification. CareerBridge must verify your company before you can view candidates.',
       });
     }
 

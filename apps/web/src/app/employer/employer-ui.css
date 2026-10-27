@@ -3016,7 +3016,7 @@ a.ev-stat:hover {
 
 .ev-jcard {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) 120px minmax(0, 1.2fr) auto;
+  grid-template-columns: minmax(0, 1.5fr) minmax(7.5rem, max-content) minmax(0, 1.2fr) auto;
   align-items: center;
   gap: 12px 16px;
   margin-bottom: 10px;
@@ -3024,6 +3024,13 @@ a.ev-stat:hover {
   border: 1px solid var(--ev-line);
   border-radius: 14px;
   background: var(--ev-card);
+}
+
+.ev-jcard > .ev-st {
+  justify-self: start;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ev-jt b {

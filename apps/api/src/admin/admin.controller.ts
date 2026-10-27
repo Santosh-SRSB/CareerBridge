@@ -510,6 +510,6 @@ export class AdminController {
 
   @Get('audit')
   audit(@CurrentUser() user: { role?: string }, @Query('query') query?: string) {
-    return this.admin.audit(query, user.role === 'PLATFORM_OPERATOR');
+    return this.admin.audit(query, user.role === 'PLATFORM_OPERATOR', user.role);
   }
 }
