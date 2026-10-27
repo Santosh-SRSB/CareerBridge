@@ -1594,15 +1594,33 @@ a.ev-stat:hover {
   gap: 12px;
 }
 
-/* Employer Candidates search cards */
+/* Employer Candidates search cards — 12 per page → 3×4 on desktop */
 .ev-cand-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   align-items: stretch;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+@media (max-width: 1200px) {
+  .ev-cand-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .ev-cand-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .ev-cand-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .ev-card.ev-candcard,

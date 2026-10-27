@@ -41,7 +41,7 @@ const SKILL_FILTER_OPTIONS = Array.from(
   new Set([...JOB_SKILL_SUGGESTIONS, ...ALL_SKILL_OPTIONS]),
 ).sort((a, b) => a.localeCompare(b));
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12;
 
 type CandidateFilters = {
   q: string;
@@ -50,7 +50,8 @@ type CandidateFilters = {
   experience: string;
   language: string;
   education: string;
-  passOutYear: string;
+  passOutYearFrom: string;
+  passOutYearTo: string;
   availability: string;
   sort: string;
 };
@@ -62,7 +63,8 @@ const EMPTY_FILTERS: CandidateFilters = {
   experience: '',
   language: '',
   education: '',
-  passOutYear: '',
+  passOutYearFrom: '',
+  passOutYearTo: '',
   availability: '',
   sort: 'match',
 };
@@ -186,7 +188,8 @@ export default function EmployerCandidatesPage() {
         experience: f.experience || undefined,
         language: f.language || undefined,
         education: f.education || undefined,
-        passOutYear: f.passOutYear ? Number(f.passOutYear) : undefined,
+        passOutYearFrom: f.passOutYearFrom ? Number(f.passOutYearFrom) : undefined,
+        passOutYearTo: f.passOutYearTo ? Number(f.passOutYearTo) : undefined,
         availability: f.availability || undefined,
         sort: f.sort && f.sort !== 'match' ? f.sort : undefined,
         page: nextPage,
@@ -435,11 +438,28 @@ export default function EmployerCandidatesPage() {
             </select>
           </label>
           <label>
-            Pass out year
-            <select value={filters.passOutYear} onChange={(e) => patchFilters({ passOutYear: e.target.value })}>
+            Pass out from
+            <select
+              value={filters.passOutYearFrom}
+              onChange={(e) => patchFilters({ passOutYearFrom: e.target.value })}
+            >
               <option value="">Any year</option>
               {PASS_OUT_YEAR_OPTIONS.map((year) => (
-                <option key={year} value={String(year)}>
+                <option key={`from-${year}`} value={String(year)}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Pass out to
+            <select
+              value={filters.passOutYearTo}
+              onChange={(e) => patchFilters({ passOutYearTo: e.target.value })}
+            >
+              <option value="">Any year</option>
+              {PASS_OUT_YEAR_OPTIONS.map((year) => (
+                <option key={`to-${year}`} value={String(year)}>
                   {year}
                 </option>
               ))}

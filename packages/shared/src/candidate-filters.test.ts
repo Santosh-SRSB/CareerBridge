@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   candidatePassOutYear,
   educationRank,
+  isImmediateAvailabilityAnswer,
   meetsEducationFilter,
   meetsPassOutYearFilter,
 } from './candidate-filters';
@@ -35,4 +36,32 @@ test('pass-out year uses latest education yearCompleted or educationEnd', () => 
   assert.equal(meetsPassOutYearFilter(2021, 2020), false);
   assert.equal(meetsPassOutYearFilter(null, undefined), true);
   assert.equal(meetsPassOutYearFilter(2021, ''), true);
+});
+
+test('pass-out year range includes every year between from and to', () => {
+  assert.equal(meetsPassOutYearFilter(2018, undefined, { from: 2018, to: 2025 }), true);
+  assert.equal(meetsPassOutYearFilter(2019, undefined, { from: 2018, to: 2025 }), true);
+  assert.equal(meetsPassOutYearFilter(2020, undefined, { from: 2018, to: 2025 }), true);
+  assert.equal(meetsPassOutYearFilter(2025, undefined, { from: 2018, to: 2025 }), true);
+  assert.equal(meetsPassOutYearFilter(2017, undefined, { from: 2018, to: 2025 }), false);
+  assert.equal(meetsPassOutYearFilter(2026, undefined, { from: 2018, to: 2025 }), false);
+  assert.equal(meetsPassOutYearFilter(2020, undefined, { from: 2018 }), true);
+  assert.equal(meetsPassOutYearFilter(2017, undefined, { from: 2018 }), false);
+  assert.equal(meetsPassOutYearFilter(2020, undefined, { to: 2020 }), true);
+  assert.equal(meetsPassOutYearFilter(2021, undefined, { to: 2020 }), false);
+  assert.equal(meetsPassOutYearFilter(null, undefined, { from: 2018, to: 2025 }), false);
+  assert.equal(meetsPassOutYearFilter(2020, undefined, {}), true);
+});
+
+test('immediate availability does not match notice periods like 30 days', () => {
+  assert.equal(isImmediateAvailabilityAnswer('Immediate'), true);
+  assert.equal(isImmediateAvailabilityAnswer('asap'), true);
+  assert.equal(isImmediateAvailabilityAnswer('0 days'), true);
+  assert.equal(isImmediateAvailabilityAnswer('0'), true);
+  assert.equal(isImmediateAvailabilityAnswer('available now'), true);
+  assert.equal(isImmediateAvailabilityAnswer('30 days'), false);
+  assert.equal(isImmediateAvailabilityAnswer('15 days'), false);
+  assert.equal(isImmediateAvailabilityAnswer('10 days'), false);
+  assert.equal(isImmediateAvailabilityAnswer('2 months'), false);
+  assert.equal(isImmediateAvailabilityAnswer('Notice TBD'), false);
 });

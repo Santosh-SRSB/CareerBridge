@@ -68,11 +68,55 @@ export function candidatePassOutYear(candidate: {
   return Math.max(...years);
 }
 
+function normalizePassOutBound(value: number | string | null | undefined): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.trunc(n);
+}
+
+/**
+ * Optional pass-out year filter.
+ * - Exact year when `filterValue` is a single year (legacy).
+ * - Inclusive range when `from` / `to` are provided (either bound optional).
+ * Missing candidate year fails only when a filter bound is active.
+ */
 export function meetsPassOutYearFilter(
   year: number | null | undefined,
-  filterValue: number | string | null | undefined,
+  filterValue?: number | string | null,
+  range?: { from?: number | string | null; to?: number | string | null },
 ) {
-  const wanted = Number(filterValue);
-  if (!Number.isFinite(wanted) || wanted <= 0) return true;
-  return year === Math.trunc(wanted);
+  let from = normalizePassOutBound(range?.from);
+  let to = normalizePassOutBound(range?.to);
+  const exact = normalizePassOutBound(filterValue);
+
+  if (from === null && to === null && exact === null) return true;
+  if (year == null || !Number.isFinite(year)) return false;
+
+  if (from !== null && to !== null && from > to) {
+    const swap = from;
+    from = to;
+    to = swap;
+  }
+
+  const y = Math.trunc(year);
+  if (from !== null || to !== null) {
+    if (from !== null && y < from) return false;
+    if (to !== null && y > to) return false;
+    return true;
+  }
+  return y === exact;
+}
+
+/** True when a notice-period answer means available immediately (not "30 days"). */
+export function isImmediateAvailabilityAnswer(raw: string | null | undefined): boolean {
+  const lower = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  if (!lower) return false;
+  if (/^(immediate|asap|available now|joining immediately|can join immediately)$/.test(lower)) {
+    return true;
+  }
+  // "0", "0 day(s)", "0 week(s)", "0 month(s)" — must not match inside "30 days"
+  return /^(0|nil|none)(\s*(days?|weeks?|months?))?$/.test(lower);
 }

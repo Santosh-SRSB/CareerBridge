@@ -314,13 +314,29 @@ class CandidateSearchQueryDto {
   @IsIn(CANDIDATE_EDUCATION_FILTERS.map((item) => item.value))
   education?: string;
 
-  /** Exact pass-out / graduation year (e.g. 2022). */
+  /** Exact pass-out / graduation year (legacy). Prefer passOutYearFrom/To. */
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1950)
   @Max(2100)
   passOutYear?: number;
+
+  /** Inclusive pass-out year range start (optional). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1950)
+  @Max(2100)
+  passOutYearFrom?: number;
+
+  /** Inclusive pass-out year range end (optional). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1950)
+  @Max(2100)
+  passOutYearTo?: number;
 
   @IsOptional()
   @IsIn(CANDIDATE_AVAILABILITY_FILTERS.map((item) => item.value))

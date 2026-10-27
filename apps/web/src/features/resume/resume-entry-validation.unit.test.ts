@@ -47,15 +47,49 @@ test('blank experience entry reports every required field', () => {
 });
 
 test('experience end date is optional only while currently working', () => {
-  const base = { role: 'Agent', company: 'Acme', startDate: '2024-01', endDate: '' };
+  const base = { role: 'Agent', company: 'Acme', startDate: '2024-01-15', endDate: '' };
   assert.equal(hasEntryErrors(validateExperienceEntry({ ...base, isCurrent: true }, NOW)), false);
   assert.equal(validateExperienceEntry({ ...base, isCurrent: false }, NOW).endDate, 'End date is required');
   assert.equal(
-    validateExperienceEntry({ ...base, endDate: '2026-12', isCurrent: false }, NOW).endDate,
+    validateExperienceEntry({ ...base, endDate: '2026-12-01', isCurrent: false }, NOW).endDate,
     'End date cannot be in the future',
   );
   assert.equal(
-    validateExperienceEntry({ ...base, startDate: '2027-01', isCurrent: true }, NOW).startDate,
+    validateExperienceEntry({ ...base, startDate: '2027-01-01', isCurrent: true }, NOW).startDate,
     'Start date cannot be in the future',
+  );
+  assert.equal(
+    hasEntryErrors(
+      validateExperienceEntry(
+        { ...base, startDate: '2024-01-15', endDate: '2025-06-30', isCurrent: false },
+        NOW,
+      ),
+    ),
+    false,
+  );
+  assert.equal(
+    validateExperienceEntry(
+      { ...base, startDate: '2025-06-01', endDate: '2024-01-01', isCurrent: false },
+      NOW,
+    ).endDate,
+    'End date must be after the start date',
+  );
+});
+
+test('experience still accepts month-only dates from older entries', () => {
+  assert.equal(
+    hasEntryErrors(
+      validateExperienceEntry(
+        {
+          role: 'Agent',
+          company: 'Acme',
+          startDate: '2024-01',
+          endDate: '2025-06',
+          isCurrent: false,
+        },
+        NOW,
+      ),
+    ),
+    false,
   );
 });

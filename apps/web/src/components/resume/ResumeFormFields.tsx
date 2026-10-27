@@ -83,6 +83,8 @@ export function MonthRangeFields({
   startError,
   endError,
   maxYear,
+  /** `month` → YYYY-MM; `date` → day/month/year (YYYY-MM-DD). */
+  mode = 'month',
 }: {
   startLabel?: string;
   endLabel?: string;
@@ -97,10 +99,12 @@ export function MonthRangeFields({
   startError?: string;
   endError?: string;
   maxYear?: number;
+  mode?: 'date' | 'month';
 }) {
   const baseId = useId();
   const startId = `${baseId}-start`;
   const endId = `${baseId}-end`;
+  const placeholder = mode === 'date' ? 'Select date' : 'Select month';
   return (
     <div className="cb-date-range cb-date-field">
       <style dangerouslySetInnerHTML={{ __html: fieldStyles }} />
@@ -108,10 +112,10 @@ export function MonthRangeFields({
         <label htmlFor={startId}>{startLabel}</label>
         <DatePicker
           id={startId}
-          mode="month"
+          mode={mode}
           value={start}
           onChange={onStartChange}
-          placeholder="Select month"
+          placeholder={placeholder}
           confirmLabel="Set start date"
           maxYear={maxYear}
           invalid={Boolean(startError)}
@@ -127,10 +131,10 @@ export function MonthRangeFields({
         <label htmlFor={endId}>{endLabel}</label>
         <DatePicker
           id={endId}
-          mode="month"
+          mode={mode}
           value={isCurrent ? '' : end}
           onChange={onEndChange}
-          placeholder="Select month"
+          placeholder={placeholder}
           confirmLabel="Set end date"
           disabled={isCurrent}
           maxYear={maxYear}

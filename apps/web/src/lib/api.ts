@@ -1481,6 +1481,8 @@ export async function searchEmployerCandidates(params: {
   language?: string;
   education?: string;
   passOutYear?: number;
+  passOutYearFrom?: number;
+  passOutYearTo?: number;
   availability?: string;
   sort?: string;
   page?: number;
@@ -1497,6 +1499,8 @@ export async function searchEmployerCandidates(params: {
   if (params.language) query.set('language', params.language);
   if (params.education) query.set('education', params.education);
   if (params.passOutYear) query.set('passOutYear', String(params.passOutYear));
+  if (params.passOutYearFrom) query.set('passOutYearFrom', String(params.passOutYearFrom));
+  if (params.passOutYearTo) query.set('passOutYearTo', String(params.passOutYearTo));
   if (params.availability) query.set('availability', params.availability);
   if (params.sort) query.set('sort', params.sort);
   if (params.page) query.set('page', String(params.page));

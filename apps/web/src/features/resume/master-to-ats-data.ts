@@ -26,11 +26,14 @@ export function sortExperienceForResume<
     const raw = value.trim();
     const iso = raw.match(/^(\d{4})-(\d{2})/);
     if (iso) return Number(iso[1]) * 12 + Number(iso[2]);
-    const named = raw.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})/i);
-    if (named) {
+    // "23 SEP 2024" | "SEP 2024"
+    const dayNamed = raw.match(
+      /^(?:\d{1,2}\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})$/i,
+    );
+    if (dayNamed) {
       const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-      const m = months.indexOf(named[1].slice(0, 3).toLowerCase());
-      return Number(named[2]) * 12 + (m >= 0 ? m + 1 : 1);
+      const m = months.indexOf(dayNamed[1].slice(0, 3).toLowerCase());
+      return Number(dayNamed[2]) * 12 + (m >= 0 ? m + 1 : 1);
     }
     const year = raw.match(/(20\d{2}|19\d{2})/);
     return year ? Number(year[1]) * 12 : 0;

@@ -21,6 +21,7 @@ import {
   experienceFilterRange,
   lookupCityCentroid,
   candidatePassOutYear,
+  isImmediateAvailabilityAnswer,
   meetsEducationFilter,
   meetsPassOutYearFilter,
   normalizeHttpUrl,
@@ -883,6 +884,8 @@ export class EmployersService {
       language?: string;
       education?: string;
       passOutYear?: number;
+      passOutYearFrom?: number;
+      passOutYearTo?: number;
       availability?: string;
       sort?: CandidateSearchSort;
       page?: number;
@@ -1021,6 +1024,7 @@ export class EmployersService {
               education: candidate.education,
             }),
             query.passOutYear,
+            { from: query.passOutYearFrom, to: query.passOutYearTo },
           )
         ) {
           return null;
@@ -2395,9 +2399,8 @@ function resolveCandidateAvailability(input: {
 }): { label: string; tone: 'immediate' | 'notice' | 'neutral' } {
   if (input.noticeAnswer) {
     const raw = input.noticeAnswer.trim();
-    const lower = raw.toLowerCase();
-    if (/immediate|asap|0\s*(day|week|month)?|available now/.test(lower)) {
-      return { label: formatAvailabilityLabel(raw, 'Immediate'), tone: 'immediate' };
+    if (isImmediateAvailabilityAnswer(raw)) {
+      return { label: 'Immediate', tone: 'immediate' };
     }
     return { label: formatAvailabilityLabel(raw, raw), tone: 'notice' };
   }

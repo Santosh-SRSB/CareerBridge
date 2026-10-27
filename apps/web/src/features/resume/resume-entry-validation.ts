@@ -20,6 +20,7 @@ export interface ExperienceEntryInput {
   isCurrent: boolean;
 }
 
+/** Month ordinal for YYYY-MM or YYYY-MM-DD (day ignored for education month fields). */
 function monthKey(value: string): number | null {
   const match = /^(\d{4})-(\d{2})/.exec(value.trim());
   if (!match) return null;
@@ -30,6 +31,26 @@ function monthKey(value: string): number | null {
 
 function currentMonthKey(now: Date): number {
   return now.getFullYear() * 12 + now.getMonth();
+}
+
+/** Day ordinal for YYYY-MM-DD; YYYY-MM treated as first of month for ordering. */
+function dayKey(value: string): number | null {
+  const trimmed = value.trim();
+  const full = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (full) {
+    const year = Number(full[1]);
+    const month = Number(full[2]);
+    const day = Number(full[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return year * 372 + (month - 1) * 31 + day;
+  }
+  const monthOnly = monthKey(trimmed);
+  if (monthOnly === null) return null;
+  return Math.floor(monthOnly / 12) * 372 + (monthOnly % 12) * 31 + 1;
+}
+
+function currentDayKey(now: Date): number {
+  return now.getFullYear() * 372 + now.getMonth() * 31 + now.getDate();
 }
 
 export function validateEducationEntry(
@@ -66,8 +87,8 @@ export function validateExperienceEntry(
   if (!input.role.trim()) errors.role = 'Job title is required';
   if (!input.company.trim()) errors.company = 'Company name is required';
 
-  const nowKey = currentMonthKey(now);
-  const start = monthKey(input.startDate || '');
+  const nowKey = currentDayKey(now);
+  const start = dayKey(input.startDate || '');
   if (start === null) {
     errors.startDate = 'Start date is required';
   } else if (start > nowKey) {
@@ -75,7 +96,7 @@ export function validateExperienceEntry(
   }
 
   if (!input.isCurrent) {
-    const end = monthKey(input.endDate || '');
+    const end = dayKey(input.endDate || '');
     if (end === null) {
       errors.endDate = 'End date is required';
     } else if (end > nowKey) {

@@ -374,6 +374,7 @@ export function ExperienceInlineForm({
         </div>
         <div className="cb-field full">
           <MonthRangeFields
+            mode="date"
             startLabel="Start date *"
             endLabel="End date *"
             start={startDate}
