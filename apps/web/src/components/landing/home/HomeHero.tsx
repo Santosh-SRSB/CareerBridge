@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { HeroPassportCards } from "./HeroPassportCards";
+import { HeroRatingLink } from "./HeroRatingLink";
 import { HomeNavbar } from "./HomeNavbar";
 import { ArrowRightIcon, BriefcaseIcon } from "./icons";
 
@@ -33,6 +34,7 @@ export function HomeHero() {
           <Link href="/jobs" className="hl-btn hl-btn--ghost hl-btn--lg hl-btn--on-white">
             Find Jobs
           </Link>
+          <HeroRatingLink />
         </div>
 
         <div className="hl-hero__visual">

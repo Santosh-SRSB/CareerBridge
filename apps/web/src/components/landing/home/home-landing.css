@@ -597,9 +597,60 @@
   display: flex;
   grid-area: ctas;
   flex-wrap: wrap;
+  align-items: center;
   gap: 14px;
   margin-top: 36px;
   padding-bottom: 70px;
+}
+
+.hl-hero__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 1px solid rgba(26, 31, 196, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-primary-dark, #10137c);
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgba(16, 19, 124, 0.06);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.hl-hero__rating:hover {
+  border-color: rgba(26, 31, 196, 0.35);
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(16, 19, 124, 0.1);
+}
+
+.hl-hero__rating-score {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.hl-hero__rating-stars {
+  display: inline-flex;
+  gap: 1px;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: #d7daf6;
+}
+
+.hl-hero__rating-stars .is-on {
+  color: #f5a524;
+}
+
+.hl-hero__rating-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-secondary, #5a5e82);
+  white-space: nowrap;
 }
 
 .hl-hero__visual {
@@ -2807,6 +2858,11 @@ button.hl-pill {
 
   .hl-hero__ctas .hl-btn {
     width: 100%;
+  }
+
+  .hl-hero__rating {
+    width: 100%;
+    justify-content: center;
   }
 
   .hl-hero__visual {
