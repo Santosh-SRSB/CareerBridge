@@ -1291,6 +1291,7 @@ describe('Fix 9 — application transitions', () => {
   });
   it('Starter plan: publishing beyond the active-job limit is refused; nothing written', async () => {
     const { svc, calls, db } = harness();
+    db.settings.push({ key: 'billing.starterActiveJobLimit', value: '5' });
     db.employers.find((e) => e.id === EMP_A)!.verificationStatus = 'VERIFIED';
     db.jobs.push(
       { id: 'JA4', employerId: EMP_A, title: 'Job A4', status: 'PENDING_REVIEW' },
@@ -1303,7 +1304,8 @@ describe('Fix 9 — application transitions', () => {
       return true;
     });
     assert.equal(calls.jobUpdates.length, 0);
-    db.settings.push({ key: 'billing.starterActiveJobLimit', value: '0' });
+    const unlimited = db.settings.find((s) => s.key === 'billing.starterActiveJobLimit')!;
+    unlimited.value = '0';
     const res: any = await svc.setStatus('uA', 'JA6', 'PUBLISHED' as any);
     assert.equal(res.status, 'PUBLISHED');
   });

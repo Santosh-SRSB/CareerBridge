@@ -1,6 +1,6 @@
 /** Starter (free) plan allowances. Super Admin can change them in Settings; 0 means unlimited. */
 export const EMPLOYER_PLAN_SETTING_DEFAULTS = {
-  'billing.starterActiveJobLimit': '5',
+  'billing.starterActiveJobLimit': '0',
   'billing.starterCandidateViewCredits': '100',
 } as const;
 

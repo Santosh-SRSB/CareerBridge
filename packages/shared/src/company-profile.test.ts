@@ -31,14 +31,14 @@ test('LinkedIn URL is optional, must be on linkedin.com, and is normalised to ht
 });
 
 test('plan settings: defaults apply to missing or invalid values; only 0 means unlimited', () => {
-  assert.deepEqual(parseEmployerPlanSettings({}), { starterActiveJobLimit: 5, starterCandidateViewCredits: 100 });
+  assert.deepEqual(parseEmployerPlanSettings({}), { starterActiveJobLimit: 0, starterCandidateViewCredits: 100 });
   assert.deepEqual(
     parseEmployerPlanSettings({ 'billing.starterActiveJobLimit': '0', 'billing.starterCandidateViewCredits': 'abc' }),
     { starterActiveJobLimit: 0, starterCandidateViewCredits: 100 },
   );
   assert.deepEqual(
     parseEmployerPlanSettings({ 'billing.starterActiveJobLimit': '-3', 'billing.starterCandidateViewCredits': '25.9' }),
-    { starterActiveJobLimit: 5, starterCandidateViewCredits: 25 },
+    { starterActiveJobLimit: 0, starterCandidateViewCredits: 25 },
   );
 });
 
