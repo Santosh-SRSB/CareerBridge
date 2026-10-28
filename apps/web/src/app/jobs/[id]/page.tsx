@@ -195,7 +195,7 @@ export default function JobDetailPage() {
               <p className="cb-job-detail__company">{job.companyName}</p>
               <p className="cb-job-detail__salary">
                 {formatSalary(job.salaryMin, job.salaryMax)}
-                <span> /month</span>
+                <span> /annually</span>
               </p>
               {job.experience ? (
                 <p className="cb-job-detail__salary-meta">Experience: {job.experience}</p>
