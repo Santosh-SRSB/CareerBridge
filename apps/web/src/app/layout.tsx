@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, Manrope, Outfit, Poppins, Space_Grotesk, Space_Mono } from "next/font/google";
 import { AuthCookieSync } from "@/components/AuthCookieSync";
+import { GoogleTag } from "@/components/GoogleTag";
 import { PushNotificationBootstrap } from "@/components/PushNotificationBootstrap";
 import { Toaster } from "@/components/ui/Toast";
 import "./globals.css";
@@ -75,6 +76,7 @@ export default function RootLayout({
       className={`${inter.variable} ${outfit.variable} ${spaceGrotesk.variable} ${poppins.variable} ${fraunces.variable} ${manrope.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-fog font-sans text-ink">
+        <GoogleTag />
         <AuthCookieSync />
         <PushNotificationBootstrap />
         {children}
