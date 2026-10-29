@@ -4,7 +4,6 @@ import { EmployerFeatures } from "@/components/landing/home/EmployerFeatures";
 import { HomeFooter } from "@/components/landing/home/HomeFooter";
 import { HomeHero } from "@/components/landing/home/HomeHero";
 import { HomeStats } from "@/components/landing/home/HomeStats";
-import { LaunchOfferPopup } from "@/components/landing/home/LaunchOfferPopup";
 import { SignedInHomeRedirect } from "@/components/landing/SignedInHomeRedirect";
 import { SupportFab } from "@/components/landing/SupportFab";
 import "@/components/landing/home/home-landing.css";
@@ -22,7 +21,6 @@ export default function Home() {
       </main>
       <HomeFooter />
       <SupportFab />
-      <LaunchOfferPopup />
     </div>
   );
 }

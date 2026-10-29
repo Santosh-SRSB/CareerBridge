@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { WelcomeRoleNav } from '@/components/landing/WelcomeChrome';
 import { HomeFooter } from '@/components/landing/home/HomeFooter';
-import { ArrowRightIcon, PassportIcon, UserIcon } from '@/components/landing/home/icons';
+import { ArrowRightIcon, UserIcon } from '@/components/landing/home/icons';
 import { useWelcomeReveal } from '@/components/landing/useWelcomeReveal';
 import '@/components/landing/home/home-landing.css';
 import '@/components/landing/welcome-landings.css';
@@ -85,12 +85,13 @@ export function CandidateWelcomeLanding() {
                 <UserIcon size={16} />
                 For candidates
               </p>
+              <p className="wl-offer wl-offer--candidate">Completely free</p>
               <h1 className="wl-hero__title">
                 Your career is bigger than your <em>resume.</em>
               </h1>
               <p className="wl-hero__lede">
-                Build a Career Passport, practise with AI, and let the right work find you — free, in
-                one quiet place.
+                Build a Career Passport, practise with AI, and let the right work find you —
+                completely free, in one quiet place.
               </p>
               <div className="wl-hero__ctas">
                 <Link className="hl-btn hl-btn--primary hl-btn--lg" href="/register?role=candidate">
@@ -117,15 +118,6 @@ export function CandidateWelcomeLanding() {
                     alt=""
                   />
                 ))}
-              </div>
-              <div className="wl-float">
-                <span className="wl-float__icon">
-                  <PassportIcon size={20} />
-                </span>
-                <span>
-                  <strong>Career Passport</strong>
-                  <small>Build yours for free</small>
-                </span>
               </div>
             </div>
           </div>
@@ -169,7 +161,7 @@ export function CandidateWelcomeLanding() {
             </svg>
             <h2 className="wl-cta__title hl-reveal">Ready to start your journey?</h2>
             <p className="wl-cta__text hl-reveal">
-              Create your free candidate account and build your Career Passport.
+              Create your completely free candidate account and build your Career Passport.
             </p>
             <div className="wl-cta__actions hl-reveal">
               <Link className="hl-pill wl-pill--light" href="/register?role=candidate">

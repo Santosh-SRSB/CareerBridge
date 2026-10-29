@@ -50,7 +50,7 @@ const BANDS = [
 
 type Band = (typeof BANDS)[number];
 
-const HERO_LINE = 'Post Jobs & Hire Talent at Zero Cost';
+const HERO_LINE = '1 Month Free for Employers';
 
 function Lightbox({ band, onClose }: { band: Band; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -143,6 +143,7 @@ export function EmployerWelcomeLanding() {
                 <BriefcaseIcon size={16} />
                 For employers
               </p>
+              <p className="wl-offer wl-offer--employer">1 month free</p>
               <h1 className="wl-type" aria-label={HERO_LINE}>
                 <span className="wl-type__ghost" aria-hidden="true">
                   {HERO_LINE}
@@ -150,8 +151,8 @@ export function EmployerWelcomeLanding() {
                 <span ref={lineRef} className="wl-type__text" aria-hidden="true" />
               </h1>
               <p className="wl-hero__lede wl-hero__lede--dark">
-                Post what you need. Meet people who already fit. Spend your time on interviews, not on
-                inboxes.
+                Post jobs free for one month. Meet people who already fit. Spend your time on
+                interviews, not on inboxes.
               </p>
               <a href="#features" className="hl-btn hl-btn--light hl-btn--lg wl-explore">
                 Explore
@@ -218,7 +219,9 @@ export function EmployerWelcomeLanding() {
                 <circle cx="260" cy="260" r="200" strokeWidth="2" />
               </svg>
               <h2 className="wl-cta__title hl-reveal">Ready to build your team?</h2>
-              <p className="wl-cta__text hl-reveal">Create your employer account and post your first role today.</p>
+              <p className="wl-cta__text hl-reveal">
+                Create your employer account — post jobs free for 1 month.
+              </p>
               <div className="wl-cta__actions hl-reveal">
                 <Link className="hl-btn hl-btn--light hl-btn--lg" href="/employer/register">
                   Signup as employer

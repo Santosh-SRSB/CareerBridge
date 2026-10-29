@@ -64,6 +64,44 @@
   margin-top: 32px;
 }
 
+.wl-offer {
+  display: inline-flex;
+  align-items: center;
+  margin: 14px 0 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font: var(--type-caption);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  animation: wl-offer-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.wl-offer--candidate {
+  color: var(--color-primary-dark);
+  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-white));
+  box-shadow: 0 10px 24px -18px var(--hl-shadow-strong);
+}
+
+.wl-offer--employer {
+  color: var(--color-white);
+  background: color-mix(in srgb, var(--color-white) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-white) 45%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 28px -20px #000;
+}
+
+@keyframes wl-offer-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* ---------- Candidate hero ---------- */
 .wl-hero--candidate {
   padding: 64px 0 40px;
@@ -771,6 +809,7 @@
 @media (prefers-reduced-motion: reduce) {
   .wl-bg span,
   .wl-float,
+  .wl-offer,
   .wl-cta__deco,
   .wl-type__text::after,
   .wl-explore svg,
