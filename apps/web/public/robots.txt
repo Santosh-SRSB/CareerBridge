@@ -1,0 +1,32 @@
+# https://www.srsbcareerbridge.com/robots.txt
+User-agent: *
+Allow: /
+
+# Private / app areas — no indexing value
+Disallow: /dashboard
+Disallow: /passport
+Disallow: /profile
+Disallow: /onboarding
+Disallow: /applications
+Disallow: /notifications
+Disallow: /resume
+Disallow: /resumes
+Disallow: /interviews
+Disallow: /assessments
+Disallow: /admin
+Disallow: /adminsrsb
+Disallow: /srsbaadmin
+Disallow: /employer/jobs
+Disallow: /employer/candidates
+Disallow: /employer/applications
+Disallow: /employer/billing
+Disallow: /employer/payments
+Disallow: /employer/interviews
+Disallow: /employer/kyc
+Disallow: /employer/profile
+Disallow: /employer/reports
+Disallow: /employer/history
+Disallow: /employer/verify
+Disallow: /api/
+
+Sitemap: https://www.srsbcareerbridge.com/sitemap.xml
