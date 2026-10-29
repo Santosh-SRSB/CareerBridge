@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { WelcomeRoleNav } from '@/components/landing/WelcomeChrome';
+import { RoleOfferPopup } from '@/components/landing/RoleOfferPopup';
 import { HomeFooter } from '@/components/landing/home/HomeFooter';
 import { ArrowRightIcon, UserIcon } from '@/components/landing/home/icons';
 import { useWelcomeReveal } from '@/components/landing/useWelcomeReveal';
@@ -176,6 +177,7 @@ export function CandidateWelcomeLanding() {
       </main>
 
       <HomeFooter welcome="candidate" />
+      <RoleOfferPopup role="candidate" />
     </div>
   );
 }

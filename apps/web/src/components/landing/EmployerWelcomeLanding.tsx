@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WelcomeRoleNav } from '@/components/landing/WelcomeChrome';
+import { RoleOfferPopup } from '@/components/landing/RoleOfferPopup';
 import { HomeFooter } from '@/components/landing/home/HomeFooter';
 import { ArrowRightIcon, BriefcaseIcon, CloseIcon } from '@/components/landing/home/icons';
 import { useWelcomeReveal } from '@/components/landing/useWelcomeReveal';
@@ -239,6 +240,7 @@ export function EmployerWelcomeLanding() {
       </div>
 
       {preview ? <Lightbox band={preview} onClose={closePreview} /> : null}
+      <RoleOfferPopup role="employer" />
     </div>
   );
 }

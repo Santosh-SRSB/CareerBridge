@@ -102,6 +102,114 @@
   }
 }
 
+.hl-launch-popup__card.wl-role-offer {
+  width: min(440px, calc(100vw - 32px));
+  align-items: stretch;
+}
+
+.wl-role-offer__panel {
+  padding: 28px 28px 32px;
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--color-primary) 22%, transparent), transparent 55%),
+    var(--color-white);
+  box-shadow: 0 28px 56px color-mix(in srgb, var(--color-primary-dark) 28%, transparent);
+  color: var(--color-text-primary);
+  animation: wl-offer-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.wl-role-offer--employer .wl-role-offer__panel {
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--color-primary) 28%, transparent), transparent 50%),
+    linear-gradient(165deg, var(--color-primary-dark), color-mix(in srgb, var(--color-primary) 55%, #0b1f3a));
+  color: var(--color-white);
+}
+
+.wl-role-offer__badge {
+  display: inline-flex;
+  margin: 0 0 14px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font: var(--type-caption);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-white));
+  color: var(--color-primary-dark);
+}
+
+.wl-role-offer--employer .wl-role-offer__badge {
+  background: color-mix(in srgb, var(--color-white) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-white) 40%, transparent);
+  color: var(--color-white);
+}
+
+.wl-role-offer__title {
+  margin: 0;
+  font: var(--type-title);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.wl-role-offer__body {
+  margin: 12px 0 0;
+  font: var(--type-body);
+  color: var(--color-text-secondary);
+}
+
+.wl-role-offer--employer .wl-role-offer__body {
+  color: color-mix(in srgb, var(--color-white) 82%, transparent);
+}
+
+.wl-role-offer__list {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.wl-role-offer__list li {
+  position: relative;
+  padding-left: 28px;
+  font: var(--type-body-sm);
+  font-weight: 600;
+}
+
+.wl-role-offer__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.35em;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 35%, var(--color-white) 0 2px, transparent 2.5px),
+    var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary-dark) 20%, transparent);
+}
+
+.wl-role-offer--employer .wl-role-offer__list li::before {
+  background:
+    radial-gradient(circle at 35% 35%, var(--color-primary-dark) 0 2px, transparent 2.5px),
+    var(--color-white);
+}
+
+.wl-role-offer__cta {
+  margin-top: 24px;
+  width: 100%;
+  justify-content: center;
+}
+
+.wl-role-offer--employer .wl-role-offer__cta {
+  background: var(--color-white);
+  color: var(--color-primary-dark);
+}
+
+.wl-role-offer--employer .wl-role-offer__cta:hover {
+  background: color-mix(in srgb, var(--color-white) 90%, var(--color-primary-light));
+}
+
 /* ---------- Candidate hero ---------- */
 .wl-hero--candidate {
   padding: 64px 0 40px;
