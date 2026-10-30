@@ -6,7 +6,7 @@ import { getCookieConsent, hasMarketingConsent, subscribeCookieConsent } from '@
 import {
   ensureMetaPixelLoaded,
   isMetaPixelAllowlisted,
-  resetMetaPageViewDedupe,
+  revokeMetaPixelConsent,
   trackMetaPageView,
 } from '@/lib/meta-pixel';
 
@@ -19,8 +19,11 @@ export function MetaPixel() {
 
   useEffect(() => {
     function sync() {
-      if (!hasMarketingConsent() || !isMetaPixelAllowlisted(pathname)) {
-        resetMetaPageViewDedupe();
+      if (!hasMarketingConsent()) {
+        revokeMetaPixelConsent();
+        return;
+      }
+      if (!isMetaPixelAllowlisted(pathname)) {
         return;
       }
       if (!ensureMetaPixelLoaded()) return;
@@ -29,8 +32,9 @@ export function MetaPixel() {
 
     sync();
     return subscribeCookieConsent(() => {
-      if (getCookieConsent() === 'rejected') {
-        resetMetaPageViewDedupe();
+      if (getCookieConsent() !== 'accepted') {
+        // Reject or cleared choice: block PageView/conversions and Meta init until Accept again.
+        revokeMetaPixelConsent();
         return;
       }
       sync();
