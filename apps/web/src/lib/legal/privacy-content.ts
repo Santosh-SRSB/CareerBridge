@@ -5,7 +5,7 @@ export const PRIVACY_META = {
   subtitle:
     'Privacy Policy of SRSB Workforce Solutions Pvt. Ltd. — how we collect, use, store, disclose, and protect your personal information on CareerBridge.',
   effectiveDate: '21 September 2026',
-  lastUpdated: '21 September 2026',
+  lastUpdated: '30 October 2026',
 };
 
 export const PRIVACY_INTRO = [
@@ -120,18 +120,26 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     id: 'cookies',
     title: '5. Cookies',
-    paragraphs: ['Our website may use cookies and similar technologies to:'],
+    paragraphs: [
+      'Our website may use cookies and similar technologies. We distinguish between cookies needed for the site to work and optional advertising / measurement cookies.',
+    ],
     bullets: [
-      'Improve website functionality.',
-      'Understand visitor behavior.',
-      'Analyze website traffic.',
-      'Enhance user experience.',
+      'Essential cookies and local storage used for sign-in, security, and core product features.',
+      'Optional advertising and measurement technologies used only after you accept them in our cookie banner.',
     ],
     subsections: [
       {
-        title: '',
+        title: 'Meta Pixel (advertising measurement)',
         paragraphs: [
-          'You may disable cookies through your browser settings; however, certain website features may not function properly.',
+          'If you choose Accept on our cookie banner, we may load Meta Pixel (Meta Platforms) on selected public pages — for example the home and welcome pages, registration and OTP verification pages, and related marketing pages. Meta Pixel helps us measure visits, advertisements, successful candidate or employer registrations, and successful “Request for Demo” submissions that come from Meta Ads and similar campaigns.',
+          'Meta Pixel is not loaded before you accept advertising cookies. If you choose Reject, Meta Pixel is not loaded and we do not send Meta PageView or conversion events. Registration, login, dashboards, jobs, resumes, interviews, and other CareerBridge features continue to work normally either way.',
+          'We do not send passwords, authentication tokens, or the personal details you type into registration or demo forms to Meta as event parameters. You can change your choice later using Cookie settings (linked from the site footer and this Privacy Policy).',
+        ],
+      },
+      {
+        title: 'Managing your choice',
+        paragraphs: [
+          'Use Cookie settings on the website to Accept or Reject advertising measurement cookies at any time. You may also control cookies through your browser settings; blocking all cookies may affect some website features.',
         ],
       },
     ],
@@ -165,6 +173,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       'Update your contact details.',
       'Request deletion of your personal information, where legally permissible.',
       'Withdraw consent for marketing communications.',
+      'Withdraw consent for optional advertising measurement cookies (including Meta Pixel) via Cookie settings on the website.',
     ],
     subsections: [
       {

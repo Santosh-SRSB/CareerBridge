@@ -15107,6 +15107,23 @@ button.cb-ticket-go {
   color: #1a1fc4;
   transform: translateX(3px);
 }
+.cb-emkt-foot__cookie-settings {
+  display: block;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b4f8f;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+.cb-emkt-foot__cookie-settings:hover {
+  color: #1a1fc4;
+  transform: translateX(3px);
+}
 .cb-emkt-foot__bottom {
   background: #fff;
   display: grid;
@@ -21994,6 +22011,19 @@ a.ep-stat:hover {
   padding: 4px 0;
 }
 .day-orbit-foot__base a:hover {
+  color: #fff;
+}
+.day-orbit-foot__cookie-settings {
+  display: block;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #d5e0d9;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.day-orbit-foot__cookie-settings:hover {
   color: #fff;
 }
 .day-orbit-foot__socials {

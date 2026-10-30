@@ -26,6 +26,8 @@ substitutions:
   _GOOGLE_ADS_LABEL_EMPLOYER_SIGNUP: ""
   _GOOGLE_ADS_LABEL_LEAD: ""
   _GOOGLE_ADS_LABEL_APPLY: ""
+  # Meta Pixel (public ID; loads in browser only after cookie Accept + allowlisted routes)
+  _META_PIXEL_ID: "1356370663141517"
 
 # VAPID (_FB_VAPID_KEY) is not baked here yet — Dockerfile supports
 # NEXT_PUBLIC_FIREBASE_VAPID_KEY when launch scope requires web push.

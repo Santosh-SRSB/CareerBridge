@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useId, useRef, useState } from "reac
 import { createPortal } from "react-dom";
 import { requestDemo } from "@/lib/api";
 import { trackGa4Event, trackGoogleAdsConversion } from "@/lib/gtag";
+import { trackMetaLead } from "@/lib/meta-pixel";
 import { SUPPORT_EMAIL } from "@/lib/social-links";
 import { CloseIcon } from "./icons";
 
@@ -74,6 +75,7 @@ export function RequestDemoForm({ open, onClose }: Props) {
       });
       trackGa4Event("generate_lead", { form: "request_demo" });
       trackGoogleAdsConversion("LEAD");
+      trackMetaLead(`${Date.now()}`);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send your request. Please try again.");

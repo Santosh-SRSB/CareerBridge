@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { LegalPageShell, LegalSections } from '@/components/legal/LegalPageShell';
+import { PrivacyCookieSettingsNote } from '@/components/legal/PrivacyCookieSettingsNote';
 import {
   PRIVACY_INTRO,
   PRIVACY_META,
@@ -33,6 +34,7 @@ export default function PrivacyPage() {
       </div>
       <div className="mt-8">
         <LegalSections sections={PRIVACY_SECTIONS} />
+        <PrivacyCookieSettingsNote />
       </div>
     </LegalPageShell>
   );

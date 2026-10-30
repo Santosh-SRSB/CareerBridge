@@ -79,6 +79,7 @@ runs:
         ads_label_employer=$(yq -r ".substitutions._GOOGLE_ADS_LABEL_EMPLOYER_SIGNUP // \"\"" "$f")
         ads_label_lead=$(yq -r ".substitutions._GOOGLE_ADS_LABEL_LEAD // \"\"" "$f")
         ads_label_apply=$(yq -r ".substitutions._GOOGLE_ADS_LABEL_APPLY // \"\"" "$f")
+        meta_pixel_id=$(yq -r ".substitutions._META_PIXEL_ID // \"\"" "$f")
         echo "Web NEXT_PUBLIC_API_URL=$api_url"
         echo "Web config file=$f"
         {
@@ -98,6 +99,7 @@ runs:
           echo "NEXT_PUBLIC_GOOGLE_ADS_LABEL_EMPLOYER_SIGNUP=$ads_label_employer"
           echo "NEXT_PUBLIC_GOOGLE_ADS_LABEL_LEAD=$ads_label_lead"
           echo "NEXT_PUBLIC_GOOGLE_ADS_LABEL_APPLY=$ads_label_apply"
+          echo "NEXT_PUBLIC_META_PIXEL_ID=$meta_pixel_id"
           echo '__CB_BUILD_ARGS__'
         } >> "$GITHUB_OUTPUT"
 
