@@ -22,6 +22,7 @@ import {
   isFirebaseConfigured,
   sendFirebaseOtp,
 } from '@/lib/firebase';
+import { trackGa4Event, trackGoogleAdsConversion } from '@/lib/gtag';
 import { OTP_EXPIRED_MESSAGE, maskMobileNumber, type OtpChannel } from '@careerbridge/shared';
 
 export default function VerifyOtpPage() {
@@ -171,6 +172,9 @@ export default function VerifyOtpPage() {
       if (flow.purpose === 'REGISTER') {
         patchStoredUser({ onboardingCompleted: false });
         if (action.toast) toast.success(action.toast);
+        const isEmployer = flow.registration?.accountType === 'EMPLOYER';
+        trackGa4Event('sign_up', { method: 'otp', role: isEmployer ? 'employer' : 'candidate' });
+        trackGoogleAdsConversion(isEmployer ? 'EMPLOYER_SIGNUP' : 'SIGNUP');
       }
       router.replace(action.path);
     } catch (err) {

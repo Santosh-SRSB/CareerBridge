@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { requestDemo } from "@/lib/api";
+import { trackGa4Event, trackGoogleAdsConversion } from "@/lib/gtag";
 import { SUPPORT_EMAIL } from "@/lib/social-links";
 import { CloseIcon } from "./icons";
 
@@ -71,6 +72,8 @@ export function RequestDemoForm({ open, onClose }: Props) {
         phone: phone.trim() || undefined,
         message: message.trim() || undefined,
       });
+      trackGa4Event("generate_lead", { form: "request_demo" });
+      trackGoogleAdsConversion("LEAD");
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send your request. Please try again.");

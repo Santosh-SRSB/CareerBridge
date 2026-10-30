@@ -72,6 +72,13 @@ runs:
         fb_sender=$(get _FB_MESSAGING_SENDER_ID)
         fb_app_id=$(get _FB_APP_ID)
         fb_measurement=$(get _FB_MEASUREMENT_ID)
+        # Optional: empty string OK until Ads conversion labels exist
+        google_tag_id=$(yq -r ".substitutions._GOOGLE_TAG_ID // \"\"" "$f")
+        google_ads_id=$(yq -r ".substitutions._GOOGLE_ADS_ID // \"\"" "$f")
+        ads_label_signup=$(yq -r ".substitutions._GOOGLE_ADS_LABEL_SIGNUP // \"\"" "$f")
+        ads_label_employer=$(yq -r ".substitutions._GOOGLE_ADS_LABEL_EMPLOYER_SIGNUP // \"\"" "$f")
+        ads_label_lead=$(yq -r ".substitutions._GOOGLE_ADS_LABEL_LEAD // \"\"" "$f")
+        ads_label_apply=$(yq -r ".substitutions._GOOGLE_ADS_LABEL_APPLY // \"\"" "$f")
         echo "Web NEXT_PUBLIC_API_URL=$api_url"
         echo "Web config file=$f"
         {
@@ -85,6 +92,12 @@ runs:
           echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$fb_sender"
           echo "NEXT_PUBLIC_FIREBASE_APP_ID=$fb_app_id"
           echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$fb_measurement"
+          echo "NEXT_PUBLIC_GOOGLE_TAG_ID=$google_tag_id"
+          echo "NEXT_PUBLIC_GOOGLE_ADS_ID=$google_ads_id"
+          echo "NEXT_PUBLIC_GOOGLE_ADS_LABEL_SIGNUP=$ads_label_signup"
+          echo "NEXT_PUBLIC_GOOGLE_ADS_LABEL_EMPLOYER_SIGNUP=$ads_label_employer"
+          echo "NEXT_PUBLIC_GOOGLE_ADS_LABEL_LEAD=$ads_label_lead"
+          echo "NEXT_PUBLIC_GOOGLE_ADS_LABEL_APPLY=$ads_label_apply"
           echo '__CB_BUILD_ARGS__'
         } >> "$GITHUB_OUTPUT"
 

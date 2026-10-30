@@ -16,6 +16,13 @@ substitutions:
   _FB_MESSAGING_SENDER_ID: "601892050765"
   _FB_APP_ID: 1:601892050765:web:293fe4ec50962f076e4904
   _FB_MEASUREMENT_ID: G-0EJSP0HMP1
+  # GA4 + Google Ads conversions (optional; leave blank until Ads labels exist)
+  _GOOGLE_TAG_ID: G-MYX8NYJWH9
+  _GOOGLE_ADS_ID: AW-18532294891
+  _GOOGLE_ADS_LABEL_SIGNUP: zKUNCIbP2K4dEOvB8YRF
+  _GOOGLE_ADS_LABEL_EMPLOYER_SIGNUP: ""
+  _GOOGLE_ADS_LABEL_LEAD: ""
+  _GOOGLE_ADS_LABEL_APPLY: ""
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -41,6 +48,18 @@ steps:
       - NEXT_PUBLIC_FIREBASE_APP_ID=${_FB_APP_ID}
       - --build-arg
       - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${_FB_MEASUREMENT_ID}
+      - --build-arg
+      - NEXT_PUBLIC_GOOGLE_TAG_ID=${_GOOGLE_TAG_ID}
+      - --build-arg
+      - NEXT_PUBLIC_GOOGLE_ADS_ID=${_GOOGLE_ADS_ID}
+      - --build-arg
+      - NEXT_PUBLIC_GOOGLE_ADS_LABEL_SIGNUP=${_GOOGLE_ADS_LABEL_SIGNUP}
+      - --build-arg
+      - NEXT_PUBLIC_GOOGLE_ADS_LABEL_EMPLOYER_SIGNUP=${_GOOGLE_ADS_LABEL_EMPLOYER_SIGNUP}
+      - --build-arg
+      - NEXT_PUBLIC_GOOGLE_ADS_LABEL_LEAD=${_GOOGLE_ADS_LABEL_LEAD}
+      - --build-arg
+      - NEXT_PUBLIC_GOOGLE_ADS_LABEL_APPLY=${_GOOGLE_ADS_LABEL_APPLY}
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:${_TAG}
       - -t

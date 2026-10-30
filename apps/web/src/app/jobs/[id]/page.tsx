@@ -10,6 +10,7 @@ import { getStoredUser } from '@/lib/session';
 import { formatJobType, formatSalary, matchLabel } from '@/lib/match';
 import { fetchJobDetails, submitApplication, withdrawJobApplication } from '@/lib/candidate-marketplace-api';
 import { saveJob, unsaveJob } from '@/lib/api';
+import { trackGa4Event, trackGoogleAdsConversion } from '@/lib/gtag';
 
 const RING_C = 2 * Math.PI * 30;
 
@@ -86,6 +87,8 @@ export default function JobDetailPage() {
     setError('');
     try {
       const application = await submitApplication(job.id);
+      trackGa4Event('apply_job', { job_id: job.id });
+      trackGoogleAdsConversion('APPLY');
       setJob({ ...job, applied: true, applicationId: application.id });
       router.replace(`/applications/${application.id}/confirmation`);
     } catch (err) {

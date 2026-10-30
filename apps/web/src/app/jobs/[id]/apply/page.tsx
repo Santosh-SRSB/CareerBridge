@@ -8,6 +8,7 @@ import { listResumes } from '@/lib/api';
 import { submitApplication, fetchJobDetails } from '@/lib/candidate-marketplace-api';
 import { CandidateAppShell } from '@/components/CandidateAppShell';
 import { Button } from '@/components/ui/Button';
+import { trackGa4Event, trackGoogleAdsConversion } from '@/lib/gtag';
 
 export default function ApplyPage() {
   const params = useParams<{ id: string }>();
@@ -35,6 +36,8 @@ export default function ApplyPage() {
     try {
       // Resume is optional — backend attaches latest resume when available.
       const application = await submitApplication(params.id, resumeId || undefined);
+      trackGa4Event('apply_job', { job_id: params.id });
+      trackGoogleAdsConversion('APPLY');
       router.replace(`/applications/${application.id}/confirmation`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'We could not send your application right now.');
