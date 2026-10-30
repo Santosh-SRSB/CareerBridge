@@ -45,24 +45,32 @@ describe('isMetaPixelAllowlisted', () => {
 describe('consent withdrawal blocks Meta tracking', () => {
   const originalEnv = process.env.NEXT_PUBLIC_META_PIXEL_ID;
   const calls: unknown[][] = [];
+  let previousWindow: Window | undefined;
 
   afterEach(() => {
     process.env.NEXT_PUBLIC_META_PIXEL_ID = originalEnv;
     __resetMetaPixelForTests();
     calls.length = 0;
-    // @ts-expect-error test cleanup
-    delete globalThis.window;
+    if (previousWindow === undefined) {
+      Reflect.deleteProperty(globalThis, 'window');
+    } else {
+      Object.defineProperty(globalThis, 'window', {
+        value: previousWindow,
+        configurable: true,
+        writable: true,
+      });
+    }
   });
 
   function mockWindowWithConsent(value: 'accepted' | 'rejected') {
+    previousWindow = (globalThis as { window?: Window }).window;
     const store: Record<string, string> = {
       cb_cookie_consent_v1: value,
     };
     const fbq = (...args: unknown[]) => {
       calls.push(args);
     };
-    // @ts-expect-error jsdom-less unit harness
-    globalThis.window = {
+    const fakeWindow = {
       localStorage: {
         getItem: (key: string) => store[key] ?? null,
         setItem: (key: string, val: string) => {
@@ -70,6 +78,13 @@ describe('consent withdrawal blocks Meta tracking', () => {
         },
         removeItem: (key: string) => {
           delete store[key];
+        },
+        clear: () => {
+          for (const key of Object.keys(store)) delete store[key];
+        },
+        key: () => null,
+        get length() {
+          return Object.keys(store).length;
         },
       },
       fbq,
@@ -83,6 +98,11 @@ describe('consent withdrawal blocks Meta tracking', () => {
         getElementsByTagName: () => [{ parentNode: { insertBefore() {} } }],
       },
     };
+    Object.defineProperty(globalThis, 'window', {
+      value: fakeWindow as unknown as Window,
+      configurable: true,
+      writable: true,
+    });
     return store;
   }
 
@@ -98,7 +118,6 @@ describe('consent withdrawal blocks Meta tracking', () => {
     assert.ok(calls.some((c) => c[0] === 'track' && c[1] === 'CompleteRegistration'));
     assert.ok(calls.some((c) => c[0] === 'track' && c[1] === 'Lead'));
 
-    // Withdraw consent (Reject).
     store.cb_cookie_consent_v1 = 'rejected';
     setCookieConsent('rejected');
     revokeMetaPixelConsent();
@@ -112,16 +131,25 @@ describe('consent withdrawal blocks Meta tracking', () => {
 
     const trackingCalls = calls.filter((c) => c[0] === 'track');
     assert.equal(trackingCalls.length, 0, 'no track events after Reject');
-    assert.ok(
-      calls.every((c) => c[0] === 'consent' || c[0] !== 'init'),
+    assert.equal(
+      calls.filter((c) => c[0] === 'init').length,
+      0,
       'Pixel must not init again while rejected',
     );
 
-    // Accept again — tracking can resume.
     store.cb_cookie_consent_v1 = 'accepted';
     setCookieConsent('accepted');
     assert.equal(ensureMetaPixelLoaded(), true);
     trackMetaPageView('/register');
     assert.ok(calls.some((c) => c[0] === 'track' && c[1] === 'PageView'));
+  });
+
+  it('fires conversions after Accept even if MetaPixel effect has not enabled tracking yet', () => {
+    process.env.NEXT_PUBLIC_META_PIXEL_ID = '1356370663141517';
+    mockWindowWithConsent('accepted');
+    __resetMetaPixelForTests();
+    // consent accepted in storage, but consentTrackingEnabled still false until ensureMetaPixelLoaded
+    trackMetaCompleteRegistration('employer', 'otp-race');
+    assert.ok(calls.some((c) => c[0] === 'track' && c[1] === 'CompleteRegistration'));
   });
 });

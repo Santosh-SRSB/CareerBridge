@@ -49,7 +49,7 @@ export function isMetaPixelAllowlisted(pathname: string | null | undefined): boo
 }
 
 export function canUseMetaPixel(pathname?: string | null): boolean {
-  if (!isMetaPixelConfigured() || !hasMarketingConsent() || !consentTrackingEnabled) return false;
+  if (!isMetaPixelConfigured() || !hasMarketingConsent()) return false;
   if (pathname === undefined) return true;
   return isMetaPixelAllowlisted(pathname);
 }
@@ -163,7 +163,9 @@ export function ensureMetaPixelLoaded(): boolean {
 }
 
 export function trackMetaPageView(pathname: string) {
-  if (!canUseMetaPixel(pathname)) return;
+  if (!isMetaPixelConfigured() || !hasMarketingConsent() || !isMetaPixelAllowlisted(pathname)) {
+    return;
+  }
   if (!ensureMetaPixelLoaded()) return;
   if (lastPageViewPath === pathname) return;
   lastPageViewPath = pathname;
@@ -180,7 +182,9 @@ export function resetMetaPageViewDedupe() {
 
 function trackOnce(key: string, eventName: string, params?: Record<string, string>) {
   if (firedConversionKeys.has(key)) return;
-  if (!hasMarketingConsent() || !isMetaPixelConfigured() || !consentTrackingEnabled) return;
+  // Do not require consentTrackingEnabled here — ensureMetaPixelLoaded enables it after Accept
+  // even if the MetaPixel effect has not run yet (e.g. conversion right after Accept).
+  if (!hasMarketingConsent() || !isMetaPixelConfigured()) return;
   if (!ensureMetaPixelLoaded()) return;
   firedConversionKeys.add(key);
   if (params) safeFbq('track', eventName, params);
