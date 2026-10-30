@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CookieSettingsLink } from "@/components/CookieConsentBanner";
 import { SOCIAL_LINKS } from "@/lib/social-links";
 import { HomeBrand } from "./HomeBrand";
 import { ArrowRightIcon, FacebookIcon, InstagramIcon, LinkedInIcon, MailIcon } from "./icons";
@@ -99,6 +100,11 @@ export function HomeFooter({ welcome }: { welcome?: Audience } = {}) {
                       <Link href={linkHref(link, welcome)}>{link.label}</Link>
                     </li>
                   ))}
+                  {column.title === "Links" ? (
+                    <li>
+                      <CookieSettingsLink className="hl-footer__cookie-settings" />
+                    </li>
+                  ) : null}
                 </ul>
               </nav>
             ))}

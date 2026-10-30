@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { CookieSettingsLink } from '@/components/CookieConsentBanner';
 
 const REGISTER_HREF = '/employer/register';
 const LOGIN_HREF = '/login?role=employer';
@@ -697,6 +698,7 @@ export function EmployerMarketingLanding() {
               <Link href="/support">Security</Link>
               <Link href="/terms">Terms</Link>
               <Link href="/privacy">Privacy</Link>
+              <CookieSettingsLink className="cb-emkt-foot__cookie-settings" />
             </div>
             <div>
               <h3>Employers</h3>

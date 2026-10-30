@@ -23,6 +23,7 @@ import {
   sendFirebaseOtp,
 } from '@/lib/firebase';
 import { trackGa4Event, trackGoogleAdsConversion } from '@/lib/gtag';
+import { trackMetaCompleteRegistration } from '@/lib/meta-pixel';
 import { OTP_EXPIRED_MESSAGE, maskMobileNumber, type OtpChannel } from '@careerbridge/shared';
 
 export default function VerifyOtpPage() {
@@ -161,10 +162,16 @@ export default function VerifyOtpPage() {
         setError('Verification could not be completed. Please try again.');
         return;
       }
+      const registrationDedupeKey = flow.requestId;
       clearOtpFlow();
       clearFirebaseOtp();
       clearPendingPassword();
       clearRegistrationDraft();
+      if (flow.purpose === 'REGISTER') {
+        const isEmployer = flow.registration?.accountType === 'EMPLOYER';
+        // Additive Meta conversion only — does not alter redirects or Google tags.
+        trackMetaCompleteRegistration(isEmployer ? 'employer' : 'candidate', registrationDedupeKey);
+      }
       if (action.type === 'sign-in-required') {
         router.replace(action.path);
         return;

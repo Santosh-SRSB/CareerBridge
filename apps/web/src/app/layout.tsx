@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, Manrope, Outfit, Poppins, Space_Grotesk, Space_Mono } from "next/font/google";
 import { AuthCookieSync } from "@/components/AuthCookieSync";
+import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 import { GoogleTag } from "@/components/GoogleTag";
+import { MetaPixel } from "@/components/MetaPixel";
 import { PushNotificationBootstrap } from "@/components/PushNotificationBootstrap";
 import { Toaster } from "@/components/ui/Toast";
 import "./globals.css";
@@ -77,10 +79,12 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-fog font-sans text-ink">
         <GoogleTag />
+        <MetaPixel />
         <AuthCookieSync />
         <PushNotificationBootstrap />
         {children}
         <Toaster />
+        <CookieConsentBanner />
       </body>
     </html>
   );

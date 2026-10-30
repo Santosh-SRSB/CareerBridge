@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { CookieSettingsLink } from '@/components/CookieConsentBanner';
 import { SOCIAL_LINKS as SOCIAL } from '@/lib/social-links';
 
 function IconFacebook() {
@@ -83,6 +84,7 @@ export function Footer() {
             <Link href="/support">Support</Link>
             <Link href="/privacy">Privacy and Policy</Link>
             <Link href="/terms">Terms and Conditions</Link>
+            <CookieSettingsLink className="day-orbit-foot__cookie-settings" />
           </div>
         </div>
         <div className="day-orbit-foot__socials">
