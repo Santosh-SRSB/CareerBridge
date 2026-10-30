@@ -1,0 +1,142 @@
+name: Deploy WEB PROD only
+
+# Manual web-only production image bake + Cloud Run update.
+# Does NOT build or deploy the API. Image-only update (env/secrets unchanged).
+on:
+  workflow_dispatch:
+    inputs:
+      git_sha:
+        description: Full git SHA to build and deploy (must be on the selected ref)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web-prod-only
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: careerbridgeprod
+  GCP_REGION: asia-south1
+  REGISTRY: asia-south1-docker.pkg.dev
+  IMAGE_REPO: asia-south1-docker.pkg.dev/careerbridgeprod/careerbridge-prod
+  WEB_SERVICE: careerbridge-web-prod
+
+jobs:
+  guard:
+    name: Require main ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless workflow runs from refs/heads/main
+        env:
+          TARGET_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$TARGET_REF" != "refs/heads/main" ]; then
+            echo "::error::Deploy WEB PROD only may only run from refs/heads/main."
+            exit 1
+          fi
+          echo "git_sha=${{ inputs.git_sha }}"
+
+  build-web:
+    name: Build + push · web
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      - name: Verify checkout SHA
+        run: |
+          set -euo pipefail
+          got=$(git rev-parse HEAD)
+          want="${{ inputs.git_sha }}"
+          echo "got=$got want=$want"
+          [ "$got" = "$want" ] || { echo "::error::Checked out $got, expected $want"; exit 1; }
+
+      - name: Authenticate to Google Cloud (OIDC)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: false
+
+      - name: Log in to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - uses: ./.github/actions/docker-image
+        with:
+          image: web
+          tags: ${{ env.IMAGE_REPO }}/web:${{ inputs.git_sha }}
+          push: 'true'
+          web_config: infrastructure/cloudbuild.web.prod.yaml
+          web_api_url_override: ${{ vars.PROD_PUBLIC_API_URL }}
+
+  deploy-web:
+    name: Deploy Web · careerbridge-web-prod
+    needs: build-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: asia-south1-docker.pkg.dev/careerbridgeprod/careerbridge-prod/web:${{ inputs.git_sha }}
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Record current revision (rollback baseline)
+        run: |
+          gcloud run services describe "$WEB_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)'
+
+      - name: Deploy new web image only
+        run: |
+          gcloud run services update "$WEB_SERVICE" --image="$IMAGE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --quiet
+
+      - name: Verify rollout and response
+        run: |
+          set -euo pipefail
+          svc=$(gcloud run services describe "$WEB_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --format=json)
+          created=$(jq -r '.status.latestCreatedRevisionName' <<<"$svc")
+          ready=$(jq -r '.status.latestReadyRevisionName' <<<"$svc")
+          image=$(jq -r '.spec.template.spec.containers[0].image' <<<"$svc")
+          traffic=$(jq -r --arg r "$ready" '[.status.traffic[] | select(.revisionName == $r) | .percent] | add // 0' <<<"$svc")
+          url=$(jq -r '.status.url' <<<"$svc")
+          echo "revision=$ready image=$image traffic=${traffic}%"
+          [ "$image" = "$IMAGE" ] || { echo "::error::Service image is $image, expected $IMAGE"; exit 1; }
+          [ "$created" = "$ready" ] || { echo "::error::Latest revision $created is not ready (ready: $ready)"; exit 1; }
+          [ "$traffic" = "100" ] || { echo "::error::Revision $ready serves ${traffic}% of traffic, expected 100%"; exit 1; }
+          status=$(curl --silent --show-error --retry 6 --retry-delay 10 --retry-all-errors --max-time 60 \
+            -o /dev/null -w '%{http_code}' "$url/")
+          [ "$status" = "200" ] || { echo "::error::Web returned HTTP $status"; exit 1; }
+          echo "Web OK → 200"
+          {
+            echo "### Web · $WEB_SERVICE"
+            echo "- revision: \`$ready\`"
+            echo "- image: \`$image\`"
+            echo "- check: HTTP 200"
+            echo "- API was not updated by this workflow"
+          } >> "$GITHUB_STEP_SUMMARY"
