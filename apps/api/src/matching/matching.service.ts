@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ErrorCode as SharedError, employerCandidateUnlockLimit } from '@careerbridge/shared';
+import {
+  ErrorCode as SharedError,
+  applyAtsMatchScoreGates,
+  employerCandidateUnlockLimit,
+} from '@careerbridge/shared';
 import {
   applicationTransitionError,
   assertAdminVerified,
@@ -270,20 +274,30 @@ export class MatchingService {
         hasResume: candidate.resumes.length > 0,
         profileCompletion: candidate.profileCompletion || 0,
       });
-      const ruleScore = Math.min(
+      const ruleRaw = Math.min(
         100,
         skillsScore + experienceScore + locationScore + languageScore + educationScore,
       );
+      const gateParts = {
+        skillsPoints: skillsScore,
+        experiencePoints: experienceScore,
+        locationPoints: locationScore,
+        languagePoints: languageScore,
+        educationPoints: educationScore,
+      };
+      const ruleScore = applyAtsMatchScoreGates(ruleRaw, gateParts);
 
       const fromPg = pgScores.get(candidate.id);
       const semanticScore =
         fromPg != null ? Math.round(Math.max(0, Math.min(1, fromPg)) * 100) : 0;
 
       // Hybrid: 70% deterministic rules + 30% semantic similarity (Volume 2 matching).
-      const totalScore =
+      const totalScore = applyAtsMatchScoreGates(
         semanticScore > 0
           ? Math.min(100, Math.round(ruleScore * 0.7 + semanticScore * 0.3))
-          : ruleScore;
+          : ruleScore,
+        gateParts,
+      );
 
       const reasons = [...base.reasons];
       if (semanticScore >= 70) reasons.push('Strong profile match');

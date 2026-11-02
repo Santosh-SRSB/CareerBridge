@@ -402,6 +402,45 @@ export function atsMatchBand(score: number): AtsMatchBand {
   return 'LOW';
 }
 
+/**
+ * Keep factor bars honest, but prevent a hollow fit from looking Moderate+.
+ * - 0 skills points → cap below 50 (Low Match); non-skills alone max at 60.
+ * - Very weak skills (< 25% of skills weight) → cap below 60.
+ * Strong skill overlap is unchanged.
+ */
+export function applyAtsMatchScoreGates(
+  rawScore: number,
+  parts: {
+    skillsPoints: number;
+    experiencePoints?: number;
+    locationPoints?: number;
+    languagePoints?: number;
+    educationPoints?: number;
+  },
+): number {
+  let score = Math.max(0, Math.min(100, Math.round(rawScore)));
+  const skills = Math.max(0, parts.skillsPoints);
+
+  if (skills <= 0) {
+    return Math.min(score, 49);
+  }
+  if (skills < ATS_JOB_MATCH_WEIGHTS.skills * 0.25) {
+    return Math.min(score, 59);
+  }
+
+  const secondaryZero = [
+    parts.experiencePoints,
+    parts.locationPoints,
+    parts.languagePoints,
+    parts.educationPoints,
+  ].filter((n) => typeof n === 'number' && n <= 0).length;
+  if (secondaryZero >= 2 && skills < ATS_JOB_MATCH_WEIGHTS.skills * 0.5) {
+    return Math.min(score, 59);
+  }
+
+  return score;
+}
+
 export function atsMatchBandLabel(score: number): string {
   const band = atsMatchBand(score);
   return ATS_MATCH_BANDS.find((item) => item.band === band)?.label || 'Low Match';
@@ -471,10 +510,18 @@ export function toAtsMatchBreakdown(match: JobMatch): AtsMatchBreakdown {
       score: Math.round((match.educationScore / 100) * w.education),
     },
   ];
+  const skillsPoints = factors.find((f) => f.key === 'skills')?.score ?? 0;
+  const score = applyAtsMatchScoreGates(match.score, {
+    skillsPoints,
+    experiencePoints: factors.find((f) => f.key === 'experience')?.score,
+    locationPoints: factors.find((f) => f.key === 'location')?.score,
+    languagePoints: factors.find((f) => f.key === 'language')?.score,
+    educationPoints: factors.find((f) => f.key === 'education')?.score,
+  });
   return {
-    score: match.score,
-    band: atsMatchBand(match.score),
-    bandLabel: atsMatchBandLabel(match.score),
+    score,
+    band: atsMatchBand(score),
+    bandLabel: atsMatchBandLabel(score),
     factors,
     reasons: match.reasons || [],
     gaps: match.gaps || [],

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   ATS_JOB_MATCH_WEIGHTS,
+  applyAtsMatchScoreGates,
   experienceFitPercent,
   findStateForCity,
   normalizeCityName,
@@ -172,14 +173,19 @@ export class IntelligenceService {
     const languageScore = pctOf(languagePoints, w.language);
 
     // Handbook Vol.3 points: Skills 40, Experience 20, Location 15, Language 15, Education 10.
-    const score = Math.min(
+    const skillsPoints = Math.floor((skillScore / 100) * w.skills);
+    const educationPoints = Math.floor((educationScore / 100) * w.education);
+    const rawScore = Math.min(
       100,
-      Math.floor((skillScore / 100) * w.skills) +
-        experiencePoints +
-        locationPoints +
-        languagePoints +
-        Math.floor((educationScore / 100) * w.education),
+      skillsPoints + experiencePoints + locationPoints + languagePoints + educationPoints,
     );
+    const score = applyAtsMatchScoreGates(rawScore, {
+      skillsPoints,
+      experiencePoints,
+      locationPoints,
+      languagePoints,
+      educationPoints,
+    });
 
     const gaps = required.filter((skill) => !overlap.includes(skill)).map(titleCase);
     const preferredGaps = preferred
