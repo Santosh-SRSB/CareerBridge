@@ -17,7 +17,9 @@ test('experience filter matches wizard labels regardless of spacing', () => {
   assert.equal(jobMatchesExperienceFilter('0 - 1 Years', '2-5'), false);
   assert.equal(jobMatchesExperienceFilter('2 - 4 Years', '2-5'), true);
   assert.equal(jobMatchesExperienceFilter('Fresher', 'fresher'), true);
-  assert.equal(jobMatchesExperienceFilter('8+ Years', '5+'), true);
+  assert.equal(jobMatchesExperienceFilter('8+ Years', '5-9'), true);
+  assert.equal(jobMatchesExperienceFilter('12+ Years', '10+'), true);
+  assert.equal(jobMatchesExperienceFilter('3 Years', '10+'), false);
   assert.equal(jobMatchesExperienceFilter(null, '2-5'), true);
 });
 

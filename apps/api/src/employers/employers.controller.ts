@@ -300,7 +300,7 @@ class CandidateSearchQueryDto {
   @Max(50)
   experienceMin?: number;
 
-  /** Experience band such as "2-5" or "5+". */
+  /** Experience band such as "2-5", "5-9", or "10+". */
   @IsOptional()
   @IsIn(CANDIDATE_EXPERIENCE_FILTERS.map((item) => item.value))
   experience?: string;

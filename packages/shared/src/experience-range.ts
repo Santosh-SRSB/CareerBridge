@@ -1,4 +1,4 @@
-/** Experience bands (years). `max` is Infinity for open-ended bands such as "5+ yrs". */
+/** Experience bands (years). `max` is Infinity for open-ended bands such as "10+ years". */
 export type ExperienceRange = { min: number; max: number };
 
 /** Candidate-side job search experience filters. */
@@ -7,7 +7,8 @@ export const CANDIDATE_EXPERIENCE_FILTERS = [
   { value: '0-1', label: '0–1 years', min: 0, max: 1 },
   { value: '1-2', label: '1–2 years', min: 1, max: 2 },
   { value: '2-5', label: '2–5 years', min: 2, max: 5 },
-  { value: '5+', label: '5+ years', min: 5, max: Number.POSITIVE_INFINITY },
+  { value: '5-9', label: '5 to 9 years', min: 5, max: 9 },
+  { value: '10+', label: '10+ years', min: 10, max: Number.POSITIVE_INFINITY },
 ] as const;
 
 /**
