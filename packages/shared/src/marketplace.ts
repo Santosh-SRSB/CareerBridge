@@ -403,10 +403,11 @@ export function atsMatchBand(score: number): AtsMatchBand {
 }
 
 /**
- * Keep factor bars honest, but prevent a hollow fit from looking Moderate+.
- * - 0 skills points → cap below 50 (Low Match); non-skills alone max at 60.
- * - Very weak skills (< 25% of skills weight) → cap below 60.
- * Strong skill overlap is unchanged.
+ * Keep factor bars honest and use the real factor total.
+ * - 0 skills → score is the sum of what matched (experience/location/language/education);
+ *   only soft-cap under 60 so a skills miss cannot sit at the full non-skill max of 60.
+ * - Very weak skills (< 25% of skills weight) → soft-cap under 60.
+ * Strong skill overlap is unchanged (no fixed 49).
  */
 export function applyAtsMatchScoreGates(
   rawScore: number,
@@ -422,7 +423,8 @@ export function applyAtsMatchScoreGates(
   const skills = Math.max(0, parts.skillsPoints);
 
   if (skills <= 0) {
-    return Math.min(score, 49);
+    // Actual matched points (e.g. 50 with half experience, 59 max with full non-skills).
+    return Math.min(score, 59);
   }
   if (skills < ATS_JOB_MATCH_WEIGHTS.skills * 0.25) {
     return Math.min(score, 59);

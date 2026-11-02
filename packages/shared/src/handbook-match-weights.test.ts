@@ -17,7 +17,7 @@ test('handbook match weights Skills 40 Experience 20 Location 15 Language 15 Edu
   assert.equal(sum, 100);
 });
 
-test('zero skills cannot stay at Moderate 60 from non-skill factors alone', () => {
+test('zero skills uses actual factor total, only soft-caps under 60', () => {
   assert.equal(
     applyAtsMatchScoreGates(60, {
       skillsPoints: 0,
@@ -26,7 +26,17 @@ test('zero skills cannot stay at Moderate 60 from non-skill factors alone', () =
       languagePoints: 15,
       educationPoints: 10,
     }),
-    49,
+    59,
+  );
+  assert.equal(
+    applyAtsMatchScoreGates(50, {
+      skillsPoints: 0,
+      experiencePoints: 10,
+      locationPoints: 15,
+      languagePoints: 15,
+      educationPoints: 10,
+    }),
+    50,
   );
   assert.equal(
     applyAtsMatchScoreGates(80, {
@@ -64,8 +74,8 @@ test('toAtsMatchBreakdown exposes handbook factors', () => {
   assert.equal(breakdown.factors.find((f) => f.key === 'language')?.max, 15);
 });
 
-test('toAtsMatchBreakdown caps ring score when skills are 0', () => {
-  const match: JobMatch = {
+test('toAtsMatchBreakdown soft-caps ring score when skills are 0 but keeps factor total', () => {
+  const fullNonSkills: JobMatch = {
     score: 60,
     skillScore: 0,
     experienceScore: 100,
@@ -79,9 +89,17 @@ test('toAtsMatchBreakdown caps ring score when skills are 0', () => {
     gaps: ['Excel'],
     recommendations: [],
   };
-  const breakdown = toAtsMatchBreakdown(match);
-  assert.equal(breakdown.score, 49);
-  assert.equal(breakdown.band, 'LOW');
-  assert.equal(breakdown.factors.find((f) => f.key === 'skills')?.score, 0);
-  assert.equal(breakdown.factors.find((f) => f.key === 'experience')?.score, 20);
+  const full = toAtsMatchBreakdown(fullNonSkills);
+  assert.equal(full.score, 59);
+  assert.equal(full.factors.find((f) => f.key === 'skills')?.score, 0);
+  assert.equal(full.factors.find((f) => f.key === 'experience')?.score, 20);
+
+  const halfExp: JobMatch = {
+    ...fullNonSkills,
+    score: 50,
+    experienceScore: 50,
+  };
+  const half = toAtsMatchBreakdown(halfExp);
+  assert.equal(half.score, 50);
+  assert.equal(half.factors.find((f) => f.key === 'experience')?.score, 10);
 });
