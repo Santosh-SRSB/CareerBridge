@@ -33,6 +33,7 @@ import {
   normalizeBusinessIdentifier,
   panFormatError,
   parseLinkedinUrl,
+  programmeFeePublishError,
   toAtsMatchBreakdown,
 } from '@careerbridge/shared';
 import { GstService } from '../gst/gst.service';
@@ -542,8 +543,13 @@ export class EmployersService {
   async createJob(userId: string, dto: CreateJobInput) {
     const employer = await this.requireEmployer(userId);
     assertAdminVerified(employer);
-    if (dto.publish) this.assertPublishSalary(dto.salaryMin, dto.salaryMax);
-    this.assertSalaryRange(dto.salaryMin, dto.salaryMax);
+    const opportunityType = dto.opportunityType === 'INTERNSHIP_TRAINING' ? 'INTERNSHIP_TRAINING' : 'JOB';
+    const programmeFields = this.normalizeProgrammeFields(dto, opportunityType);
+    if (dto.publish) {
+      if (opportunityType === 'INTERNSHIP_TRAINING') this.assertProgrammeFee(programmeFields);
+      else this.assertPublishSalary(dto.salaryMin, dto.salaryMax);
+    }
+    if (opportunityType !== 'INTERNSHIP_TRAINING') this.assertSalaryRange(dto.salaryMin, dto.salaryMax);
     await this.assertJobCategory(dto.category);
     const screeningQuestions = normalizeScreeningQuestions(dto.screeningQuestions);
     const city = dto.city.trim();
@@ -563,15 +569,17 @@ export class EmployersService {
         openings: dto.openings && dto.openings > 0 ? dto.openings : 1,
         workMode: dto.workMode || null,
         educationMin: dto.educationMin || null,
-        salaryMin: dto.salaryMin,
-        salaryMax: dto.salaryMax,
-        jobType: dto.jobType || 'FULL_TIME',
+        salaryMin: opportunityType === 'INTERNSHIP_TRAINING' ? null : dto.salaryMin,
+        salaryMax: opportunityType === 'INTERNSHIP_TRAINING' ? null : dto.salaryMax,
+        jobType: opportunityType === 'INTERNSHIP_TRAINING' ? 'INTERNSHIP' : dto.jobType || 'FULL_TIME',
         category: dto.category,
         experience: dto.experience || 'Fresher',
         requiredSkills: JSON.stringify(dto.requiredSkills || []),
         preferredSkills: JSON.stringify(dto.preferredSkills || []),
         benefits: dto.benefits,
         screeningQuestionsJson: JSON.stringify(screeningQuestions),
+        opportunityType,
+        ...programmeFields,
         // Verified employers publish live; unverified are blocked by assertAdminVerified above.
         status: dto.publish ? 'PUBLISHED' : 'DRAFT',
         publishedAt: dto.publish ? now : null,
@@ -592,10 +600,21 @@ export class EmployersService {
 
   async updateJob(userId: string, id: string, dto: CreateJobInput) {
     const existing = await this.requireJob(userId, id);
+    const opportunityType =
+      dto.opportunityType === 'INTERNSHIP_TRAINING' ||
+      (!dto.opportunityType && existing.opportunityType === 'INTERNSHIP_TRAINING')
+        ? 'INTERNSHIP_TRAINING'
+        : dto.opportunityType === 'JOB'
+          ? 'JOB'
+          : existing.opportunityType === 'INTERNSHIP_TRAINING'
+            ? 'INTERNSHIP_TRAINING'
+            : 'JOB';
+    const programmeFields = this.normalizeProgrammeFields(dto, opportunityType);
     if (existing.status === 'PUBLISHED' || existing.status === 'PENDING_REVIEW') {
-      this.assertPublishSalary(dto.salaryMin, dto.salaryMax);
+      if (opportunityType === 'INTERNSHIP_TRAINING') this.assertProgrammeFee(programmeFields);
+      else this.assertPublishSalary(dto.salaryMin, dto.salaryMax);
     }
-    this.assertSalaryRange(dto.salaryMin, dto.salaryMax);
+    if (opportunityType !== 'INTERNSHIP_TRAINING') this.assertSalaryRange(dto.salaryMin, dto.salaryMax);
     await this.assertJobCategory(dto.category, existing.category);
     const screeningQuestions = normalizeScreeningQuestions(dto.screeningQuestions);
     const city = dto.city.trim();
@@ -613,15 +632,17 @@ export class EmployersService {
         openings: dto.openings && dto.openings > 0 ? dto.openings : 1,
         workMode: dto.workMode || null,
         educationMin: dto.educationMin || null,
-        salaryMin: dto.salaryMin,
-        salaryMax: dto.salaryMax,
-        jobType: dto.jobType || 'FULL_TIME',
+        salaryMin: opportunityType === 'INTERNSHIP_TRAINING' ? null : dto.salaryMin,
+        salaryMax: opportunityType === 'INTERNSHIP_TRAINING' ? null : dto.salaryMax,
+        jobType: opportunityType === 'INTERNSHIP_TRAINING' ? 'INTERNSHIP' : dto.jobType || 'FULL_TIME',
         category: dto.category,
         experience: dto.experience,
         requiredSkills: JSON.stringify(dto.requiredSkills || []),
         preferredSkills: JSON.stringify(dto.preferredSkills || []),
         benefits: dto.benefits,
         screeningQuestionsJson: JSON.stringify(screeningQuestions),
+        opportunityType,
+        ...programmeFields,
       },
     });
     if (existing.status === 'PUBLISHED') {
@@ -642,7 +663,24 @@ export class EmployersService {
 
     if (goingLive) {
       assertAdminVerified(employer);
-      if (!job.publishedAt) this.assertPublishSalary(job.salaryMin, job.salaryMax);
+      if (!job.publishedAt) {
+        if (job.opportunityType === 'INTERNSHIP_TRAINING') {
+          this.assertProgrammeFee({
+            programmeDuration: job.programmeDuration,
+            eligibilityCriteria: job.eligibilityCriteria,
+            applicationDeadline: job.applicationDeadline,
+            learningOutcomes: job.learningOutcomes,
+            selectionProcess: job.selectionProcess,
+            feeType: job.feeType,
+            feeAmount: job.feeAmount,
+            feeMin: job.feeMin,
+            feeMax: job.feeMax,
+            feeDisclosureText: job.feeDisclosureText,
+          });
+        } else {
+          this.assertPublishSalary(job.salaryMin, job.salaryMax);
+        }
+      }
       if (job.status !== 'PENDING_REVIEW') {
         await this.assertActiveJobAllowance(employer.id);
       }
@@ -775,6 +813,60 @@ export class EmployersService {
     }
   }
 
+  private normalizeProgrammeFields(
+    dto: CreateJobInput,
+    opportunityType: 'JOB' | 'INTERNSHIP_TRAINING',
+  ) {
+    if (opportunityType !== 'INTERNSHIP_TRAINING') {
+      return {
+        programmeDuration: null,
+        eligibilityCriteria: null,
+        applicationDeadline: null,
+        learningOutcomes: null,
+        selectionProcess: null,
+        feeType: null,
+        feeAmount: null,
+        feeMin: null,
+        feeMax: null,
+        feeDisclosureText: null,
+      };
+    }
+    const deadlineRaw = dto.applicationDeadline?.trim();
+    const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
+    return {
+      programmeDuration: dto.programmeDuration?.trim() || null,
+      eligibilityCriteria: dto.eligibilityCriteria?.trim() || null,
+      applicationDeadline: deadline && !Number.isNaN(deadline.getTime()) ? deadline : null,
+      learningOutcomes: dto.learningOutcomes?.trim() || null,
+      selectionProcess: dto.selectionProcess?.trim() || null,
+      feeType: (dto.feeType as 'FIXED' | 'RANGE' | 'FREE' | 'DISCUSSED_WITH_EMPLOYER' | null) || null,
+      feeAmount: dto.feeAmount ?? null,
+      feeMin: dto.feeMin ?? null,
+      feeMax: dto.feeMax ?? null,
+      feeDisclosureText: dto.feeDisclosureText?.trim() || null,
+    };
+  }
+
+  private assertProgrammeFee(fields: ReturnType<EmployersService['normalizeProgrammeFields']>) {
+    const error = programmeFeePublishError({
+      opportunityType: 'INTERNSHIP_TRAINING',
+      feeType: fields.feeType,
+      feeAmount: fields.feeAmount,
+      feeMin: fields.feeMin,
+      feeMax: fields.feeMax,
+      feeDisclosureText: fields.feeDisclosureText,
+    });
+    if (error) {
+      throw new BadRequestException({ code: SharedError.VALIDATION_ERROR, message: error });
+    }
+    if (!fields.programmeDuration?.trim()) {
+      throw new BadRequestException({
+        code: SharedError.VALIDATION_ERROR,
+        message: 'Programme duration is required for training programmes',
+      });
+    }
+  }
+
   private assertPublishSalary(salaryMin?: number | null, salaryMax?: number | null) {
     const error = jobSalaryRequiredError(salaryMin, salaryMax);
     if (error) {
@@ -866,7 +958,11 @@ export class EmployersService {
           experienceYears: row.candidate.totalExperienceYears || 0,
           photoUrl: await readableCandidatePhotoUrl(this.storage, row.candidate.id, row.candidate.photoUrl),
         },
-        job: { id: row.job.id, title: row.job.title },
+        job: {
+          id: row.job.id,
+          title: row.job.title,
+          opportunityType: row.job.opportunityType,
+        },
         employerNote: row.employerNote,
         match: this.scoreApplicationMatch(row.candidate, row.job),
       })),
@@ -2331,6 +2427,29 @@ export class EmployersService {
     };
   }
 
+  async applicationStatusHistory(userId: string, applicationId: string) {
+    const employer = await this.requireEmployer(userId);
+    const application = await this.prisma.application.findFirst({
+      where: { id: applicationId, job: { employerId: employer.id } },
+      select: { id: true },
+    });
+    if (!application) {
+      throw new NotFoundException({ code: SharedError.RESOURCE_NOT_FOUND, message: 'Application was not found' });
+    }
+    const rows = await this.prisma.applicationStatusHistory.findMany({
+      where: { applicationId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      fromStatus: row.fromStatus,
+      toStatus: row.toStatus,
+      changedByUserId: row.changedByUserId,
+      note: row.note,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
   async changeStatus(userId: string, applicationId: string, action: string, reason?: string, note?: string) {
     const employer = await this.requireEmployer(userId);
     const application = await this.prisma.application.findFirst({
@@ -2353,10 +2472,26 @@ export class EmployersService {
       );
     }
     const employerNote = note?.trim().slice(0, 500);
+    const previousStatus = application.status;
     const updated = await this.prisma.application.update({
       where: { id: application.id },
       data: { status, ...(employerNote ? { employerNote } : {}) },
     });
+    await this.prisma.applicationStatusHistory
+      .create({
+        data: {
+          applicationId: application.id,
+          fromStatus: previousStatus,
+          toStatus: status,
+          changedByUserId: userId,
+          note: employerNote || reason?.trim().slice(0, 500) || null,
+        },
+      })
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Application status history write failed for ${application.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
     const noticeKey = APPLICATION_STATUS_NOTICE[status];
     let notification: 'CREATED' | 'FAILED' | 'NOT_APPLICABLE' = 'NOT_APPLICABLE';
     if (noticeKey) {
@@ -2498,6 +2633,17 @@ type CreateJobInput = {
     required?: boolean;
   }>;
   publish?: boolean;
+  opportunityType?: string;
+  programmeDuration?: string;
+  eligibilityCriteria?: string;
+  applicationDeadline?: string | null;
+  learningOutcomes?: string;
+  selectionProcess?: string;
+  feeType?: string | null;
+  feeAmount?: number | null;
+  feeMin?: number | null;
+  feeMax?: number | null;
+  feeDisclosureText?: string | null;
 };
 
 function parseList(raw: string) {

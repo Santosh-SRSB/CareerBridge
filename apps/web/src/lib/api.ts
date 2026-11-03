@@ -1945,6 +1945,50 @@ export async function getAdminApplicationPipeline() {
   return request<AdminApplicationPipeline>('/admin/applications/pipeline');
 }
 
+export type AdminCommissionReport = {
+  total: number;
+  rows: Array<{
+    id: string;
+    applicationId: string;
+    candidateId: string;
+    candidateName: string;
+    employerId: string;
+    companyName: string;
+    jobId: string;
+    programmeTitle: string;
+    opportunityType: string;
+    applicationStatus: string;
+    appliedAt: string;
+    selectedAt: string;
+    commissionPercent: number;
+    commissionAmountPaise: number | null;
+    invoiceStatus: string;
+    invoiceNumber: string | null;
+    invoiceDate: string | null;
+    notes: string | null;
+    createdAt: string;
+  }>;
+};
+
+export async function getAdminCommissionReport() {
+  return request<AdminCommissionReport>('/admin/commission-report');
+}
+
+export async function addAdminCommission(applicationId: string, percent: number, notes?: string) {
+  return request<{
+    id: string;
+    applicationId: string;
+    commissionPercent: number;
+    commissionAmountPaise: number | null;
+    invoiceStatus: string;
+    selectedAt: string;
+    createdAt: string;
+  }>(`/admin/applications/${encodeURIComponent(applicationId)}/commission`, {
+    method: 'POST',
+    body: JSON.stringify({ percent, notes }),
+  });
+}
+
 export type AdminRevenue = {
   period: string;
   currency: string;

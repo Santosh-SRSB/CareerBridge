@@ -1026,6 +1026,9 @@ function JobsSearchContent() {
                     const posted = formatPosted(job.publishedAt);
                     return (
                       <article key={job.id} className="jb-job" aria-labelledby={`jb-job-${job.id}`}>
+                        {job.opportunityType === 'INTERNSHIP_TRAINING' ? (
+                          <div className="jb-training-strip">Training Program</div>
+                        ) : null}
                         <div className="jb-jt">
                           <span
                             className="jb-logo"
@@ -1074,7 +1077,13 @@ function JobsSearchContent() {
                               {job.experience}
                             </li>
                           ) : null}
-                          {salary ? (
+                          {job.opportunityType === 'INTERNSHIP_TRAINING' && job.feeLabel ? (
+                            <li>
+                              <Icon name="wallet" small />
+                              <span className="sr-only">Programme fee: </span>
+                              {job.feeLabel}
+                            </li>
+                          ) : salary ? (
                             <li>
                               <Icon name="wallet" small />
                               <span className="sr-only">Salary: </span>

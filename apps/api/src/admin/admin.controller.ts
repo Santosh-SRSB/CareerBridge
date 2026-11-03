@@ -14,7 +14,8 @@ import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
 import { Throttle } from '@nestjs/throttler';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { AdminService } from './admin.service';
 import { AdminAccountDeletionService } from './admin-account-deletion.service';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -141,6 +142,19 @@ class DeleteAccountDto {
   @MinLength(5)
   @MaxLength(500)
   reason: string;
+}
+
+class AddCommissionDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  @Max(100)
+  percent!: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
 }
 
 @ApiTags('admin')
@@ -314,6 +328,22 @@ export class AdminController {
   @Get('applications/:id')
   applicationDetails(@Param('id') id: string) {
     return this.admin.applicationDetails(id);
+  }
+
+  @Post('applications/:id/commission')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  addCommission(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: AddCommissionDto,
+  ) {
+    return this.admin.addCommission(user.id, id, dto.percent, dto.notes);
+  }
+
+  @Get('commission-report')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  commissionReport() {
+    return this.admin.commissionReport();
   }
 
   @Get('interviews')

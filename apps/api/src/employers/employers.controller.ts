@@ -31,6 +31,8 @@ import {
   JOB_EXPERIENCE_RANGES,
   LEGACY_JOB_EXPERIENCE_RANGES,
   JOB_TYPES,
+  OPPORTUNITY_TYPES,
+  PROGRAMME_FEE_TYPES,
   SCREENING_QUESTION_TYPES,
   WORK_MODES,
 } from '@careerbridge/shared';
@@ -247,6 +249,63 @@ class CreateJobDto {
   @IsOptional()
   @IsBoolean()
   publish?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...OPPORTUNITY_TYPES])
+  opportunityType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  programmeDuration?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  eligibilityCriteria?: string;
+
+  @IsOptional()
+  @IsString()
+  applicationDeadline?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  learningOutcomes?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  selectionProcess?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...PROGRAMME_FEE_TYPES])
+  feeType?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  feeAmount?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  feeMin?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  feeMax?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  feeDisclosureText?: string | null;
 }
 
 class ApplicationActionDto {
@@ -608,6 +667,11 @@ export class EmployersController {
   @Post('interviews/:id/request-feedback')
   requestInterviewFeedback(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.employers.requestInterviewFeedback(user.id, id);
+  }
+
+  @Get('applications/:id/status-history')
+  applicationStatusHistory(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.employers.applicationStatusHistory(user.id, id);
   }
 
   @Post('applications/:id/status')
