@@ -1,10 +1,12 @@
 import {
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -19,6 +21,7 @@ import { JwtPayload } from './jwt.strategy';
 import { hashPassword, verifyPassword } from './password.util';
 import { requireJwtAccessSecret, requireJwtRefreshSecret } from './jwt-secrets';
 import { isSafeInlinePhoto } from '../candidates/profile-photo.util';
+import { ReferralsService } from '../referrals/referrals.service';
 
 const OTP_TTL_SECONDS = 300;
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -40,6 +43,8 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly firebase: FirebaseService,
     private readonly email: EmailService,
+    @Inject(forwardRef(() => ReferralsService))
+    private readonly referrals: ReferralsService,
   ) {}
 
   private isDevOtp() {
@@ -234,6 +239,10 @@ export class AuthService {
                 companyName: dto.companyName?.trim(),
                 industry: dto.industry?.trim(),
                 whatsappOptIn: accountType === 'CANDIDATE' ? Boolean(dto.whatsappOptIn) : false,
+                referralCode:
+                  accountType === 'CANDIDATE' && dto.referralCode
+                    ? String(dto.referralCode).trim().slice(0, 30)
+                    : undefined,
               }
             : { accountType },
         ),
@@ -526,6 +535,28 @@ export class AuthService {
         return { registered: true, signInRequired: true as const };
       }
       // Candidates are signed in immediately with the same JWT session as password/OTP login.
+      if (user.candidate?.id && registration?.referralCode) {
+        try {
+          await this.referrals.attributeRegistration({
+            referredCandidateId: user.candidate.id,
+            referralCode: registration.referralCode,
+            referralSource: 'LINK',
+          });
+          await this.referrals.ensureReferralCodeForCandidate(user.candidate.id);
+        } catch (err) {
+          this.logger.warn(
+            `Referral attribution skipped for candidate ${user.candidate.id}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      } else if (user.candidate?.id) {
+        try {
+          await this.referrals.ensureReferralCodeForCandidate(user.candidate.id);
+        } catch {
+          // non-blocking
+        }
+      }
     } else {
       if (user.status === 'SUSPENDED' || user.status === 'INACTIVE') {
         throw new UnauthorizedException({
@@ -1071,6 +1102,7 @@ function parseRegistration(payloadJson?: string | null) {
       companyName?: string;
       industry?: string;
       whatsappOptIn?: boolean;
+      referralCode?: string;
     };
   } catch {
     return null;

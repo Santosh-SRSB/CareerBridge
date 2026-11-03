@@ -94,4 +94,11 @@ export class RequestOtpDto {
   @IsString()
   @MaxLength(64)
   replacesRequestId?: string;
+
+  /** Candidate registration only: referral code from /register?ref= */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  referralCode?: string;
 }
