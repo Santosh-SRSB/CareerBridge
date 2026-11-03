@@ -359,8 +359,10 @@ class CandidateSearchQueryDto {
   @Max(50)
   pageSize?: number;
 
-  @IsString()
-  jobId: string;
+  /** Optional — omit to browse the full talent pool (no job match scores). */
+  @IsOptional()
+  @IsUUID('all')
+  jobId?: string;
 }
 
 class ScheduleInterviewDto {

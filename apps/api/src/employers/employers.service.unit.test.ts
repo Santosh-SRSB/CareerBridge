@@ -268,6 +268,17 @@ function harness(opts: Opts = {}) {
     },
     candidate: {
       findUnique: async ({ where }: Row) => db.candidates.find((c) => c.id === where.id) ?? null,
+      findMany: async () =>
+        (db.candidates || []).map((c: Row) => ({
+          ...c,
+          skills: c.skills || [],
+          education: c.education || [],
+          experiences: c.experiences || [],
+          applications: c.applications || [],
+          updatedAt: c.updatedAt || new Date(0),
+          totalExperienceYears: c.totalExperienceYears || 0,
+          totalExperienceMonths: c.totalExperienceMonths || 0,
+        })),
     },
     resume: { findFirst: async () => null },
     platformSetting: {
@@ -524,12 +535,10 @@ describe('Fix 2 — one verification state everywhere', () => {
   });
   it('admin-verified (legacy verified boolean) employers pass the gate', async () => {
     const { svc } = harness();
-    // Passes the admin Verify gate, then fails on the next (unrelated) validation.
-    await assert.rejects(svc.searchCandidates('uA', {}), (err) => {
-      assert.ok(err instanceof BadRequestException);
-      assert.match(httpMessage(err), /Select a job/);
-      return true;
-    });
+    // Passes the admin Verify gate; empty jobId browses the full talent pool.
+    const browsed = await svc.searchCandidates('uA', {});
+    assert.equal(browsed.jobId, null);
+    assert.ok(Array.isArray(browsed.candidates));
     await assert.rejects(svc.searchCandidates('uB', {}), ForbiddenException);
   });
   it('submitVerification keeps the boolean in sync with the status', async () => {

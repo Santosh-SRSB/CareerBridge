@@ -1248,7 +1248,8 @@ export function employerCandidateUnlockLimit(amountPaise: number) {
 }
 
 export type EmployerCandidateSearchResponse = {
-  jobId: string;
+  /** Null when browsing the full talent pool with no job selected. */
+  jobId: string | null;
   unlocked: boolean;
   unlockLimit: number;
   totalMatched: number;

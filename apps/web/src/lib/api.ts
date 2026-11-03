@@ -1487,7 +1487,8 @@ export async function searchEmployerCandidates(params: {
   sort?: string;
   page?: number;
   pageSize?: number;
-  jobId: string;
+  /** Omit or empty to browse all candidates (no job match scores). */
+  jobId?: string;
 }) {
   const query = new URLSearchParams();
   if (params.q) query.set('q', params.q);
@@ -1505,13 +1506,13 @@ export async function searchEmployerCandidates(params: {
   if (params.sort) query.set('sort', params.sort);
   if (params.page) query.set('page', String(params.page));
   if (params.pageSize) query.set('pageSize', String(params.pageSize));
-  query.set('jobId', params.jobId);
+  if (params.jobId) query.set('jobId', params.jobId);
   const data = await request<EmployerCandidateSearchResponse | EmployerCandidateSearchResult[]>(
     `/employers/candidates/search?${query.toString()}`,
   );
   if (Array.isArray(data)) {
     return {
-      jobId: params.jobId,
+      jobId: params.jobId || null,
       unlocked: true,
       unlockLimit: data.length,
       totalMatched: data.length,

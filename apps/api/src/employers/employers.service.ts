@@ -899,10 +899,7 @@ export class EmployersService {
 
     const jobId = query.jobId?.trim();
     if (!jobId) {
-      throw new BadRequestException({
-        code: SharedError.VALIDATION_ERROR,
-        message: 'Select a job to search matched candidates.',
-      });
+      return this.browseAllCandidates(employer.id, query);
     }
 
     await this.matching.assertJobUnlocked(userId, jobId);
@@ -1137,6 +1134,206 @@ export class EmployersService {
       unlocked: true,
       unlockLimit,
       totalMatched,
+      total: filtered.length,
+      page,
+      pageSize,
+      candidates: candidatePayload,
+    };
+  }
+
+  /**
+   * Talent-pool browse with no job selected: all candidate profiles (filtered/sorted),
+   * without match scores. Shortlist against a job still requires selecting a job.
+   */
+  private async browseAllCandidates(
+    employerId: string,
+    query: {
+      q?: string;
+      city?: string;
+      skill?: string;
+      skills?: string[];
+      experienceMin?: number;
+      experience?: string;
+      language?: string;
+      education?: string;
+      passOutYear?: number;
+      passOutYearFrom?: number;
+      passOutYearTo?: number;
+      availability?: string;
+      sort?: CandidateSearchSort;
+      page?: number;
+      pageSize?: number;
+    },
+  ) {
+    const skillFilters = Array.from(
+      new Set(
+        [...(query.skills || []), ...(query.skill ? [query.skill] : [])]
+          .map((item) => item.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    if (skillFilters.length > CANDIDATE_SEARCH_MAX_SKILLS) {
+      throw new BadRequestException({
+        code: SharedError.VALIDATION_ERROR,
+        message: `You can filter by up to ${CANDIDATE_SEARCH_MAX_SKILLS} skills.`,
+      });
+    }
+    const cityFilter = query.city?.trim();
+    const q = query.q?.trim();
+    const experienceMin = query.experienceMin && query.experienceMin > 0 ? query.experienceMin : 0;
+    const experienceBand = experienceFilterRange(query.experience);
+    const languageFilter = query.language?.trim().toLowerCase();
+    const page = Math.max(1, query.page || 1);
+    const pageSize = Math.min(Math.max(1, query.pageSize || 20), 50);
+
+    const candidates = await this.prisma.candidate.findMany({
+      where: {
+        ...(cityFilter
+          ? { city: { contains: cityFilter, mode: 'insensitive' as const } }
+          : {}),
+        ...(skillFilters.length
+          ? {
+              AND: skillFilters.map((wanted) => ({
+                skills: { some: { name: { contains: wanted, mode: 'insensitive' as const } } },
+              })),
+            }
+          : {}),
+        ...(languageFilter
+          ? { preferredLanguage: { contains: languageFilter, mode: 'insensitive' as const } }
+          : {}),
+      },
+      include: {
+        skills: true,
+        education: { select: { yearCompleted: true }, orderBy: { yearCompleted: 'desc' }, take: 8 },
+        experiences: { orderBy: { startDate: 'desc' }, take: 3 },
+        applications: {
+          where: { job: { employerId }, status: { not: 'WITHDRAWN' } },
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            status: true,
+            screeningAnswersJson: true,
+          },
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+      take: 500,
+    });
+
+    const filtered = candidates
+      .map((candidate) => {
+        const candidateYears =
+          (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
+        if (experienceMin > 0 && candidateYears + 1e-9 < experienceMin) return null;
+        if (experienceBand) {
+          const inBand =
+            experienceBand.max === experienceBand.min
+              ? candidateYears <= experienceBand.max
+              : candidateYears >= experienceBand.min && candidateYears <= experienceBand.max;
+          if (!inBand) return null;
+        }
+        if (!meetsEducationFilter(candidate.highestEducation, query.education)) return null;
+        if (
+          !meetsPassOutYearFilter(
+            candidatePassOutYear({
+              educationEnd: candidate.educationEnd,
+              education: candidate.education,
+            }),
+            query.passOutYear,
+            { from: query.passOutYearFrom, to: query.passOutYearTo },
+          )
+        ) {
+          return null;
+        }
+        if (q) {
+          const haystack = [
+            candidate.firstName,
+            candidate.lastName,
+            candidate.city,
+            candidate.state,
+            candidate.highestEducation,
+            ...candidate.skills.map((item) => item.name),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          if (!haystack.includes(q.toLowerCase())) return null;
+        }
+        const currentlyEmployed = candidate.experiences.some((item) => item.stillInCompany);
+        const application = candidate.applications[0] || null;
+        const noticeAnswer =
+          (candidate as { noticePeriod?: string | null }).noticePeriod?.trim() ||
+          extractNoticePeriodAnswer(application?.screeningAnswersJson, new Map());
+        const availability = resolveCandidateAvailability({
+          stillInCollege: candidate.stillInCollege,
+          currentlyEmployed,
+          noticeAnswer,
+          experienceYears: candidate.totalExperienceYears || 0,
+        });
+        if (query.availability) {
+          const kind =
+            availability.label === 'Student' ? 'student' : availability.tone === 'immediate' ? 'immediate' : 'notice';
+          if (kind !== query.availability) return null;
+        }
+        return { candidate, candidateYears, currentlyEmployed, application, availability };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
+
+    if (query.sort === 'experience') {
+      filtered.sort((a, b) => b.candidateYears - a.candidateYears);
+    } else if (query.sort === 'match') {
+      filtered.sort(
+        (a, b) =>
+          (b.candidate.profileCompletion || 0) - (a.candidate.profileCompletion || 0) ||
+          b.candidate.updatedAt.getTime() - a.candidate.updatedAt.getTime(),
+      );
+    } else {
+      // recent (default when browsing all)
+      filtered.sort((a, b) => b.candidate.updatedAt.getTime() - a.candidate.updatedAt.getTime());
+    }
+
+    const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const candidatePayload = await Promise.all(
+      pageRows.map(async ({ candidate, currentlyEmployed, application, availability }) => {
+        const latestRole = candidate.experiences[0];
+        const skillNames = candidate.skills.map((item) => item.name);
+        return {
+          id: candidate.id,
+          firstName: candidate.firstName,
+          lastName: candidate.lastName,
+          city: candidate.city,
+          state: candidate.state,
+          highestEducation: candidate.highestEducation,
+          preferredLanguage: candidate.preferredLanguage,
+          experienceYears: candidate.totalExperienceYears || 0,
+          experienceMonths: candidate.totalExperienceMonths || 0,
+          stillInCollege: candidate.stillInCollege,
+          openToRelocating: candidate.openToRelocating,
+          currentlyEmployed,
+          availabilityLabel: availability.label,
+          availabilityTone: availability.tone,
+          profileCompletion: candidate.profileCompletion,
+          skills: skillNames.slice(0, 6),
+          skillsTotal: skillNames.length,
+          latestRole: latestRole
+            ? { title: latestRole.jobTitle, company: latestRole.company }
+            : null,
+          matchScore: null as number | null,
+          appliedToEmployer: Boolean(application),
+          applicationId: application?.id || null,
+          applicationStatus: application?.status || null,
+          talentShortlisted: false,
+          photoUrl: await readableCandidatePhotoUrl(this.storage, candidate.id, candidate.photoUrl),
+        };
+      }),
+    );
+
+    return {
+      jobId: null as string | null,
+      unlocked: true,
+      unlockLimit: 0,
+      totalMatched: filtered.length,
       total: filtered.length,
       page,
       pageSize,

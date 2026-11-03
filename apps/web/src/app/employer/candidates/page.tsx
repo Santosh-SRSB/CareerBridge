@@ -172,10 +172,6 @@ export default function EmployerCandidatesPage() {
   }
 
   async function runSearch(selectedJobId: string, f: CandidateFilters = filters, nextPage = 1) {
-    if (!selectedJobId) {
-      setError('Select a job to search matched candidates.');
-      return;
-    }
     setSearching(true);
     setError('');
     setLoadFailed(false);
@@ -194,7 +190,7 @@ export default function EmployerCandidatesPage() {
         sort: f.sort && f.sort !== 'match' ? f.sort : undefined,
         page: nextPage,
         pageSize: PAGE_SIZE,
-        jobId: selectedJobId,
+        jobId: selectedJobId || undefined,
       });
       setResults(data.candidates ?? []);
       setUnlockLimit(data.unlockLimit);
@@ -221,11 +217,8 @@ export default function EmployerCandidatesPage() {
     listEmployerJobs()
       .then(async (rows) => {
         setJobs(rows);
-        const firstId = rows[0]?.id || '';
-        if (firstId) {
-          setJobId(firstId);
-          await runSearch(firstId, initial);
-        }
+        setJobId('');
+        await runSearch('', initial);
       })
       .catch(() => {
         setJobs([]);
@@ -285,7 +278,7 @@ export default function EmployerCandidatesPage() {
     setSkillDraft('');
     setSkillError('');
     setError('');
-    if (jobId) void runSearch(jobId, EMPTY_FILTERS);
+    void runSearch(jobId, EMPTY_FILTERS);
   }
 
   async function shortlist(target: { candidateId: string; applicationId: string | null }, note?: string) {
@@ -295,6 +288,9 @@ export default function EmployerCandidatesPage() {
       if (target.applicationId) {
         await changeApplicationStatus(target.applicationId, 'SHORTLIST', undefined, note || undefined);
       } else {
+        if (!jobId) {
+          throw new Error('Select a job to shortlist this candidate.');
+        }
         await setTalentShortlist(target.candidateId, jobId, true, note || undefined);
       }
       setResults((rows) =>
@@ -336,7 +332,7 @@ export default function EmployerCandidatesPage() {
       <EvPageHead
         eyebrow="Talent pool"
         title="Candidates"
-        subtitle="Ranked matches for your open roles. Shortlist candidates and schedule interviews."
+        subtitle="Browse all candidates, or select a job for ranked matches. Shortlist and schedule interviews."
         actions={
           selectedJob ? (
             <div className="ev-card ev-matching">
@@ -361,15 +357,12 @@ export default function EmployerCandidatesPage() {
             onChange={(e) => {
               const next = e.target.value;
               setJobId(next);
-              setResults([]);
-              setHasSearched(false);
               setError('');
-              if (next) void runSearch(next, filters, 1);
+              void runSearch(next, filters, 1);
             }}
             disabled={loading}
-            required
           >
-            <option value="">Select a job</option>
+            <option value="">All candidates</option>
             {jobs.map((job) => (
               <option key={job.id} value={job.id}>
                 {job.title}
@@ -483,7 +476,7 @@ export default function EmployerCandidatesPage() {
               onChange={(e) => {
                 const next = { ...filters, sort: e.target.value };
                 setFilters(next);
-                if (jobId && hasSearched) void runSearch(jobId, next, 1);
+                if (hasSearched) void runSearch(jobId, next, 1);
               }}
             >
               {CANDIDATE_SEARCH_SORTS.map((item) => (
@@ -519,7 +512,7 @@ export default function EmployerCandidatesPage() {
           <button type="button" className="ev-lnk ev-lnk--mut" onClick={clearFilters}>
             Clear All
           </button>
-          <button type="submit" className="ev-btn ev-btn--accent" disabled={!jobId || loading || searching}>
+          <button type="submit" className="ev-btn ev-btn--accent" disabled={loading || searching}>
             {searching ? 'Searching…' : 'Search candidates'}
           </button>
         </div>
@@ -545,37 +538,28 @@ export default function EmployerCandidatesPage() {
           />
         ) : null}
 
-        {!loading && !searching && !jobsError && !hasSearched ? (
-          <div className="ev-card">
-            <EvEmpty
-              title="Select a job to see candidates"
-              body="Matched candidates load automatically for your roles."
-              action={
-                jobs.length ? null : (
-                  <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
-                    Post a job
-                  </Link>
-                )
-              }
-            />
-          </div>
-        ) : null}
-
         {!loading && !searching && !loadFailed && hasSearched && (results?.length ?? 0) === 0 ? (
           <div className="ev-card" data-state="empty">
-            <EvEmpty title="No candidates found" body="Try broader filters or another job posting." />
+            <EvEmpty
+              title="No candidates found"
+              body={
+                jobId
+                  ? 'Try broader filters or another job posting.'
+                  : 'Try broader filters, or select a job to see ranked matches.'
+              }
+            />
           </div>
         ) : null}
 
         {!loading && !searching && (results?.length ?? 0) > 0 ? (
           <>
             <div className="ev-results-head">
-              <h2>Matched candidates</h2>
+              <h2>{jobId ? 'Matched candidates' : 'All candidates'}</h2>
               <span className="ev-sub" data-testid="candidates-count">
                 <b>
                   {total} {total === 1 ? 'candidate' : 'candidates'} found
                 </b>
-                {unlockLimit > 0 && totalMatched > total ? ` · ${totalMatched} matched in total` : ''}
+                {jobId && unlockLimit > 0 && totalMatched > total ? ` · ${totalMatched} matched in total` : ''}
               </span>
             </div>
 
@@ -584,7 +568,7 @@ export default function EmployerCandidatesPage() {
                 const isShortlisted = row.applicationStatus === 'SHORTLISTED' || Boolean(row.talentShortlisted);
                 const canShortlist = row.applicationId
                   ? ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(String(row.applicationStatus || 'APPLIED'))
-                  : !row.talentShortlisted;
+                  : Boolean(jobId) && !row.talentShortlisted;
                 const shortlistBusy = busyId === `shortlist-${row.id}`;
                 const skillLabels = row.skills
                   .map(shortSkillLabel)
@@ -660,7 +644,11 @@ export default function EmployerCandidatesPage() {
 
                     <footer className="ev-candcard__actions">
                       <Link
-                        href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
+                        href={
+                          jobId
+                            ? `/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`
+                            : `/employer/candidates/${row.id}`
+                        }
                         className="ev-btn ev-btn--ghost ev-btn--sm ev-candcard__view"
                       >
                         View profile
