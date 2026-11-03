@@ -38,6 +38,8 @@ export type MatchCandidate = {
   hasExperience: string | null;
   /** Years of experience (optional — improves experience scoring). */
   experienceYears?: number;
+  /** Past / current job titles — used for role-title fit when the job has no skill list. */
+  experienceTitles?: string[];
   hasEducation?: boolean;
   highestEducation?: string | null;
   educationCount?: number;
@@ -48,6 +50,51 @@ export type MatchCandidate = {
   /** Spoken languages (e.g. English, Tamil). */
   languages?: string[];
 };
+
+const ROLE_TITLE_STOP = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'job',
+  'role',
+  'position',
+  'opening',
+  'vacancy',
+  'hiring',
+  'junior',
+  'senior',
+  'associate',
+  'executive',
+]);
+
+/** 0–100: how well interests / titles / skills match the job title (same-field token match). */
+export function roleTitleFitPercent(
+  jobTitle: string | null | undefined,
+  corpus: string[],
+): number {
+  const title = String(jobTitle || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!title) return 0;
+  const fields = corpus.map((item) => item.toLowerCase().replace(/\s+/g, ' ').trim()).filter(Boolean);
+  if (!fields.length) return 0;
+  if (fields.some((field) => field.includes(title) || (field.length >= 4 && title.includes(field)))) {
+    return 100;
+  }
+  const tokens = title
+    .split(/[^a-z0-9]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 2 && !ROLE_TITLE_STOP.has(t));
+  if (!tokens.length) return 0;
+  // Require every distinctive title token in the same interest / experience / skill line
+  // so "Service Engineer" does not match every "Software Engineer".
+  if (fields.some((field) => tokens.every((token) => field.includes(token)))) {
+    return 100;
+  }
+  return 0;
+}
 
 export type MatchJob = {
   city: string;
@@ -107,11 +154,16 @@ export class IntelligenceService {
       skills.some((item) => item.includes(skill) || skill.includes(item)),
     );
 
+    // Never award a free skills score — empty skill lists used to give everyone 70 and show all profiles.
     const skillScore = required.length
       ? Math.round((overlap.length / required.length) * 100)
       : preferred.length
-        ? Math.min(100, 55 + Math.round((preferredOverlap.length / preferred.length) * 45))
-        : 70;
+        ? Math.round((preferredOverlap.length / preferred.length) * 100)
+        : roleTitleFitPercent(job.title, [
+            ...candidate.careerInterests,
+            ...candidate.skills,
+            ...(candidate.experienceTitles || []),
+          ]);
 
     const preferredSkillScore = preferred.length
       ? Math.round((preferredOverlap.length / preferred.length) * 100)

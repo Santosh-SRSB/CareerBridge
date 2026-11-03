@@ -174,6 +174,7 @@ export class MatchingService {
     const candidates = await this.prisma.candidate.findMany({
       include: {
         skills: true,
+        experiences: { select: { jobTitle: true }, orderBy: { startDate: 'desc' }, take: 5 },
         interviews: { where: { score: { not: null } }, select: { score: true } },
         resumes: { select: { id: true, rawText: true, summary: true }, take: 1 },
       },
@@ -247,6 +248,7 @@ export class MatchingService {
           skills: candidate.skills.map((item) => item.name),
           hasExperience: candidate.hasExperience,
           experienceYears: years,
+          experienceTitles: candidate.experiences.map((item) => item.jobTitle).filter(Boolean),
           hasEducation: Boolean(candidate.highestEducation),
           highestEducation: candidate.highestEducation,
           hasResume: candidate.resumes.length > 0,
@@ -257,6 +259,7 @@ export class MatchingService {
           category: job.category,
           requiredSkills,
           preferredSkills,
+          title: job.title,
           experience:
             job.experience && job.experience !== 'NONE'
               ? job.experience
@@ -294,8 +297,8 @@ export class MatchingService {
       const semanticScore =
         fromPg != null ? Math.round(Math.max(0, Math.min(1, fromPg)) * 100) : 0;
 
-      // Role filter: when the job lists required skills, skip zero skill overlap.
-      if (requiredSkills.length > 0 && skillsScore <= 0) {
+      // Role filter: no skill / role-title fit → do not show on this job's talent pool.
+      if (skillsScore <= 0) {
         continue;
       }
 

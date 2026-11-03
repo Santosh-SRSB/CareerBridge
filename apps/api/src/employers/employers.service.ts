@@ -942,7 +942,6 @@ export class EmployersService {
     });
 
     const totalMatched = await this.prisma.candidateMatch.count({ where: { jobId: job.id } });
-    const jobRequiredSkills = parseList(job.requiredSkills);
 
     if (!matchRows.length) {
       return {
@@ -1059,10 +1058,9 @@ export class EmployersService {
         // Live score identical to profile breakdown (not stale hybrid CandidateMatch total).
         const liveMatch = this.scoreApplicationMatch(candidate, job);
         const breakdown = toAtsMatchBreakdown(liveMatch);
-        if (jobRequiredSkills.length > 0) {
-          const skillsPts = breakdown.factors.find((f) => f.key === 'skills')?.score ?? 0;
-          if (skillsPts <= 0) return null;
-        }
+        const skillsPts = breakdown.factors.find((f) => f.key === 'skills')?.score ?? 0;
+        // Drop profiles with no skill / role-title fit for this job (stops "all candidates" dumps).
+        if (skillsPts <= 0) return null;
         return {
           match,
           liveScore: breakdown.score,
@@ -2323,6 +2321,7 @@ type MatchCandidateRow = {
   totalExperienceMonths?: number | null;
   certifications?: string | null;
   skills: Array<{ name: string }>;
+  experiences?: Array<{ jobTitle?: string | null }>;
   education?: Array<{ id?: string; yearCompleted?: number | null }>;
   resumes?: Array<{ id: string; score?: number | null }>;
 };
@@ -2350,6 +2349,9 @@ function scoreApplicationMatchImpl(
       hasExperience: candidate.hasExperience,
       experienceYears:
         (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12,
+      experienceTitles: (candidate.experiences || [])
+        .map((item) => item.jobTitle)
+        .filter((title): title is string => Boolean(title?.trim())),
       hasEducation: Boolean(
         candidate.highestEducation?.trim() || (candidate.education?.length || 0) > 0,
       ),

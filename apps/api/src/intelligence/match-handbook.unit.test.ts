@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { toAtsMatchBreakdown } from '@careerbridge/shared';
-import { IntelligenceService, type MatchCandidate, type MatchJob } from './intelligence.service';
+import {
+  IntelligenceService,
+  roleTitleFitPercent,
+  type MatchCandidate,
+  type MatchJob,
+} from './intelligence.service';
 
 const svc = new IntelligenceService();
 
@@ -57,4 +62,30 @@ test('total equals the sum of factor points', () => {
   const sum = byKey.skills + byKey.experience + byKey.location + byKey.language + byKey.education;
   assert.equal(match.score, sum);
   assert.equal(sum, 80 + 2 + 2 + 2 + 5);
+});
+
+test('roleTitleFitPercent requires full role tokens in the same field', () => {
+  assert.equal(roleTitleFitPercent('Service Engineer', ['Service Engineer']), 100);
+  assert.equal(roleTitleFitPercent('Service Engineer', ['service engineer trainee']), 100);
+  assert.equal(roleTitleFitPercent('Service Engineer', ['Software Engineer']), 0);
+  assert.equal(roleTitleFitPercent('Service Engineer', ['Customer Service', 'Software Engineer']), 0);
+  assert.equal(roleTitleFitPercent('Service Engineer', ['Excel', 'Communication']), 0);
+});
+
+test('empty required skills uses role title fit, not a free 70', () => {
+  const miss = points(
+    { skills: ['Excel'], careerInterests: ['Accountant'], experienceTitles: ['Junior accountant'] },
+    { requiredSkills: [], preferredSkills: [], title: 'Service Engineer' },
+  );
+  assert.equal(miss.byKey.skills, 0);
+
+  const hit = points(
+    {
+      skills: [],
+      careerInterests: ['Service Engineer'],
+      experienceTitles: ['Field Service Engineer'],
+    },
+    { requiredSkills: [], preferredSkills: [], title: 'Service Engineer' },
+  );
+  assert.equal(hit.byKey.skills, 80);
 });
