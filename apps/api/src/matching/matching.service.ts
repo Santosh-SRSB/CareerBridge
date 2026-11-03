@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  ATS_JOB_MATCH_WEIGHTS,
   ErrorCode as SharedError,
   applyAtsMatchScoreGates,
   employerCandidateUnlockLimit,
@@ -142,6 +143,9 @@ export class MatchingService {
     const requiredSkills = profile
       ? parseList(profile.requiredSkillsJson)
       : parseList(job.requiredSkills);
+    const preferredSkills = profile
+      ? parseList(profile.preferredSkillsJson)
+      : parseList(job.preferredSkills);
     const experienceYearsMin = profile?.experienceYearsMin || 0;
 
     // Ensure job profile + JD chunks exist in pgvector (required for semantic score).
@@ -252,6 +256,7 @@ export class MatchingService {
           city: job.city,
           category: job.category,
           requiredSkills,
+          preferredSkills,
           experience:
             job.experience && job.experience !== 'NONE'
               ? job.experience
@@ -261,12 +266,13 @@ export class MatchingService {
           languages: jobLanguages,
         },
       );
-      // Handbook Vol.3 deterministic points: Skills 40, Experience 20, Location 15, Language 15, Education 10.
-      const skillsScore = Math.floor((base.skillScore / 100) * 40);
-      const experienceScore = Math.round((base.experienceScore / 100) * 20);
-      const locationScore = Math.round((base.locationScore / 100) * 15);
-      const languageScore = Math.round((base.languageScore / 100) * 15);
-      const educationScore = Math.floor((base.educationScore / 100) * 10);
+      const w = ATS_JOB_MATCH_WEIGHTS;
+      // Same point math as profile breakdown (Skills 80 · Exp/Loc/Lang/Edu 5 each).
+      const skillsScore = Math.floor((base.skillScore / 100) * w.skills);
+      const experienceScore = Math.round((base.experienceScore / 100) * w.experience);
+      const locationScore = Math.round((base.locationScore / 100) * w.location);
+      const languageScore = Math.round((base.languageScore / 100) * w.language);
+      const educationScore = Math.floor((base.educationScore / 100) * w.education);
       const interviewReadinessScore = this.intelligence.interviewReadinessScore({
         interviewScores: candidate.interviews
           .map((item) => item.score)
@@ -274,10 +280,6 @@ export class MatchingService {
         hasResume: candidate.resumes.length > 0,
         profileCompletion: candidate.profileCompletion || 0,
       });
-      const ruleRaw = Math.min(
-        100,
-        skillsScore + experienceScore + locationScore + languageScore + educationScore,
-      );
       const gateParts = {
         skillsPoints: skillsScore,
         experiencePoints: experienceScore,
@@ -285,19 +287,17 @@ export class MatchingService {
         languagePoints: languageScore,
         educationPoints: educationScore,
       };
-      const ruleScore = applyAtsMatchScoreGates(ruleRaw, gateParts);
+      // Card + profile use the same gated rule score (no semantic blend that diverges).
+      const totalScore = applyAtsMatchScoreGates(base.score, gateParts);
 
       const fromPg = pgScores.get(candidate.id);
       const semanticScore =
         fromPg != null ? Math.round(Math.max(0, Math.min(1, fromPg)) * 100) : 0;
 
-      // Hybrid: 70% deterministic rules + 30% semantic similarity (Volume 2 matching).
-      const totalScore = applyAtsMatchScoreGates(
-        semanticScore > 0
-          ? Math.min(100, Math.round(ruleScore * 0.7 + semanticScore * 0.3))
-          : ruleScore,
-        gateParts,
-      );
+      // Role filter: when the job lists required skills, skip zero skill overlap.
+      if (requiredSkills.length > 0 && skillsScore <= 0) {
+        continue;
+      }
 
       const reasons = [...base.reasons];
       if (semanticScore >= 70) reasons.push('Strong profile match');
@@ -316,7 +316,7 @@ export class MatchingService {
       });
     }
 
-    // Optional Gemini enrichment for top candidates only (cost control).
+    // Optional Gemini enrichment for explanations only (does not change the scored total).
     if (this.config.get<string>('AI_MATCH_ENRICH') === 'true' && this.aiGateway.isConfigured()) {
       scored.sort((a, b) => b.totalScore - a.totalScore);
       const enrichTargets = scored.slice(0, 5);
@@ -338,17 +338,11 @@ export class MatchingService {
             description: job.description.slice(0, 1500),
           },
         );
-        if (ai?.matchScore != null) {
-          item.totalScore = Math.min(
-            100,
-            Math.round(item.totalScore * 0.8 + Number(ai.matchScore) * 0.2),
-          );
-          if (ai.matchedSkills?.length) {
-            item.reasons = [...new Set([...item.reasons, ...ai.matchedSkills.slice(0, 3)])];
-          }
-          if (ai.missingSkills?.length) {
-            item.gaps = [...new Set([...item.gaps, ...ai.missingSkills.slice(0, 5)])];
-          }
+        if (ai?.matchedSkills?.length) {
+          item.reasons = [...new Set([...item.reasons, ...ai.matchedSkills.slice(0, 3)])];
+        }
+        if (ai?.missingSkills?.length) {
+          item.gaps = [...new Set([...item.gaps, ...ai.missingSkills.slice(0, 5)])];
         }
       }
     }
@@ -356,13 +350,11 @@ export class MatchingService {
     scored.sort((a, b) => b.totalScore - a.totalScore);
     const top = scored.slice(0, 40);
 
-    await this.prisma.$transaction(
-      top.map((item, index) =>
-        this.prisma.candidateMatch.upsert({
-          where: {
-            jobId_candidateId: { jobId: job.id, candidateId: item.candidateId },
-          },
-          create: {
+    await this.prisma.$transaction([
+      this.prisma.candidateMatch.deleteMany({ where: { jobId: job.id } }),
+      ...top.map((item, index) =>
+        this.prisma.candidateMatch.create({
+          data: {
             jobId: job.id,
             candidateId: item.candidateId,
             applicationId: item.applicationId,
@@ -376,21 +368,9 @@ export class MatchingService {
             gapsJson: JSON.stringify(item.gaps),
             computedAt: new Date(),
           },
-          update: {
-            applicationId: item.applicationId,
-            skillsScore: item.skillsScore,
-            experienceScore: item.experienceScore,
-            interviewReadinessScore: item.interviewReadinessScore,
-            semanticScore: item.semanticScore,
-            totalScore: item.totalScore,
-            rank: index + 1,
-            reasonsJson: JSON.stringify(item.reasons),
-            gapsJson: JSON.stringify(item.gaps),
-            computedAt: new Date(),
-          },
         }),
       ),
-    );
+    ]);
 
     const rows = await this.prisma.candidateMatch.findMany({
       where: { jobId: job.id },

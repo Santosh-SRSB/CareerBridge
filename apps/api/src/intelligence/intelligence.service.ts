@@ -172,7 +172,7 @@ export class IntelligenceService {
     }
     const languageScore = pctOf(languagePoints, w.language);
 
-    // Handbook Vol.3 points: Skills 40, Experience 20, Location 15, Language 15, Education 10.
+    // Points: Skills 80, Experience 5, Location 5, Language 5, Education 5.
     const skillsPoints = Math.floor((skillScore / 100) * w.skills);
     const educationPoints = Math.floor((educationScore / 100) * w.education);
     const rawScore = Math.min(

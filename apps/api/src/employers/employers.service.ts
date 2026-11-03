@@ -33,6 +33,7 @@ import {
   normalizeBusinessIdentifier,
   panFormatError,
   parseLinkedinUrl,
+  toAtsMatchBreakdown,
 } from '@careerbridge/shared';
 import { GstService } from '../gst/gst.service';
 import { normalizeGstin, validateGstinFormat } from '../gst/gst.validator';
@@ -929,23 +930,19 @@ export class EmployersService {
     const page = Math.max(1, query.page || 1);
     const pageSize = Math.min(Math.max(1, query.pageSize || 20), 50);
 
-    let matchRows = await this.prisma.candidateMatch.findMany({
+    // Always refresh so card scores match live profile weights (Skills 80 · others 5 each).
+    if (unlockLimit > 0) {
+      await this.matching.recomputeMatchesForJob(job.id);
+    }
+
+    const matchRows = await this.prisma.candidateMatch.findMany({
       where: { jobId: job.id },
       orderBy: [{ rank: 'asc' }, { totalScore: 'desc' }],
       take: unlockLimit > 0 ? unlockLimit : 0,
     });
 
-    // First open of a published job: score candidates automatically from live profiles.
-    if (!matchRows.length && unlockLimit > 0) {
-      await this.matching.recomputeMatchesForJob(job.id);
-      matchRows = await this.prisma.candidateMatch.findMany({
-        where: { jobId: job.id },
-        orderBy: [{ rank: 'asc' }, { totalScore: 'desc' }],
-        take: unlockLimit,
-      });
-    }
-
     const totalMatched = await this.prisma.candidateMatch.count({ where: { jobId: job.id } });
+    const jobRequiredSkills = parseList(job.requiredSkills);
 
     if (!matchRows.length) {
       return {
@@ -1059,14 +1056,31 @@ export class EmployersService {
             availability.label === 'Student' ? 'student' : availability.tone === 'immediate' ? 'immediate' : 'notice';
           if (kind !== query.availability) return null;
         }
-        return { match, candidate, candidateYears, currentlyEmployed, application, availability };
+        // Live score identical to profile breakdown (not stale hybrid CandidateMatch total).
+        const liveMatch = this.scoreApplicationMatch(candidate, job);
+        const breakdown = toAtsMatchBreakdown(liveMatch);
+        if (jobRequiredSkills.length > 0) {
+          const skillsPts = breakdown.factors.find((f) => f.key === 'skills')?.score ?? 0;
+          if (skillsPts <= 0) return null;
+        }
+        return {
+          match,
+          liveScore: breakdown.score,
+          candidate,
+          candidateYears,
+          currentlyEmployed,
+          application,
+          availability,
+        };
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
     if (query.sort === 'recent') {
       filtered.sort((a, b) => b.candidate.updatedAt.getTime() - a.candidate.updatedAt.getTime());
     } else if (query.sort === 'experience') {
-      filtered.sort((a, b) => b.candidateYears - a.candidateYears || b.match.totalScore - a.match.totalScore);
+      filtered.sort((a, b) => b.candidateYears - a.candidateYears || b.liveScore - a.liveScore);
+    } else {
+      filtered.sort((a, b) => b.liveScore - a.liveScore || b.match.totalScore - a.match.totalScore);
     }
     const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
     const talentShortlisted = new Set(
@@ -1085,10 +1099,10 @@ export class EmployersService {
     );
 
     const candidatePayload = await Promise.all(
-      pageRows.map(async ({ match, candidate, currentlyEmployed, application, availability }) => {
+      pageRows.map(async ({ liveScore, candidate, currentlyEmployed, application, availability }) => {
         const latestRole = candidate.experiences[0];
         const skillNames = candidate.skills.map((item) => item.name);
-        const matchScore = Math.round(match.totalScore);
+        const matchScore = Math.round(liveScore);
         return {
           id: candidate.id,
           firstName: candidate.firstName,

@@ -385,13 +385,13 @@ export const ATS_MATCH_BANDS: Array<{
   { band: 'LOW', min: 0, label: 'Low Match', shortLabel: 'Low', color: 'grey' },
 ];
 
-/** Handbook Vol.3 match weights (points toward 100). */
+/** Job match weights (points toward 100). Skills dominate; other factors are light ties. */
 export const ATS_JOB_MATCH_WEIGHTS = {
-  skills: 40,
-  experience: 20,
-  location: 15,
-  language: 15,
-  education: 10,
+  skills: 80,
+  experience: 5,
+  location: 5,
+  language: 5,
+  education: 5,
 } as const;
 
 export function atsMatchBand(score: number): AtsMatchBand {
@@ -404,8 +404,8 @@ export function atsMatchBand(score: number): AtsMatchBand {
 
 /**
  * Keep factor bars honest and use the real factor total.
- * - 0 skills → score is the sum of what matched (experience/location/language/education);
- *   only soft-cap under 60 so a skills miss cannot sit at the full non-skill max of 60.
+ * - 0 skills → score is the sum of secondary factors only (max 20 with current weights);
+ *   soft-cap under 60 so a skills miss cannot reach Moderate/Good.
  * - Very weak skills (< 25% of skills weight) → soft-cap under 60.
  * Strong skill overlap is unchanged (no fixed 49).
  */
@@ -423,7 +423,7 @@ export function applyAtsMatchScoreGates(
   const skills = Math.max(0, parts.skillsPoints);
 
   if (skills <= 0) {
-    // Actual matched points (e.g. 50 with half experience, 59 max with full non-skills).
+    // Secondary-only total (skills carry most of the weight).
     return Math.min(score, 59);
   }
   if (skills < ATS_JOB_MATCH_WEIGHTS.skills * 0.25) {
