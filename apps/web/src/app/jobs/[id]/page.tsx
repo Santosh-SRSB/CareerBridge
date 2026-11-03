@@ -193,28 +193,86 @@ export default function JobDetailPage() {
                 )}
               </button>
 
-              {eyebrow ? <p className="cb-job-detail__eyebrow">{eyebrow}</p> : null}
+              {job.opportunityType === 'INTERNSHIP_TRAINING' ? (
+                <p className="cb-job-detail__eyebrow">Training Program</p>
+              ) : eyebrow ? (
+                <p className="cb-job-detail__eyebrow">{eyebrow}</p>
+              ) : null}
               <h1>{job.title}</h1>
               <p className="cb-job-detail__company">{job.companyName}</p>
-              <p className="cb-job-detail__salary">
-                {formatSalary(job.salaryMin, job.salaryMax)}
-                <span> /annually</span>
-              </p>
-              {job.experience ? (
-                <p className="cb-job-detail__salary-meta">Experience: {job.experience}</p>
-              ) : null}
+              {job.opportunityType === 'INTERNSHIP_TRAINING' ? (
+                <>
+                  <p className="cb-job-detail__salary">{job.feeLabel || 'Programme fee disclosed below'}</p>
+                  {job.programmeDuration ? (
+                    <p className="cb-job-detail__salary-meta">Duration: {job.programmeDuration}</p>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <p className="cb-job-detail__salary">
+                    {formatSalary(job.salaryMin, job.salaryMax)}
+                    <span> /annually</span>
+                  </p>
+                  {job.experience ? (
+                    <p className="cb-job-detail__salary-meta">Experience: {job.experience}</p>
+                  ) : null}
+                </>
+              )}
 
               <div className="cb-job-detail__tags">
-                {job.jobType ? <span>{formatJobType(job.jobType)}</span> : null}
+                {job.opportunityType === 'INTERNSHIP_TRAINING' ? (
+                  <span>Internship / Training</span>
+                ) : job.jobType ? (
+                  <span>{formatJobType(job.jobType)}</span>
+                ) : null}
                 {job.city ? <span>{job.city}</span> : null}
+                {job.workMode ? <span>{job.workMode}</span> : null}
                 {job.category ? <span>{job.category}</span> : null}
               </div>
             </div>
 
             <div className="cb-job-detail__panel cb-job-detail__about cb-job-detail__fx" style={{ animationDelay: '0.08s' }}>
-              <h3>About the job</h3>
+              <h3>{job.opportunityType === 'INTERNSHIP_TRAINING' ? 'About the programme' : 'About the job'}</h3>
               <p className="cb-job-detail__body">{job.description}</p>
             </div>
+
+            {job.opportunityType === 'INTERNSHIP_TRAINING' ? (
+              <div className="cb-job-detail__panel cb-job-detail__fx" style={{ animationDelay: '0.1s' }}>
+                <h3>Programme details</h3>
+                <div className="cb-job-detail__body space-y-3">
+                  {job.eligibilityCriteria ? (
+                    <p>
+                      <strong>Eligibility:</strong> {job.eligibilityCriteria}
+                    </p>
+                  ) : null}
+                  {job.learningOutcomes ? (
+                    <p>
+                      <strong>What you will learn:</strong> {job.learningOutcomes}
+                    </p>
+                  ) : null}
+                  {job.selectionProcess ? (
+                    <p>
+                      <strong>Selection &amp; enrolment:</strong> {job.selectionProcess}
+                    </p>
+                  ) : null}
+                  {job.applicationDeadline ? (
+                    <p>
+                      <strong>Application closes:</strong>{' '}
+                      {new Date(job.applicationDeadline).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  ) : null}
+                  {job.feeLabel || job.feeDisclosureText ? (
+                    <p>
+                      <strong>Programme fee:</strong> {job.feeLabel || job.feeDisclosureText}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <div className="cb-job-detail__panel cb-job-detail__reqs cb-job-detail__fx" style={{ animationDelay: '0.16s' }}>
               <h3>Requirements</h3>

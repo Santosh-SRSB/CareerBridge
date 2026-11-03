@@ -8,6 +8,7 @@ import {
   resolveExperienceChip,
   resolveCandidateExperienceBand,
   formatLocationLabel,
+  isTechnologyDomainCandidate,
   ONBOARDING_STEP_LABELS,
 } from '@careerbridge/shared';
 import type { ApplicationRecord, CandidateProfile, JobCard } from '@careerbridge/shared';
@@ -279,6 +280,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [bio, setBio] = useState('');
   const [jobs, setJobs] = useState<JobCard[]>([]);
+  const [trainingJobs, setTrainingJobs] = useState<JobCard[]>([]);
   const [scheduledInterviews, setScheduledInterviews] = useState<ScheduledJobInterview[]>([]);
   const [applicationCount, setApplicationCount] = useState(0);
   const [recentApplications, setRecentApplications] = useState<ApplicationRecord[]>([]);
@@ -352,6 +354,9 @@ export default function DashboardPage() {
           recommendedJobs()
             .then((result) => result.items || [])
             .catch(() => listJobs({ limit: 8 }).then((result) => result.items || []).catch(() => [])),
+          listJobs({ opportunityType: 'INTERNSHIP_TRAINING', pageSize: 8 })
+            .then((result) => result.items || [])
+            .catch(() => [] as JobCard[]),
           fetchScheduledInterviews().catch(() => [] as ScheduledJobInterview[]),
           listApplications().catch(() => [] as ApplicationRecord[]),
           listResumes()
@@ -362,7 +367,7 @@ export default function DashboardPage() {
               return latest?.summary || latest?.content?.summary || '';
             })
             .catch(() => ''),
-        ]).then(([, candidateProfile, completion, jobItems, interviews, applications, resumeSummary]) => {
+        ]).then(([, candidateProfile, completion, jobItems, trainingItems, interviews, applications, resumeSummary]) => {
           if (!candidateProfile) {
             setDataState('error');
             return;
@@ -383,6 +388,11 @@ export default function DashboardPage() {
           setCompletionPercent(percent);
           setBio(resolvePassportSummary(candidateProfile, resumeSummary || undefined));
           setJobs(jobItems.slice(0, 3));
+          setTrainingJobs(
+            isTechnologyDomainCandidate(candidateProfile.careerInterests)
+              ? trainingItems.slice(0, 4)
+              : [],
+          );
           const upcoming = sortInterviewsByTime(
             interviews.filter(
               (item) =>
@@ -759,6 +769,91 @@ export default function DashboardPage() {
             <div className="cd-stat-lbl">Applications</div>
           </div>
         </section>
+
+        {trainingJobs.length > 0 ? (
+          <>
+            <div className="cd-sec-h">
+              <h2>Training Programmes</h2>
+              <button
+                type="button"
+                onClick={() => router.push('/jobs?opportunityType=INTERNSHIP_TRAINING')}
+              >
+                View programmes →
+              </button>
+            </div>
+            <div className="cd-jobs">
+              {trainingJobs.map((job) => {
+                const skills = jobSkillPills(job);
+                const feeLabel = job.feeLabel || 'Programme fee disclosed on listing';
+                return (
+                  <article key={job.id} className="cd-job cd-job--training">
+                    <div className="cd-training-strip">Training Program</div>
+                    <div className="cd-job-top">
+                      <span className="cd-job-logo" aria-hidden>
+                        {companyInitials(job.companyName)}
+                      </span>
+                      <span className="cd-job-co">{job.companyName}</span>
+                      <span className="cd-job-match">Training</span>
+                    </div>
+                    <div className="cd-job-body">
+                      <h3 className="cd-job-title">{job.title}</h3>
+                      <p className="cd-meta">
+                        <PinGlyph />
+                        {formatLocationLabel(job.city, (job as { state?: string | null }).state) ||
+                          job.city ||
+                          city ||
+                          'India'}
+                      </p>
+                      <p className="cd-meta" data-testid="training-fee">
+                        <WalletGlyph />
+                        {feeLabel}
+                      </p>
+                      {job.programmeDuration ? (
+                        <p className="cd-meta">
+                          <BriefcaseGlyph />
+                          <span>
+                            Duration: <strong>{job.programmeDuration}</strong>
+                          </span>
+                        </p>
+                      ) : null}
+                      {skills.length > 0 ? (
+                        <div className="cd-tags">
+                          {skills.map((skill) => (
+                            <span key={skill} className="cd-tag">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="cd-job-act">
+                        <button
+                          type="button"
+                          className="cd-btn cd-btn--mint"
+                          onClick={() => router.push(`/jobs/${job.id}`)}
+                        >
+                          View
+                        </button>
+                        {job.applied ? (
+                          <button type="button" className="cd-btn cd-btn--applied" disabled>
+                            Applied
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="cd-btn cd-btn--dark"
+                            onClick={() => router.push(`/jobs/${job.id}/apply`)}
+                          >
+                            Apply
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
 
         <div className="cd-sec-h">
           <h2>Recommended Jobs</h2>

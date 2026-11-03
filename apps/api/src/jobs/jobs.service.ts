@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import {
   ErrorCode,
   experienceFilterRange,
+  formatProgrammeFee,
   JOB_ROLE_CATALOG,
   jobMatchesExperienceFilter,
   type JobRolesResponse,
@@ -70,6 +71,7 @@ export class JobsService {
       q?: string;
       location?: string;
       type?: string;
+      opportunityType?: string;
       category?: string;
       experience?: string;
       salaryMin?: number;
@@ -93,6 +95,9 @@ export class JobsService {
       ],
       ...(query.location ? { city: { contains: query.location, mode: 'insensitive' as const } } : {}),
       ...(query.type ? { jobType: query.type } : {}),
+      ...(query.opportunityType === 'JOB' || query.opportunityType === 'INTERNSHIP_TRAINING'
+        ? { opportunityType: query.opportunityType }
+        : {}),
       ...(query.category ? { category: query.category } : {}),
       ...(query.q
         ? {
@@ -456,6 +461,10 @@ export class JobsService {
       status: job.status,
       applied,
       applicationId: activeApplication?.id ?? null,
+      eligibilityCriteria: job.eligibilityCriteria ?? null,
+      learningOutcomes: job.learningOutcomes ?? null,
+      selectionProcess: job.selectionProcess ?? null,
+      feeDisclosureText: job.feeDisclosureText ?? null,
     };
   }
 
@@ -749,6 +758,14 @@ export class JobsService {
       experience: string | null;
       workMode?: string | null;
       publishedAt?: Date | null;
+      opportunityType?: string | null;
+      programmeDuration?: string | null;
+      feeType?: string | null;
+      feeAmount?: number | null;
+      feeMin?: number | null;
+      feeMax?: number | null;
+      feeDisclosureText?: string | null;
+      applicationDeadline?: Date | null;
       employer: { companyName: string };
     },
     candidate?: {
@@ -799,6 +816,17 @@ export class JobsService {
           },
         )
       : undefined;
+    const opportunityType = job.opportunityType === 'INTERNSHIP_TRAINING' ? 'INTERNSHIP_TRAINING' : 'JOB';
+    const feeLabel =
+      opportunityType === 'INTERNSHIP_TRAINING'
+        ? formatProgrammeFee({
+            feeType: job.feeType,
+            feeAmount: job.feeAmount,
+            feeMin: job.feeMin,
+            feeMax: job.feeMax,
+            feeDisclosureText: job.feeDisclosureText,
+          })
+        : null;
     return {
       id: job.id,
       title: job.title,
@@ -813,6 +841,14 @@ export class JobsService {
       experience: job.experience,
       workMode: job.workMode ?? null,
       publishedAt: job.publishedAt?.toISOString() ?? null,
+      opportunityType,
+      programmeDuration: job.programmeDuration ?? null,
+      feeType: job.feeType ?? null,
+      feeAmount: job.feeAmount ?? null,
+      feeMin: job.feeMin ?? null,
+      feeMax: job.feeMax ?? null,
+      feeLabel,
+      applicationDeadline: job.applicationDeadline?.toISOString() ?? null,
       distanceKm:
         distanceKm == null || !Number.isFinite(distanceKm)
           ? null

@@ -33,6 +33,7 @@ import { SuperAdminShell } from '@/components/super-admin/SuperAdminShell';
 import { PlatformCatalogSettings } from '@/components/super-admin/PlatformCatalogSettings';
 import { AdminChangePasswordForm } from '@/components/super-admin/AdminChangePasswordForm';
 import { ReportExportPanel } from '@/components/super-admin/ReportExportPanel';
+import { CommissionReportPanel } from '@/components/super-admin/CommissionReportPanel';
 import { EmployerJobReportPanel } from '@/components/super-admin/EmployerJobReportPanel';
 import { CandidateProgressPanel, EmployerProgressPanel } from '@/components/super-admin/ProgressPiePanel';
 import { AccountDeleteDialog } from '@/components/super-admin/AccountDeleteDialog';
@@ -994,6 +995,7 @@ export default function SuperAdminDashboardInner() {
 
         {tab === 'reports' && (
           <div className="space-y-4">
+            <CommissionReportPanel />
             <ReportExportPanel />
             {listLoading && !reports ? (
               <p className="sa-muted text-sm">Loading reports…</p>
