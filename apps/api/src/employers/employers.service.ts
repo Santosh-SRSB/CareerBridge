@@ -2323,7 +2323,7 @@ type MatchCandidateRow = {
   totalExperienceMonths?: number | null;
   certifications?: string | null;
   skills: Array<{ name: string }>;
-  education?: Array<{ id: string }>;
+  education?: Array<{ id?: string; yearCompleted?: number | null }>;
   resumes?: Array<{ id: string; score?: number | null }>;
 };
 
