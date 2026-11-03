@@ -1284,11 +1284,17 @@ describe('Fix 9 — application transitions', () => {
   });
   it('skipping stages is rejected with 409 and nothing is written', async () => {
     const { svc, calls } = harness();
+    // APPLIED cannot jump to HIRE / SELECT.
     await assert.rejects(svc.changeStatus('uA', 'APP1', 'HIRE'), (err) => httpStatus(err) === 409);
     await assert.rejects(svc.changeStatus('uA', 'APP1', 'SELECT'), (err) => httpStatus(err) === 409);
-    await assert.rejects(svc.changeStatus('uA', 'APP2', 'SELECT'), (err) => httpStatus(err) === 409);
     assert.equal(calls.appUpdates.length, 0);
     assert.equal(calls.notifications.length, 0);
+  });
+  it('shortlisted can move to selected without interview (training enrolment)', async () => {
+    const { svc, calls } = harness();
+    const res: any = await svc.changeStatus('uA', 'APP2', 'SELECT');
+    assert.equal(res.status, 'SELECTED');
+    assert.deepEqual(calls.appUpdates.at(-1), { status: 'SELECTED' });
   });
   it('shortlist / hold / reject notify the candidate in-app; reject includes the reason', async () => {
     const { svc, calls } = harness();
