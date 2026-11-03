@@ -637,6 +637,20 @@
   box-shadow: var(--cd-shadow);
 }
 
+.cd-training-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 4px 10px;
+  background: #0b1f4d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .cd-job-top {
   display: flex;
   align-items: center;

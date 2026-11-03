@@ -27,8 +27,17 @@ function titleCase(raw: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-export function applicationStatusMeta(status: string | null | undefined) {
+export function applicationStatusMeta(
+  status: string | null | undefined,
+  options?: { opportunityType?: string | null },
+) {
   const key = String(status || '').toUpperCase();
+  if (
+    key === 'INTERVIEW' &&
+    String(options?.opportunityType || '').toUpperCase() === 'INTERNSHIP_TRAINING'
+  ) {
+    return { label: 'Contacted', tone: 'amber' as EvTone };
+  }
   return APPLICATION_META[key] || { label: key ? titleCase(key) : '—', tone: 'default' as EvTone };
 }
 

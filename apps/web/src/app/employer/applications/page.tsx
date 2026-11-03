@@ -28,13 +28,15 @@ const APPLICATION_SORT_VALUE: Record<ApplicationSortKey, (app: EmployerApplicati
   experience: (app) => experienceYears(app),
   location: (app) => app.candidate.city || null,
   score: (app) => app.match?.score ?? null,
-  status: (app) => applicationStatusLabel(app.status),
+  status: (app) => applicationStatusLabel(app.status, app.job?.opportunityType),
   newest: (app) => +new Date(app.createdAt),
 };
 
-function applicationStatusLabel(status: string) {
+function applicationStatusLabel(status: string, opportunityType?: string | null) {
   if (status === 'SHORTLISTED') return 'Shortlisted';
-  if (status === 'INTERVIEW') return 'Interview';
+  if (status === 'INTERVIEW') {
+    return opportunityType === 'INTERNSHIP_TRAINING' ? 'Contacted' : 'Interview';
+  }
   if (status === 'APPLIED') return 'Applied';
   if (status === 'UNDER_REVIEW' || status === 'REVIEW') return 'Under Review';
   if (status === 'ON_HOLD') return 'On Hold';
@@ -344,7 +346,10 @@ function EmployerApplicationsBody() {
                           </td>
                           <td>
                             <span style={{ whiteSpace: 'nowrap' }}>
-                              <EvApplicationPill status={item.status} />
+                              <EvApplicationPill
+                                status={item.status}
+                                opportunityType={item.job?.opportunityType}
+                              />
                               <EvMiniStage status={item.status} />
                             </span>
                           </td>

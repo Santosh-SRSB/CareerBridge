@@ -1220,11 +1220,13 @@ export class AdminService {
         job: {
           select: {
             title: true,
+            opportunityType: true,
             employer: { select: { companyName: true } },
           },
         },
         candidate: { select: { firstName: true, lastName: true } },
         match: { select: { totalScore: true } },
+        commissionRecord: { select: { id: true, commissionPercent: true, invoiceStatus: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -1234,10 +1236,154 @@ export class AdminService {
       status: row.status,
       matchScore: row.match?.totalScore ?? null,
       jobTitle: row.job.title,
+      opportunityType: row.job.opportunityType,
       companyName: row.job.employer.companyName,
       candidateName: [row.candidate.firstName, row.candidate.lastName].filter(Boolean).join(' ') || '—',
       createdAt: row.createdAt.toISOString(),
+      commissionPercent: row.commissionRecord?.commissionPercent ?? null,
+      commissionInvoiceStatus: row.commissionRecord?.invoiceStatus ?? null,
+      canAddCommission:
+        (row.status === 'SELECTED' || row.status === 'HIRED') && !row.commissionRecord,
     }));
+  }
+
+  /**
+   * Super Admin / Admin enter a commission % after selection. Does not auto-run on SELECTED.
+   * One record per application (unique constraint).
+   */
+  async addCommission(actorUserId: string, applicationId: string, percent: number, notes?: string) {
+    if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Enter a commission percentage between 0.01 and 100',
+      });
+    }
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: {
+        job: { select: { id: true, employerId: true, feeType: true, feeAmount: true, feeMin: true, feeMax: true } },
+        commissionRecord: { select: { id: true } },
+      },
+    });
+    if (!application) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Application was not found' });
+    }
+    if (application.status !== 'SELECTED' && application.status !== 'HIRED') {
+      throw new BadRequestException({
+        code: ErrorCode.BUSINESS_RULE_VIOLATION,
+        message: 'Commission can only be added after the candidate is Selected',
+      });
+    }
+    if (application.commissionRecord) {
+      throw new BadRequestException({
+        code: ErrorCode.DUPLICATE_RESOURCE,
+        message: 'Commission has already been added for this application',
+      });
+    }
+    const feeBase =
+      application.job.feeType === 'FIXED'
+        ? application.job.feeAmount
+        : application.job.feeType === 'RANGE'
+          ? application.job.feeMin
+          : null;
+    const commissionAmountPaise =
+      feeBase != null && Number.isFinite(feeBase)
+        ? Math.round(feeBase * 100 * (percent / 100))
+        : null;
+    const selectedHistory = await this.prisma.applicationStatusHistory.findFirst({
+      where: { applicationId, toStatus: { in: ['SELECTED', 'HIRED'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const selectedAt = selectedHistory?.createdAt || application.updatedAt;
+    const created = await this.prisma.commissionRecord.create({
+      data: {
+        applicationId: application.id,
+        candidateId: application.candidateId,
+        employerId: application.job.employerId,
+        jobId: application.job.id,
+        appliedAt: application.createdAt,
+        selectedAt,
+        commissionPercent: percent,
+        commissionAmountPaise,
+        invoiceStatus: 'READY_TO_INVOICE',
+        notes: notes?.trim() || null,
+        createdByUserId: actorUserId,
+      },
+    });
+    await this.prisma.auditLog
+      .create({
+        data: {
+          userId: actorUserId,
+          action: 'COMMISSION_ADDED',
+          resourceType: 'APPLICATION',
+          resourceId: application.id,
+          newValue: JSON.stringify({
+            commissionPercent: percent,
+            commissionRecordId: created.id,
+          }),
+        },
+      })
+      .catch(() => undefined);
+    return {
+      id: created.id,
+      applicationId: created.applicationId,
+      commissionPercent: created.commissionPercent,
+      commissionAmountPaise: created.commissionAmountPaise,
+      invoiceStatus: created.invoiceStatus,
+      selectedAt: created.selectedAt.toISOString(),
+      createdAt: created.createdAt.toISOString(),
+    };
+  }
+
+  async commissionReport() {
+    const rows = await this.prisma.commissionRecord.findMany({
+      include: {
+        application: {
+          select: {
+            id: true,
+            status: true,
+            candidate: { select: { firstName: true, lastName: true } },
+          },
+        },
+        job: {
+          select: {
+            id: true,
+            title: true,
+            opportunityType: true,
+            employer: { select: { id: true, companyName: true } },
+          },
+        },
+      },
+      orderBy: { selectedAt: 'desc' },
+      take: 500,
+    });
+    return {
+      total: rows.length,
+      rows: rows.map((row) => ({
+        id: row.id,
+        applicationId: row.applicationId,
+        candidateId: row.candidateId,
+        candidateName:
+          [row.application.candidate.firstName, row.application.candidate.lastName]
+            .filter(Boolean)
+            .join(' ') || '—',
+        employerId: row.employerId,
+        companyName: row.job.employer.companyName,
+        jobId: row.jobId,
+        programmeTitle: row.job.title,
+        opportunityType: row.job.opportunityType,
+        applicationStatus: row.application.status,
+        appliedAt: row.appliedAt.toISOString(),
+        selectedAt: row.selectedAt.toISOString(),
+        commissionPercent: row.commissionPercent,
+        commissionAmountPaise: row.commissionAmountPaise,
+        invoiceStatus: row.invoiceStatus,
+        invoiceNumber: row.invoiceNumber,
+        invoiceDate: row.invoiceDate?.toISOString() ?? null,
+        notes: row.notes,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    };
   }
 
   /** Per-stage application counts across the whole platform (not limited to the latest 100 rows). */

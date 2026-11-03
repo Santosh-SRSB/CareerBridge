@@ -41,6 +41,11 @@ const ACTIONS = [
   { value: 'REJECT', label: 'Not selected' },
 ] as const;
 
+function actionLabel(value: (typeof ACTIONS)[number]['value'], opportunityType?: string | null) {
+  if (value === 'INTERVIEW' && opportunityType === 'INTERNSHIP_TRAINING') return 'Contacted';
+  return ACTIONS.find((item) => item.value === value)?.label || value;
+}
+
 const OUTCOMES = [
   { value: 'HIRED', label: 'Confirm hired' },
   { value: 'OFFER_EXTENDED', label: 'Offer extended' },
@@ -516,7 +521,12 @@ export default function EmployerJobApplicationsPage() {
                                 aria-pressed={active}
                                 onClick={() => void onMove(item.id, action.value)}
                               >
-                                {action.label}
+                                {actionLabel(
+                                  action.value,
+                                  typeof jobDetail?.opportunityType === 'string'
+                                    ? jobDetail.opportunityType
+                                    : null,
+                                )}
                               </button>
                             );
                           })}

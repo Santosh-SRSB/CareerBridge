@@ -6,6 +6,95 @@ export const JOB_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'] as
 
 export const WORK_MODES = ['ONSITE', 'HYBRID', 'REMOTE'] as const;
 
+/** Ordinary salaried posting vs internship / training programme. */
+export const OPPORTUNITY_TYPES = ['JOB', 'INTERNSHIP_TRAINING'] as const;
+export type OpportunityType = (typeof OPPORTUNITY_TYPES)[number];
+
+export const PROGRAMME_FEE_TYPES = ['FIXED', 'RANGE', 'FREE', 'DISCUSSED_WITH_EMPLOYER'] as const;
+export type ProgrammeFeeType = (typeof PROGRAMME_FEE_TYPES)[number];
+
+export const COMMISSION_INVOICE_STATUSES = [
+  'NOT_READY',
+  'READY_TO_INVOICE',
+  'INVOICED',
+  'PAID',
+  'DISPUTED',
+] as const;
+export type CommissionInvoiceStatus = (typeof COMMISSION_INVOICE_STATUSES)[number];
+
+/** Career interest label that unlocks Kaizentrix training cards on the candidate dashboard. */
+export const TECHNOLOGY_DOMAIN_INTEREST = 'Technology';
+
+export function isTechnologyDomainCandidate(careerInterests: readonly string[] | null | undefined) {
+  return (careerInterests || []).some(
+    (item) => item.trim().toLowerCase() === TECHNOLOGY_DOMAIN_INTEREST.toLowerCase(),
+  );
+}
+
+export function formatProgrammeFee(input: {
+  feeType?: ProgrammeFeeType | string | null;
+  feeAmount?: number | null;
+  feeMin?: number | null;
+  feeMax?: number | null;
+  feeDisclosureText?: string | null;
+}): string | null {
+  const type = String(input.feeType || '').toUpperCase();
+  if (!type) return input.feeDisclosureText?.trim() || null;
+  if (type === 'FREE') return 'No programme fee';
+  if (type === 'FIXED' && input.feeAmount != null && Number.isFinite(input.feeAmount)) {
+    return `Programme fee: ₹${Math.round(input.feeAmount).toLocaleString('en-IN')}`;
+  }
+  if (
+    type === 'RANGE' &&
+    input.feeMin != null &&
+    input.feeMax != null &&
+    Number.isFinite(input.feeMin) &&
+    Number.isFinite(input.feeMax)
+  ) {
+    return `Programme fee: ₹${Math.round(input.feeMin).toLocaleString('en-IN')}–₹${Math.round(input.feeMax).toLocaleString('en-IN')}`;
+  }
+  if (type === 'DISCUSSED_WITH_EMPLOYER') {
+    return (
+      input.feeDisclosureText?.trim() ||
+      'Paid training programme; charges will be discussed with shortlisted candidates'
+    );
+  }
+  return input.feeDisclosureText?.trim() || null;
+}
+
+export function programmeFeePublishError(input: {
+  opportunityType?: OpportunityType | string | null;
+  feeType?: ProgrammeFeeType | string | null;
+  feeAmount?: number | null;
+  feeMin?: number | null;
+  feeMax?: number | null;
+  feeDisclosureText?: string | null;
+}): string | null {
+  if (String(input.opportunityType || 'JOB') !== 'INTERNSHIP_TRAINING') return null;
+  const type = String(input.feeType || '').toUpperCase();
+  if (!type || !(PROGRAMME_FEE_TYPES as readonly string[]).includes(type)) {
+    return 'Programme fee disclosure is required for training programmes';
+  }
+  if (type === 'FIXED' && !(input.feeAmount != null && input.feeAmount > 0)) {
+    return 'Enter a programme fee amount';
+  }
+  if (
+    type === 'RANGE' &&
+    !(
+      input.feeMin != null &&
+      input.feeMax != null &&
+      input.feeMin > 0 &&
+      input.feeMax >= input.feeMin
+    )
+  ) {
+    return 'Enter a valid programme fee range';
+  }
+  if (type === 'DISCUSSED_WITH_EMPLOYER' && !input.feeDisclosureText?.trim()) {
+    return 'Add a short note that programme charges will be discussed';
+  }
+  return null;
+}
+
 /** Experience options offered on new job posts. */
 export const JOB_EXPERIENCE_RANGES = ['Fresher', '0–1 yr', '1–2 yrs', '2–5 yrs', '5+ yrs'] as const;
 
@@ -142,6 +231,17 @@ export type CreateJobPayload = {
   benefits?: string;
   screeningQuestions?: ScreeningQuestion[];
   publish?: boolean;
+  opportunityType?: OpportunityType;
+  programmeDuration?: string;
+  eligibilityCriteria?: string;
+  applicationDeadline?: string | null;
+  learningOutcomes?: string;
+  selectionProcess?: string;
+  feeType?: ProgrammeFeeType | null;
+  feeAmount?: number | null;
+  feeMin?: number | null;
+  feeMax?: number | null;
+  feeDisclosureText?: string | null;
 };
 
 export const TECH_JOB_CATEGORIES = [
@@ -554,6 +654,15 @@ export type JobCard = {
   applied?: boolean;
   /** Job posting status when included on application records (PUBLISHED, CLOSED, DRAFT…). */
   status?: string;
+  opportunityType?: OpportunityType | string;
+  programmeDuration?: string | null;
+  feeType?: ProgrammeFeeType | string | null;
+  feeAmount?: number | null;
+  feeMin?: number | null;
+  feeMax?: number | null;
+  /** Candidate-safe fee summary (never includes SRSB commission). */
+  feeLabel?: string | null;
+  applicationDeadline?: string | null;
 };
 
 export type JobDetail = JobCard & {
@@ -564,6 +673,10 @@ export type JobDetail = JobCard & {
   applied: boolean;
   /** Present when the candidate has an active (non-withdrawn) application for this job. */
   applicationId?: string | null;
+  eligibilityCriteria?: string | null;
+  learningOutcomes?: string | null;
+  selectionProcess?: string | null;
+  feeDisclosureText?: string | null;
 };
 
 export type PagedJobs = {
@@ -1205,7 +1318,7 @@ export type EmployerApplication = {
     /** Browser-readable profile photo when the candidate uploaded one. */
     photoUrl?: string | null;
   };
-  job: { id: string; title: string };
+  job: { id: string; title: string; opportunityType?: OpportunityType | string };
   /** Private hiring-team note; never shown to the candidate. */
   employerNote?: string | null;
   match?: JobMatch;

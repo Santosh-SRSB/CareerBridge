@@ -24,6 +24,10 @@ class JobQueryDto {
   type?: string;
 
   @IsOptional()
+  @IsIn(['JOB', 'INTERNSHIP_TRAINING'])
+  opportunityType?: 'JOB' | 'INTERNSHIP_TRAINING';
+
+  @IsOptional()
   @IsString()
   category?: string;
 

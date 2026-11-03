@@ -266,6 +266,10 @@ function harness(opts: Opts = {}) {
         return { ...row };
       },
     },
+    applicationStatusHistory: {
+      create: async ({ data }: Row) => ({ id: `ASH${++seq}`, createdAt: new Date(), ...data }),
+      findMany: async () => [],
+    },
     candidate: {
       findUnique: async ({ where }: Row) => db.candidates.find((c) => c.id === where.id) ?? null,
       findMany: async () =>

@@ -101,8 +101,14 @@ export function EvPill({ tone = 'default', children }: { tone?: EvTone; children
   return <span className={cx('ev-pill', tone !== 'default' && `ev-pill--${tone}`)}>{children}</span>;
 }
 
-export function EvApplicationPill({ status }: { status?: string | null }) {
-  const meta = applicationStatusMeta(status);
+export function EvApplicationPill({
+  status,
+  opportunityType,
+}: {
+  status?: string | null;
+  opportunityType?: string | null;
+}) {
+  const meta = applicationStatusMeta(status, { opportunityType });
   return <EvPill tone={meta.tone}>{meta.label}</EvPill>;
 }
 

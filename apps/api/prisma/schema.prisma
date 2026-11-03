@@ -338,6 +338,26 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum OpportunityType {
+  JOB
+  INTERNSHIP_TRAINING
+}
+
+enum ProgrammeFeeType {
+  FIXED
+  RANGE
+  FREE
+  DISCUSSED_WITH_EMPLOYER
+}
+
+enum CommissionInvoiceStatus {
+  NOT_READY
+  READY_TO_INVOICE
+  INVOICED
+  PAID
+  DISPUTED
+}
+
 /// One row per GSTIN. Several employer (staff) accounts may link to the same company.
 model Company {
   id        String   @id @default(uuid())
@@ -420,6 +440,18 @@ model Job {
   publishedAt            DateTime? @map("published_at")
   /// When the job entered its current CLOSED state; null while not closed (or closed before this was recorded).
   closedAt               DateTime? @map("closed_at")
+  /// Ordinary job vs internship/training programme listing.
+  opportunityType        OpportunityType @default(JOB) @map("opportunity_type")
+  programmeDuration      String?   @map("programme_duration")
+  eligibilityCriteria    String?   @map("eligibility_criteria") @db.Text
+  applicationDeadline    DateTime? @map("application_deadline")
+  learningOutcomes       String?   @map("learning_outcomes") @db.Text
+  selectionProcess       String?   @map("selection_process") @db.Text
+  feeType                ProgrammeFeeType? @map("fee_type")
+  feeAmount              Int?      @map("fee_amount")
+  feeMin                 Int?      @map("fee_min")
+  feeMax                 Int?      @map("fee_max")
+  feeDisclosureText      String?   @map("fee_disclosure_text") @db.Text
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 
@@ -432,9 +464,11 @@ model Job {
   interviews     EmployerInterview[]
   savedBy        SavedJob[]
   talentShortlists EmployerTalentShortlist[]
+  commissionRecords CommissionRecord[]
 
   @@index([status, city])
   @@index([category])
+  @@index([opportunityType, status])
   @@index([latitude, longitude])
   @@map("jobs")
 }
@@ -638,10 +672,57 @@ model Application {
   match         CandidateMatch?
   hiringOutcome HiringOutcome?
   employerInterviews EmployerInterview[]
+  statusHistory ApplicationStatusHistory[]
+  commissionRecord CommissionRecord?
 
   @@unique([candidateId, jobId])
   @@index([jobId])
   @@map("applications")
+}
+
+/// Durable log of application status transitions (employer/admin actions).
+model ApplicationStatusHistory {
+  id              String             @id @default(uuid())
+  applicationId   String             @map("application_id")
+  fromStatus      ApplicationStatus? @map("from_status")
+  toStatus        ApplicationStatus  @map("to_status")
+  changedByUserId String?            @map("changed_by_user_id")
+  note            String?            @db.Text
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, createdAt])
+  @@map("application_status_history")
+}
+
+/// Admin-entered commission for a selected application. Not auto-created on SELECTED.
+model CommissionRecord {
+  id                   String                  @id @default(uuid())
+  applicationId        String                  @unique @map("application_id")
+  candidateId          String                  @map("candidate_id")
+  employerId           String                  @map("employer_id")
+  jobId                String                  @map("job_id")
+  appliedAt            DateTime                @map("applied_at")
+  selectedAt           DateTime                @map("selected_at")
+  /// Percentage entered by Super Admin / Admin (e.g. 9 or 10). Never shown to candidates.
+  commissionPercent    Float                   @map("commission_percent")
+  commissionAmountPaise Int?                   @map("commission_amount_paise")
+  invoiceStatus        CommissionInvoiceStatus @default(READY_TO_INVOICE) @map("invoice_status")
+  invoiceNumber        String?                 @map("invoice_number")
+  invoiceDate          DateTime?               @map("invoice_date")
+  notes                String?                 @db.Text
+  createdByUserId      String                  @map("created_by_user_id")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  job         Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([employerId, selectedAt])
+  @@index([jobId, selectedAt])
+  @@index([invoiceStatus])
+  @@map("commission_records")
 }
 
 model JobSkillProfile {

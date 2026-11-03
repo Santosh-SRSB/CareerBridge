@@ -14,12 +14,17 @@ import {
   JOB_SKILL_SUGGESTIONS,
   JOB_TITLE_SUGGESTIONS,
   JOB_TYPES,
+  OPPORTUNITY_TYPES,
+  PROGRAMME_FEE_TYPES,
   PREFERRED_LANGUAGES,
   WORK_MODES,
   JOB_DESCRIPTION_MAX,
   jobSalaryRequiredError,
+  programmeFeePublishError,
   salaryRangeError,
   type CreateJobPayload,
+  type OpportunityType,
+  type ProgrammeFeeType,
   type ScreeningQuestion,
   type ScreeningQuestionType,
 } from '@careerbridge/shared';
@@ -170,9 +175,21 @@ export default function NewJobPage() {
   const [city, setCity] = useState('Bengaluru');
   const [workMode, setWorkMode] = useState<(typeof WORK_MODES)[number]>('HYBRID');
   const [jobType, setJobType] = useState<(typeof JOB_TYPES)[number]>('FULL_TIME');
+  const [opportunityType, setOpportunityType] = useState<OpportunityType>('JOB');
+  const [programmeDuration, setProgrammeDuration] = useState('');
+  const [eligibilityCriteria, setEligibilityCriteria] = useState('');
+  const [learningOutcomes, setLearningOutcomes] = useState('');
+  const [selectionProcess, setSelectionProcess] = useState('');
+  const [applicationDeadline, setApplicationDeadline] = useState('');
+  const [feeType, setFeeType] = useState<ProgrammeFeeType | ''>('');
+  const [feeAmount, setFeeAmount] = useState('');
+  const [feeMin, setFeeMin] = useState('');
+  const [feeMax, setFeeMax] = useState('');
+  const [feeDisclosureText, setFeeDisclosureText] = useState('');
   const [experience, setExperience] = useState<(typeof JOB_EXPERIENCE_RANGES)[number]>('2–5 yrs');
   const [salaryMin, setSalaryMin] = useState('');
   const [salaryMax, setSalaryMax] = useState('');
+  const isTraining = opportunityType === 'INTERNSHIP_TRAINING';
   const [languages, setLanguages] = useState<string[]>(['English', 'Tamil']);
   const [benefits, setBenefits] = useState<string[]>([]);
   const [benefitDraft, setBenefitDraft] = useState('');
@@ -247,6 +264,23 @@ export default function NewJobPage() {
         if (job.jobType && (JOB_TYPES as readonly string[]).includes(String(job.jobType))) {
           setJobType(job.jobType as (typeof JOB_TYPES)[number]);
         }
+        if (job.opportunityType === 'INTERNSHIP_TRAINING') {
+          setOpportunityType('INTERNSHIP_TRAINING');
+        }
+        setProgrammeDuration(String(job.programmeDuration || ''));
+        setEligibilityCriteria(String(job.eligibilityCriteria || ''));
+        setLearningOutcomes(String(job.learningOutcomes || ''));
+        setSelectionProcess(String(job.selectionProcess || ''));
+        setApplicationDeadline(
+          job.applicationDeadline ? String(job.applicationDeadline).slice(0, 10) : '',
+        );
+        if (job.feeType && (PROGRAMME_FEE_TYPES as readonly string[]).includes(String(job.feeType))) {
+          setFeeType(job.feeType as ProgrammeFeeType);
+        }
+        setFeeAmount(job.feeAmount != null ? String(job.feeAmount) : '');
+        setFeeMin(job.feeMin != null ? String(job.feeMin) : '');
+        setFeeMax(job.feeMax != null ? String(job.feeMax) : '');
+        setFeeDisclosureText(String(job.feeDisclosureText || ''));
         const storedExperience = toJobExperienceRange(job.experience ? String(job.experience) : null);
         if (storedExperience) setExperience(storedExperience);
         if (job.educationMin) {
@@ -335,16 +369,29 @@ export default function NewJobPage() {
       category,
       city: city.trim(),
       workMode,
-      jobType,
+      jobType: isTraining ? 'INTERNSHIP' : jobType,
+      opportunityType,
+      programmeDuration: isTraining ? programmeDuration.trim() || undefined : undefined,
+      eligibilityCriteria: isTraining ? eligibilityCriteria.trim() || undefined : undefined,
+      learningOutcomes: isTraining ? learningOutcomes.trim() || undefined : undefined,
+      selectionProcess: isTraining ? selectionProcess.trim() || undefined : undefined,
+      applicationDeadline: isTraining && applicationDeadline ? applicationDeadline : null,
+      feeType: isTraining && feeType ? feeType : null,
+      feeAmount: isTraining && feeAmount ? Number(feeAmount) : null,
+      feeMin: isTraining && feeMin ? Number(feeMin) : null,
+      feeMax: isTraining && feeMax ? Number(feeMax) : null,
+      feeDisclosureText: isTraining ? feeDisclosureText.trim() || null : null,
       experience,
-      salaryMin: monthlyMin > 0 ? monthlyMin * 12 : undefined,
-      salaryMax: monthlyMax > 0 ? monthlyMax * 12 : undefined,
+      salaryMin: isTraining ? undefined : monthlyMin > 0 ? monthlyMin * 12 : undefined,
+      salaryMax: isTraining ? undefined : monthlyMax > 0 ? monthlyMax * 12 : undefined,
       requiredSkills: skills,
       educationMin,
       description:
         trimmedDescription.length >= 20
           ? trimmedDescription
-          : 'Draft job posting — requirements in progress.',
+          : isTraining
+            ? 'Draft training programme — details in progress.'
+            : 'Draft job posting — requirements in progress.',
       benefits: benefitLines.length ? benefitLines.join('\n') : undefined,
       screeningQuestions: questions
         .map((item) => ({
@@ -464,23 +511,42 @@ export default function NewJobPage() {
 
   function validateStep(nextStep: number) {
     if (nextStep <= 1) return null;
-    if (title.trim().length < 2) return 'Enter a job title.';
+    if (title.trim().length < 2) return isTraining ? 'Enter a programme title.' : 'Enter a job title.';
     if (department.trim().length < 2) return 'Enter the department.';
     if (city.trim().length < 2) return 'Select or enter the job location.';
     if (nextStep <= 2) return null;
     if (!skills.length) return 'At least one skill is required.';
     if (!educationMin.trim()) return 'Education is required.';
     if (nextStep <= 3) return null;
-    const required = jobSalaryRequiredError(salaryMin, salaryMax);
-    if (required) {
-      setSalaryErrors(required.startsWith('Minimum') ? { min: required } : { max: required });
-      return required;
+    if (isTraining) {
+      if (!programmeDuration.trim()) return 'Programme duration is required.';
+      const feeError = programmeFeePublishError({
+        opportunityType,
+        feeType: feeType || null,
+        feeAmount: feeAmount ? Number(feeAmount) : null,
+        feeMin: feeMin ? Number(feeMin) : null,
+        feeMax: feeMax ? Number(feeMax) : null,
+        feeDisclosureText: feeDisclosureText || null,
+      });
+      if (feeError) return feeError;
+    } else {
+      const required = jobSalaryRequiredError(salaryMin, salaryMax);
+      if (required) {
+        setSalaryErrors(required.startsWith('Minimum') ? { min: required } : { max: required });
+        return required;
+      }
+      setSalaryErrors({});
+      const salaryError = salaryRangeError(salaryMin, salaryMax);
+      if (salaryError) return salaryError;
     }
-    setSalaryErrors({});
-    const salaryError = salaryRangeError(salaryMin, salaryMax);
-    if (salaryError) return salaryError;
-    if (!description.trim()) return 'Job description is required.';
-    if (description.trim().length < 20) return 'Add a job description of at least 20 characters.';
+    if (!description.trim()) {
+      return isTraining ? 'Programme description is required.' : 'Job description is required.';
+    }
+    if (description.trim().length < 20) {
+      return isTraining
+        ? 'Add a programme description of at least 20 characters.'
+        : 'Add a job description of at least 20 characters.';
+    }
     if (description.length > JOB_DESCRIPTION_MAX) {
       return `Job description must be ${JOB_DESCRIPTION_MAX} characters or fewer.`;
     }
@@ -704,12 +770,29 @@ export default function NewJobPage() {
                 </div>
                 <div className="ev-span">
                   <ChoiceGrid
-                    label="Job Type"
-                    value={jobType}
-                    onChange={(value) => setJobType(value as (typeof JOB_TYPES)[number])}
-                    options={JOB_TYPES.map((type) => ({ value: type, label: JOB_TYPE_LABELS[type] }))}
+                    label="Opportunity type"
+                    value={opportunityType}
+                    onChange={(value) => {
+                      const next = value as OpportunityType;
+                      setOpportunityType(next);
+                      if (next === 'INTERNSHIP_TRAINING') setJobType('INTERNSHIP');
+                    }}
+                    options={OPPORTUNITY_TYPES.map((type) => ({
+                      value: type,
+                      label: type === 'INTERNSHIP_TRAINING' ? 'Internship / Training programme' : 'Job',
+                    }))}
                   />
                 </div>
+                {!isTraining ? (
+                  <div className="ev-span">
+                    <ChoiceGrid
+                      label="Job Type"
+                      value={jobType}
+                      onChange={(value) => setJobType(value as (typeof JOB_TYPES)[number])}
+                      options={JOB_TYPES.map((type) => ({ value: type, label: JOB_TYPE_LABELS[type] }))}
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -771,41 +854,142 @@ export default function NewJobPage() {
 
             {step === 3 ? (
               <div className="ev-stack">
-                <div className="ev-f ev-stack">
-                  <Input
-                    label="Salary from (₹ / month)"
-                    name="salaryMin"
-                    inputMode="numeric"
-                    placeholder="18000"
-                    required
-                    error={salaryErrors.min}
-                    value={salaryMin}
-                    onChange={(event) => {
-                      setSalaryMin(event.target.value.replace(/\D/g, ''));
-                      setSalaryErrors((prev) => ({ ...prev, min: undefined }));
-                    }}
-                  />
-                  <Input
-                    label="Salary to (₹ / month)"
-                    name="salaryMax"
-                    inputMode="numeric"
-                    placeholder="22000"
-                    required
-                    error={salaryErrors.max}
-                    value={salaryMax}
-                    onChange={(event) => {
-                      setSalaryMax(event.target.value.replace(/\D/g, ''));
-                      setSalaryErrors((prev) => ({ ...prev, max: undefined }));
-                    }}
-                  />
-                </div>
+                {isTraining ? (
+                  <>
+                    <Input
+                      label="Programme duration"
+                      name="programmeDuration"
+                      required
+                      placeholder="e.g. 12 weeks"
+                      value={programmeDuration}
+                      onChange={(event) => setProgrammeDuration(event.target.value)}
+                    />
+                    <Textarea
+                      label="Eligibility criteria"
+                      name="eligibilityCriteria"
+                      placeholder="Who this programme is for…"
+                      value={eligibilityCriteria}
+                      onChange={(event) => setEligibilityCriteria(event.target.value)}
+                    />
+                    <Textarea
+                      label="What candidates will learn"
+                      name="learningOutcomes"
+                      placeholder="Key skills and outcomes…"
+                      value={learningOutcomes}
+                      onChange={(event) => setLearningOutcomes(event.target.value)}
+                    />
+                    <Textarea
+                      label="Selection and enrolment process"
+                      name="selectionProcess"
+                      placeholder="How Kaizentrix reviews applications and enrols candidates…"
+                      value={selectionProcess}
+                      onChange={(event) => setSelectionProcess(event.target.value)}
+                    />
+                    <Input
+                      label="Application closing date"
+                      name="applicationDeadline"
+                      type="date"
+                      value={applicationDeadline}
+                      onChange={(event) => setApplicationDeadline(event.target.value)}
+                    />
+                    <SelectField
+                      label="Programme fee disclosure"
+                      required
+                      value={feeType}
+                      onChange={(value) => setFeeType(value as ProgrammeFeeType)}
+                      options={[
+                        { value: '', label: 'Select fee disclosure' },
+                        { value: 'FIXED', label: 'Fixed fee' },
+                        { value: 'RANGE', label: 'Fee range' },
+                        { value: 'FREE', label: 'No programme fee' },
+                        {
+                          value: 'DISCUSSED_WITH_EMPLOYER',
+                          label: 'Charges discussed by Kaizentrix',
+                        },
+                      ]}
+                    />
+                    {feeType === 'FIXED' ? (
+                      <Input
+                        label="Programme fee (₹)"
+                        name="feeAmount"
+                        inputMode="numeric"
+                        required
+                        value={feeAmount}
+                        onChange={(event) => setFeeAmount(event.target.value.replace(/\D/g, ''))}
+                      />
+                    ) : null}
+                    {feeType === 'RANGE' ? (
+                      <div className="ev-f ev-stack">
+                        <Input
+                          label="Fee from (₹)"
+                          name="feeMin"
+                          inputMode="numeric"
+                          required
+                          value={feeMin}
+                          onChange={(event) => setFeeMin(event.target.value.replace(/\D/g, ''))}
+                        />
+                        <Input
+                          label="Fee to (₹)"
+                          name="feeMax"
+                          inputMode="numeric"
+                          required
+                          value={feeMax}
+                          onChange={(event) => setFeeMax(event.target.value.replace(/\D/g, ''))}
+                        />
+                      </div>
+                    ) : null}
+                    {feeType === 'DISCUSSED_WITH_EMPLOYER' ? (
+                      <Textarea
+                        label="Fee disclosure note"
+                        name="feeDisclosureText"
+                        required
+                        placeholder="Paid training programme; charges will be discussed with shortlisted candidates"
+                        value={feeDisclosureText}
+                        onChange={(event) => setFeeDisclosureText(event.target.value)}
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="ev-f ev-stack">
+                    <Input
+                      label="Salary from (₹ / month)"
+                      name="salaryMin"
+                      inputMode="numeric"
+                      placeholder="18000"
+                      required
+                      error={salaryErrors.min}
+                      value={salaryMin}
+                      onChange={(event) => {
+                        setSalaryMin(event.target.value.replace(/\D/g, ''));
+                        setSalaryErrors((prev) => ({ ...prev, min: undefined }));
+                      }}
+                    />
+                    <Input
+                      label="Salary to (₹ / month)"
+                      name="salaryMax"
+                      inputMode="numeric"
+                      placeholder="22000"
+                      required
+                      error={salaryErrors.max}
+                      value={salaryMax}
+                      onChange={(event) => {
+                        setSalaryMax(event.target.value.replace(/\D/g, ''));
+                        setSalaryErrors((prev) => ({ ...prev, max: undefined }));
+                      }}
+                    />
+                  </div>
+                )}
                 <Textarea
-                  label="Job Description"
+                  label={isTraining ? 'Programme description' : 'Job Description'}
                   name="description"
                   required
                   maxLength={JOB_DESCRIPTION_MAX}
                   hint={`${description.length} / ${JOB_DESCRIPTION_MAX} characters`}
-                  placeholder="Describe responsibilities, day-to-day work, and what success looks like…"
+                  placeholder={
+                    isTraining
+                      ? 'Describe the training programme, delivery mode, and what candidates should expect…'
+                      : 'Describe responsibilities, day-to-day work, and what success looks like…'
+                  }
                   value={description}
                   onChange={(event) => setDescription(event.target.value.slice(0, JOB_DESCRIPTION_MAX))}
                 />
