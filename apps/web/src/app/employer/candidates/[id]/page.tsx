@@ -19,11 +19,10 @@ import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmMod
 import { RejectConfirmModal } from '@/components/employer/RejectConfirmModal';
 import { EmployerAtsPanel } from '@/components/employer/EmployerAtsPanel';
 import { EvAlert, EvApplicationPill, EvAvatar, EvPageHead, EvSkeleton } from '@/components/employer/ui';
-import { pipelineStage } from '@/lib/employer-ui-status';
+import { pipelineLabels, pipelineStage } from '@/lib/employer-ui-status';
 
 const FINAL_APPLICATION_STATUSES = ['HIRED', 'REJECTED', 'WITHDRAWN'];
 const SCHEDULABLE_APPLICATION_STATUSES = ['SHORTLISTED', 'INTERVIEW', 'ON_HOLD'];
-const PIPELINE_LABELS = ['Applied', 'Shortlisted', 'Interview', 'Hired'];
 
 function titleCaseName(value: string) {
   return value
@@ -73,6 +72,7 @@ export default function EmployerCandidateProfilePage() {
   const [modal, setModal] = useState<'SHORTLIST' | 'REJECT' | null>(null);
   const [modalError, setModalError] = useState('');
   const [invited, setInvited] = useState(false);
+  const [selectBusy, setSelectBusy] = useState(false);
 
   async function load() {
     const next = await getEmployerCandidate(params.id, jobId);
@@ -108,6 +108,25 @@ export default function EmployerCandidateProfilePage() {
       toast.error(text);
     } finally {
       setBusy('');
+    }
+  }
+
+  async function selectForTraining() {
+    if (!profile?.application) return;
+    setSelectBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await changeApplicationStatus(profile.application.id, 'SELECT');
+      toast.success('Candidate selected after enrolment / offline payment');
+      setMessage('Candidate selected. You can add commission from the admin panel.');
+      await load().catch(() => undefined);
+    } catch (err) {
+      const text = userFacingError(err, 'select candidate');
+      setError(text);
+      toast.error(text);
+    } finally {
+      setSelectBusy(false);
     }
   }
 
@@ -166,7 +185,13 @@ export default function EmployerCandidateProfilePage() {
   const locationLine = profile ? formatLocation(profile.city, profile.state) : '';
 
   const application = profile?.application ?? null;
-  const stage = pipelineStage(application?.status);
+  const isTraining = application?.opportunityType === 'INTERNSHIP_TRAINING';
+  const stage = pipelineStage(application?.status, { opportunityType: application?.opportunityType });
+  const statusSteps = pipelineLabels(application?.opportunityType);
+  const canReject =
+    application &&
+    !FINAL_APPLICATION_STATUSES.includes(application.status) &&
+    !(isTraining && application.status === 'SELECTED');
 
   return (
     <EmployerShellFallback title="Candidate profile">
@@ -230,7 +255,7 @@ export default function EmployerCandidateProfilePage() {
                   </p>
                 ) : (
                   <div className="ev-stepper" aria-label={`Current stage: ${application.status}`}>
-                    {PIPELINE_LABELS.map((label, index) => (
+                    {statusSteps.map((label, index) => (
                       <span key={label} className={index <= stage ? 'done' : undefined}>
                         {label}
                       </span>
@@ -256,7 +281,10 @@ export default function EmployerCandidateProfilePage() {
                   <div>
                     <small>CURRENT STATUS</small>
                     <b>
-                      <EvApplicationPill status={application.status} />
+                      <EvApplicationPill
+                        status={application.status}
+                        opportunityType={application.opportunityType}
+                      />
                     </b>
                   </div>
                 ) : null}
@@ -314,12 +342,32 @@ export default function EmployerCandidateProfilePage() {
                     Shortlist
                   </button>
                 ) : null}
-                {application?.status === 'SHORTLISTED' ? (
+                {application?.status === 'SHORTLISTED' ||
+                (isTraining && application?.status === 'INTERVIEW') ? (
                   <span className="ev-btn ev-btn--ghost ev-btn--static" aria-label="Already shortlisted">
                     Shortlisted ✓
                   </span>
                 ) : null}
-                {application && SCHEDULABLE_APPLICATION_STATUSES.includes(application.status) ? (
+                {isTraining &&
+                application &&
+                (application.status === 'SHORTLISTED' || application.status === 'INTERVIEW') ? (
+                  <button
+                    type="button"
+                    className="ev-btn"
+                    disabled={busy !== '' || selectBusy}
+                    onClick={() => void selectForTraining()}
+                  >
+                    {selectBusy ? 'Selecting…' : 'Select (after offline payment)'}
+                  </button>
+                ) : null}
+                {application?.status === 'SELECTED' && isTraining ? (
+                  <span className="ev-btn ev-btn--ghost ev-btn--static" aria-label="Already selected">
+                    Selected ✓
+                  </span>
+                ) : null}
+                {!isTraining &&
+                application &&
+                SCHEDULABLE_APPLICATION_STATUSES.includes(application.status) ? (
                   <Link
                     href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(application.id)}&jobId=${encodeURIComponent(application.jobId)}`}
                     className="ev-btn ev-btn--ghost"
@@ -337,7 +385,7 @@ export default function EmployerCandidateProfilePage() {
                     {busy === 'RESUME' ? 'Opening…' : 'Download resume'}
                   </button>
                 ) : null}
-                {application && !FINAL_APPLICATION_STATUSES.includes(application.status) ? (
+                {canReject ? (
                   <button
                     type="button"
                     className="ev-btn ev-btn--danger"

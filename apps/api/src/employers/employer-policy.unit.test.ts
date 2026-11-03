@@ -121,6 +121,7 @@ describe('Application status transitions (existing status model)', () => {
   it('pipeline statuses can move, same-status is not an error', () => {
     assert.equal(applicationTransitionError('APPLIED', 'SHORTLISTED'), null);
     assert.equal(applicationTransitionError('SHORTLISTED', 'UNDER_REVIEW'), null);
+    assert.equal(applicationTransitionError('SHORTLISTED', 'SELECTED'), null);
     assert.equal(applicationTransitionError('INTERVIEW', 'HIRED'), null);
     assert.equal(applicationTransitionError('SELECTED', 'REJECTED'), null);
     assert.equal(applicationTransitionError('HIRED', 'HIRED'), null);

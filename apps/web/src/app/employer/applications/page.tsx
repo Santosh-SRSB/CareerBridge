@@ -35,7 +35,8 @@ const APPLICATION_SORT_VALUE: Record<ApplicationSortKey, (app: EmployerApplicati
 function applicationStatusLabel(status: string, opportunityType?: string | null) {
   if (status === 'SHORTLISTED') return 'Shortlisted';
   if (status === 'INTERVIEW') {
-    return opportunityType === 'INTERNSHIP_TRAINING' ? 'Contacted' : 'Interview';
+    // Legacy training rows may still be INTERVIEW; treat as shortlisted in the two-step flow.
+    return opportunityType === 'INTERNSHIP_TRAINING' ? 'Shortlisted' : 'Interview';
   }
   if (status === 'APPLIED') return 'Applied';
   if (status === 'UNDER_REVIEW' || status === 'REVIEW') return 'Under Review';
