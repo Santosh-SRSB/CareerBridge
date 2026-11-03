@@ -21,6 +21,7 @@ import { requestOtp } from '@/lib/api';
 import { saveOtpFlow } from '@/lib/otp-flow';
 import { clearPendingPassword, getPendingPassword, setPendingPassword } from '@/lib/pending-password';
 import { clearRegistrationDraft, loadRegistrationDraft, saveRegistrationDraft } from '@/lib/registration-draft';
+import { loadReferralCode, saveReferralCode } from '@/lib/referral-attr';
 import { authErrorMessage } from '@/lib/auth-errors';
 import {
   clearFirebaseOtp,
@@ -48,8 +49,12 @@ const FIELD_ORDER: Array<[Field, string]> = [
   ['terms', 'cand-terms'],
 ];
 
-export function RegistrationForm() {
+export function RegistrationForm({ referralCode }: { referralCode?: string } = {}) {
   const router = useRouter();
+  const resolvedReferral =
+    (referralCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 30) ||
+    loadReferralCode() ||
+    '';
   const [dial, setDial] = useState<string>(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
@@ -156,6 +161,11 @@ export function RegistrationForm() {
     const phone = toE164(dial, national);
     const trimmedEmail = email.trim();
     const [locationState, locationCity] = location ? location.split('|') : ['', ''];
+    const code =
+      resolvedReferral ||
+      loadReferralCode() ||
+      '';
+    if (code) saveReferralCode(code);
     setLoading(true);
     try {
       const result = await requestOtp({
@@ -171,6 +181,7 @@ export function RegistrationForm() {
         preferredLanguage: 'English',
         password,
         whatsappOptIn,
+        ...(code ? { referralCode: code } : {}),
         ...(replacesRequestId.current ? { replacesRequestId: replacesRequestId.current } : {}),
       });
 

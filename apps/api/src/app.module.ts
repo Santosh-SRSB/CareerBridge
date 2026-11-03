@@ -27,6 +27,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
 import { RetentionModule } from './retention/retention.module';
+import { ReferralsModule } from './referrals/referrals.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
 import { PlatformController } from './platform/platform.controller';
@@ -71,6 +72,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     NotificationsModule,
     TestimonialsModule,
     RetentionModule,
+    ReferralsModule,
   ],
   controllers: [HealthController, PlatformController],
   providers: [

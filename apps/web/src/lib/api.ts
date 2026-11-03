@@ -2181,6 +2181,138 @@ export async function reviewAdminTestimonial(
   });
 }
 
+export type ReferralDashboard = {
+  referralCode: string;
+  sharePath: string;
+  referrerKind: 'FRESHER' | 'EXPERIENCED';
+  rules: {
+    fresherBatchSize: number;
+    experiencedBatchSize: number;
+    pointsPerBatch: number;
+    pointsToPayoutEligible: number;
+  };
+  stats: {
+    approvedReferrals: number;
+    pointsBalance: number;
+    pointsToPayoutEligible: number;
+    referralsNeededForNextBatch: number;
+    payoutEligible: boolean;
+  };
+  referrals: Array<{
+    id: string;
+    status: string;
+    submittedAt: string;
+    approvedAt: string | null;
+    referredName: string;
+    referredPhoneMasked: string;
+  }>;
+  ledger: Array<{
+    id: string;
+    type: string;
+    points: number;
+    reference: string | null;
+    notes: string | null;
+    createdAt: string;
+  }>;
+  payouts: Array<{
+    id: string;
+    upiId: string;
+    pointsAtRequest: number;
+    status: string;
+    paymentReference: string | null;
+    paidAt: string | null;
+    createdAt: string;
+  }>;
+  pendingPayout: {
+    id: string;
+    upiId: string;
+    pointsAtRequest: number;
+    createdAt: string;
+  } | null;
+};
+
+export async function getReferralDashboard() {
+  return request<ReferralDashboard>('/referrals/me');
+}
+
+export async function submitReferralPayout(upiId: string) {
+  return request('/referrals/me/payout', {
+    method: 'POST',
+    body: JSON.stringify({ upiId }),
+  });
+}
+
+export async function validateReferralCode(code: string) {
+  return request<{ valid: boolean; referralCode?: string; referrerName?: string }>(
+    `/referrals/validate/${encodeURIComponent(code)}`,
+  );
+}
+
+export type AdminReferralsBoard = {
+  campaign: {
+    id: string;
+    name: string;
+    fresherBatchSize: number;
+    experiencedBatchSize: number;
+    pointsPerBatch: number;
+    pointsToPayoutEligible: number;
+    status: string;
+  };
+  referrals: Array<{
+    id: string;
+    status: string;
+    referralCode: string;
+    submittedAt: string;
+    approvedAt: string | null;
+    fraudFlag: boolean;
+    rejectionReason: string | null;
+    referrer: { id: string; name: string; phone: string | null; kind: string };
+    referred: { id: string; name: string; phone: string | null };
+    rewardStatus: string | null;
+  }>;
+  payouts: Array<{
+    id: string;
+    status: string;
+    upiId: string;
+    pointsAtRequest: number;
+    paymentReference: string | null;
+    adminNote: string | null;
+    paidAt: string | null;
+    createdAt: string;
+    referrer: { id: string; name: string; phone: string | null; email: string | null };
+  }>;
+};
+
+export async function getAdminReferrals(params?: { status?: string; payoutStatus?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set('status', params.status);
+  if (params?.payoutStatus) qs.set('payoutStatus', params.payoutStatus);
+  const q = qs.toString() ? `?${qs}` : '';
+  return request<AdminReferralsBoard>(`/admin/referrals${q}`);
+}
+
+export async function reviewAdminReferral(
+  id: string,
+  action: 'APPROVE' | 'REJECT' | 'HOLD',
+  reason?: string,
+) {
+  return request(`/admin/referrals/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify({ action, reason }),
+  });
+}
+
+export async function reviewAdminReferralPayout(
+  id: string,
+  action: 'PAID' | 'REJECT',
+  opts?: { paymentReference?: string; adminNote?: string },
+) {
+  return request(`/admin/referrals/payouts/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify({ action, ...opts }),
+  });
+}
+
 export async function createAdminSkill(payload: { name: string; category: string; aliases?: string }) {
   return request('/admin/skills', {
     method: 'POST',

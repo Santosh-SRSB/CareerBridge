@@ -88,7 +88,17 @@ async function harness(opts: { userType?: string; adminStatus?: string; withAdmi
         JWT_REFRESH_EXPIRES: '1d',
       })[key],
   };
-  const auth = new AuthService(prisma as never, new JwtService({}), config as never, {} as never, {} as never);
+  const auth = new AuthService(
+    prisma as never,
+    new JwtService({}),
+    config as never,
+    {} as never,
+    {} as never,
+    {
+      attributeRegistration: async () => null,
+      ensureReferralCodeForCandidate: async () => null,
+    } as never,
+  );
   const service = new AdminService(prisma as never, auth, {} as never, {} as never, {} as never);
   return { service, auth, admin, user, other, audits, adminLookups, adminUpdates };
 }

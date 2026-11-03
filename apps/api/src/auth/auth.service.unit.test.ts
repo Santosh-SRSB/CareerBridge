@@ -104,7 +104,18 @@ function harness(
       sentOtps.push({ email: to, code });
     },
   };
-  const svc = new AuthService(prisma, jwt as any, config as any, firebase as any, email as any);
+  const referrals = {
+    attributeRegistration: async () => null,
+    ensureReferralCodeForCandidate: async () => ({ referralCode: 'CBTEST' }),
+  };
+  const svc = new AuthService(
+    prisma,
+    jwt as any,
+    config as any,
+    firebase as any,
+    email as any,
+    referrals as any,
+  );
   return { svc, otpRequests, updateManyCalls, createdUsers, refreshTokens, sentOtps };
 }
 

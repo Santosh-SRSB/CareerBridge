@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -8,6 +8,7 @@ import { FirebaseService } from './firebase.service';
 import { EmailService } from './email.service';
 import { JwtStrategy } from './jwt.strategy';
 import { requireJwtAccessSecret } from './jwt-secrets';
+import { ReferralsModule } from '../referrals/referrals.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { requireJwtAccessSecret } from './jwt-secrets';
         signOptions: { expiresIn: config.get('JWT_ACCESS_EXPIRES') || '7d' },
       }),
     }),
+    forwardRef(() => ReferralsModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, FirebaseService, EmailService, JwtStrategy],

@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { usePathname, useRouter } from 'next/navigation';
-import { listApplications, logout, getCandidateMe } from '@/lib/api';
+import { listApplications, logout, getCandidateMe, getReferralDashboard } from '@/lib/api';
 import { getStoredUser } from '@/lib/session';
+import { subscribeReferralPoints } from '@/lib/referral-attr';
 import {
   cacheBustedPhotoSrc,
   displayableCandidatePhotoUrl,
@@ -21,6 +22,7 @@ export type CandidateTab =
   | 'jobs'
   | 'applications'
   | 'interviews'
+  | 'refer'
   | 'profile'
   | 'resumes'
   | 'ats';
@@ -112,6 +114,23 @@ const NAV_INTERVIEWS: NavItem = {
   ),
 };
 
+const NAV_REFER: NavItem = {
+  id: 'refer',
+  label: 'Refer',
+  href: '/refer-earn',
+  icon: (active) => (
+    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" strokeWidth="1.85" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"
+      />
+      <circle cx="9" cy="7" r="4" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 8v6M16 11h6" />
+    </svg>
+  ),
+};
+
 const NAV_RESUMES: NavItem = {
   id: 'resumes',
   label: 'Resumes',
@@ -167,6 +186,8 @@ function DesktopNavLink({
   active,
   highlighted,
   badge,
+  badgeTone = 'alert',
+  title,
   onClick,
   onMouseEnter,
   itemRef,
@@ -175,27 +196,37 @@ function DesktopNavLink({
   label: string;
   active: boolean;
   highlighted: boolean;
-  badge?: number;
+  badge?: number | null;
+  badgeTone?: 'alert' | 'points';
+  title?: string;
   onClick?: () => void;
   onMouseEnter?: () => void;
   itemRef?: (node: HTMLAnchorElement | null) => void;
 }) {
   const lit = highlighted;
+  const showBadge =
+    typeof badge === 'number' && (badgeTone === 'points' || badge > 0);
   return (
     <Link
       href={href}
       ref={itemRef}
+      title={title}
       onClick={onClick}
       onMouseEnter={onMouseEnter}
-      className={`relative z-[1] inline-flex h-full items-center px-3 text-[15px] text-white transition-colors hover:bg-white/10 lg:px-5 lg:text-base ${
+      className={`relative z-[1] inline-flex h-full shrink-0 items-center whitespace-nowrap px-2.5 text-[13px] text-white transition-colors hover:bg-white/10 lg:px-3.5 lg:text-[15px] ${
         lit ? 'font-bold' : 'font-semibold'
       }`}
       aria-current={active ? 'page' : undefined}
     >
       {label}
-      {typeof badge === 'number' && badge > 0 ? (
-        <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c2410c] px-1 text-[10px] font-bold text-white">
-          {badge > 9 ? '9+' : badge}
+      {showBadge && badgeTone === 'points' ? (
+        <span className="ml-1.5 text-[11px] font-extrabold tabular-nums text-white/80 lg:text-xs">
+          · {badge}
+        </span>
+      ) : null}
+      {showBadge && badgeTone === 'alert' ? (
+        <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c2410c] px-1.5 text-[10px] font-bold text-white">
+          {badge! > 9 ? '9+' : badge}
         </span>
       ) : null}
     </Link>
@@ -208,6 +239,7 @@ export const CANDIDATE_NAV_ITEMS: NavItem[] = [
   NAV_JOBS,
   NAV_APPLICATIONS,
   NAV_INTERVIEWS,
+  NAV_REFER,
   NAV_RESUMES,
   NAV_ATS,
   NAV_PROFILE,
@@ -215,6 +247,7 @@ export const CANDIDATE_NAV_ITEMS: NavItem[] = [
 
 const ACCOUNT_MENU_LINKS = [
   { href: '/profile', label: 'Profile' },
+  { href: '/refer-earn', label: 'Refer & Earn' },
   { href: '/jobs/saved', label: 'Saved jobs' },
   { href: '/resumes', label: 'View Resume' },
   { href: '/ats', label: 'ATS Score' },
@@ -232,6 +265,7 @@ const DESKTOP_NAV_CORE: NavItem[] = [
   NAV_JOBS,
   NAV_APPLICATIONS,
   NAV_INTERVIEWS,
+  NAV_REFER,
 ];
 
 function resolveTab(pathname: string, activeTab?: CandidateTab): CandidateTab {
@@ -239,6 +273,7 @@ function resolveTab(pathname: string, activeTab?: CandidateTab): CandidateTab {
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/applications')) return 'applications';
   if (pathname.startsWith('/interviews')) return 'interviews';
+  if (pathname.startsWith('/refer-earn')) return 'refer';
   if (pathname.startsWith('/resumes')) return 'resumes';
   if (pathname.startsWith('/ats')) return 'ats';
   if (pathname.startsWith('/passport') || pathname.startsWith('/profile')) return 'profile';
@@ -281,6 +316,7 @@ export function CandidateAppShell({
   /** Auto-swiping Resume ⇄ ATS in the mobile last slot */
   const [mobileCarousel, setMobileCarousel] = useState<'resumes' | 'ats'>('resumes');
   const [carouselTick, setCarouselTick] = useState(0);
+  const [referralPoints, setReferralPoints] = useState<number | null>(null);
   const deskItemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
 
   useEffect(() => {
@@ -375,6 +411,24 @@ export function CandidateAppShell({
       });
     return () => {
       active = false;
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    let active = true;
+    getReferralDashboard()
+      .then((board) => {
+        if (active) setReferralPoints(board.stats.pointsBalance);
+      })
+      .catch(() => {
+        if (active) setReferralPoints(null);
+      });
+    const stop = subscribeReferralPoints((points) => {
+      if (active) setReferralPoints(points);
+    });
+    return () => {
+      active = false;
+      stop();
     };
   }, [pathname]);
 
@@ -513,6 +567,16 @@ export function CandidateAppShell({
             ) : null}
           </div>
           <div className="relative flex shrink-0 items-center gap-2">
+            {referralPoints != null ? (
+              <Link
+                href="/refer-earn"
+                className="inline-flex h-8 max-w-[4.5rem] items-center justify-center rounded-full border border-white/45 bg-white/10 px-2 text-[11px] font-extrabold tabular-nums text-white"
+                aria-label={`${referralPoints} referral points`}
+                title="Refer & Earn points"
+              >
+                {referralPoints} pts
+              </Link>
+            ) : null}
             <SupportIconLink className={`${HEADER_ICON_LINK} h-9 w-9`} iconSize={18} />
             <NotificationBell variant="candidate-pill" className="!h-9 !w-9" />
             <button
@@ -540,7 +604,7 @@ export function CandidateAppShell({
         </div>
 
         {/* Desktop: single full-width rectangle — logo | text links | utilities */}
-        <div className="relative mx-auto hidden h-[68px] w-full max-w-[1200px] items-center justify-between gap-6 px-6 md:flex lg:px-8">
+        <div className="relative mx-auto hidden h-[68px] w-full max-w-[1280px] items-center justify-between gap-4 px-5 md:flex lg:gap-6 lg:px-8">
           <div className="flex min-w-0 shrink-0 items-center gap-3">
             {showBack ? (
               <button
@@ -559,7 +623,7 @@ export function CandidateAppShell({
 
           <nav
             ref={deskNavRef}
-            className="cb-desk-nav absolute inset-y-0 left-1/2 flex h-full -translate-x-1/2 items-stretch gap-1 lg:gap-2"
+            className="cb-desk-nav absolute inset-y-0 left-1/2 flex h-full -translate-x-1/2 items-stretch gap-0.5 lg:gap-1"
             onMouseLeave={() => setHoverKey(defaultHoverKey)}
           >
             <span
@@ -578,9 +642,17 @@ export function CandidateAppShell({
                   key={item.id}
                   href={item.href}
                   label={item.label}
+                  title={item.id === 'refer' ? 'Refer & Earn' : undefined}
                   active={isActive}
                   highlighted={hoverKey === item.id}
-                  badge={item.id === 'applications' ? appsCount : undefined}
+                  badge={
+                    item.id === 'applications'
+                      ? appsCount
+                      : item.id === 'refer'
+                        ? referralPoints
+                        : undefined
+                  }
+                  badgeTone={item.id === 'refer' ? 'points' : 'alert'}
                   onMouseEnter={() => setHoverKey(item.id)}
                   itemRef={(node) => {
                     deskItemRefs.current[item.id] = node;
@@ -592,7 +664,7 @@ export function CandidateAppShell({
             {(() => {
               const carouselActive = currentTab === 'resumes' || currentTab === 'ats';
               const carouselLit = hoverKey === 'carousel';
-              const carouselLabel = mobileCarousel === 'ats' ? 'ATS' : 'View Resume';
+              const carouselLabel = mobileCarousel === 'ats' ? 'ATS' : 'Resume';
               return (
                 <Link
                   href={mobileCarouselItem.href}
@@ -601,7 +673,7 @@ export function CandidateAppShell({
                   }}
                   onClick={onMobileResumeAtsClick}
                   onMouseEnter={() => setHoverKey('carousel')}
-                  className={`relative z-[1] inline-flex h-full items-center px-3 text-[15px] text-white transition-colors hover:bg-white/10 lg:px-5 lg:text-base ${
+                  className={`relative z-[1] inline-flex h-full shrink-0 items-center whitespace-nowrap px-2.5 text-[13px] text-white transition-colors hover:bg-white/10 lg:px-3.5 lg:text-[15px] ${
                     carouselLit ? 'font-bold' : 'font-semibold'
                   }`}
                   aria-current={carouselActive ? 'page' : undefined}
@@ -619,7 +691,7 @@ export function CandidateAppShell({
             })()}
           </nav>
 
-          <div className="relative flex shrink-0 items-center gap-3">
+          <div className="relative flex shrink-0 items-center gap-2.5">
             <SupportIconLink className={`${HEADER_ICON_LINK} h-10 w-10`} iconSize={20} />
             <NotificationBell variant="candidate-pill" className="!h-10 !w-10" />
             <button
