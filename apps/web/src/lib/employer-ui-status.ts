@@ -27,18 +27,28 @@ function titleCase(raw: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+function isTrainingOpportunity(opportunityType?: string | null) {
+  return String(opportunityType || '').toUpperCase() === 'INTERNSHIP_TRAINING';
+}
+
 export function applicationStatusMeta(
   status: string | null | undefined,
   options?: { opportunityType?: string | null },
 ) {
   const key = String(status || '').toUpperCase();
-  if (
-    key === 'INTERVIEW' &&
-    String(options?.opportunityType || '').toUpperCase() === 'INTERNSHIP_TRAINING'
-  ) {
-    return { label: 'Contacted', tone: 'amber' as EvTone };
+  // Legacy training apps may still sit on INTERVIEW; show Shortlisted so the flow reads as two steps.
+  if (isTrainingOpportunity(options?.opportunityType) && key === 'INTERVIEW') {
+    return { label: 'Shortlisted', tone: 'green' as EvTone };
   }
   return APPLICATION_META[key] || { label: key ? titleCase(key) : '—', tone: 'default' as EvTone };
+}
+
+/** Stepper labels: training is Applied → Shortlisted → Selected only. */
+export function pipelineLabels(opportunityType?: string | null): string[] {
+  if (isTrainingOpportunity(opportunityType)) {
+    return ['Applied', 'Shortlisted', 'Selected'];
+  }
+  return ['Applied', 'Shortlisted', 'Interview', 'Hired'];
 }
 
 export function interviewStatusMeta(status: string | null | undefined) {
@@ -56,13 +66,21 @@ export function jobStatusChip(status: string | null | undefined): '' | 'active' 
   return '';
 }
 
-/** Pipeline progress (0–3) for the mini stepper: Applied → Shortlisted → Interview → Hired. */
-export function pipelineStage(status: string | null | undefined): number {
+/** Pipeline progress for the mini stepper. Training: 0–2; jobs: 0–3. */
+export function pipelineStage(
+  status: string | null | undefined,
+  options?: { opportunityType?: string | null },
+): number {
   const key = String(status || '').toUpperCase();
+  if (key === 'REJECTED' || key === 'WITHDRAWN') return -1;
+  if (isTrainingOpportunity(options?.opportunityType)) {
+    if (key === 'SELECTED' || key === 'HIRED') return 2;
+    if (key === 'SHORTLISTED' || key === 'INTERVIEW') return 1;
+    return 0;
+  }
   if (key === 'HIRED' || key === 'SELECTED') return 3;
   if (key === 'INTERVIEW') return 2;
   if (key === 'SHORTLISTED') return 1;
-  if (key === 'REJECTED' || key === 'WITHDRAWN') return -1;
   return 0;
 }
 

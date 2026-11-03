@@ -32,7 +32,7 @@ import {
 } from '@/components/employer/ui';
 import { PROFILE_MATCH_LABEL, atsMatchBandLabel, toAtsMatchBreakdown } from '@careerbridge/shared';
 
-const ACTIONS = [
+const JOB_ACTIONS = [
   { value: 'REVIEW', label: 'Review' },
   { value: 'SHORTLIST', label: 'Shortlist' },
   { value: 'INTERVIEW', label: 'Interview' },
@@ -41,9 +41,17 @@ const ACTIONS = [
   { value: 'REJECT', label: 'Not selected' },
 ] as const;
 
-function actionLabel(value: (typeof ACTIONS)[number]['value'], opportunityType?: string | null) {
-  if (value === 'INTERVIEW' && opportunityType === 'INTERNSHIP_TRAINING') return 'Contacted';
-  return ACTIONS.find((item) => item.value === value)?.label || value;
+/** Training programmes: Shortlist → Select only (Select after offline fee / enrolment). */
+const TRAINING_ACTIONS = [
+  { value: 'SHORTLIST', label: 'Shortlist' },
+  { value: 'SELECT', label: 'Select' },
+  { value: 'REJECT', label: 'Not selected' },
+] as const;
+
+type MoveAction = (typeof JOB_ACTIONS)[number]['value'];
+
+function moveActionsFor(opportunityType?: string | null) {
+  return opportunityType === 'INTERNSHIP_TRAINING' ? TRAINING_ACTIONS : JOB_ACTIONS;
 }
 
 const OUTCOMES = [
@@ -128,6 +136,11 @@ export default function EmployerJobApplicationsPage() {
     });
   }, [items, matchByApp]);
 
+  const opportunityType =
+    typeof jobDetail?.opportunityType === 'string' ? jobDetail.opportunityType : null;
+  const isTrainingJob = opportunityType === 'INTERNSHIP_TRAINING';
+  const moveActions = moveActionsFor(opportunityType);
+
   async function load() {
     const job = await getEmployerJob(params.id).catch(() => null);
     if (job) {
@@ -186,7 +199,7 @@ export default function EmployerJobApplicationsPage() {
     }
   }
 
-  async function onMove(applicationId: string, action: (typeof ACTIONS)[number]['value']) {
+  async function onMove(applicationId: string, action: MoveAction) {
     setError('');
     setMessage('');
     try {
@@ -196,6 +209,8 @@ export default function EmployerJobApplicationsPage() {
         setMessage('Candidate hired.');
       } else if (action === 'SHORTLIST') {
         setMessage('Candidate has been shortlisted.');
+      } else if (action === 'SELECT' && isTrainingJob) {
+        setMessage('Candidate selected after enrolment / offline payment.');
       }
       await load();
     } catch (err) {
@@ -494,18 +509,27 @@ export default function EmployerJobApplicationsPage() {
                         >
                           View resume
                         </button>
-                        <Link
-                          href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(item.id)}&jobId=${encodeURIComponent(params.id)}`}
-                          className="ev-btn ev-btn--sm"
-                        >
-                          Schedule interview
-                        </Link>
+                        {!isTrainingJob ? (
+                          <Link
+                            href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(item.id)}&jobId=${encodeURIComponent(params.id)}`}
+                            className="ev-btn ev-btn--sm"
+                          >
+                            Schedule interview
+                          </Link>
+                        ) : null}
                       </nav>
 
                       <section className="ev-pipe" aria-label="Move candidate">
-                        <h4 className="ev-pipe__label">Move candidate</h4>
+                        <h4 className="ev-pipe__label">
+                          {isTrainingJob ? 'Training enrolment' : 'Move candidate'}
+                        </h4>
+                        {isTrainingJob ? (
+                          <p className="ev-sub" style={{ margin: '0 0 0.5rem' }}>
+                            Shortlist first, then Select after offline payment / enrolment.
+                          </p>
+                        ) : null}
                         <div className="ev-pipe__track" role="group">
-                          {ACTIONS.map((action) => {
+                          {moveActions.map((action) => {
                             const active =
                               (action.value === 'REVIEW' && item.status === 'UNDER_REVIEW') ||
                               (action.value === 'SHORTLIST' && item.status === 'SHORTLISTED') ||
@@ -521,33 +545,30 @@ export default function EmployerJobApplicationsPage() {
                                 aria-pressed={active}
                                 onClick={() => void onMove(item.id, action.value)}
                               >
-                                {actionLabel(
-                                  action.value,
-                                  typeof jobDetail?.opportunityType === 'string'
-                                    ? jobDetail.opportunityType
-                                    : null,
-                                )}
+                                {action.label}
                               </button>
                             );
                           })}
                         </div>
                       </section>
 
-                      <section className="ev-pipe ev-pipe--outcome" aria-label="Hiring outcome">
-                        <h4 className="ev-pipe__label">Outcome</h4>
-                        <div className="ev-pipe__track" role="group">
-                          {OUTCOMES.map((outcome) => (
-                            <button
-                              key={outcome.value}
-                              type="button"
-                              className="ev-chipbtn"
-                              onClick={() => void onOutcome(item.id, outcome)}
-                            >
-                              {outcome.label}
-                            </button>
-                          ))}
-                        </div>
-                      </section>
+                      {!isTrainingJob ? (
+                        <section className="ev-pipe ev-pipe--outcome" aria-label="Hiring outcome">
+                          <h4 className="ev-pipe__label">Outcome</h4>
+                          <div className="ev-pipe__track" role="group">
+                            {OUTCOMES.map((outcome) => (
+                              <button
+                                key={outcome.value}
+                                type="button"
+                                className="ev-chipbtn"
+                                onClick={() => void onOutcome(item.id, outcome)}
+                              >
+                                {outcome.label}
+                              </button>
+                            ))}
+                          </div>
+                        </section>
+                      ) : null}
                     </div>
                   </div>
                 </article>

@@ -1407,6 +1407,7 @@ export type EmployerCandidatePassport = {
     status: string;
     jobId: string;
     jobTitle: string;
+    opportunityType?: OpportunityType | string;
   } | null;
   match: JobMatch | null;
   view: 'CONTROLLED_PASSPORT';

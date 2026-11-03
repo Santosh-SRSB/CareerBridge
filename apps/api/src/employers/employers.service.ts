@@ -1524,7 +1524,7 @@ export class EmployersService {
 
   async candidateView(userId: string, candidateId: string, jobId?: string) {
     const employer = await this.requireEmployer(userId);
-    const appliedInclude = { job: { select: { id: true, title: true } } } as const;
+    const appliedInclude = { job: { select: { id: true, title: true, opportunityType: true } } } as const;
     const appliedForJob = jobId
       ? await this.prisma.application.findFirst({
           where: { candidateId, jobId, job: { employerId: employer.id } },
@@ -1623,6 +1623,7 @@ export class EmployersService {
             status: applied.status,
             jobId: applied.job.id,
             jobTitle: applied.job.title,
+            opportunityType: applied.job.opportunityType,
           }
         : null,
       match,

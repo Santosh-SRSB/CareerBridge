@@ -7,6 +7,7 @@ import {
   jobStatusChip,
   matchBarTone,
   matchPillTone,
+  pipelineLabels,
   pipelineStage,
 } from './employer-ui-status';
 
@@ -41,6 +42,19 @@ test('pipeline stage drives the mini progress bar', () => {
   assert.equal(pipelineStage('INTERVIEW'), 2);
   assert.equal(pipelineStage('HIRED'), 3);
   assert.equal(pipelineStage('REJECTED'), -1);
+});
+
+test('training programmes use a Shortlist → Select pipeline', () => {
+  const training = { opportunityType: 'INTERNSHIP_TRAINING' };
+  assert.deepEqual(pipelineLabels('INTERNSHIP_TRAINING'), ['Applied', 'Shortlisted', 'Selected']);
+  assert.equal(pipelineStage('APPLIED', training), 0);
+  assert.equal(pipelineStage('SHORTLISTED', training), 1);
+  assert.equal(pipelineStage('INTERVIEW', training), 1);
+  assert.equal(pipelineStage('SELECTED', training), 2);
+  assert.deepEqual(applicationStatusMeta('INTERVIEW', training), {
+    label: 'Shortlisted',
+    tone: 'green',
+  });
 });
 
 test('match tones and initials', () => {
