@@ -1,4 +1,4 @@
-/* Refer & Earn — clean royal-blue dashboard theme */
+/* Refer & Earn — royal-blue dashboard (screenshot layout) */
 
 .re-page {
   --navy: #0f172a;
@@ -10,7 +10,8 @@
   --muted: #64748b;
   --ink: #0f172a;
   --card: #ffffff;
-  --page-bg: #eef2f7;
+  --ok: #059669;
+  --ok-soft: #d1fae5;
   --sans: var(--font-manrope), "Manrope", "Segoe UI", sans-serif;
   --display: var(--font-space-grotesk), "Space Grotesk", "Segoe UI", sans-serif;
   --mono: var(--font-space-mono), "Space Mono", ui-monospace, monospace;
@@ -65,73 +66,149 @@
 }
 
 .re-points {
-  min-width: 9.75rem;
-  padding: 0.95rem 1.05rem;
-  border-radius: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 15.5rem;
+  padding: 0.95rem 1.1rem;
+  border-radius: 0.95rem;
   background: var(--blue);
   color: #fff;
   box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
 }
 
-.re-points span,
-.re-points small {
+.re-ring {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.re-ring strong {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.re-points__meta span,
+.re-points__meta small {
   display: block;
   font-size: 0.72rem;
   opacity: 0.88;
 }
 
-.re-points strong {
+.re-points__meta strong {
   display: block;
-  margin: 0.15rem 0 0.55rem;
+  margin: 0.2rem 0 0.25rem;
   font-family: var(--display);
-  font-size: 2rem;
-  line-height: 1;
+  font-size: 1.15rem;
+  line-height: 1.1;
   font-weight: 700;
 }
 
-.re-bar {
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
-  overflow: hidden;
-  margin-bottom: 0.45rem;
+.re-tracks {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  grid-template-columns: 1fr;
 }
 
-.re-bar > i {
+@media (min-width: 900px) {
+  .re-tracks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.re-track {
+  padding: 1rem 1.05rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.re-track--active {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18), 0 8px 20px rgba(37, 99, 235, 0.08);
+}
+
+.re-track__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.re-track h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--display);
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+}
+
+.re-track__badge {
+  font-style: normal;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--blue-deep);
+  background: var(--blue-pill);
+  border-radius: 999px;
+  padding: 0.22rem 0.5rem;
+}
+
+.re-track__pts {
+  font-family: var(--display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--blue);
+  white-space: nowrap;
+}
+
+.re-track p {
+  margin: 0.55rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.re-track__prog {
+  margin-top: 0.75rem;
+}
+
+.re-track__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  overflow: hidden;
+}
+
+.re-track__bar > i {
   display: block;
   height: 100%;
-  background: #fff;
+  background: var(--blue);
   border-radius: inherit;
   transition: width 400ms ease;
 }
 
-.re-rule {
-  margin: 1rem 0 0;
-  padding: 0.9rem 1rem;
-  border-radius: 0.9rem;
-  border: 1px solid var(--line);
-  background: var(--card);
+.re-track__prog small {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
   color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.45;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.re-rule p {
-  margin: 0;
-}
-
-.re-rule ul {
-  margin: 0.55rem 0 0;
-  padding: 0 0 0 1.1rem;
-}
-
-.re-rule li {
-  margin: 0.2rem 0;
-}
-
-.re-rule strong {
-  color: var(--navy);
+  line-height: 1.4;
 }
 
 .re-stats {
@@ -273,6 +350,19 @@
   margin-top: 0.9rem;
 }
 
+.re-invite .re-btn--block {
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.re-invite .re-actions {
+  margin-top: 0.65rem;
+}
+
+.re-invite .re-actions .re-btn {
+  flex: 1 1 calc(50% - 0.3rem);
+}
+
 .re-btn {
   display: inline-flex;
   align-items: center;
@@ -379,8 +469,8 @@
 }
 
 .re-pill--joined {
-  background: var(--blue-pill);
-  color: var(--blue-deep);
+  background: var(--ok-soft);
+  color: var(--ok);
 }
 
 .re-pill--invited {
@@ -450,11 +540,7 @@
 }
 
 @media (max-width: 480px) {
-  .re-actions {
-    flex-direction: column;
-  }
-
-  .re-btn {
-    width: 100%;
+  .re-invite .re-actions .re-btn {
+    flex: 1 1 100%;
   }
 }

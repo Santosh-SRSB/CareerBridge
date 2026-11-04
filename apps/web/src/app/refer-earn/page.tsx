@@ -37,6 +37,43 @@ function statusTone(status: string) {
   return 'neutral';
 }
 
+function PointsRing({ value, max }: { value: number; max: number }) {
+  const size = 72;
+  const stroke = 7;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
+  const offset = c * (1 - pct);
+
+  return (
+    <div className="re-ring" aria-hidden>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="rgba(255,255,255,0.28)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="#fff"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 export default function ReferEarnPage() {
   const [data, setData] = useState<ReferralDashboard | null>(null);
   const [error, setError] = useState('');
@@ -103,9 +140,20 @@ export default function ReferEarnPage() {
     window.open('https://www.instagram.com/', '_blank', 'noopener,noreferrer');
   }
 
-  const progressToPayout = data
-    ? Math.min(100, Math.round((data.stats.pointsBalance / data.stats.pointsToPayoutEligible) * 100))
-    : 0;
+  const fresherPts = data?.rules.fresherPointsPerBatch ?? data?.rules.pointsPerBatch ?? 10;
+  const experiencedPts = data?.rules.experiencedPointsPerBatch ?? 5;
+  const isFresher = data?.referrerKind === 'FRESHER';
+  const batchSize = data
+    ? isFresher
+      ? data.rules.fresherBatchSize
+      : data.rules.experiencedBatchSize
+    : 3;
+  const towardRaw = data ? data.stats.approvedReferrals % batchSize : 0;
+  const towardBatch =
+    data && towardRaw === 0 && data.stats.approvedReferrals > 0 && data.stats.referralsNeededForNextBatch === 0
+      ? batchSize
+      : towardRaw;
+  const trackProgressPct = batchSize > 0 ? Math.round((towardBatch / batchSize) * 100) : 0;
 
   return (
     <CandidateAppShell activeTab="refer" title="Refer & Earn" maxWidth="max-w-5xl">
@@ -115,21 +163,24 @@ export default function ReferEarnPage() {
             <p className="re-kicker">Refer & Earn</p>
             <h1 className="re-title">Invite friends. Earn real cash.</h1>
             <p className="re-lead">
-              Share your personal referral link. When friends register through your link and
-              complete login, you earn points on your track. Reach{' '}
-              {data?.stats.pointsToPayoutEligible ?? 100} points to unlock UPI payout.
+              Share your personal link. When friends register through it and log in, you earn
+              points. Reach {data?.stats.pointsToPayoutEligible ?? 100} points to unlock your UPI
+              payout.
             </p>
           </div>
           {data ? (
             <div className="re-points" aria-label={`${data.stats.pointsBalance} points`}>
-              <span>Points</span>
-              <strong>{data.stats.pointsBalance}</strong>
-              <div className="re-bar" aria-hidden>
-                <i style={{ width: `${progressToPayout}%` }} />
+              <PointsRing
+                value={data.stats.pointsBalance}
+                max={data.stats.pointsToPayoutEligible}
+              />
+              <div className="re-points__meta">
+                <span>Your points</span>
+                <strong>
+                  {data.stats.pointsBalance} / {data.stats.pointsToPayoutEligible}
+                </strong>
+                <small>{data.stats.pointsToPayoutEligible} points unlocks UPI payout</small>
               </div>
-              <small>
-                {data.stats.pointsBalance} / {data.stats.pointsToPayoutEligible} to UPI
-              </small>
             </div>
           ) : null}
         </header>
@@ -140,31 +191,69 @@ export default function ReferEarnPage() {
 
         {data ? (
           <>
-            <div className="re-rule">
-              <p>
-                <strong>
-                  Your track: {data.referrerKind === 'FRESHER' ? 'Fresher' : 'Experienced'}.
-                </strong>{' '}
-                You need {data.stats.referralsNeededForNextBatch} more friend
-                {data.stats.referralsNeededForNextBatch === 1 ? '' : 's'} to register through your
-                link and log in before your next points credit.
-              </p>
-              <ul>
-                <li>
-                  <strong>Fresher track:</strong> when {data.rules.fresherBatchSize} friends
-                  register through your link and log in, you earn{' '}
-                  {data.rules.fresherPointsPerBatch ?? data.rules.pointsPerBatch} points.
-                </li>
-                <li>
-                  <strong>Experienced track:</strong> when {data.rules.experiencedBatchSize} friend
-                  registers through your link and logs in, you earn{' '}
-                  {data.rules.experiencedPointsPerBatch ?? 5} points.
-                </li>
-                <li>
-                  <strong>Payout:</strong> at {data.rules.pointsToPayoutEligible} points you can
-                  submit your UPI ID. Super Admin reviews and completes payment.
-                </li>
-              </ul>
+            <div className="re-tracks">
+              <article className={`re-track${isFresher ? ' re-track--active' : ''}`}>
+                <div className="re-track__top">
+                  <h3>
+                    Fresher
+                    {isFresher ? <em className="re-track__badge">Your track</em> : null}
+                  </h3>
+                  <strong className="re-track__pts">+{fresherPts} points</strong>
+                </div>
+                <p>
+                  When {data.rules.fresherBatchSize} friends register through your link and log in.
+                </p>
+                {isFresher ? (
+                  <div className="re-track__prog">
+                    <div className="re-track__bar" aria-hidden>
+                      <i style={{ width: `${trackProgressPct}%` }} />
+                    </div>
+                    <small>
+                      {towardBatch} of {batchSize} friends joined.{' '}
+                      {data.stats.referralsNeededForNextBatch > 0
+                        ? `${data.stats.referralsNeededForNextBatch} more to earn your next points.`
+                        : 'Next points batch ready.'}
+                    </small>
+                  </div>
+                ) : null}
+              </article>
+
+              <article className={`re-track${!isFresher ? ' re-track--active' : ''}`}>
+                <div className="re-track__top">
+                  <h3>
+                    Experienced
+                    {!isFresher ? <em className="re-track__badge">Your track</em> : null}
+                  </h3>
+                  <strong className="re-track__pts">+{experiencedPts} points</strong>
+                </div>
+                <p>
+                  When {data.rules.experiencedBatchSize} friend registers through your link and logs
+                  in.
+                </p>
+                {!isFresher ? (
+                  <div className="re-track__prog">
+                    <div className="re-track__bar" aria-hidden>
+                      <i style={{ width: `${trackProgressPct}%` }} />
+                    </div>
+                    <small>
+                      {towardBatch} of {batchSize} friends joined.{' '}
+                      {data.stats.referralsNeededForNextBatch > 0
+                        ? `${data.stats.referralsNeededForNextBatch} more to earn your next points.`
+                        : 'Next points batch ready.'}
+                    </small>
+                  </div>
+                ) : null}
+              </article>
+
+              <article className="re-track">
+                <div className="re-track__top">
+                  <h3>Payout</h3>
+                </div>
+                <p>
+                  At {data.rules.pointsToPayoutEligible} points, submit your UPI ID. Our team reviews
+                  it and completes the payment.
+                </p>
+              </article>
             </div>
 
             <div className="re-stats">
@@ -224,7 +313,7 @@ export default function ReferEarnPage() {
               <section className="re-panel re-invite" aria-label="Share referral link">
                 <h2>Invite a friend</h2>
                 <p className="re-invite__hint">
-                  Code <code>{data.referralCode}</code>
+                  Your code <code>{data.referralCode}</code>
                 </p>
                 <label className="re-invite__label" htmlFor="re-share-url">
                   Referral link
@@ -236,10 +325,10 @@ export default function ReferEarnPage() {
                   value={shareUrl}
                   onFocus={(e) => e.currentTarget.select()}
                 />
+                <button type="button" className="re-btn re-btn--main re-btn--block" onClick={copyLink}>
+                  {copied ? 'Copied' : 'Copy link'}
+                </button>
                 <div className="re-actions">
-                  <button type="button" className="re-btn re-btn--main" onClick={copyLink}>
-                    {copied ? 'Copied' : 'Copy link'}
-                  </button>
                   <a
                     className="re-btn"
                     href={whatsAppShareUrl(shareUrl, data.referralCode)}
@@ -262,9 +351,6 @@ export default function ReferEarnPage() {
                   <button type="button" className="re-btn" onClick={shareInstagram}>
                     Instagram
                   </button>
-                  <a className="re-btn" href={shareUrl} target="_blank" rel="noreferrer">
-                    Open
-                  </a>
                 </div>
               </section>
             </div>
