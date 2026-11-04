@@ -163,6 +163,23 @@ jobs:
           gcloud run services update "$API_SERVICE" --image="$IMAGE" \
             --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --quiet
 
+      # Keep CORS / public web URL aligned with infrastructure/cloudrun-api-dev.env.yaml
+      # (image-only deploys otherwise leave a stale WEB_ORIGIN and block brand domains like .co.in).
+      - name: Sync WEB_ORIGIN and PUBLIC_WEB_URL
+        run: |
+          set -euo pipefail
+          WEB_ORIGIN=$(sed -n 's/^WEB_ORIGIN:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml)
+          PUBLIC_WEB_URL=$(sed -n 's/^PUBLIC_WEB_URL:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml)
+          if [ -z "$WEB_ORIGIN" ] || [ -z "$PUBLIC_WEB_URL" ]; then
+            echo "::error::Could not parse WEB_ORIGIN / PUBLIC_WEB_URL from infrastructure/cloudrun-api-dev.env.yaml"
+            exit 1
+          fi
+          echo "Syncing WEB_ORIGIN and PUBLIC_WEB_URL for brand domains (incl. .co.in)"
+          gcloud run services update "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --update-env-vars="WEB_ORIGIN=${WEB_ORIGIN},PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
+            --quiet
+
       - name: Verify rollout and health
         run: |
           set -euo pipefail

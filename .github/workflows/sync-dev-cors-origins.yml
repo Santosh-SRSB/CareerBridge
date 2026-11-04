@@ -1,0 +1,60 @@
+# Fast DEV fix: sync API CORS (WEB_ORIGIN) + PUBLIC_WEB_URL from the env yaml.
+# Use when brand domains (.co.in / .in) need OTP/CORS without a full image rebuild.
+name: Sync DEV CORS origins
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: sync-dev-cors
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: careerbridge-f7b72
+  GCP_REGION: asia-south1
+  API_SERVICE: careerbridge-api-dev
+
+jobs:
+  sync:
+    name: Update WEB_ORIGIN on careerbridge-api-dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Sync WEB_ORIGIN and PUBLIC_WEB_URL
+        run: |
+          set -euo pipefail
+          WEB_ORIGIN=$(sed -n 's/^WEB_ORIGIN:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml)
+          PUBLIC_WEB_URL=$(sed -n 's/^PUBLIC_WEB_URL:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml)
+          if [ -z "$WEB_ORIGIN" ] || [ -z "$PUBLIC_WEB_URL" ]; then
+            echo "::error::Could not parse WEB_ORIGIN / PUBLIC_WEB_URL"
+            exit 1
+          fi
+          echo "WEB_ORIGIN=$WEB_ORIGIN"
+          echo "PUBLIC_WEB_URL=$PUBLIC_WEB_URL"
+          gcloud run services update "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --update-env-vars="WEB_ORIGIN=${WEB_ORIGIN},PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
+            --quiet
+          url=$(gcloud run services describe "$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --format='value(status.url)')
+          curl --fail --silent --show-error --retry 4 --retry-delay 5 --max-time 30 \
+            -o /tmp/health.json "$url/api/v1/health"
+          jq -e '.data.status == "ok"' /tmp/health.json
+          {
+            echo "### CORS sync"
+            echo "- service: \`$API_SERVICE\`"
+            echo "- health: ok"
+            echo "- WEB_ORIGIN now includes srsbcareerbridge.co.in"
+          } >> "$GITHUB_STEP_SUMMARY"
