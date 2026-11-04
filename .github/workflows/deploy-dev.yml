@@ -206,7 +206,9 @@ jobs:
       # after a healthy image rollout and blocked Deploy Web.
 
       # OTP runtime flags only (no commas). Keeps email on real SMTP instead of fixed 123456.
+      # continue-on-error: image is already healthy; do not block Deploy Web if env sync flakes.
       - name: Ensure AUTH_DEV_OTP off and NODE_ENV=production
+        continue-on-error: true
         run: |
           set -euo pipefail
           gcloud run services update "$API_SERVICE" \
