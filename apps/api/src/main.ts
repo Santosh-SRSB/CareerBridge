@@ -45,12 +45,25 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: '8mb', verify: captureRaw }));
 
   app.setGlobalPrefix('api/v1');
-  // Accept comma or semicolon separators. Semicolons are used when syncing via
-  // `gcloud --update-env-vars` so origin lists are not split on URL commas.
-  const webOrigins = (process.env.WEB_ORIGIN || 'http://localhost:3000')
+  // Brand + Cloud Run origins are always allowed so registration OTP on .co.in / .in
+  // works even when Cloud Run WEB_ORIGIN env is stale (image-only deploys).
+  // WEB_ORIGIN may use commas or semicolons; both are accepted.
+  const brandWebOrigins = [
+    'http://localhost:3000',
+    'https://www.srsbcareerbridge.com',
+    'https://srsbcareerbridge.com',
+    'https://srsbcareerbridge.co.in',
+    'https://www.srsbcareerbridge.co.in',
+    'https://srsbcareerbridge.in',
+    'https://www.srsbcareerbridge.in',
+    'https://careerbridge-web-dev-601892050765.asia-south1.run.app',
+    'https://careerbridge-web-dev-yo5h6bqrha-el.a.run.app',
+  ];
+  const envWebOrigins = (process.env.WEB_ORIGIN || '')
     .split(/[,;]+/)
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const webOrigins = [...new Set([...brandWebOrigins, ...envWebOrigins])];
   app.enableCors({
     origin: webOrigins,
     credentials: true,
