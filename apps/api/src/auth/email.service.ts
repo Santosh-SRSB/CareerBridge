@@ -51,13 +51,16 @@ export class EmailService {
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.logger.error(`Failed to send OTP email: ${detail}`);
+      // SERVICE_UNAVAILABLE (not 502): the global filter keeps this message for clients.
+      const authFailed = /invalid login|eauth|535|username and password/i.test(detail);
       throw new HttpException(
         {
           code: ErrorCode.INTERNAL_ERROR,
-          message:
-            'We could not send the email OTP. Check SMTP settings, or use a Gmail App Password.',
+          message: authFailed
+            ? 'Email OTP could not be sent: SMTP login failed. Update SMTP_USER / SMTP_PASS (Gmail App Password) on careerbridge-api-dev.'
+            : 'We could not send the email OTP right now. Please try again in a minute, or use Mobile OTP.',
         },
-        HttpStatus.BAD_GATEWAY,
+        HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
   }

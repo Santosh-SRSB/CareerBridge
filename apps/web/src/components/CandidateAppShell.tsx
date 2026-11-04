@@ -116,7 +116,7 @@ const NAV_INTERVIEWS: NavItem = {
 
 const NAV_REFER: NavItem = {
   id: 'refer',
-  label: 'Refer',
+  label: 'Refer & Earn',
   href: '/refer-earn',
   icon: (active) => (
     <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" strokeWidth="1.85" aria-hidden>
