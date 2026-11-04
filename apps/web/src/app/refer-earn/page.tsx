@@ -106,13 +106,23 @@ export default function ReferEarnPage() {
 
         {data ? (
           <>
-            <p className="re-rule">
-              <strong>{data.referrerKind === 'FRESHER' ? 'Fresher track' : 'Experienced track'}.</strong>{' '}
-              {data.referrerKind === 'FRESHER'
-                ? `${data.rules.fresherBatchSize} joins → ${data.rules.pointsPerBatch} points.`
-                : `${data.rules.experiencedBatchSize} join → ${data.rules.pointsPerBatch} points.`}{' '}
-              {data.stats.referralsNeededForNextBatch} more for the next batch.
-            </p>
+            <div className="re-rule">
+              <p>
+                <strong>Your track: {data.referrerKind === 'FRESHER' ? 'Fresher' : 'Experienced'}.</strong>{' '}
+                {data.stats.referralsNeededForNextBatch} more successful join
+                {data.stats.referralsNeededForNextBatch === 1 ? '' : 's'} for your next points batch.
+              </p>
+              <ul>
+                <li>
+                  <strong>Fresher:</strong> every {data.rules.fresherBatchSize} successful joins →{' '}
+                  {data.rules.pointsPerBatch} points
+                </li>
+                <li>
+                  <strong>Experienced:</strong> every {data.rules.experiencedBatchSize} successful join →{' '}
+                  {data.rules.pointsPerBatch} points
+                </li>
+              </ul>
+            </div>
 
             <section className="re-panel" aria-label="Share referral link">
               <div className="re-panel__row">

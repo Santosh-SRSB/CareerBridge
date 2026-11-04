@@ -108,6 +108,19 @@
   line-height: 1.45;
 }
 
+.re-rule p {
+  margin: 0;
+}
+
+.re-rule ul {
+  margin: 0.55rem 0 0;
+  padding: 0 0 0 1.1rem;
+}
+
+.re-rule li {
+  margin: 0.2rem 0;
+}
+
 .re-rule strong {
   color: var(--navy);
 }
