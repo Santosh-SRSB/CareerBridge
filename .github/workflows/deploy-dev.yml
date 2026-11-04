@@ -188,9 +188,11 @@ jobs:
             exit 1
           fi
           echo "Syncing WEB_ORIGIN and PUBLIC_WEB_URL for brand domains (incl. .co.in)"
+          # WEB_ORIGIN is a comma-separated allowlist; default env-var parsing also
+          # splits on commas, so use an explicit | delimiter (gcloud ^|^…|^… form).
           gcloud run services update "$API_SERVICE" \
             --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
-            --update-env-vars="WEB_ORIGIN=${WEB_ORIGIN},PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
+            --update-env-vars="^|^WEB_ORIGIN=${WEB_ORIGIN}|^PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
             --quiet
 
       - name: Verify rollout and health

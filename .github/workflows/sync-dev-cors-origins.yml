@@ -44,9 +44,10 @@ jobs:
           fi
           echo "WEB_ORIGIN=$WEB_ORIGIN"
           echo "PUBLIC_WEB_URL=$PUBLIC_WEB_URL"
+          # WEB_ORIGIN contains commas; use | as the env-var pair delimiter.
           gcloud run services update "$API_SERVICE" \
             --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
-            --update-env-vars="WEB_ORIGIN=${WEB_ORIGIN},PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
+            --update-env-vars="^|^WEB_ORIGIN=${WEB_ORIGIN}|^PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
             --quiet
           url=$(gcloud run services describe "$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --format='value(status.url)')
           curl --fail --silent --show-error --retry 4 --retry-delay 5 --max-time 30 \
