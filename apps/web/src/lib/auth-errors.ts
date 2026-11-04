@@ -3,9 +3,16 @@ import { OTP_EXPIRED_MESSAGE } from '@careerbridge/shared';
 export const INVALID_OTP_MESSAGE = 'Invalid or expired OTP. Please enter the latest OTP or request a new one.';
 export const RESET_OTP_EXPIRED_MESSAGE = 'This OTP has expired. Select "Send a new code" to get a new one.';
 
+const FIREBASE_DOMAIN_HINT =
+  'Add srsbcareerbridge.co.in and www.srsbcareerbridge.co.in under Firebase Authentication → Settings → Authorized domains.';
+
 const FIREBASE_CODES: Record<string, string> = {
   'auth/captcha-check-failed':
-    'Verification could not be completed. Please try again.',
+    `Verification could not be completed. Please try again. If you are on .co.in, ${FIREBASE_DOMAIN_HINT}`,
+  'auth/unauthorized-domain':
+    `This site domain is not allowed for Phone OTP. ${FIREBASE_DOMAIN_HINT}`,
+  'auth/invalid-app-credential':
+    `Firebase blocked this browser session for Phone OTP. ${FIREBASE_DOMAIN_HINT}`,
   'auth/invalid-verification-code': 'The OTP is incorrect.',
   'auth/code-expired': OTP_EXPIRED_MESSAGE,
   'auth/too-many-requests': 'Too many attempts. Please wait and try again later.',

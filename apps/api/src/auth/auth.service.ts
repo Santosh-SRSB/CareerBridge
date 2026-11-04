@@ -47,11 +47,14 @@ export class AuthService {
     private readonly referrals: ReferralsService,
   ) {}
 
+  private isDeployedRuntime() {
+    // Cloud Run / GCP always sets GCP_PROJECT_ID. Never treat that as local DEV OTP.
+    return Boolean(this.config.get('GCP_PROJECT_ID')) || this.config.get('NODE_ENV') === 'production';
+  }
+
   private isDevOtp() {
-    return (
-      this.config.get('AUTH_DEV_OTP') === 'true' &&
-      this.config.get('NODE_ENV') !== 'production'
-    );
+    if (this.isDeployedRuntime()) return false;
+    return this.config.get('AUTH_DEV_OTP') === 'true';
   }
 
   async requestOtp(dto: RequestOtpDto) {
@@ -253,7 +256,7 @@ export class AuthService {
     if (channel === 'EMAIL' && otpCode) {
       if (!this.isDevOtp() && this.email.isConfigured()) {
         await this.email.sendOtp(email || '', otpCode);
-      } else if (!this.isDevOtp() && !this.email.isConfigured() && this.config.get('NODE_ENV') === 'production') {
+      } else if (!this.isDevOtp() && !this.email.isConfigured() && this.isDeployedRuntime()) {
         this.logger.error('Email OTP requested but SMTP credentials are not configured.');
         throw new HttpException(
           {
@@ -275,7 +278,7 @@ export class AuthService {
 
     const revealOtp =
       this.isDevOtp() ||
-      (channel === 'EMAIL' && !this.email.isConfigured() && this.config.get('NODE_ENV') !== 'production');
+      (channel === 'EMAIL' && !this.email.isConfigured() && !this.isDeployedRuntime());
 
     return {
       requestId: request.id,

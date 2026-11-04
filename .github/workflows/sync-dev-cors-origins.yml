@@ -1,5 +1,6 @@
-# Fast DEV fix: sync API CORS (WEB_ORIGIN) + PUBLIC_WEB_URL from the env yaml.
+# Fast DEV fix: sync API CORS + OTP runtime flags from the env yaml.
 # Use when brand domains (.co.in / .in) need OTP/CORS without a full image rebuild.
+# Also forces AUTH_DEV_OTP=false + NODE_ENV=production so email OTP uses SMTP (not fixed 123456).
 name: Sync DEV CORS origins
 
 on:
@@ -16,7 +17,7 @@ env:
 
 jobs:
   sync:
-    name: Update WEB_ORIGIN on careerbridge-api-dev
+    name: Update WEB_ORIGIN / OTP flags on careerbridge-api-dev
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: dev
@@ -33,7 +34,7 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Sync WEB_ORIGIN and PUBLIC_WEB_URL
+      - name: Sync WEB_ORIGIN, PUBLIC_WEB_URL, AUTH_DEV_OTP, NODE_ENV
         run: |
           set -euo pipefail
           python3 <<'PY'
@@ -45,13 +46,19 @@ jobs:
           def grab(key: str) -> str:
               m = re.search(rf'^{re.escape(key)}:\s*"(.*)"\s*$', text, re.M)
               if not m:
+                  m = re.search(rf'^{re.escape(key)}:\s*([^\s#]+)\s*$', text, re.M)
+              if not m:
                   raise SystemExit(f"::error::Could not parse {key}")
-              return m.group(1).replace("\r", "").strip()
+              return m.group(1).replace("\r", "").strip().strip('"')
 
           web_origin = grab("WEB_ORIGIN").replace(",", ";")
           public_web = grab("PUBLIC_WEB_URL")
+          auth_dev_otp = grab("AUTH_DEV_OTP")
+          node_env = grab("NODE_ENV")
           print(f"WEB_ORIGIN_SAFE origins={web_origin.count(';') + 1}")
           print(f"PUBLIC_WEB_URL={public_web}")
+          print(f"AUTH_DEV_OTP={auth_dev_otp}")
+          print(f"NODE_ENV={node_env}")
 
           svc = os.environ["API_SERVICE"]
           region = os.environ["GCP_REGION"]
@@ -60,8 +67,68 @@ jobs:
               "gcloud", "run", "services", "update", svc,
               f"--region={region}", f"--project={project}", "--quiet",
           ]
+          # One key per update — commas inside WEB_ORIGIN previously broke gcloud parsing.
           subprocess.check_call(base + [f"--update-env-vars=PUBLIC_WEB_URL={public_web}"])
           subprocess.check_call(base + [f"--update-env-vars=WEB_ORIGIN={web_origin}"])
+          subprocess.check_call(base + [f"--update-env-vars=AUTH_DEV_OTP={auth_dev_otp}"])
+          subprocess.check_call(base + [f"--update-env-vars=NODE_ENV={node_env}"])
+          PY
+
+      - name: Ensure Firebase Phone OTP authorized domains
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json, os, subprocess, urllib.error, urllib.request
+
+          project = os.environ["GCP_PROJECT_ID"]
+          token = subprocess.check_output(
+              ["gcloud", "auth", "print-access-token"], text=True
+          ).strip()
+          url = f"https://identitytoolkit.googleapis.com/admin/v2/projects/{project}/config"
+          req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  cfg = json.load(resp)
+          except urllib.error.HTTPError as err:
+              body = err.read().decode("utf-8", "replace")
+              print(f"::warning::Could not read Firebase Auth config ({err.code}): {body[:400]}")
+              raise SystemExit(0)
+
+          needed = [
+              "srsbcareerbridge.co.in",
+              "www.srsbcareerbridge.co.in",
+              "srsbcareerbridge.com",
+              "www.srsbcareerbridge.com",
+              "srsbcareerbridge.in",
+              "www.srsbcareerbridge.in",
+          ]
+          current = list(cfg.get("authorizedDomains") or [])
+          merged = list(dict.fromkeys([*current, *needed]))
+          if merged == current:
+              print("Firebase authorizedDomains already include brand hosts")
+              raise SystemExit(0)
+
+          payload = json.dumps({"authorizedDomains": merged}).encode("utf-8")
+          patch = urllib.request.Request(
+              url + "?updateMask=authorizedDomains",
+              data=payload,
+              method="PATCH",
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Content-Type": "application/json",
+              },
+          )
+          try:
+              with urllib.request.urlopen(patch, timeout=30) as resp:
+                  updated = json.load(resp)
+              print(
+                  "Firebase authorizedDomains updated:",
+                  ", ".join(updated.get("authorizedDomains") or merged),
+              )
+          except urllib.error.HTTPError as err:
+              body = err.read().decode("utf-8", "replace")
+              print(f"::warning::Could not update Firebase authorizedDomains ({err.code}): {body[:400]}")
           PY
 
       - name: Health check
@@ -72,8 +139,10 @@ jobs:
             -o /tmp/health.json "$url/api/v1/health"
           jq -e '.data.status == "ok"' /tmp/health.json
           {
-            echo "### CORS sync"
+            echo "### CORS + OTP env sync"
             echo "- service: \`$API_SERVICE\`"
             echo "- health: ok"
-            echo "- WEB_ORIGIN now includes srsbcareerbridge.co.in"
+            echo "- WEB_ORIGIN includes srsbcareerbridge.co.in"
+            echo "- AUTH_DEV_OTP / NODE_ENV synced from cloudrun-api-dev.env.yaml"
+            echo "- Firebase authorizedDomains step attempted (see logs if warning)"
           } >> "$GITHUB_STEP_SUMMARY"
