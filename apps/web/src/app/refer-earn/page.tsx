@@ -11,6 +11,32 @@ import { notifyReferralPoints, whatsAppShareUrl } from '@/lib/referral-attr';
 import { userFacingError } from '@/lib/client-errors';
 import './refer-earn.css';
 
+function shareMessage(shareUrl: string, referralCode: string) {
+  return [
+    shareUrl,
+    '',
+    'Join me on CareerBridge — build your Career Passport and apply to jobs.',
+    `Referral code: ${referralCode}`,
+  ].join('\n');
+}
+
+function linkedInShareUrl(shareUrl: string) {
+  return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+}
+
+function emailShareUrl(shareUrl: string, referralCode: string) {
+  const subject = encodeURIComponent('Join me on CareerBridge');
+  const body = encodeURIComponent(shareMessage(shareUrl, referralCode));
+  return `mailto:?subject=${subject}&body=${body}`;
+}
+
+function statusTone(status: string) {
+  const key = status.toUpperCase();
+  if (key.includes('APPROV') || key.includes('JOIN') || key.includes('SUCCESS')) return 'joined';
+  if (key.includes('PEND') || key.includes('INVIT')) return 'invited';
+  return 'neutral';
+}
+
 export default function ReferEarnPage() {
   const [data, setData] = useState<ReferralDashboard | null>(null);
   const [error, setError] = useState('');
@@ -70,12 +96,19 @@ export default function ReferEarnPage() {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
+  function shareInstagram() {
+    if (!shareUrl || !data) return;
+    void navigator.clipboard?.writeText(shareMessage(shareUrl, data.referralCode));
+    setNotice('Link copied — paste it in Instagram (DM or bio).');
+    window.open('https://www.instagram.com/', '_blank', 'noopener,noreferrer');
+  }
+
   const progressToPayout = data
     ? Math.min(100, Math.round((data.stats.pointsBalance / data.stats.pointsToPayoutEligible) * 100))
     : 0;
 
   return (
-    <CandidateAppShell activeTab="refer" title="Refer & Earn" maxWidth="max-w-4xl">
+    <CandidateAppShell activeTab="refer" title="Refer & Earn" maxWidth="max-w-5xl">
       <div className="re-page">
         <header className="re-header">
           <div>
@@ -124,45 +157,106 @@ export default function ReferEarnPage() {
               </ul>
             </div>
 
-            <section className="re-panel" aria-label="Share referral link">
-              <div className="re-panel__row">
-                <h2>Your referral link</h2>
-                <code>{data.referralCode}</code>
-              </div>
-              <a className="re-url" href={shareUrl} target="_blank" rel="noreferrer">
-                {shareUrl}
-              </a>
-              <div className="re-actions">
-                <button type="button" className="re-btn re-btn--main" onClick={copyLink}>
-                  {copied ? 'Copied' : 'Copy link'}
-                </button>
-                <a
-                  className="re-btn"
-                  href={whatsAppShareUrl(shareUrl, data.referralCode)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  WhatsApp
-                </a>
-                <a className="re-btn" href={shareUrl} target="_blank" rel="noreferrer">
-                  Open
-                </a>
-              </div>
-            </section>
-
             <div className="re-stats">
               <div>
-                <span>Successful</span>
+                <span>Friends invited</span>
+                <strong>{data.referrals.length}</strong>
+              </div>
+              <div>
+                <span>Joined</span>
                 <strong>{data.stats.approvedReferrals}</strong>
               </div>
               <div>
                 <span>Next batch</span>
                 <strong>{data.stats.referralsNeededForNextBatch}</strong>
               </div>
-              <div>
-                <span>Payout at</span>
-                <strong>{data.stats.pointsToPayoutEligible}</strong>
+              <div className="re-stats__hi">
+                <span>Points</span>
+                <strong>{data.stats.pointsBalance}</strong>
               </div>
+            </div>
+
+            <div className="re-grid">
+              <section className="re-panel" aria-label="Referrals">
+                <h2>Your referrals</h2>
+                {data.referrals.length === 0 ? (
+                  <p className="re-note">No referrals yet. Share your link to get started.</p>
+                ) : (
+                  <div className="re-table-wrap">
+                    <table className="re-table">
+                      <thead>
+                        <tr>
+                          <th>Friend</th>
+                          <th>Phone</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.referrals.map((row) => (
+                          <tr key={row.id}>
+                            <td>
+                              <strong>{row.referredName}</strong>
+                            </td>
+                            <td>{row.referredPhoneMasked}</td>
+                            <td>
+                              <em className={`re-pill re-pill--${statusTone(row.status)}`}>
+                                {row.status}
+                              </em>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              <section className="re-panel re-invite" aria-label="Share referral link">
+                <h2>Invite a friend</h2>
+                <p className="re-invite__hint">
+                  Code <code>{data.referralCode}</code>
+                </p>
+                <label className="re-invite__label" htmlFor="re-share-url">
+                  Referral link
+                </label>
+                <input
+                  id="re-share-url"
+                  className="re-invite__input"
+                  readOnly
+                  value={shareUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <div className="re-actions">
+                  <button type="button" className="re-btn re-btn--main" onClick={copyLink}>
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
+                  <a
+                    className="re-btn"
+                    href={whatsAppShareUrl(shareUrl, data.referralCode)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    WhatsApp
+                  </a>
+                  <a
+                    className="re-btn"
+                    href={linkedInShareUrl(shareUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    LinkedIn
+                  </a>
+                  <a className="re-btn" href={emailShareUrl(shareUrl, data.referralCode)}>
+                    Email
+                  </a>
+                  <button type="button" className="re-btn" onClick={shareInstagram}>
+                    Instagram
+                  </button>
+                  <a className="re-btn" href={shareUrl} target="_blank" rel="noreferrer">
+                    Open
+                  </a>
+                </div>
+              </section>
             </div>
 
             {data.stats.payoutEligible || data.pendingPayout ? (
@@ -191,25 +285,6 @@ export default function ReferEarnPage() {
               </section>
             ) : null}
 
-            <section className="re-panel">
-              <h2>Referrals</h2>
-              {data.referrals.length === 0 ? (
-                <p className="re-note">No referrals yet. Share your link to get started.</p>
-              ) : (
-                <ul className="re-rows">
-                  {data.referrals.map((row) => (
-                    <li key={row.id}>
-                      <div>
-                        <strong>{row.referredName}</strong>
-                        <span>{row.referredPhoneMasked}</span>
-                      </div>
-                      <em>{row.status}</em>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
             {data.payouts.length > 0 ? (
               <section className="re-panel">
                 <h2>Payout history</h2>
@@ -220,7 +295,7 @@ export default function ReferEarnPage() {
                         <strong>{p.upiId}</strong>
                         <span>{p.pointsAtRequest} pts</span>
                       </div>
-                      <em>{p.status}</em>
+                      <em className={`re-pill re-pill--${statusTone(p.status)}`}>{p.status}</em>
                     </li>
                   ))}
                 </ul>
