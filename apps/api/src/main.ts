@@ -45,8 +45,10 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: '8mb', verify: captureRaw }));
 
   app.setGlobalPrefix('api/v1');
+  // Accept comma or semicolon separators. Semicolons are used when syncing via
+  // `gcloud --update-env-vars` so origin lists are not split on URL commas.
   const webOrigins = (process.env.WEB_ORIGIN || 'http://localhost:3000')
-    .split(',')
+    .split(/[,;]+/)
     .map((origin) => origin.trim())
     .filter(Boolean);
   app.enableCors({

@@ -176,25 +176,6 @@ jobs:
           gcloud run services update "$API_SERVICE" --image="$IMAGE" \
             --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --quiet
 
-      # Keep CORS / public web URL aligned with infrastructure/cloudrun-api-dev.env.yaml
-      # (image-only deploys otherwise leave a stale WEB_ORIGIN and block brand domains like .co.in).
-      - name: Sync WEB_ORIGIN and PUBLIC_WEB_URL
-        run: |
-          set -euo pipefail
-          # Strip CR so Windows-checked-in YAML does not pollute values.
-          WEB_ORIGIN=$(sed -n 's/^WEB_ORIGIN:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml | tr -d '\r')
-          PUBLIC_WEB_URL=$(sed -n 's/^PUBLIC_WEB_URL:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml | tr -d '\r')
-          if [ -z "$WEB_ORIGIN" ] || [ -z "$PUBLIC_WEB_URL" ]; then
-            echo "::error::Could not parse WEB_ORIGIN / PUBLIC_WEB_URL from infrastructure/cloudrun-api-dev.env.yaml"
-            exit 1
-          fi
-          echo "Syncing WEB_ORIGIN (len=${#WEB_ORIGIN}) and PUBLIC_WEB_URL=$PUBLIC_WEB_URL"
-          # WEB_ORIGIN values contain commas. gcloud flag form is: ^DELIM^K1=V1DELIMK2=V2
-          gcloud run services update "$API_SERVICE" \
-            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
-            --update-env-vars="^|^WEB_ORIGIN=${WEB_ORIGIN}|PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
-            --quiet
-
       - name: Verify rollout and health
         run: |
           set -euo pipefail
@@ -219,6 +200,46 @@ jobs:
             echo "- image: \`$image\`"
             echo "- health: \`$url/api/v1/health\` → ok"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Keep CORS / public web URL aligned with infrastructure/cloudrun-api-dev.env.yaml
+      # (image-only deploys otherwise leave a stale WEB_ORIGIN and block brand domains like .co.in).
+      # gcloud --update-env-vars splits on commas, so we store origins with semicolons;
+      # the API accepts both separators (see apps/api/src/main.ts).
+      - name: Sync WEB_ORIGIN and PUBLIC_WEB_URL
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import os, re, subprocess
+
+          text = Path("infrastructure/cloudrun-api-dev.env.yaml").read_text(encoding="utf-8")
+
+          def grab(key: str) -> str:
+              m = re.search(rf'^{re.escape(key)}:\s*"(.*)"\s*$', text, re.M)
+              if not m:
+                  raise SystemExit(f"::error::Could not parse {key} from cloudrun-api-dev.env.yaml")
+              return m.group(1).replace("\r", "").strip()
+
+          web_origin = grab("WEB_ORIGIN").replace(",", ";")
+          public_web = grab("PUBLIC_WEB_URL")
+          if not web_origin or not public_web:
+              raise SystemExit("::error::WEB_ORIGIN / PUBLIC_WEB_URL empty after parse")
+
+          print(f"WEB_ORIGIN_SAFE origins={web_origin.count(';') + 1} len={len(web_origin)}")
+          print(f"PUBLIC_WEB_URL={public_web}")
+
+          svc = os.environ["API_SERVICE"]
+          region = os.environ["GCP_REGION"]
+          project = os.environ["GCP_PROJECT_ID"]
+          base = [
+              "gcloud", "run", "services", "update", svc,
+              f"--region={region}", f"--project={project}", "--quiet",
+          ]
+          # Two single-key updates: values contain no commas, so gcloud CSV parsing is safe.
+          subprocess.check_call(base + [f"--update-env-vars=PUBLIC_WEB_URL={public_web}"])
+          subprocess.check_call(base + [f"--update-env-vars=WEB_ORIGIN={web_origin}"])
+          print("CORS env synced (.co.in included)")
+          PY
 
       - name: Diagnostics
         if: failure()

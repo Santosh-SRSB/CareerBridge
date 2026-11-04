@@ -74,22 +74,22 @@ export default function ReferEarnPage() {
   return (
     <CandidateAppShell activeTab="refer" title="Refer & Earn" maxWidth="max-w-5xl">
       <div className="re-stage">
-        <div className="re-top">
+        <div className="re-hero">
           <div>
             <p className="re-brand">CareerBridge · Refer & Earn</p>
-            <h1 className="re-headline">Invite once. Earn on every join.</h1>
+            <h1 className="re-headline">Share your bridge. Earn on every join.</h1>
             <p className="re-support">
-              Share your personal link. Friends register, you collect points, and at 100 points you
-              unlock UPI payout.
+              Send your personal link. When friends register successfully, you earn points. At 100
+              points, unlock UPI payout.
             </p>
           </div>
 
           {data ? (
             <div className="re-score" aria-label={`${data.stats.pointsBalance} points`}>
-              <span className="re-score__label">Points</span>
+              <span className="re-score__label">Your points</span>
               <strong className="re-score__value">{data.stats.pointsBalance}</strong>
               <span className="re-score__meta">
-                {data.stats.pointsBalance} / {data.stats.pointsToPayoutEligible} toward UPI
+                {data.stats.pointsBalance} / {data.stats.pointsToPayoutEligible} to UPI
               </span>
               <div className="re-meter" aria-hidden>
                 <span style={{ width: `${progressToPayout}%` }} />
@@ -109,33 +109,37 @@ export default function ReferEarnPage() {
               {data.referrerKind === 'FRESHER'
                 ? `${data.rules.fresherBatchSize} successful registrations → ${data.rules.pointsPerBatch} points.`
                 : `${data.rules.experiencedBatchSize} successful registration → ${data.rules.pointsPerBatch} points.`}{' '}
-              {data.stats.referralsNeededForNextBatch} more to unlock the next batch.
+              {data.stats.referralsNeededForNextBatch} more for the next batch.
             </p>
 
-            <section className="re-share" aria-label="Share referral link">
-              <div className="re-share__row">
-                <h2>Your link</h2>
-                <span className="re-code">{data.referralCode}</span>
-              </div>
-              <a className="re-link" href={shareUrl} target="_blank" rel="noreferrer">
-                {shareUrl}
-              </a>
-              <div className="re-actions">
-                <button type="button" className="re-btn re-btn--primary" onClick={copyLink}>
-                  Copy link
-                </button>
-                <a
-                  className="re-btn re-btn--ghost"
-                  href={whatsAppShareUrl(shareUrl, data.referralCode)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  WhatsApp
+            <section className="re-ticket" aria-label="Share referral link">
+              <div className="re-ticket__main">
+                <h2>Your invite link</h2>
+                <span className="re-ticket__code">{data.referralCode}</span>
+                <a className="re-link" href={shareUrl} target="_blank" rel="noreferrer">
+                  {shareUrl}
                 </a>
-                <a className="re-btn re-btn--ghost" href={shareUrl} target="_blank" rel="noreferrer">
-                  Open
-                </a>
+                <div className="re-actions">
+                  <button type="button" className="re-btn re-btn--primary" onClick={copyLink}>
+                    Copy link
+                  </button>
+                  <a
+                    className="re-btn re-btn--ghost"
+                    href={whatsAppShareUrl(shareUrl, data.referralCode)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    WhatsApp
+                  </a>
+                  <a className="re-btn re-btn--ghost" href={shareUrl} target="_blank" rel="noreferrer">
+                    Open
+                  </a>
+                </div>
               </div>
+              <aside className="re-ticket__stub" aria-hidden>
+                <span>Code</span>
+                <strong>{data.referralCode.slice(0, 6)}</strong>
+              </aside>
             </section>
 
             <div className="re-rail">
@@ -171,6 +175,8 @@ export default function ReferEarnPage() {
                       onChange={(e) => setUpiId(e.target.value)}
                       placeholder="yourname@upi"
                       required
+                      autoComplete="off"
+                      inputMode="email"
                     />
                     <button type="submit" disabled={busy} className="re-btn re-btn--primary">
                       {busy ? 'Submitting…' : 'Submit UPI'}

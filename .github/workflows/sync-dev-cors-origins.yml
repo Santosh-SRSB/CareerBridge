@@ -36,19 +36,37 @@ jobs:
       - name: Sync WEB_ORIGIN and PUBLIC_WEB_URL
         run: |
           set -euo pipefail
-          WEB_ORIGIN=$(sed -n 's/^WEB_ORIGIN:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml | tr -d '\r')
-          PUBLIC_WEB_URL=$(sed -n 's/^PUBLIC_WEB_URL:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml | tr -d '\r')
-          if [ -z "$WEB_ORIGIN" ] || [ -z "$PUBLIC_WEB_URL" ]; then
-            echo "::error::Could not parse WEB_ORIGIN / PUBLIC_WEB_URL"
-            exit 1
-          fi
-          echo "WEB_ORIGIN len=${#WEB_ORIGIN}"
-          echo "PUBLIC_WEB_URL=$PUBLIC_WEB_URL"
-          # gcloud form: ^DELIM^K1=V1DELIMK2=V2 (WEB_ORIGIN itself contains commas).
-          gcloud run services update "$API_SERVICE" \
-            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
-            --update-env-vars="^|^WEB_ORIGIN=${WEB_ORIGIN}|PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
-            --quiet
+          python3 <<'PY'
+          from pathlib import Path
+          import os, re, subprocess
+
+          text = Path("infrastructure/cloudrun-api-dev.env.yaml").read_text(encoding="utf-8")
+
+          def grab(key: str) -> str:
+              m = re.search(rf'^{re.escape(key)}:\s*"(.*)"\s*$', text, re.M)
+              if not m:
+                  raise SystemExit(f"::error::Could not parse {key}")
+              return m.group(1).replace("\r", "").strip()
+
+          web_origin = grab("WEB_ORIGIN").replace(",", ";")
+          public_web = grab("PUBLIC_WEB_URL")
+          print(f"WEB_ORIGIN_SAFE origins={web_origin.count(';') + 1}")
+          print(f"PUBLIC_WEB_URL={public_web}")
+
+          svc = os.environ["API_SERVICE"]
+          region = os.environ["GCP_REGION"]
+          project = os.environ["GCP_PROJECT_ID"]
+          base = [
+              "gcloud", "run", "services", "update", svc,
+              f"--region={region}", f"--project={project}", "--quiet",
+          ]
+          subprocess.check_call(base + [f"--update-env-vars=PUBLIC_WEB_URL={public_web}"])
+          subprocess.check_call(base + [f"--update-env-vars=WEB_ORIGIN={web_origin}"])
+          PY
+
+      - name: Health check
+        run: |
+          set -euo pipefail
           url=$(gcloud run services describe "$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --format='value(status.url)')
           curl --fail --silent --show-error --retry 4 --retry-delay 5 --max-time 30 \
             -o /tmp/health.json "$url/api/v1/health"
