@@ -17,18 +17,18 @@ if [ -z "${DATABASE_URL:-}" ] && [ -n "${DB_PASSWORD:-}" ]; then
   export DATABASE_URL="postgresql://${USER}:${PASS}@localhost/${NAME}?host=${HOST}&schema=public"
 fi
 
-# Apply pending Prisma migrations. A failed migration stops startup: never fall back to
-# `db push`, never rewrite migration history, never reset. Fix the migration and redeploy.
-if [ "${RUN_PRISMA_MIGRATE:-true}" = "true" ]; then
-  if [ -z "${DATABASE_URL:-}" ]; then
-    echo "RUN_PRISMA_MIGRATE=true but DATABASE_URL is not set; refusing to start." >&2
-    exit 1
-  fi
-  echo "Running prisma migrate deploy..."
-  if ! npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma; then
-    echo "prisma migrate deploy failed; refusing to start. The database schema was not modified by this script." >&2
-    exit 1
-  fi
+# Always apply pending Prisma migrations on boot (additive only; never db push / reset).
+# PROD may still have RUN_PRISMA_MIGRATE=false in Cloud Run env; ignore that flag so
+# image deploys can ship schema without needing run.revisions.list to update env vars.
+# A failed migration stops startup. Fix the migration and redeploy.
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "DATABASE_URL is not set; refusing to start (required for prisma migrate deploy)." >&2
+  exit 1
+fi
+echo "Running prisma migrate deploy..."
+if ! npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma; then
+  echo "prisma migrate deploy failed; refusing to start. The database schema was not modified by this script." >&2
+  exit 1
 fi
 
 exec node dist/main.js

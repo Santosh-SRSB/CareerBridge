@@ -14,8 +14,8 @@ name: Deploy PROD
 # Rollback (manual): redeploy a previous immutable SHA tag, e.g.
 #   gcloud run services update careerbridge-api-prod --region=asia-south1 --project=careerbridgeprod \
 #     --image=asia-south1-docker.pkg.dev/careerbridgeprod/careerbridge-prod/api:<previous-full-sha>
-# Schema is not rolled back by an image rollback. Keep RUN_PRISMA_MIGRATE=false on PROD
-# until an approved schema-bootstrap plan exists.
+# Schema is not rolled back by an image rollback. API entrypoint always runs
+# `prisma migrate deploy` on boot (additive); a failed migrate keeps the old revision live.
 on:
   workflow_dispatch:
 
@@ -224,8 +224,8 @@ jobs:
           region: ${{ env.GCP_REGION }}
           project: ${{ env.GCP_PROJECT_ID }}
 
-      # Image only. Does not set env, secrets, Cloud SQL, or RUN_PRISMA_MIGRATE.
-      # Keep RUN_PRISMA_MIGRATE=false on the service until schema bootstrap is approved.
+      # Image only. Does not set env, secrets, or Cloud SQL.
+      # Schema: API entrypoint runs prisma migrate deploy on boot.
       - name: Deploy new image
         run: |
           gcloud run services update "$API_SERVICE" --image="$IMAGE" \
