@@ -1,0 +1,460 @@
+/* Refer & Earn — clean royal-blue dashboard theme */
+
+.re-page {
+  --navy: #0f172a;
+  --blue: #2563eb;
+  --blue-deep: #1d4ed8;
+  --blue-soft: #eff6ff;
+  --blue-pill: #dbeafe;
+  --line: #e2e8f0;
+  --muted: #64748b;
+  --ink: #0f172a;
+  --card: #ffffff;
+  --page-bg: #eef2f7;
+  --sans: var(--font-manrope), "Manrope", "Segoe UI", sans-serif;
+  --display: var(--font-space-grotesk), "Space Grotesk", "Segoe UI", sans-serif;
+  --mono: var(--font-space-mono), "Space Mono", ui-monospace, monospace;
+
+  color: var(--ink);
+  font-family: var(--sans);
+  padding: 0.35rem 0.15rem 1.5rem;
+  margin: 0 -0.35rem;
+  border-radius: 1rem;
+  background: transparent;
+}
+
+.re-header {
+  display: grid;
+  gap: 1.15rem;
+  margin-bottom: 0.25rem;
+}
+
+@media (min-width: 720px) {
+  .re-header {
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 1.75rem;
+  }
+}
+
+.re-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+
+.re-title {
+  margin: 0.35rem 0 0;
+  font-family: var(--display);
+  font-size: clamp(1.65rem, 3.6vw, 2.1rem);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--navy);
+}
+
+.re-lead {
+  margin: 0.5rem 0 0;
+  max-width: 36rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.re-points {
+  min-width: 9.75rem;
+  padding: 0.95rem 1.05rem;
+  border-radius: 0.9rem;
+  background: var(--blue);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+}
+
+.re-points span,
+.re-points small {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.88;
+}
+
+.re-points strong {
+  display: block;
+  margin: 0.15rem 0 0.55rem;
+  font-family: var(--display);
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.re-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  overflow: hidden;
+  margin-bottom: 0.45rem;
+}
+
+.re-bar > i {
+  display: block;
+  height: 100%;
+  background: #fff;
+  border-radius: inherit;
+  transition: width 400ms ease;
+}
+
+.re-rule {
+  margin: 1rem 0 0;
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.re-rule p {
+  margin: 0;
+}
+
+.re-rule ul {
+  margin: 0.55rem 0 0;
+  padding: 0 0 0 1.1rem;
+}
+
+.re-rule li {
+  margin: 0.2rem 0;
+}
+
+.re-rule strong {
+  color: var(--navy);
+}
+
+.re-stats {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+  .re-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.re-stats > div {
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.re-stats span {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.re-stats strong {
+  display: block;
+  margin-top: 0.45rem;
+  font-family: var(--display);
+  font-size: 1.7rem;
+  line-height: 1;
+  color: var(--navy);
+  letter-spacing: -0.03em;
+}
+
+.re-stats__hi {
+  background: var(--blue) !important;
+  border-color: var(--blue) !important;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.2) !important;
+}
+
+.re-stats__hi span,
+.re-stats__hi strong {
+  color: #fff !important;
+}
+
+.re-stats__hi span {
+  opacity: 0.9;
+}
+
+.re-grid {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 900px) {
+  .re-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(17rem, 0.9fr);
+    align-items: start;
+  }
+}
+
+.re-panel {
+  margin-top: 1rem;
+  padding: 1.1rem 1.15rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.re-grid .re-panel {
+  margin-top: 0;
+}
+
+.re-panel h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+}
+
+.re-invite__hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.re-invite__hint code {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-radius: 0.4rem;
+  padding: 0.18rem 0.45rem;
+}
+
+.re-invite__label {
+  display: block;
+  margin-top: 0.95rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.re-invite__input {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  min-height: 2.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.8rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--navy);
+  background: #f8fafc;
+}
+
+.re-invite__input:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.22);
+  border-color: var(--blue);
+}
+
+.re-actions,
+.re-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.re-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.55rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--navy);
+  font-family: var(--sans);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.re-btn:hover {
+  background: var(--blue-soft);
+  border-color: #bfdbfe;
+}
+
+.re-btn--main {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.re-btn--main:hover {
+  background: var(--blue-deep);
+  border-color: var(--blue-deep);
+}
+
+.re-btn--main:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.re-form input {
+  flex: 1 1 14rem;
+  min-height: 2.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.9rem;
+  background: #f8fafc;
+}
+
+.re-form input:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.22);
+  border-color: var(--blue);
+}
+
+.re-table-wrap {
+  margin-top: 0.85rem;
+  overflow-x: auto;
+}
+
+.re-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 18rem;
+}
+
+.re-table th {
+  text-align: left;
+  padding: 0.45rem 0.35rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.re-table td {
+  padding: 0.8rem 0.35rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+.re-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.re-table strong {
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.re-pill {
+  display: inline-flex;
+  align-items: center;
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.22rem 0.55rem;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.re-pill--joined {
+  background: var(--blue-pill);
+  color: var(--blue-deep);
+}
+
+.re-pill--invited {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.re-pill--neutral {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.re-rows {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0;
+}
+
+.re-rows li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.re-rows li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.re-rows strong {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--navy);
+}
+
+.re-rows span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.re-note {
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.re-msg {
+  margin-top: 0.85rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.7rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.re-msg--ok {
+  background: var(--blue-soft);
+  color: var(--blue-deep);
+}
+
+.re-msg--bad {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+@media (max-width: 480px) {
+  .re-actions {
+    flex-direction: column;
+  }
+
+  .re-btn {
+    width: 100%;
+  }
+}

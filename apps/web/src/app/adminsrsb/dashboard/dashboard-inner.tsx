@@ -36,6 +36,7 @@ import { ReportExportPanel } from '@/components/super-admin/ReportExportPanel';
 import { EmployerJobReportPanel } from '@/components/super-admin/EmployerJobReportPanel';
 import { CandidateProgressPanel, EmployerProgressPanel } from '@/components/super-admin/ProgressPiePanel';
 import { AccountDeleteDialog } from '@/components/super-admin/AccountDeleteDialog';
+import { AdminReferralsPanel } from '@/components/super-admin/AdminReferralsPanel';
 import { type AdminDeletableKind, auditDeletionReason, canOfferAccountDeletion } from '@/lib/admin-account-deletion';
 import {
   ActionBtn,
@@ -87,6 +88,7 @@ const TABS: SuperAdminNavId[] = [
   'ai-usage',
   'notifications',
   'testimonials',
+  'referrals',
   'reports',
   'admins',
   'settings',
@@ -991,6 +993,8 @@ export default function SuperAdminDashboardInner() {
             )}
           </div>
         )}
+
+        {tab === 'referrals' && <AdminReferralsPanel />}
 
         {tab === 'reports' && (
           <div className="space-y-4">

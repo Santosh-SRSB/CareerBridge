@@ -26,7 +26,13 @@ function errorCode(err: unknown) {
 
 function harness(
   users: Row[] = [],
-  options: { devOtp?: boolean; emailConfigured?: boolean; nodeEnv?: string; failCreate?: boolean } = {},
+  options: {
+    devOtp?: boolean;
+    emailConfigured?: boolean;
+    nodeEnv?: string;
+    gcpProjectId?: string;
+    failCreate?: boolean;
+  } = {},
 ) {
   const otpRequests: Row[] = [];
   const updateManyCalls: Row[] = [];
@@ -94,6 +100,7 @@ function harness(
     NODE_ENV: options.nodeEnv ?? 'development',
     JWT_ACCESS_SECRET: 'unit-test-access-secret',
     JWT_REFRESH_SECRET: 'unit-test-refresh-secret',
+    ...(options.gcpProjectId ? { GCP_PROJECT_ID: options.gcpProjectId } : {}),
   };
   const config = { get: (key: string) => settings[key] };
   const jwt = { signAsync: async () => 'signed-token' };
@@ -104,7 +111,18 @@ function harness(
       sentOtps.push({ email: to, code });
     },
   };
-  const svc = new AuthService(prisma, jwt as any, config as any, firebase as any, email as any);
+  const referrals = {
+    attributeRegistration: async () => null,
+    ensureReferralCodeForCandidate: async () => ({ referralCode: 'CBTEST' }),
+  };
+  const svc = new AuthService(
+    prisma,
+    jwt as any,
+    config as any,
+    firebase as any,
+    email as any,
+    referrals as any,
+  );
   return { svc, otpRequests, updateManyCalls, createdUsers, refreshTokens, sentOtps };
 }
 
@@ -704,6 +722,22 @@ describe('email OTP outside development OTP mode', () => {
     const value = Number(sentOtps[0].code);
     assert.ok(value >= 100000 && value <= 999999);
     assert.equal(otpRequests[0].otpHash, createHash('sha256').update(sentOtps[0].code).digest('hex'));
+    assert.equal('devOtp' in result, false);
+  });
+
+  it('never uses fixed DEV OTP when GCP_PROJECT_ID is set even if AUTH_DEV_OTP=true', async () => {
+    const { svc, sentOtps } = harness(
+      [{ id: 'u1', email: 'asha@example.test', userType: 'CANDIDATE', phone: '+919800000099' }],
+      { devOtp: true, emailConfigured: true, gcpProjectId: 'careerbridge-f7b72' },
+    );
+    const result = await svc.requestOtp({
+      channel: 'EMAIL',
+      purpose: 'LOGIN',
+      accountType: 'CANDIDATE',
+      email: 'asha@example.test',
+    });
+    assert.equal(sentOtps.length, 1);
+    assert.notEqual(sentOtps[0].code, '123456');
     assert.equal('devOtp' in result, false);
   });
 });

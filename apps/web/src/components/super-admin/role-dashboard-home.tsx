@@ -21,6 +21,7 @@ const MODULE_TILES: Tile[] = [
   { id: 'ai-usage', label: 'AI Usage', href: '/adminsrsb/dashboard?tab=ai-usage' },
   { id: 'notifications', label: 'Notifications', href: '/adminsrsb/dashboard?tab=notifications' },
   { id: 'testimonials', label: 'Testimonials', href: '/adminsrsb/dashboard?tab=testimonials' },
+  { id: 'referrals', label: 'Referrals', href: '/adminsrsb/dashboard?tab=referrals' },
   { id: 'reports', label: 'Reports', href: '/adminsrsb/dashboard?tab=reports' },
   { id: 'audit', label: 'Audit', href: '/adminsrsb/dashboard?tab=audit' },
   { id: 'admins', label: 'Administration', href: '/adminsrsb/dashboard?tab=admins' },

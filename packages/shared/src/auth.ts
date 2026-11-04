@@ -155,6 +155,8 @@ export type RequestOtpPayload = {
   whatsappOptIn?: boolean;
   /** Registration only: the earlier OTP request this one replaces (e.g. after "Change mobile number"). */
   replacesRequestId?: string;
+  /** Candidate registration only: code from /register?ref= */
+  referralCode?: string;
 };
 
 export const REGISTRATION_PASSWORD_HINT =

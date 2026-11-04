@@ -16,6 +16,7 @@ const NAV = [
   { href: '/dashboard', label: 'My home' },
   { href: '/jobs', label: 'Jobs' },
   { href: '/passport?overview=1', label: 'Passport' },
+  { href: '/refer-earn', label: 'Refer & Earn' },
   { href: '/courses', label: 'Courses' },
   { href: '/interviews', label: 'Interviews' },
   { href: '/assessments', label: 'Skill assessment' },
