@@ -181,18 +181,18 @@ jobs:
       - name: Sync WEB_ORIGIN and PUBLIC_WEB_URL
         run: |
           set -euo pipefail
-          WEB_ORIGIN=$(sed -n 's/^WEB_ORIGIN:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml)
-          PUBLIC_WEB_URL=$(sed -n 's/^PUBLIC_WEB_URL:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml)
+          # Strip CR so Windows-checked-in YAML does not pollute values.
+          WEB_ORIGIN=$(sed -n 's/^WEB_ORIGIN:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml | tr -d '\r')
+          PUBLIC_WEB_URL=$(sed -n 's/^PUBLIC_WEB_URL:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml | tr -d '\r')
           if [ -z "$WEB_ORIGIN" ] || [ -z "$PUBLIC_WEB_URL" ]; then
             echo "::error::Could not parse WEB_ORIGIN / PUBLIC_WEB_URL from infrastructure/cloudrun-api-dev.env.yaml"
             exit 1
           fi
-          echo "Syncing WEB_ORIGIN and PUBLIC_WEB_URL for brand domains (incl. .co.in)"
-          # WEB_ORIGIN is a comma-separated allowlist; default env-var parsing also
-          # splits on commas, so use an explicit | delimiter (gcloud ^|^…|^… form).
+          echo "Syncing WEB_ORIGIN (len=${#WEB_ORIGIN}) and PUBLIC_WEB_URL=$PUBLIC_WEB_URL"
+          # WEB_ORIGIN values contain commas. gcloud flag form is: ^DELIM^K1=V1DELIMK2=V2
           gcloud run services update "$API_SERVICE" \
             --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
-            --update-env-vars="^|^WEB_ORIGIN=${WEB_ORIGIN}|^PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
+            --update-env-vars="^|^WEB_ORIGIN=${WEB_ORIGIN}|PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
             --quiet
 
       - name: Verify rollout and health

@@ -36,18 +36,18 @@ jobs:
       - name: Sync WEB_ORIGIN and PUBLIC_WEB_URL
         run: |
           set -euo pipefail
-          WEB_ORIGIN=$(sed -n 's/^WEB_ORIGIN:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml)
-          PUBLIC_WEB_URL=$(sed -n 's/^PUBLIC_WEB_URL:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml)
+          WEB_ORIGIN=$(sed -n 's/^WEB_ORIGIN:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml | tr -d '\r')
+          PUBLIC_WEB_URL=$(sed -n 's/^PUBLIC_WEB_URL:[[:space:]]*"\(.*\)"/\1/p' infrastructure/cloudrun-api-dev.env.yaml | tr -d '\r')
           if [ -z "$WEB_ORIGIN" ] || [ -z "$PUBLIC_WEB_URL" ]; then
             echo "::error::Could not parse WEB_ORIGIN / PUBLIC_WEB_URL"
             exit 1
           fi
-          echo "WEB_ORIGIN=$WEB_ORIGIN"
+          echo "WEB_ORIGIN len=${#WEB_ORIGIN}"
           echo "PUBLIC_WEB_URL=$PUBLIC_WEB_URL"
-          # WEB_ORIGIN contains commas; use | as the env-var pair delimiter.
+          # gcloud form: ^DELIM^K1=V1DELIMK2=V2 (WEB_ORIGIN itself contains commas).
           gcloud run services update "$API_SERVICE" \
             --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
-            --update-env-vars="^|^WEB_ORIGIN=${WEB_ORIGIN}|^PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
+            --update-env-vars="^|^WEB_ORIGIN=${WEB_ORIGIN}|PUBLIC_WEB_URL=${PUBLIC_WEB_URL}" \
             --quiet
           url=$(gcloud run services describe "$API_SERVICE" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --format='value(status.url)')
           curl --fail --silent --show-error --retry 4 --retry-delay 5 --max-time 30 \
