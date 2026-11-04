@@ -83,7 +83,8 @@ jobs:
       contents: read
       id-token: write
     strategy:
-      fail-fast: true
+      # Keep API (CORS / email OTP env) deployable if the web image build flakes.
+      fail-fast: false
       matrix:
         image: [api, web]
     steps:
@@ -124,6 +125,9 @@ jobs:
   deploy-api:
     name: Deploy API · careerbridge-api-dev
     needs: build
+    # Run even if the web matrix leg failed, as long as the API image was pushed.
+    # Live web stays on the previous revision when web build flakes — no UI risk.
+    if: always() && needs.build.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: dev
@@ -141,6 +145,15 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Require API image from this commit
+        run: |
+          set -euo pipefail
+          if ! gcloud artifacts docker images describe "$IMAGE" --project="$GCP_PROJECT_ID" >/dev/null 2>&1; then
+            echo "::error::API image $IMAGE was not pushed (build/api likely failed). Cannot deploy."
+            exit 1
+          fi
+          echo "API image present: $IMAGE"
 
       - name: Record current revision
         run: |
@@ -216,7 +229,9 @@ jobs:
 
   deploy-web:
     name: Deploy Web · careerbridge-web-dev
-    needs: deploy-api
+    needs: [build, deploy-api]
+    # Skip when web image failed — keeps the previous live web revision untouched.
+    if: needs.build.result == 'success' && needs.deploy-api.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: dev

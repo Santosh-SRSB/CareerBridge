@@ -17,7 +17,9 @@ const FIREBASE_MESSAGES: Record<string, string> = {
   'auth/too-many-requests': 'Too many attempts. Please wait and try again later.',
   'auth/quota-exceeded': "We couldn't send the OTP right now. Please try again later.",
   'auth/captcha-check-failed':
-    'Verification could not be completed. Please try again.',
+    'Verification could not be completed. Please try again. If you are on srsbcareerbridge.co.in, add that domain under Firebase Authentication → Settings → Authorized domains.',
+  'auth/unauthorized-domain':
+    'This site domain is not allowed for Phone OTP. In Firebase Console → Authentication → Settings → Authorized domains, add srsbcareerbridge.co.in and www.srsbcareerbridge.co.in.',
   'auth/invalid-phone-number': 'Enter a valid mobile number.',
   'auth/missing-phone-number': 'Enter a valid mobile number.',
   'auth/network-request-failed': 'Network error. Check your connection and try again.',
