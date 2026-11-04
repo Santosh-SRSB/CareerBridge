@@ -70,8 +70,10 @@ export function AdminReferralsPanel() {
             <p className="sa-label text-xs">Campaign</p>
             <h2 className="sa-ink mt-1 text-lg font-extrabold">{board.campaign.name}</h2>
             <p className="sa-muted mt-1 text-xs">
-              Fresher {board.campaign.fresherBatchSize}→{board.campaign.pointsPerBatch} pts · Experienced{' '}
-              {board.campaign.experiencedBatchSize}→{board.campaign.pointsPerBatch} pts · UPI at{' '}
+              Fresher {board.campaign.fresherBatchSize} register+login →{' '}
+              {board.campaign.fresherPointsPerBatch ?? board.campaign.pointsPerBatch} pts · Experienced{' '}
+              {board.campaign.experiencedBatchSize} register+login →{' '}
+              {board.campaign.experiencedPointsPerBatch ?? 5} pts · UPI at{' '}
               {board.campaign.pointsToPayoutEligible} pts · {board.campaign.status}
             </p>
           </section>

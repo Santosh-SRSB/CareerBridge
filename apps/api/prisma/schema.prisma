@@ -1301,9 +1301,12 @@ model ReferralCampaign {
   currency                   String                 @default("INR") @db.Char(3)
   /// Fresher: how many successful referrals earn one points batch (default 3 → 10 points).
   fresherBatchSize           Int                    @default(3) @map("fresher_batch_size")
-  /// Experienced: how many successful referrals earn one points batch (default 1 → 10 points).
+  /// Experienced: how many successful referrals earn one points batch (default 1 → 5 points).
   experiencedBatchSize       Int                    @default(1) @map("experienced_batch_size")
+  /// Points credited per completed fresher batch (default 10).
   pointsPerBatch             Int                    @default(10) @map("points_per_batch")
+  /// Points credited per completed experienced batch (default 5).
+  experiencedPointsPerBatch  Int                    @default(5) @map("experienced_points_per_batch")
   pointsToPayoutEligible     Int                    @default(100) @map("points_to_payout_eligible")
   startDate                  DateTime?              @map("start_date")
   endDate                    DateTime?              @map("end_date")

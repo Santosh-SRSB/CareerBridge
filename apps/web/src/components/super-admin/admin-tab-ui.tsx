@@ -41,7 +41,12 @@ export const TAB_THEME: Record<
   'ai-usage': { ...SA_TONE, title: 'AI Usage', blurb: 'Cost and feature consumption' },
   notifications: { ...SA_TONE, title: 'Notifications', blurb: 'Inbox + WhatsApp delivery board' },
   testimonials: { ...SA_TONE, title: 'Testimonials', blurb: 'Approve or reject public feedback quotes' },
-  referrals: { ...SA_TONE, title: 'Referrals', blurb: 'Refer & Earn attribution, points, and UPI payouts' },
+  referrals: {
+    ...SA_TONE,
+    title: 'Referrals',
+    blurb:
+      'Refer & Earn: Fresher 3 register+login → 10 pts; Experienced 1 register+login → 5 pts; UPI payouts',
+  },
   reports: { ...SA_TONE, title: 'Reports', blurb: 'Operational metric packs' },
   admins: { ...SA_TONE, title: 'Administration', blurb: 'Staff access control' },
   settings: { ...SA_TONE, title: 'Settings', blurb: 'Controlled platform configuration' },

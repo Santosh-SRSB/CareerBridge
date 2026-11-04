@@ -115,8 +115,9 @@ export default function ReferEarnPage() {
             <p className="re-kicker">Refer & Earn</p>
             <h1 className="re-title">Invite friends. Earn real cash.</h1>
             <p className="re-lead">
-              Share your link. Successful registrations earn points. At 100 points, unlock UPI
-              payout.
+              Share your personal referral link. When friends register through your link and
+              complete login, you earn points on your track. Reach{' '}
+              {data?.stats.pointsToPayoutEligible ?? 100} points to unlock UPI payout.
             </p>
           </div>
           {data ? (
@@ -141,18 +142,27 @@ export default function ReferEarnPage() {
           <>
             <div className="re-rule">
               <p>
-                <strong>Your track: {data.referrerKind === 'FRESHER' ? 'Fresher' : 'Experienced'}.</strong>{' '}
-                {data.stats.referralsNeededForNextBatch} more successful join
-                {data.stats.referralsNeededForNextBatch === 1 ? '' : 's'} for your next points batch.
+                <strong>
+                  Your track: {data.referrerKind === 'FRESHER' ? 'Fresher' : 'Experienced'}.
+                </strong>{' '}
+                You need {data.stats.referralsNeededForNextBatch} more friend
+                {data.stats.referralsNeededForNextBatch === 1 ? '' : 's'} to register through your
+                link and log in before your next points credit.
               </p>
               <ul>
                 <li>
-                  <strong>Fresher:</strong> every {data.rules.fresherBatchSize} successful joins →{' '}
-                  {data.rules.pointsPerBatch} points
+                  <strong>Fresher track:</strong> when {data.rules.fresherBatchSize} friends
+                  register through your link and log in, you earn{' '}
+                  {data.rules.fresherPointsPerBatch ?? data.rules.pointsPerBatch} points.
                 </li>
                 <li>
-                  <strong>Experienced:</strong> every {data.rules.experiencedBatchSize} successful join →{' '}
-                  {data.rules.pointsPerBatch} points
+                  <strong>Experienced track:</strong> when {data.rules.experiencedBatchSize} friend
+                  registers through your link and logs in, you earn{' '}
+                  {data.rules.experiencedPointsPerBatch ?? 5} points.
+                </li>
+                <li>
+                  <strong>Payout:</strong> at {data.rules.pointsToPayoutEligible} points you can
+                  submit your UPI ID. Super Admin reviews and completes payment.
                 </li>
               </ul>
             </div>

@@ -35,11 +35,19 @@ export class ReferralsService {
         fresherBatchSize: 3,
         experiencedBatchSize: 1,
         pointsPerBatch: 10,
+        experiencedPointsPerBatch: 5,
         pointsToPayoutEligible: 100,
         startDate: new Date(),
         campaignStatus: ReferralCampaignStatus.ACTIVE,
       },
     });
+  }
+
+  private pointsForKind(
+    campaign: { pointsPerBatch: number; experiencedPointsPerBatch: number },
+    kind: ReferrerKind,
+  ) {
+    return kind === 'FRESHER' ? campaign.pointsPerBatch : campaign.experiencedPointsPerBatch;
   }
 
   async ensureReferralCodeForCandidate(candidateId: string) {
@@ -188,6 +196,8 @@ export class ReferralsService {
       rules: {
         fresherBatchSize: campaign.fresherBatchSize,
         experiencedBatchSize: campaign.experiencedBatchSize,
+        fresherPointsPerBatch: campaign.pointsPerBatch,
+        experiencedPointsPerBatch: campaign.experiencedPointsPerBatch,
         pointsPerBatch: campaign.pointsPerBatch,
         pointsToPayoutEligible: campaign.pointsToPayoutEligible,
       },
@@ -322,6 +332,8 @@ export class ReferralsService {
         name: campaign.campaignName,
         fresherBatchSize: campaign.fresherBatchSize,
         experiencedBatchSize: campaign.experiencedBatchSize,
+        fresherPointsPerBatch: campaign.pointsPerBatch,
+        experiencedPointsPerBatch: campaign.experiencedPointsPerBatch,
         pointsPerBatch: campaign.pointsPerBatch,
         pointsToPayoutEligible: campaign.pointsToPayoutEligible,
         status: campaign.campaignStatus,
@@ -524,6 +536,7 @@ export class ReferralsService {
     const kind = this.referrerKind(candidate);
     const batchSize =
       kind === 'FRESHER' ? campaign.fresherBatchSize : campaign.experiencedBatchSize;
+    const pointsPerBatch = this.pointsForKind(campaign, kind);
     const expectedBatches = Math.floor(approvedCount / batchSize);
     const creditedBatches = credits.filter((c) => c.reference?.startsWith('batch:')).length;
 
@@ -534,12 +547,12 @@ export class ReferralsService {
           data: {
             referrerCandidateId,
             transactionType: ReferralPointTxnType.CREDIT,
-            points: campaign.pointsPerBatch,
+            points: pointsPerBatch,
             reference,
             notes:
               kind === 'FRESHER'
-                ? `${campaign.fresherBatchSize} successful referrals → ${campaign.pointsPerBatch} points`
-                : `1 successful referral → ${campaign.pointsPerBatch} points`,
+                ? `${campaign.fresherBatchSize} friends register and log in → ${pointsPerBatch} points`
+                : `${campaign.experiencedBatchSize} friend registers and logs in → ${pointsPerBatch} points`,
           },
         });
       } catch {

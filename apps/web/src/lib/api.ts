@@ -2188,6 +2188,8 @@ export type ReferralDashboard = {
   rules: {
     fresherBatchSize: number;
     experiencedBatchSize: number;
+    fresherPointsPerBatch: number;
+    experiencedPointsPerBatch: number;
     pointsPerBatch: number;
     pointsToPayoutEligible: number;
   };
@@ -2254,6 +2256,8 @@ export type AdminReferralsBoard = {
     name: string;
     fresherBatchSize: number;
     experiencedBatchSize: number;
+    fresherPointsPerBatch: number;
+    experiencedPointsPerBatch: number;
     pointsPerBatch: number;
     pointsToPayoutEligible: number;
     status: string;
