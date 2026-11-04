@@ -205,6 +205,62 @@ jobs:
       # Do NOT sync WEB_ORIGIN via gcloud here — comma-rich env updates kept failing Deploy API
       # after a healthy image rollout and blocked Deploy Web.
 
+      # OTP runtime flags only (no commas). Keeps email on real SMTP instead of fixed 123456.
+      - name: Ensure AUTH_DEV_OTP off and NODE_ENV=production
+        run: |
+          set -euo pipefail
+          gcloud run services update "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --quiet \
+            --update-env-vars=AUTH_DEV_OTP=false
+          gcloud run services update "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --quiet \
+            --update-env-vars=NODE_ENV=production
+
+      # Phone OTP on brand domains needs these hosts in Firebase Auth authorized domains.
+      - name: Ensure Firebase Phone OTP authorized domains
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json, os, subprocess, urllib.error, urllib.request
+          project = os.environ["GCP_PROJECT_ID"]
+          token = subprocess.check_output(["gcloud", "auth", "print-access-token"], text=True).strip()
+          url = f"https://identitytoolkit.googleapis.com/admin/v2/projects/{project}/config"
+          req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  cfg = json.load(resp)
+          except urllib.error.HTTPError as err:
+              print(f"::warning::Firebase Auth config read failed ({err.code}): {err.read()[:300]!r}")
+              raise SystemExit(0)
+          needed = [
+              "srsbcareerbridge.co.in",
+              "www.srsbcareerbridge.co.in",
+              "srsbcareerbridge.com",
+              "www.srsbcareerbridge.com",
+              "srsbcareerbridge.in",
+              "www.srsbcareerbridge.in",
+          ]
+          current = list(cfg.get("authorizedDomains") or [])
+          merged = list(dict.fromkeys([*current, *needed]))
+          if merged == current:
+              print("Firebase authorizedDomains already include brand hosts")
+              raise SystemExit(0)
+          payload = json.dumps({"authorizedDomains": merged}).encode("utf-8")
+          patch = urllib.request.Request(
+              url + "?updateMask=authorizedDomains",
+              data=payload,
+              method="PATCH",
+              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+          )
+          try:
+              with urllib.request.urlopen(patch, timeout=30) as resp:
+                  updated = json.load(resp)
+              print("Firebase authorizedDomains updated:", ", ".join(updated.get("authorizedDomains") or merged))
+          except urllib.error.HTTPError as err:
+              print(f"::warning::Firebase authorizedDomains update failed ({err.code}): {err.read()[:300]!r}")
+          PY
+
       - name: Diagnostics
         if: failure()
         run: |
