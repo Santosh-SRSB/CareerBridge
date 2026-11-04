@@ -1,0 +1,67 @@
+# One-shot / on-demand: enable prisma migrate on PROD API so additive referral tables apply.
+# Image stays the same; only RUN_PRISMA_MIGRATE flips so entrypoint runs `prisma migrate deploy`.
+name: Apply PROD referral migration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apply-prod-referral-migration
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: careerbridgeprod
+  GCP_REGION: asia-south1
+  API_SERVICE: careerbridge-api-prod
+
+jobs:
+  migrate:
+    name: Enable migrate on careerbridge-api-prod
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Turn on RUN_PRISMA_MIGRATE and roll a new revision
+        run: |
+          set -euo pipefail
+          before=$(gcloud run services describe "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='value(status.latestReadyRevisionName)')
+          echo "before_revision=$before"
+          gcloud run services update "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --quiet \
+            --update-env-vars=RUN_PRISMA_MIGRATE=true
+          after=$(gcloud run services describe "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='value(status.latestReadyRevisionName)')
+          echo "after_revision=$after"
+          url=$(gcloud run services describe "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --format='value(status.url)')
+          curl --fail --silent --show-error --retry 8 --retry-delay 8 --retry-all-errors --max-time 30 \
+            -o /tmp/health.json "$url/api/v1/health"
+          jq -e '.data.status == "ok"' /tmp/health.json
+          {
+            echo "### PROD referral migration"
+            echo "- service: \`$API_SERVICE\`"
+            echo "- before: \`$before\`"
+            echo "- after: \`$after\`"
+            echo "- RUN_PRISMA_MIGRATE=true (entrypoint runs prisma migrate deploy on start)"
+            echo "- health: ok"
+          } >> "$GITHUB_STEP_SUMMARY"
