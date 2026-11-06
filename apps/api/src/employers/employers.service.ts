@@ -1472,15 +1472,12 @@ export class EmployersService {
     }
 
     const resolvedJobId = jobId || applied?.job.id;
+    // Job-scoped views still respect match unlock rules. Talent-pool browse (no job
+    // selected) is free for verified employers — no paid-job / plan gate.
     if (resolvedJobId && !applied) {
       await this.matching.assertCandidateVisibleForJob(userId, resolvedJobId, candidateId);
     } else if (resolvedJobId && applied) {
       await this.matching.assertJobUnlocked(userId, resolvedJobId);
-    } else if (!applied) {
-      throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: 'Select a paid job to view this candidate profile.',
-      });
     }
     await this.recordCandidateView(employer.id, candidateId, resolvedJobId || null, Boolean(applied));
 
