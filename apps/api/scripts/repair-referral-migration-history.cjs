@@ -1,26 +1,38 @@
 /**
- * Idempotent Prisma history repair for DEV → main sync.
+ * Idempotent Prisma history repair when DEV DB history diverged from main's migration folders.
  *
- * Old DEV branch applied referral as `20261103190000_referral_earn`.
- * main ships `20261103180000_referral_earn` (same additive tables).
- * Also DEV may have `20261103180000_kaizentrix_training_commission` in history
- * while main no longer ships that folder — orphan rows block `migrate deploy`.
+ * - Removes orphan `_prisma_migrations` rows whose folders are not in this image
+ * - If referral tables already exist but `20261103180000_referral_earn` is not marked applied,
+ *   marks it applied (does not re-run DDL)
  *
- * Safe on PROD: if `20261103180000_referral_earn` is already applied, this is a no-op.
- * Never drops tables. Only rewrites `_prisma_migrations` rows when needed.
+ * Safe on PROD: when history already matches the image, this is a no-op.
+ * Never drops tables / never touches data rows.
  */
 'use strict';
 
 const { execFileSync } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 const { PrismaClient } = require('../generated/prisma');
 
 const MAIN_REFERRAL = '20261103180000_referral_earn';
-const OLD_DEV_REFERRAL = '20261103190000_referral_earn';
-const ORPHAN_PREFIXES = [
-  OLD_DEV_REFERRAL,
-  '20261103180000_kaizentrix_training_commission',
-];
+const apiRoot = path.join(__dirname, '..');
+const migrationsDir = path.join(apiRoot, 'prisma', 'migrations');
+
+function localMigrationNames() {
+  return fs
+    .readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
+}
+
+function runPrisma(args) {
+  execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', 'prisma@6', ...args], {
+    stdio: 'inherit',
+    cwd: apiRoot,
+    env: process.env,
+  });
+}
 
 async function main() {
   if (!process.env.DATABASE_URL) {
@@ -28,19 +40,36 @@ async function main() {
     return;
   }
 
+  const local = new Set(localMigrationNames());
+  console.log(
+    `repair-referral-migration-history: local migrations=${[...local].sort().join(',')}`,
+  );
+
   const prisma = new PrismaClient();
   try {
-    const applied = await prisma.$queryRaw`
+    const appliedRows = await prisma.$queryRaw`
       SELECT migration_name
       FROM "_prisma_migrations"
       WHERE rolled_back_at IS NULL
     `;
-    const names = new Set(applied.map((r) => r.migration_name));
+    const applied = appliedRows.map((r) => r.migration_name);
+    console.log(`repair-referral-migration-history: applied=${applied.join(',') || '(none)'}`);
 
-    if (names.has(MAIN_REFERRAL) && !names.has(OLD_DEV_REFERRAL)) {
-      console.log('repair-referral-migration-history: already aligned; nothing to do');
-      return;
+    const orphans = applied.filter((name) => !local.has(name));
+    for (const orphan of orphans) {
+      console.log(`repair-referral-migration-history: deleting orphan history row ${orphan}`);
+      await prisma.$executeRaw`
+        DELETE FROM "_prisma_migrations"
+        WHERE migration_name = ${orphan}
+      `;
     }
+
+    const stillApplied = await prisma.$queryRaw`
+      SELECT migration_name
+      FROM "_prisma_migrations"
+      WHERE rolled_back_at IS NULL
+    `;
+    const names = new Set(stillApplied.map((r) => r.migration_name));
 
     const tables = await prisma.$queryRaw`
       SELECT tablename
@@ -50,35 +79,18 @@ async function main() {
     `;
     const hasReferralTables = tables.length > 0;
 
-    for (const orphan of ORPHAN_PREFIXES) {
-      if (!names.has(orphan)) continue;
-      // Keep data; only remove history row that is absent from this image's migrations folder.
-      console.log(`repair-referral-migration-history: removing orphan history row ${orphan}`);
-      await prisma.$executeRaw`
-        DELETE FROM "_prisma_migrations"
-        WHERE migration_name = ${orphan}
-      `;
-      names.delete(orphan);
-    }
-
-    if (hasReferralTables && !names.has(MAIN_REFERRAL)) {
+    if (hasReferralTables && local.has(MAIN_REFERRAL) && !names.has(MAIN_REFERRAL)) {
       console.log(
         `repair-referral-migration-history: marking ${MAIN_REFERRAL} applied (tables already exist)`,
       );
-      execFileSync(
-        process.platform === 'win32' ? 'npx.cmd' : 'npx',
-        ['--yes', 'prisma@6', 'migrate', 'resolve', '--applied', MAIN_REFERRAL, '--schema=./prisma/schema.prisma'],
-        {
-          stdio: 'inherit',
-          cwd: path.join(__dirname, '..'),
-          env: process.env,
-        },
-      );
-    } else {
-      console.log('repair-referral-migration-history: no resolve needed');
+      await prisma.$disconnect();
+      runPrisma(['migrate', 'resolve', '--applied', MAIN_REFERRAL, '--schema=./prisma/schema.prisma']);
+      return;
     }
+
+    console.log('repair-referral-migration-history: history aligned for migrate deploy');
   } finally {
-    await prisma.$disconnect();
+    await prisma.$disconnect().catch(() => undefined);
   }
 }
 
