@@ -198,9 +198,11 @@ jobs:
           gcloud run revisions describe "$latest" --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
             --format='yaml(status.conditions)'
           echo "### Cloud Run logs · $latest"
+          gcloud run services logs read "$API_SERVICE" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --limit=50 || true
           gcloud logging read \
-            "resource.type=cloud_run_revision AND resource.labels.service_name=\"$API_SERVICE\" AND resource.labels.revision_name=\"$latest\"" \
-            --project="$GCP_PROJECT_ID" --limit=40 --format='value(textPayload)' || true
+            "resource.type=\"cloud_run_revision\" AND resource.labels.revision_name=\"$latest\"" \
+            --project="$GCP_PROJECT_ID" --limit=40 --format='json' 2>&1 | tail -n 200 || true
 
   deploy-web:
     name: Deploy Web · careerbridge-web-dev

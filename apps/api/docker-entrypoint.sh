@@ -26,18 +26,23 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 # DEV-only history mismatch (190000 vs 180000 referral; orphan Kaizentrix row). Idempotent no-op on PROD.
+echo "entrypoint: node=$(node -v) pwd=$(pwd)"
+ls -la ./scripts ./generated/prisma/index.js ./prisma/schema.prisma 2>&1 || true
 if [ -f ./scripts/repair-referral-migration-history.cjs ]; then
-  echo "Checking referral migration history…"
+  echo "entrypoint: repairing referral migration history…"
   if ! node ./scripts/repair-referral-migration-history.cjs; then
-    echo "referral migration history repair failed; refusing to start." >&2
+    echo "entrypoint: referral migration history repair failed; refusing to start." >&2
     exit 1
   fi
+else
+  echo "entrypoint: repair script missing; continuing to migrate deploy"
 fi
-echo "Running prisma migrate deploy..."
+echo "entrypoint: running prisma migrate deploy…"
 if ! npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma; then
-  echo "prisma migrate deploy failed; refusing to start. The database schema was not modified by this script." >&2
+  echo "entrypoint: prisma migrate deploy failed; refusing to start." >&2
   exit 1
 fi
+echo "entrypoint: migrations ok; starting API"
 
 
 exec node dist/main.js
