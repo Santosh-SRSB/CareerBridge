@@ -157,7 +157,7 @@ jobs:
 
       # `services update` fails if the service does not exist (never creates one) and only
       # shifts traffic once the new revision passes its startup probe. The API entrypoint runs
-      # `prisma migrate deploy` before listening, so a failed migration keeps the old revision live.
+      # Image only. Entrypoint repairs DEV referral migration history; PROD stays hard-fail on migrate.
       - name: Deploy new image
         run: |
           gcloud run services update "$API_SERVICE" --image="$IMAGE" \

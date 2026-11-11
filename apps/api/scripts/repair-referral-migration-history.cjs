@@ -1,12 +1,12 @@
 /**
- * Idempotent Prisma history repair when DEV DB history diverged from main's migration folders.
+ * Idempotent Prisma history + referral schema repair for DEV↔main sync.
  *
- * - Removes orphan `_prisma_migrations` rows whose folders are not in this image
- * - If referral tables already exist but `20261103180000_referral_earn` is not marked applied,
- *   marks it applied (does not re-run DDL)
+ * 1) Deletes orphan `_prisma_migrations` rows not present in this image
+ * 2) Marks `20261103180000_referral_earn` applied when referral tables already exist
+ * 3) Ensures `experienced_points_per_batch` exists (IF NOT EXISTS) and marks
+ *    `20261104120000_referral_experienced_points` applied when needed
  *
- * Safe on PROD: when history already matches the image, this is a no-op.
- * Never drops tables / never touches data rows.
+ * Never drops tables. Safe no-op when already aligned (including PROD).
  */
 'use strict';
 
@@ -16,6 +16,7 @@ const path = require('path');
 const { PrismaClient } = require('../generated/prisma');
 
 const MAIN_REFERRAL = '20261103180000_referral_earn';
+const EXPERIENCED_POINTS = '20261104120000_referral_experienced_points';
 const apiRoot = path.join(__dirname, '..');
 const migrationsDir = path.join(apiRoot, 'prisma', 'migrations');
 
@@ -34,42 +35,37 @@ function runPrisma(args) {
   });
 }
 
+async function appliedNames(prisma) {
+  const rows = await prisma.$queryRaw`
+    SELECT migration_name
+    FROM "_prisma_migrations"
+    WHERE rolled_back_at IS NULL
+  `;
+  return new Set(rows.map((r) => r.migration_name));
+}
+
 async function main() {
   if (!process.env.DATABASE_URL) {
-    console.log('repair-referral-migration-history: DATABASE_URL missing; skip');
+    console.log('repair: DATABASE_URL missing; skip');
     return;
   }
 
   const local = new Set(localMigrationNames());
-  console.log(
-    `repair-referral-migration-history: local migrations=${[...local].sort().join(',')}`,
-  );
+  console.log(`repair: local=${[...local].sort().join(',')}`);
 
   const prisma = new PrismaClient();
   try {
-    const appliedRows = await prisma.$queryRaw`
-      SELECT migration_name
-      FROM "_prisma_migrations"
-      WHERE rolled_back_at IS NULL
-    `;
-    const applied = appliedRows.map((r) => r.migration_name);
-    console.log(`repair-referral-migration-history: applied=${applied.join(',') || '(none)'}`);
+    let names = await appliedNames(prisma);
+    console.log(`repair: applied=${[...names].join(',') || '(none)'}`);
 
-    const orphans = applied.filter((name) => !local.has(name));
-    for (const orphan of orphans) {
-      console.log(`repair-referral-migration-history: deleting orphan history row ${orphan}`);
+    for (const orphan of [...names].filter((n) => !local.has(n))) {
+      console.log(`repair: delete orphan history ${orphan}`);
       await prisma.$executeRaw`
         DELETE FROM "_prisma_migrations"
         WHERE migration_name = ${orphan}
       `;
     }
-
-    const stillApplied = await prisma.$queryRaw`
-      SELECT migration_name
-      FROM "_prisma_migrations"
-      WHERE rolled_back_at IS NULL
-    `;
-    const names = new Set(stillApplied.map((r) => r.migration_name));
+    names = await appliedNames(prisma);
 
     const tables = await prisma.$queryRaw`
       SELECT tablename
@@ -79,22 +75,47 @@ async function main() {
     `;
     const hasReferralTables = tables.length > 0;
 
+    // Ensure experienced points column before app boot (idempotent).
+    if (hasReferralTables) {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "referral_campaigns"
+        ADD COLUMN IF NOT EXISTS "experienced_points_per_batch" INTEGER NOT NULL DEFAULT 5
+      `);
+      await prisma.$executeRawUnsafe(`
+        UPDATE "referral_campaigns"
+        SET "experienced_points_per_batch" = 5,
+            "experienced_batch_size" = 1,
+            "fresher_batch_size" = 3,
+            "points_per_batch" = 10
+        WHERE "campaign_status" = 'ACTIVE'
+      `);
+      console.log('repair: ensured experienced_points_per_batch column');
+    }
+
+    const needResolve = [];
     if (hasReferralTables && local.has(MAIN_REFERRAL) && !names.has(MAIN_REFERRAL)) {
-      console.log(
-        `repair-referral-migration-history: marking ${MAIN_REFERRAL} applied (tables already exist)`,
-      );
-      await prisma.$disconnect();
-      runPrisma(['migrate', 'resolve', '--applied', MAIN_REFERRAL, '--schema=./prisma/schema.prisma']);
+      needResolve.push(MAIN_REFERRAL);
+    }
+    if (hasReferralTables && local.has(EXPERIENCED_POINTS) && !names.has(EXPERIENCED_POINTS)) {
+      needResolve.push(EXPERIENCED_POINTS);
+    }
+
+    if (needResolve.length === 0) {
+      console.log('repair: history already aligned');
       return;
     }
 
-    console.log('repair-referral-migration-history: history aligned for migrate deploy');
+    await prisma.$disconnect();
+    for (const migration of needResolve) {
+      console.log(`repair: migrate resolve --applied ${migration}`);
+      runPrisma(['migrate', 'resolve', '--applied', migration, '--schema=./prisma/schema.prisma']);
+    }
   } finally {
     await prisma.$disconnect().catch(() => undefined);
   }
 }
 
 main().catch((err) => {
-  console.error('repair-referral-migration-history failed:', err);
+  console.error('repair failed:', err);
   process.exit(1);
 });

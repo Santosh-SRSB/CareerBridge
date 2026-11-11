@@ -31,18 +31,29 @@ ls -la ./scripts ./generated/prisma/index.js ./prisma/schema.prisma 2>&1 || true
 if [ -f ./scripts/repair-referral-migration-history.cjs ]; then
   echo "entrypoint: repairing referral migration history…"
   if ! node ./scripts/repair-referral-migration-history.cjs; then
-    echo "entrypoint: referral migration history repair failed; refusing to start." >&2
-    exit 1
+    if [ "${PII_ACTIVE_KEY_ID:-}" = "dev1" ]; then
+      echo "entrypoint: repair failed on DEV; continuing to migrate/boot" >&2
+    else
+      echo "entrypoint: referral migration history repair failed; refusing to start." >&2
+      exit 1
+    fi
   fi
 else
-  echo "entrypoint: repair script missing; continuing to migrate deploy"
+  echo "entrypoint: repair script missing; continuing"
 fi
+
 echo "entrypoint: running prisma migrate deploy…"
-if ! npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma; then
+if npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma; then
+  echo "entrypoint: migrations ok"
+elif [ "${PII_ACTIVE_KEY_ID:-}" = "dev1" ]; then
+  # DEV-only soft continue: repair script already patched referral history/columns.
+  # PROD uses PII_ACTIVE_KEY_ID=k1 and still hard-fails here — never soft-continues.
+  echo "entrypoint: migrate deploy failed on DEV after repair; continuing boot (DEV soft path)" >&2
+else
   echo "entrypoint: prisma migrate deploy failed; refusing to start." >&2
   exit 1
 fi
-echo "entrypoint: migrations ok; starting API"
+echo "entrypoint: starting API"
 
 
 exec node dist/main.js
