@@ -47,6 +47,7 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/generated ./apps/api/generated
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder /app/apps/api/scripts/repair-referral-migration-history.cjs ./apps/api/scripts/repair-referral-migration-history.cjs
 COPY apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
 RUN sed -i 's/\r$//' ./apps/api/docker-entrypoint.sh && chmod +x ./apps/api/docker-entrypoint.sh
 

@@ -25,10 +25,19 @@ if [ -z "${DATABASE_URL:-}" ]; then
   echo "DATABASE_URL is not set; refusing to start (required for prisma migrate deploy)." >&2
   exit 1
 fi
+# DEV-only history mismatch (190000 vs 180000 referral; orphan Kaizentrix row). Idempotent no-op on PROD.
+if [ -f ./scripts/repair-referral-migration-history.cjs ]; then
+  echo "Checking referral migration history…"
+  if ! node ./scripts/repair-referral-migration-history.cjs; then
+    echo "referral migration history repair failed; refusing to start." >&2
+    exit 1
+  fi
+fi
 echo "Running prisma migrate deploy..."
 if ! npx --yes prisma@6 migrate deploy --schema=./prisma/schema.prisma; then
   echo "prisma migrate deploy failed; refusing to start. The database schema was not modified by this script." >&2
   exit 1
 fi
+
 
 exec node dist/main.js
