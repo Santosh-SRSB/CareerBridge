@@ -128,6 +128,7 @@ function makeDb() {
     settings: [] as Row[],
     candidateViews: [] as Row[],
     companies: [] as Row[],
+    candidateMatches: [] as Row[],
   };
 }
 type Db = ReturnType<typeof makeDb>;
@@ -177,7 +178,35 @@ type Opts = {
   /** Runs before company.create's unique check, to simulate a concurrent registration winning the race. */
   beforeCompanyCreate?: (db: Db) => void;
   pii?: PiiCryptoService;
+  /** Resume-download tests: enforce job ownership + match unlock in the matching double. */
+  strictResumeVisibility?: boolean;
+  assertCandidateVisibleForJob?: (uid: string, jobId: string, candidateId: string) => Promise<void>;
 };
+
+function resumeVisibilityMock(db: Db) {
+  return async (uid: string, jobId: string, candidateId: string) => {
+    const employer = db.employers.find((e) => e.userId === uid);
+    const job = db.jobs.find((j) => j.id === jobId && j.employerId === employer?.id);
+    if (!job) {
+      throw new ForbiddenException({
+        code: 'BUSINESS_RULE_VIOLATION',
+        message: 'Complete the job posting payment to unlock matched candidate profiles.',
+      });
+    }
+    const applied = db.applications.some(
+      (a) => a.jobId === jobId && a.candidateId === candidateId && a.status !== 'WITHDRAWN',
+    );
+    if (applied) return;
+    const match = db.candidateMatches.find((m) => m.jobId === jobId && m.candidateId === candidateId);
+    if (!match || match.rank == null || match.rank > 10) {
+      throw new ForbiddenException({
+        code: 'BUSINESS_RULE_VIOLATION',
+        message:
+          'This candidate profile is not included in your current payment plan. Pay the job posting fee or upgrade to view more matches.',
+      });
+    }
+  };
+}
 
 function harness(opts: Opts = {}) {
   const db = makeDb();
@@ -353,7 +382,9 @@ function harness(opts: Opts = {}) {
     },
     assertJobUnlocked: async () => undefined,
     candidateUnlockLimit: async () => 0,
-    assertCandidateVisibleForJob: async () => undefined,
+    assertCandidateVisibleForJob:
+      opts.assertCandidateVisibleForJob ??
+      (opts.strictResumeVisibility ? resumeVisibilityMock(db) : async () => undefined),
   };
   const interviewWhatsApp = {
     enqueueInvitation: async (id: string, kind = 'initial') => {
@@ -470,34 +501,41 @@ const jobDto = (extra: Row = {}) => ({
   ...extra,
 });
 
-describe('Fix 1 — resume download needs employer + job + application', () => {
+describe('Fix 1 — resume download needs employer ownership + application or match unlock', () => {
   it('candidate applied to job A → download OK (that application resume)', async () => {
-    const { svc, calls } = harness();
+    const { svc, calls } = harness({ strictResumeVisibility: true });
     await svc.downloadCandidateResume('uA', CAND, 'JA1');
     assert.deepEqual(calls.downloads, [{ userId: 'cU', resumeId: 'R1' }]);
   });
   it('candidate applied to job B → download OK (job B application resume)', async () => {
-    const { svc, calls } = harness();
+    const { svc, calls } = harness({ strictResumeVisibility: true });
     await svc.downloadCandidateResume('uA', CAND, 'JA2');
     assert.deepEqual(calls.downloads, [{ userId: 'cU', resumeId: 'R2' }]);
   });
-  it('same employer, job C the candidate did NOT apply to → 403', async () => {
-    const { svc, calls } = harness();
+  it('same employer, job C with no application and no match unlock → 403', async () => {
+    const { svc, calls } = harness({ strictResumeVisibility: true });
     await assert.rejects(svc.downloadCandidateResume('uA', CAND, 'JA3'), (err) => {
       assert.ok(err instanceof ForbiddenException);
-      assert.match(httpMessage(err), /not applied to the selected job/);
+      assert.match(httpMessage(err), /not included in your current payment plan|not applied/i);
       return true;
     });
     assert.equal(calls.downloads.length, 0);
   });
+  it('matched talent (no application) → download OK from candidate resume', async () => {
+    const { svc, calls, db, prisma } = harness({ strictResumeVisibility: true });
+    db.candidateMatches.push({ jobId: 'JA3', candidateId: CAND, rank: 1 });
+    (prisma as any).resume.findFirst = async () => ({ id: 'R-MATCH' });
+    await svc.downloadCandidateResume('uA', CAND, 'JA3');
+    assert.deepEqual(calls.downloads, [{ userId: 'cU', resumeId: 'R-MATCH' }]);
+  });
   it("employer B → 403, with or without employer A's job id", async () => {
-    const { svc, calls } = harness();
+    const { svc, calls } = harness({ strictResumeVisibility: true });
     await assert.rejects(svc.downloadCandidateResume('uB', CAND, 'JA1'), ForbiddenException);
     await assert.rejects(svc.downloadCandidateResume('uB', CAND), ForbiddenException);
     assert.equal(calls.downloads.length, 0);
   });
   it('no job id → latest application to this employer', async () => {
-    const { svc, calls } = harness();
+    const { svc, calls } = harness({ strictResumeVisibility: true });
     await svc.downloadCandidateResume('uA', CAND);
     assert.deepEqual(calls.downloads, [{ userId: 'cU', resumeId: 'R2' }]);
   });
