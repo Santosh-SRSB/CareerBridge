@@ -8470,6 +8470,41 @@ a.ep-prohead__cta {
   gap: 8px;
   margin-top: 16px;
 }
+.ep-modal--resume {
+  padding: 12px;
+}
+.ep-modal__card--resume {
+  width: min(960px, 100%);
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+.ep-modal__head--resume {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ep-modal__actions--resume {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+.ep-resume-preview {
+  margin-top: 12px;
+  min-height: 60vh;
+  flex: 1;
+  border: 1px solid #eef0ff;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f7f8fc;
+}
+.ep-resume-preview__frame {
+  width: 100%;
+  height: min(72vh, 820px);
+  border: 0;
+  background: #fff;
+}
 
 .ep-saas-panel__link {
   font-size: 14px;

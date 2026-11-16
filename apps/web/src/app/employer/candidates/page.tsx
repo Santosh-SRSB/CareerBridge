@@ -316,7 +316,7 @@ export default function EmployerCandidatesPage() {
   if (awaitingAdmin) {
     return (
       <EmployerShellFallback title="Candidates">
-        <EvPageHead eyebrow="Talent pool" title="Candidates" subtitle={WAITING_FOR_ADMINISTRATION_APPROVAL} />
+        <EvPageHead eyebrow="Applicants" title="Candidates" subtitle={WAITING_FOR_ADMINISTRATION_APPROVAL} />
         <div className="ev-card ev-mt">
           <EvEmpty
             title={WAITING_FOR_ADMINISTRATION_APPROVAL}
@@ -330,9 +330,9 @@ export default function EmployerCandidatesPage() {
   return (
     <EmployerShellFallback title="Candidates">
       <EvPageHead
-        eyebrow="Talent pool"
+        eyebrow="Applicants"
         title="Candidates"
-        subtitle="Browse all candidates, or select a job for ranked matches. Shortlist and schedule interviews."
+        subtitle="Search only among candidates who applied to your jobs. Select a job to rank applicants."
         actions={
           selectedJob ? (
             <div className="ev-card ev-matching">
@@ -362,7 +362,7 @@ export default function EmployerCandidatesPage() {
             }}
             disabled={loading}
           >
-            <option value="">All candidates</option>
+            <option value="">All applicants</option>
             {jobs.map((job) => (
               <option key={job.id} value={job.id}>
                 {job.title}
@@ -544,8 +544,8 @@ export default function EmployerCandidatesPage() {
               title="No candidates found"
               body={
                 jobId
-                  ? 'Try broader filters or another job posting.'
-                  : 'Try broader filters, or select a job to see ranked matches.'
+                  ? 'No applicants match these filters for this job.'
+                  : 'No applicants yet. Candidates appear here after they apply to your jobs.'
               }
             />
           </div>
@@ -554,12 +554,11 @@ export default function EmployerCandidatesPage() {
         {!loading && !searching && (results?.length ?? 0) > 0 ? (
           <>
             <div className="ev-results-head">
-              <h2>{jobId ? 'Matched candidates' : 'All candidates'}</h2>
+              <h2>{jobId ? 'Applicants for this job' : 'All applicants'}</h2>
               <span className="ev-sub" data-testid="candidates-count">
                 <b>
-                  {total} {total === 1 ? 'candidate' : 'candidates'} found
+                  {total} {total === 1 ? 'applicant' : 'applicants'} found
                 </b>
-                {jobId && unlockLimit > 0 && totalMatched > total ? ` · ${totalMatched} matched in total` : ''}
               </span>
             </div>
 

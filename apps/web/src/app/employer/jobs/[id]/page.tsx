@@ -14,14 +14,13 @@ import {
   listJobMatches,
   recomputeJobMatches,
   recordHiringOutcome,
-  openBase64FileInNewTab,
-  saveBase64File,
   type JobMatchRow,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { EmployerAtsBandChip, EmployerAtsPanel } from '@/components/employer/EmployerAtsPanel';
 import { MatchedCandidateCard } from '@/components/employer/MatchedCandidateCard';
 import { JobStatusActions } from '@/components/employer/JobStatusActions';
+import { ResumePreviewModal } from '@/components/employer/ResumePreviewModal';
 import {
   EvAlert,
   EvApplicationPill,
@@ -92,6 +91,13 @@ export default function EmployerJobApplicationsPage() {
   const [invitedIds, setInvitedIds] = useState<Set<string>>(() => new Set());
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [resumeBusyId, setResumeBusyId] = useState('');
+  const [resumePreview, setResumePreview] = useState<{
+    content: string;
+    fileName: string;
+    mimeType: string;
+    kind: 'pdf' | 'html';
+  } | null>(null);
 
   const uniqueMatches = useMemo(() => {
     const seen = new Set<string>();
@@ -166,39 +172,32 @@ export default function EmployerJobApplicationsPage() {
     }
   }
 
-  async function fetchResume(candidateId: string) {
-    return downloadEmployerCandidateResume(candidateId, params.id);
-  }
-
   async function onViewResume(candidateId: string) {
     setError('');
+    setResumeBusyId(candidateId);
     try {
-      const file = await fetchResume(candidateId);
+      const file = await downloadEmployerCandidateResume(candidateId, params.id);
       if (file.pdf) {
-        openBase64FileInNewTab(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
+        setResumePreview({
+          content: file.pdf,
+          fileName: file.fileName || 'resume.pdf',
+          mimeType: file.mimeType || 'application/pdf',
+          kind: 'pdf',
+        });
       } else if (file.html) {
-        openBase64FileInNewTab(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
+        setResumePreview({
+          content: file.html,
+          fileName: file.fileName || 'resume.html',
+          mimeType: file.mimeType || 'text/html',
+          kind: 'html',
+        });
       } else {
         setError('Resume file was empty.');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open resume.');
-    }
-  }
-
-  async function onDownloadResume(candidateId: string) {
-    setError('');
-    try {
-      const file = await fetchResume(candidateId);
-      if (file.pdf) {
-        saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
-      } else if (file.html) {
-        saveBase64File(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
-      } else {
-        setError('Resume file was empty.');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not download resume.');
+    } finally {
+      setResumeBusyId('');
     }
   }
 
@@ -506,16 +505,10 @@ export default function EmployerJobApplicationsPage() {
                         <button
                           type="button"
                           className="ev-btn ev-btn--ghost ev-btn--sm"
+                          disabled={resumeBusyId === item.candidate.id}
                           onClick={() => void onViewResume(item.candidate.id)}
                         >
-                          View resume
-                        </button>
-                        <button
-                          type="button"
-                          className="ev-btn ev-btn--ghost ev-btn--sm"
-                          onClick={() => void onDownloadResume(item.candidate.id)}
-                        >
-                          Download
+                          {resumeBusyId === item.candidate.id ? 'Opening…' : 'View resume'}
                         </button>
                         <Link
                           href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(item.id)}&jobId=${encodeURIComponent(params.id)}`}
@@ -574,6 +567,15 @@ export default function EmployerJobApplicationsPage() {
           </div>
         </section>
       ) : null}
+
+      <ResumePreviewModal
+        open={Boolean(resumePreview)}
+        content={resumePreview?.content || ''}
+        fileName={resumePreview?.fileName || 'resume.pdf'}
+        mimeType={resumePreview?.mimeType || 'application/pdf'}
+        kind={resumePreview?.kind || 'pdf'}
+        onClose={() => setResumePreview(null)}
+      />
     </EmployerShellFallback>
   );
 }

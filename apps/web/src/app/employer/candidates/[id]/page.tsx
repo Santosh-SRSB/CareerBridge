@@ -11,13 +11,12 @@ import {
   downloadEmployerCandidateResume,
   getEmployerCandidate,
   inviteCandidateToJob,
-  openBase64FileInNewTab,
-  saveBase64File,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { toast } from '@/components/ui/Toast';
 import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
 import { RejectConfirmModal } from '@/components/employer/RejectConfirmModal';
+import { ResumePreviewModal } from '@/components/employer/ResumePreviewModal';
 import { EmployerAtsPanel } from '@/components/employer/EmployerAtsPanel';
 import { EvAlert, EvApplicationPill, EvAvatar, EvPageHead, EvSkeleton } from '@/components/employer/ui';
 import { pipelineStage } from '@/lib/employer-ui-status';
@@ -74,6 +73,12 @@ export default function EmployerCandidateProfilePage() {
   const [modal, setModal] = useState<'SHORTLIST' | 'REJECT' | null>(null);
   const [modalError, setModalError] = useState('');
   const [invited, setInvited] = useState(false);
+  const [resumePreview, setResumePreview] = useState<{
+    content: string;
+    fileName: string;
+    mimeType: string;
+    kind: 'pdf' | 'html';
+  } | null>(null);
 
   async function load() {
     const next = await getEmployerCandidate(params.id, jobId);
@@ -151,39 +156,26 @@ export default function EmployerCandidateProfilePage() {
       const file = await loadResumeFile();
       if (!file) return;
       if (file.pdf) {
-        openBase64FileInNewTab(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
+        setResumePreview({
+          content: file.pdf,
+          fileName: file.fileName || 'resume.pdf',
+          mimeType: file.mimeType || 'application/pdf',
+          kind: 'pdf',
+        });
         return;
       }
       if (file.html) {
-        openBase64FileInNewTab(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
+        setResumePreview({
+          content: file.html,
+          fileName: file.fileName || 'resume.html',
+          mimeType: file.mimeType || 'text/html',
+          kind: 'html',
+        });
         return;
       }
       setError('Resume file was empty.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open resume.');
-    } finally {
-      setBusy('');
-    }
-  }
-
-  async function downloadResumeFile() {
-    if (!profile?.hasResume) return;
-    setBusy('RESUME_DL');
-    setError('');
-    try {
-      const file = await loadResumeFile();
-      if (!file) return;
-      if (file.pdf) {
-        saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
-        return;
-      }
-      if (file.html) {
-        saveBase64File(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
-        return;
-      }
-      setError('Resume file was empty.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not download resume.');
     } finally {
       setBusy('');
     }
@@ -358,24 +350,14 @@ export default function EmployerCandidateProfilePage() {
                   </Link>
                 ) : null}
                 {profile.hasResume ? (
-                  <>
-                    <button
-                      type="button"
-                      className="ev-btn ev-btn--ghost"
-                      disabled={busy !== ''}
-                      onClick={() => void viewResume()}
-                    >
-                      {busy === 'RESUME' ? 'Opening…' : 'View resume'}
-                    </button>
-                    <button
-                      type="button"
-                      className="ev-btn ev-btn--ghost"
-                      disabled={busy !== ''}
-                      onClick={() => void downloadResumeFile()}
-                    >
-                      {busy === 'RESUME_DL' ? 'Downloading…' : 'Download'}
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="ev-btn ev-btn--ghost"
+                    disabled={busy !== ''}
+                    onClick={() => void viewResume()}
+                  >
+                    {busy === 'RESUME' ? 'Opening…' : 'View resume'}
+                  </button>
                 ) : null}
                 {application && !FINAL_APPLICATION_STATUSES.includes(application.status) ? (
                   <button
@@ -467,6 +449,14 @@ export default function EmployerCandidateProfilePage() {
         error={modalError}
         onCancel={() => setModal(null)}
         onConfirm={(reason) => act('REJECT', reason)}
+      />
+      <ResumePreviewModal
+        open={Boolean(resumePreview)}
+        content={resumePreview?.content || ''}
+        fileName={resumePreview?.fileName || 'resume.pdf'}
+        mimeType={resumePreview?.mimeType || 'application/pdf'}
+        kind={resumePreview?.kind || 'pdf'}
+        onClose={() => setResumePreview(null)}
       />
     </EmployerShellFallback>
   );

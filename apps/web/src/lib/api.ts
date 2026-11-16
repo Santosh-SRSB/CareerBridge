@@ -966,7 +966,7 @@ export async function downloadResume(id: string, variant?: 'original' | 'formatt
   }>(`/resumes/${id}/download${q}`);
 }
 
-function base64OrTextToBlob(content: string, mimeType: string, fileName: string) {
+export function base64OrTextToBlob(content: string, mimeType: string, fileName: string) {
   const isHtml = mimeType.includes('html') || fileName.endsWith('.html');
   if (isHtml) return new Blob([content], { type: mimeType || 'text/html' });
   const binary = atob(content);

@@ -162,7 +162,20 @@ function matches(row: Row, where: Row | undefined, db: Db): boolean {
 function hydrateApplication(db: Db, app: Row) {
   const candidate = db.candidates.find((c) => c.id === app.candidateId)!;
   const job = db.jobs.find((j) => j.id === app.jobId)!;
-  return { ...app, candidate: { ...candidate, skills: [] }, job };
+  return {
+    ...app,
+    candidate: {
+      ...candidate,
+      onboardingCompleted: candidate.onboardingCompleted ?? true,
+      skills: candidate.skills || [],
+      education: candidate.education || [],
+      experiences: candidate.experiences || [],
+      updatedAt: candidate.updatedAt || new Date(0),
+      totalExperienceYears: candidate.totalExperienceYears || 0,
+      totalExperienceMonths: candidate.totalExperienceMonths || 0,
+    },
+    job,
+  };
 }
 function hydrateInterview(db: Db, row: Row) {
   const app = db.applications.find((a) => a.id === row.applicationId)!;
@@ -288,6 +301,13 @@ function harness(opts: Opts = {}) {
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         return rows[0] ? hydrateApplication(db, rows[0]) : null;
       },
+      findMany: async ({ where, take }: Row = {}) => {
+        const rows = db.applications
+          .filter((a) => matches(a, where, db))
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        const sliced = typeof take === 'number' ? rows.slice(0, take) : rows;
+        return sliced.map((row) => hydrateApplication(db, row));
+      },
       update: async ({ where, data }: Row) => {
         calls.appUpdates.push(data);
         const row = db.applications.find((a) => a.id === where.id)!;
@@ -297,17 +317,42 @@ function harness(opts: Opts = {}) {
     },
     candidate: {
       findUnique: async ({ where }: Row) => db.candidates.find((c) => c.id === where.id) ?? null,
-      findMany: async () =>
-        (db.candidates || []).map((c: Row) => ({
-          ...c,
-          skills: c.skills || [],
-          education: c.education || [],
-          experiences: c.experiences || [],
-          applications: c.applications || [],
-          updatedAt: c.updatedAt || new Date(0),
-          totalExperienceYears: c.totalExperienceYears || 0,
-          totalExperienceMonths: c.totalExperienceMonths || 0,
-        })),
+      findMany: async ({ where }: Row = {}) => {
+        const appsSome = where?.applications?.some;
+        return (db.candidates || [])
+          .filter((c: Row) => {
+            if (where?.onboardingCompleted != null && c.onboardingCompleted !== where.onboardingCompleted) {
+              // Seed rows may omit the flag; treat missing as completed for browse tests.
+              if (where.onboardingCompleted === true && c.onboardingCompleted == null) {
+                /* allow */
+              } else {
+                return false;
+              }
+            }
+            if (appsSome) {
+              const hasApp = db.applications.some(
+                (a) => a.candidateId === c.id && matches(a, appsSome, db),
+              );
+              if (!hasApp) return false;
+            }
+            return true;
+          })
+          .map((c: Row) => ({
+            ...c,
+            onboardingCompleted: c.onboardingCompleted ?? true,
+            skills: c.skills || [],
+            education: c.education || [],
+            experiences: c.experiences || [],
+            applications: db.applications
+              .filter((a) => a.candidateId === c.id && matches(a, where?.applications?.some || { status: { not: 'WITHDRAWN' } }, db))
+              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+              .slice(0, 1)
+              .map((a) => ({ id: a.id, status: a.status, screeningAnswersJson: a.screeningAnswersJson ?? null })),
+            updatedAt: c.updatedAt || new Date(0),
+            totalExperienceYears: c.totalExperienceYears || 0,
+            totalExperienceMonths: c.totalExperienceMonths || 0,
+          }));
+      },
     },
     resume: { findFirst: async () => null },
     platformSetting: {
@@ -573,10 +618,11 @@ describe('Fix 2 — one verification state everywhere', () => {
   });
   it('admin-verified (legacy verified boolean) employers pass the gate', async () => {
     const { svc } = harness();
-    // Passes the admin Verify gate; empty jobId browses the full talent pool.
+    // Passes the admin Verify gate; empty jobId browses applicants only (no open talent pool).
     const browsed = await svc.searchCandidates('uA', {});
     assert.equal(browsed.jobId, null);
     assert.ok(Array.isArray(browsed.candidates));
+    assert.ok(browsed.candidates.every((row) => row.appliedToEmployer && row.applicationId));
     await assert.rejects(svc.searchCandidates('uB', {}), ForbiddenException);
   });
   it('submitVerification keeps the boolean in sync with the status', async () => {
