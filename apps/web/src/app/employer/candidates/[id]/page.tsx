@@ -11,6 +11,7 @@ import {
   downloadEmployerCandidateResume,
   getEmployerCandidate,
   inviteCandidateToJob,
+  openBase64FileInNewTab,
   saveBase64File,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
@@ -134,15 +135,44 @@ export default function EmployerCandidateProfilePage() {
     }
   }
 
+  async function loadResumeFile() {
+    if (!profile?.hasResume) return null;
+    return downloadEmployerCandidateResume(
+      profile.id,
+      resolvedJobId || profile.application?.jobId,
+    );
+  }
+
   async function viewResume() {
     if (!profile?.hasResume) return;
     setBusy('RESUME');
     setError('');
     try {
-      const file = await downloadEmployerCandidateResume(
-        profile.id,
-        resolvedJobId || profile.application?.jobId,
-      );
+      const file = await loadResumeFile();
+      if (!file) return;
+      if (file.pdf) {
+        openBase64FileInNewTab(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
+        return;
+      }
+      if (file.html) {
+        openBase64FileInNewTab(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
+        return;
+      }
+      setError('Resume file was empty.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open resume.');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function downloadResumeFile() {
+    if (!profile?.hasResume) return;
+    setBusy('RESUME_DL');
+    setError('');
+    try {
+      const file = await loadResumeFile();
+      if (!file) return;
       if (file.pdf) {
         saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
         return;
@@ -153,7 +183,7 @@ export default function EmployerCandidateProfilePage() {
       }
       setError('Resume file was empty.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open resume.');
+      setError(err instanceof Error ? err.message : 'Could not download resume.');
     } finally {
       setBusy('');
     }
@@ -328,14 +358,24 @@ export default function EmployerCandidateProfilePage() {
                   </Link>
                 ) : null}
                 {profile.hasResume ? (
-                  <button
-                    type="button"
-                    className="ev-btn ev-btn--ghost"
-                    disabled={busy !== ''}
-                    onClick={() => void viewResume()}
-                  >
-                    {busy === 'RESUME' ? 'Opening…' : 'Download resume'}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="ev-btn ev-btn--ghost"
+                      disabled={busy !== ''}
+                      onClick={() => void viewResume()}
+                    >
+                      {busy === 'RESUME' ? 'Opening…' : 'View resume'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ev-btn ev-btn--ghost"
+                      disabled={busy !== ''}
+                      onClick={() => void downloadResumeFile()}
+                    >
+                      {busy === 'RESUME_DL' ? 'Downloading…' : 'Download'}
+                    </button>
+                  </>
                 ) : null}
                 {application && !FINAL_APPLICATION_STATUSES.includes(application.status) ? (
                   <button

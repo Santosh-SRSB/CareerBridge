@@ -14,6 +14,7 @@ import {
   listJobMatches,
   recomputeJobMatches,
   recordHiringOutcome,
+  openBase64FileInNewTab,
   saveBase64File,
   type JobMatchRow,
 } from '@/lib/api';
@@ -165,10 +166,30 @@ export default function EmployerJobApplicationsPage() {
     }
   }
 
+  async function fetchResume(candidateId: string) {
+    return downloadEmployerCandidateResume(candidateId, params.id);
+  }
+
   async function onViewResume(candidateId: string) {
     setError('');
     try {
-      const file = await downloadEmployerCandidateResume(candidateId, params.id);
+      const file = await fetchResume(candidateId);
+      if (file.pdf) {
+        openBase64FileInNewTab(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
+      } else if (file.html) {
+        openBase64FileInNewTab(file.html, file.fileName || 'resume.html', file.mimeType || 'text/html');
+      } else {
+        setError('Resume file was empty.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open resume.');
+    }
+  }
+
+  async function onDownloadResume(candidateId: string) {
+    setError('');
+    try {
+      const file = await fetchResume(candidateId);
       if (file.pdf) {
         saveBase64File(file.pdf, file.fileName || 'resume.pdf', file.mimeType || 'application/pdf');
       } else if (file.html) {
@@ -177,7 +198,7 @@ export default function EmployerJobApplicationsPage() {
         setError('Resume file was empty.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open resume.');
+      setError(err instanceof Error ? err.message : 'Could not download resume.');
     }
   }
 
@@ -488,6 +509,13 @@ export default function EmployerJobApplicationsPage() {
                           onClick={() => void onViewResume(item.candidate.id)}
                         >
                           View resume
+                        </button>
+                        <button
+                          type="button"
+                          className="ev-btn ev-btn--ghost ev-btn--sm"
+                          onClick={() => void onDownloadResume(item.candidate.id)}
+                        >
+                          Download
                         </button>
                         <Link
                           href={`/employer/interviews/schedule?applicationId=${encodeURIComponent(item.id)}&jobId=${encodeURIComponent(params.id)}`}

@@ -8,7 +8,9 @@ import { ConfigService } from '@nestjs/config';
 import {
   ATS_JOB_MATCH_WEIGHTS,
   ErrorCode as SharedError,
+  MIN_JOB_MATCH_SKILLS_POINTS,
   applyAtsMatchScoreGates,
+  careerTracksCompatible,
   employerCandidateUnlockLimit,
 } from '@careerbridge/shared';
 import {
@@ -297,8 +299,20 @@ export class MatchingService {
       const semanticScore =
         fromPg != null ? Math.round(Math.max(0, Math.min(1, fromPg)) * 100) : 0;
 
-      // Role filter: no skill / role-title fit → do not show on this job's talent pool.
-      if (skillsScore <= 0) {
+      // Drop weak skill fit and cross-track mixes (IT on Non-IT jobs and vice versa).
+      if (skillsScore < MIN_JOB_MATCH_SKILLS_POINTS) {
+        continue;
+      }
+      if (
+        !careerTracksCompatible(
+          { title: job.title, category: job.category },
+          {
+            interests: parseList(candidate.careerInterests),
+            skills: candidate.skills.map((item) => item.name),
+            experienceTitles: candidate.experiences.map((item) => item.jobTitle).filter(Boolean),
+          },
+        )
+      ) {
         continue;
       }
 

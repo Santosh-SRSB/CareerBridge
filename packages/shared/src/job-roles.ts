@@ -1,4 +1,5 @@
 import { MASTER_JOB_ROLES } from './job-categories-and-skills';
+import { NON_TECH_JOB_CATEGORIES, TECH_JOB_CATEGORIES } from './marketplace';
 
 const BASE_JOB_ROLE_CATALOG: Record<string, string[]> = {
   IT: [
@@ -22,10 +23,19 @@ const BASE_JOB_ROLE_CATALOG: Record<string, string[]> = {
   GENERAL: ['Customer Service Executive', 'Front Office Executive', 'Business Analyst', 'Operations Executive'],
 };
 
-function categorizeRole(role: string): keyof typeof BASE_JOB_ROLE_CATALOG {
+export function categorizeRole(role: string): keyof typeof BASE_JOB_ROLE_CATALOG {
   const blob = role.toLowerCase();
+  // Non-IT hiring / BD / sales titles win over incidental IT keywords in a JD.
   if (
-    /\b(software|developer|engineer|devops|sre|qa|sdet|test|data|ml|ai|cloud|cyber|security|architect|product manager|scrum|cto|it support|ui\/ux|ux designer|graphic designer)\b/.test(
+    /\b(talent acquisition|recruiter|recruitment|human resource|\bhr\b|business development|bde|bdm|sales executive|inside sales|field sales)\b/.test(
+      blob,
+    )
+  ) {
+    if (/\b(talent acquisition|recruiter|recruitment|human resource|\bhr\b)\b/.test(blob)) return 'HR';
+    return 'SALES';
+  }
+  if (
+    /\b(software|developer|engineer|devops|sre|qa|sdet|test automation|data scientist|data engineer|ml engineer|ai engineer|cloud|cyber|security|architect|scrum|cto|it support|ui\/ux|ux designer)\b/.test(
       blob,
     )
   ) {
@@ -39,6 +49,67 @@ function categorizeRole(role: string): keyof typeof BASE_JOB_ROLE_CATALOG {
   if (/\b(market|seo|content|brand|copywriter)\b/.test(blob)) return 'MARKETING';
   return 'GENERAL';
 }
+
+/** Coarse hiring track used to keep IT talent pools off Non-IT jobs (and vice versa). */
+export type CareerTrack = 'IT' | 'NON_IT';
+
+const TECH_SKILL_RE =
+  /\b(python|java|javascript|typescript|react|angular|vue|node\.?js|spring|django|flask|aws|azure|gcp|devops|docker|kubernetes|sql|mongodb|postgres|git|linux|c\+\+|golang|kotlin|swift|tensorflow|pytorch|machine learning|deep learning|ci\/cd|jenkins|gitlab|github actions|cloud computing)\b/gi;
+const NON_TECH_SKILL_RE =
+  /\b(sales|business development|recruitment|talent acquisition|staffing|hr generalist|payroll|accounting|bookkeeping|digital marketing|seo|content writing|customer service|retail|cashier|hospitality)\b/gi;
+
+export function resolveCareerTrack(input: {
+  title?: string | null;
+  category?: string | null;
+  interests?: string[];
+  skills?: string[];
+  experienceTitles?: string[];
+}): CareerTrack {
+  const category = (input.category || '').trim();
+  if ((TECH_JOB_CATEGORIES as readonly string[]).includes(category)) return 'IT';
+  if ((NON_TECH_JOB_CATEGORIES as readonly string[]).includes(category)) return 'NON_IT';
+
+  const blob = [
+    input.title || '',
+    ...(input.interests || []),
+    ...(input.skills || []),
+    ...(input.experienceTitles || []),
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const roleCat = categorizeRole(blob);
+  if (roleCat === 'IT') return 'IT';
+  if (roleCat === 'HR' || roleCat === 'SALES' || roleCat === 'MARKETING' || roleCat === 'FINANCE') {
+    return 'NON_IT';
+  }
+
+  const techHits = (blob.match(TECH_SKILL_RE) || []).length;
+  const nonTechHits = (blob.match(NON_TECH_SKILL_RE) || []).length;
+  if (techHits >= 2 && techHits > nonTechHits) return 'IT';
+  if (nonTechHits >= 1 && nonTechHits >= techHits) return 'NON_IT';
+  return techHits >= 1 ? 'IT' : 'NON_IT';
+}
+
+/** Hard gate: IT jobs only show IT-track candidates; Non-IT jobs only show Non-IT-track candidates. */
+export function careerTracksCompatible(
+  job: { title?: string | null; category?: string | null },
+  candidate: { interests?: string[]; skills?: string[]; experienceTitles?: string[] },
+): boolean {
+  const jobTrack = resolveCareerTrack({
+    title: job.title,
+    category: job.category,
+  });
+  const candidateTrack = resolveCareerTrack({
+    interests: candidate.interests,
+    skills: candidate.skills,
+    experienceTitles: candidate.experienceTitles,
+  });
+  return jobTrack === candidateTrack;
+}
+
+/** Minimum skills points (of 80) required to appear in a job talent pool. */
+export const MIN_JOB_MATCH_SKILLS_POINTS = 16;
 
 function mergeCatalog(): Record<string, string[]> {
   const out: Record<string, string[]> = {

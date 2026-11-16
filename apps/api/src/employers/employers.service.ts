@@ -34,6 +34,8 @@ import {
   panFormatError,
   parseLinkedinUrl,
   toAtsMatchBreakdown,
+  MIN_JOB_MATCH_SKILLS_POINTS,
+  careerTracksCompatible,
 } from '@careerbridge/shared';
 import { GstService } from '../gst/gst.service';
 import { normalizeGstin, validateGstinFormat } from '../gst/gst.validator';
@@ -1056,8 +1058,22 @@ export class EmployersService {
         const liveMatch = this.scoreApplicationMatch(candidate, job);
         const breakdown = toAtsMatchBreakdown(liveMatch);
         const skillsPts = breakdown.factors.find((f) => f.key === 'skills')?.score ?? 0;
-        // Drop profiles with no skill / role-title fit for this job (stops "all candidates" dumps).
-        if (skillsPts <= 0) return null;
+        // Drop weak skill fit and IT↔Non-IT cross-track mixes for this job.
+        if (skillsPts < MIN_JOB_MATCH_SKILLS_POINTS) return null;
+        if (
+          !careerTracksCompatible(
+            { title: job.title, category: job.category },
+            {
+              interests: parseList(candidate.careerInterests),
+              skills: candidate.skills.map((item) => item.name),
+              experienceTitles: (candidate.experiences || [])
+                .map((item) => item.jobTitle)
+                .filter((title): title is string => Boolean(title)),
+            },
+          )
+        ) {
+          return null;
+        }
         return {
           match,
           liveScore: breakdown.score,
@@ -1534,7 +1550,7 @@ export class EmployersService {
   async downloadCandidateResume(userId: string, candidateId: string, jobId?: string) {
     const employer = await this.requireEmployer(userId);
     const requestedJobId = jobId?.trim() || undefined;
-    // The application must link this candidate to this employer, and to the requested job when one is given.
+    // Prefer an application on this employer's job; otherwise allow matched/visible talent for that job.
     const applied = await this.prisma.application.findFirst({
       where: {
         candidateId,
@@ -1544,17 +1560,31 @@ export class EmployersService {
       include: { candidate: { select: { userId: true } } },
       orderBy: { createdAt: 'desc' },
     });
+
+    let ownerUserId = applied?.candidate.userId || null;
     if (!applied) {
-      throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: requestedJobId
-          ? 'This candidate has not applied to the selected job.'
-          : 'Resume is available only for candidates who applied to your jobs.',
+      if (!requestedJobId) {
+        throw new ForbiddenException({
+          code: SharedError.BUSINESS_RULE_VIOLATION,
+          message: 'Resume is available only for candidates who applied to your jobs.',
+        });
+      }
+      await this.matching.assertCandidateVisibleForJob(userId, requestedJobId, candidateId);
+      const candidate = await this.prisma.candidate.findUnique({
+        where: { id: candidateId },
+        select: { userId: true },
       });
+      if (!candidate) {
+        throw new NotFoundException({
+          code: SharedError.RESOURCE_NOT_FOUND,
+          message: 'Candidate profile was not found',
+        });
+      }
+      ownerUserId = candidate.userId;
     }
 
     const resumeId =
-      applied.resumeId ||
+      applied?.resumeId ||
       (
         await this.prisma.resume.findFirst({
           where: { candidateId, ...USABLE_RESUME_WHERE },
@@ -1563,14 +1593,14 @@ export class EmployersService {
         })
       )?.id;
 
-    if (!resumeId) {
+    if (!resumeId || !ownerUserId) {
       throw new NotFoundException({
         code: SharedError.RESOURCE_NOT_FOUND,
         message: 'This candidate has not uploaded a resume yet.',
       });
     }
 
-    return this.resumes.download(applied.candidate.userId, resumeId);
+    return this.resumes.download(ownerUserId, resumeId);
   }
 
   /** Cancelled interviews are left out of the normal list; `status=CANCELLED` returns only those, as history. */

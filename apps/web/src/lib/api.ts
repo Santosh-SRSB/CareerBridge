@@ -966,18 +966,20 @@ export async function downloadResume(id: string, variant?: 'original' | 'formatt
   }>(`/resumes/${id}/download${q}`);
 }
 
-export function saveBase64File(content: string, fileName: string, mimeType: string) {
+function base64OrTextToBlob(content: string, mimeType: string, fileName: string) {
   const isHtml = mimeType.includes('html') || fileName.endsWith('.html');
-  const blob = isHtml
-    ? new Blob([content], { type: mimeType || 'text/html' })
-    : (() => {
-        const binary = atob(content);
-        const bytes = new Uint8Array(binary.length);
-        for (let index = 0; index < binary.length; index += 1) {
-          bytes[index] = binary.charCodeAt(index);
-        }
-        return new Blob([bytes], { type: mimeType });
-      })();
+  if (isHtml) return new Blob([content], { type: mimeType || 'text/html' });
+  const binary = atob(content);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType || 'application/pdf' });
+}
+
+/** Download file to disk. */
+export function saveBase64File(content: string, fileName: string, mimeType: string) {
+  const blob = base64OrTextToBlob(content, mimeType, fileName);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -986,6 +988,18 @@ export function saveBase64File(content: string, fileName: string, mimeType: stri
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Open resume in a new tab for viewing (download stays optional via saveBase64File). */
+export function openBase64FileInNewTab(content: string, fileName: string, mimeType: string) {
+  const blob = base64OrTextToBlob(content, mimeType, fileName);
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!opened) {
+    // Popup blocked — fall back to download so the employer still gets the file.
+    saveBase64File(content, fileName, mimeType);
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function startInterview(jobRole: string, interviewType: string) {
