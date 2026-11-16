@@ -34,6 +34,8 @@ import {
   panFormatError,
   parseLinkedinUrl,
   toAtsMatchBreakdown,
+  MIN_JOB_MATCH_SKILLS_POINTS,
+  careerTracksCompatible,
 } from '@careerbridge/shared';
 import { GstService } from '../gst/gst.service';
 import { normalizeGstin, validateGstinFormat } from '../gst/gst.validator';
@@ -899,11 +901,12 @@ export class EmployersService {
 
     const jobId = query.jobId?.trim();
     if (!jobId) {
-      return this.browseApplicantCandidates(employer.id, query);
+      return this.browseAllCandidates(employer.id, query);
     }
 
-    // Applicants stay visible without match-pool unlock; search is applicants-only.
+    await this.matching.assertJobUnlocked(userId, jobId);
     const job = await this.requireJob(userId, jobId);
+    const unlockLimit = await this.matching.candidateUnlockLimit(employer.id, jobId);
 
     const skillFilters = Array.from(
       new Set(
@@ -926,29 +929,71 @@ export class EmployersService {
     const page = Math.max(1, query.page || 1);
     const pageSize = Math.min(Math.max(1, query.pageSize || 20), 50);
 
-    const applications = await this.prisma.application.findMany({
-      where: { jobId: job.id, status: { not: 'WITHDRAWN' } },
-      include: {
-        candidate: {
-          include: {
-            skills: true,
-            education: { select: { yearCompleted: true }, orderBy: { yearCompleted: 'desc' }, take: 8 },
-            experiences: { orderBy: { startDate: 'desc' }, take: 3 },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
-    });
+    // Refresh JD match ranks so card scores stay live.
+    if (unlockLimit > 0) {
+      await this.matching.recomputeMatchesForJob(job.id);
+    }
 
+    const [matchRows, totalMatched, applications] = await Promise.all([
+      this.prisma.candidateMatch.findMany({
+        where: { jobId: job.id },
+        orderBy: [{ rank: 'asc' }, { totalScore: 'desc' }],
+        take: unlockLimit > 0 ? unlockLimit : 0,
+      }),
+      this.prisma.candidateMatch.count({ where: { jobId: job.id } }),
+      this.prisma.application.findMany({
+        where: { jobId: job.id, status: { not: 'WITHDRAWN' } },
+        select: {
+          id: true,
+          status: true,
+          candidateId: true,
+          screeningAnswersJson: true,
+        },
+        take: 500,
+      }),
+    ]);
+
+    const applicationByCandidate = new Map(applications.map((row) => [row.candidateId, row]));
+    const candidateIds = Array.from(
+      new Set([...matchRows.map((row) => row.candidateId), ...applications.map((row) => row.candidateId)]),
+    );
+
+    if (!candidateIds.length) {
+      return {
+        jobId,
+        unlocked: true,
+        unlockLimit,
+        totalMatched,
+        total: 0,
+        page,
+        pageSize,
+        candidates: [],
+      };
+    }
+
+    const candidates = await this.prisma.candidate.findMany({
+      where: { id: { in: candidateIds }, onboardingCompleted: true },
+      include: {
+        skills: true,
+        education: { select: { yearCompleted: true }, orderBy: { yearCompleted: 'desc' }, take: 8 },
+        experiences: { orderBy: { startDate: 'desc' }, take: 3 },
+      },
+    });
+    const candidateById = new Map(candidates.map((row) => [row.id, row]));
+    const matchByCandidate = new Map(matchRows.map((row) => [row.candidateId, row]));
     const questionMap = new Map(
       parseScreeningQuestions(job.screeningQuestionsJson).map((item) => [item.id, item.prompt]),
     );
 
-    const filtered = applications
-      .map((application) => {
-        const candidate = application.candidate;
-        if (!candidate?.onboardingCompleted) return null;
+    const filtered = candidateIds
+      .map((candidateId) => {
+        const candidate = candidateById.get(candidateId);
+        if (!candidate) return null;
+        const application = applicationByCandidate.get(candidateId) || null;
+        const isApplicant = Boolean(application);
+        // Non-applicants must be in the unlocked JD match pool.
+        if (!isApplicant && !matchByCandidate.has(candidateId)) return null;
+
         if (cityFilter && !candidate.city?.toLowerCase().includes(cityFilter.toLowerCase())) {
           return null;
         }
@@ -1009,7 +1054,7 @@ export class EmployersService {
         const currentlyEmployed = candidate.experiences.some((item) => item.stillInCompany);
         const noticeAnswer =
           (candidate as { noticePeriod?: string | null }).noticePeriod?.trim() ||
-          extractNoticePeriodAnswer(application.screeningAnswersJson, questionMap);
+          extractNoticePeriodAnswer(application?.screeningAnswersJson, questionMap);
         const availability = resolveCandidateAvailability({
           stillInCollege: candidate.stillInCollege,
           currentlyEmployed,
@@ -1021,19 +1066,38 @@ export class EmployersService {
             availability.label === 'Student' ? 'student' : availability.tone === 'immediate' ? 'immediate' : 'notice';
           if (kind !== query.availability) return null;
         }
+
         const liveMatch = this.scoreApplicationMatch(candidate, job);
         const breakdown = toAtsMatchBreakdown(liveMatch);
+        const skillsPts = breakdown.factors.find((f) => f.key === 'skills')?.score ?? 0;
+        // Applicants always stay visible; talent-pool rows still need JD/track fit.
+        if (!isApplicant) {
+          if (skillsPts < MIN_JOB_MATCH_SKILLS_POINTS) return null;
+          if (
+            !careerTracksCompatible(
+              { title: job.title, category: job.category },
+              {
+                interests: parseList(candidate.careerInterests),
+                skills: candidate.skills.map((item) => item.name),
+                experienceTitles: (candidate.experiences || [])
+                  .map((item) => item.jobTitle)
+                  .filter((title): title is string => Boolean(title)),
+              },
+            )
+          ) {
+            return null;
+          }
+        }
+
         return {
+          match: matchByCandidate.get(candidateId) || null,
           liveScore: breakdown.score,
           candidate,
           candidateYears,
           currentlyEmployed,
-          application: {
-            id: application.id,
-            status: application.status,
-            screeningAnswersJson: application.screeningAnswersJson,
-          },
+          application,
           availability,
+          isApplicant,
         };
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -1043,9 +1107,29 @@ export class EmployersService {
     } else if (query.sort === 'experience') {
       filtered.sort((a, b) => b.candidateYears - a.candidateYears || b.liveScore - a.liveScore);
     } else {
-      filtered.sort((a, b) => b.liveScore - a.liveScore);
+      // Best match: applicants first by score, then talent matches by score.
+      filtered.sort(
+        (a, b) =>
+          Number(b.isApplicant) - Number(a.isApplicant) ||
+          b.liveScore - a.liveScore ||
+          (b.match?.totalScore || 0) - (a.match?.totalScore || 0),
+      );
     }
     const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const talentShortlisted = new Set(
+      pageRows.length
+        ? (
+            await this.prisma.employerTalentShortlist.findMany({
+              where: {
+                employerId: employer.id,
+                jobId: job.id,
+                candidateId: { in: pageRows.map((row) => row.candidate.id) },
+              },
+              select: { candidateId: true },
+            })
+          ).map((row) => row.candidateId)
+        : [],
+    );
 
     const candidatePayload = await Promise.all(
       pageRows.map(async ({ liveScore, candidate, currentlyEmployed, application, availability }) => {
@@ -1074,10 +1158,10 @@ export class EmployersService {
             ? { title: latestRole.jobTitle, company: latestRole.company }
             : null,
           matchScore,
-          appliedToEmployer: true,
-          applicationId: application.id,
-          applicationStatus: application.status,
-          talentShortlisted: false,
+          appliedToEmployer: Boolean(application),
+          applicationId: application?.id || null,
+          applicationStatus: application?.status || null,
+          talentShortlisted: talentShortlisted.has(candidate.id),
           photoUrl: await readableCandidatePhotoUrl(this.storage, candidate.id, candidate.photoUrl),
         };
       }),
@@ -1086,8 +1170,8 @@ export class EmployersService {
     return {
       jobId,
       unlocked: true,
-      unlockLimit: 0,
-      totalMatched: filtered.length,
+      unlockLimit,
+      totalMatched,
       total: filtered.length,
       page,
       pageSize,
@@ -1096,10 +1180,10 @@ export class EmployersService {
   }
 
   /**
-   * No job selected: only candidates who applied to this employer's jobs.
-   * Filters/sort apply inside that applicant set — no open talent-pool browse.
+   * No job selected: browse the full candidate pool (filtered/sorted).
+   * Shortlist / JD match scores still require selecting a job.
    */
-  private async browseApplicantCandidates(
+  private async browseAllCandidates(
     employerId: string,
     query: {
       q?: string;
@@ -1143,9 +1227,6 @@ export class EmployersService {
     const candidates = await this.prisma.candidate.findMany({
       where: {
         onboardingCompleted: true,
-        applications: {
-          some: { job: { employerId }, status: { not: 'WITHDRAWN' } },
-        },
         ...(cityFilter
           ? { city: { contains: cityFilter, mode: 'insensitive' as const } }
           : {}),
@@ -1181,8 +1262,6 @@ export class EmployersService {
 
     const filtered = candidates
       .map((candidate) => {
-        const application = candidate.applications[0] || null;
-        if (!application) return null;
         const candidateYears =
           (candidate.totalExperienceYears || 0) + (candidate.totalExperienceMonths || 0) / 12;
         if (experienceMin > 0 && candidateYears + 1e-9 < experienceMin) return null;
@@ -1221,9 +1300,10 @@ export class EmployersService {
           if (!haystack.includes(q.toLowerCase())) return null;
         }
         const currentlyEmployed = candidate.experiences.some((item) => item.stillInCompany);
+        const application = candidate.applications[0] || null;
         const noticeAnswer =
           (candidate as { noticePeriod?: string | null }).noticePeriod?.trim() ||
-          extractNoticePeriodAnswer(application.screeningAnswersJson, new Map());
+          extractNoticePeriodAnswer(application?.screeningAnswersJson, new Map());
         const availability = resolveCandidateAvailability({
           stillInCollege: candidate.stillInCollege,
           currentlyEmployed,
@@ -1278,9 +1358,9 @@ export class EmployersService {
             ? { title: latestRole.jobTitle, company: latestRole.company }
             : null,
           matchScore: null as number | null,
-          appliedToEmployer: true,
-          applicationId: application.id,
-          applicationStatus: application.status,
+          appliedToEmployer: Boolean(application),
+          applicationId: application?.id || null,
+          applicationStatus: application?.status || null,
           talentShortlisted: false,
           photoUrl: await readableCandidatePhotoUrl(this.storage, candidate.id, candidate.photoUrl),
         };

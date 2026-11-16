@@ -618,11 +618,10 @@ describe('Fix 2 — one verification state everywhere', () => {
   });
   it('admin-verified (legacy verified boolean) employers pass the gate', async () => {
     const { svc } = harness();
-    // Passes the admin Verify gate; empty jobId browses applicants only (no open talent pool).
+    // Passes the admin Verify gate; empty jobId browses the full candidate pool.
     const browsed = await svc.searchCandidates('uA', {});
     assert.equal(browsed.jobId, null);
     assert.ok(Array.isArray(browsed.candidates));
-    assert.ok(browsed.candidates.every((row) => row.appliedToEmployer && row.applicationId));
     await assert.rejects(svc.searchCandidates('uB', {}), ForbiddenException);
   });
   it('submitVerification keeps the boolean in sync with the status', async () => {

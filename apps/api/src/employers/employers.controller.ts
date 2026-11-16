@@ -359,7 +359,7 @@ class CandidateSearchQueryDto {
   @Max(50)
   pageSize?: number;
 
-  /** Optional — omit to browse applicants across all of this employer's jobs. */
+  /** Optional — omit to browse the full candidate pool (no job match scores). */
   @IsOptional()
   @IsUUID('all')
   jobId?: string;

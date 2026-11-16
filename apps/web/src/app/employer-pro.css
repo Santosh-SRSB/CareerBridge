@@ -8471,20 +8471,25 @@ a.ep-prohead__cta {
   margin-top: 16px;
 }
 .ep-modal--resume {
-  padding: 12px;
+  padding: 8px;
+  place-items: stretch;
 }
 .ep-modal__card--resume {
-  width: min(960px, 100%);
-  max-height: calc(100vh - 24px);
+  width: min(1280px, calc(100vw - 16px));
+  height: calc(100vh - 16px);
+  max-height: calc(100vh - 16px);
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 14px 16px 16px;
+  margin: 0 auto;
+  border-radius: 14px;
 }
 .ep-modal__head--resume {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-shrink: 0;
 }
 .ep-modal__actions--resume {
   margin-top: 0;
@@ -8492,8 +8497,8 @@ a.ep-prohead__cta {
 }
 .ep-resume-preview {
   margin-top: 12px;
-  min-height: 60vh;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   border: 1px solid #eef0ff;
   border-radius: 12px;
   overflow: hidden;
@@ -8501,7 +8506,8 @@ a.ep-prohead__cta {
 }
 .ep-resume-preview__frame {
   width: 100%;
-  height: min(72vh, 820px);
+  height: 100%;
+  min-height: calc(100vh - 120px);
   border: 0;
   background: #fff;
 }
