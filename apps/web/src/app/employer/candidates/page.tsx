@@ -16,21 +16,17 @@ import {
   getEmployerMe,
   listEmployerJobs,
   searchEmployerCandidates,
-  changeApplicationStatus,
-  setTalentShortlist,
 } from '@/lib/api';
 import {
   EmployerShellFallback,
   WAITING_FOR_ADMINISTRATION_APPROVAL,
   isEmployerAdminVerified,
 } from '@/components/EmployerPortal';
-import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
 import { MatchedCandidateCard } from '@/components/employer/MatchedCandidateCard';
 import { EvAlert, EvAvatar, EvEmpty, EvPageHead, EvSkeleton } from '@/components/employer/ui';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
 import { ErrorState } from '@/components/ui/StateViews';
-import { toast } from '@/components/ui/Toast';
 import { userFacingError } from '@/lib/client-errors';
 import { ALL_SKILL_OPTIONS } from '@/data/technology-skills';
 import { useCatalog } from '@/hooks/useCatalog';
@@ -157,13 +153,6 @@ export default function EmployerCandidatesPage() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
-  const [busyId, setBusyId] = useState('');
-  const [shortlistError, setShortlistError] = useState('');
-  const [shortlistTarget, setShortlistTarget] = useState<{
-    candidateId: string;
-    applicationId: string | null;
-    name: string;
-  } | null>(null);
   const [awaitingAdmin, setAwaitingAdmin] = useState(false);
 
   function patchFilters(patch: Partial<CandidateFilters>) {
@@ -278,38 +267,6 @@ export default function EmployerCandidatesPage() {
     setSkillError('');
     setError('');
     void runSearch(jobId, EMPTY_FILTERS);
-  }
-
-  async function shortlist(target: { candidateId: string; applicationId: string | null }, note?: string) {
-    setBusyId(`shortlist-${target.candidateId}`);
-    setShortlistError('');
-    try {
-      if (target.applicationId) {
-        await changeApplicationStatus(target.applicationId, 'SHORTLIST', undefined, note || undefined);
-      } else {
-        if (!jobId) {
-          throw new Error('Select a job to shortlist this candidate.');
-        }
-        await setTalentShortlist(target.candidateId, jobId, true, note || undefined);
-      }
-      setResults((rows) =>
-        rows.map((row) =>
-          row.id !== target.candidateId
-            ? row
-            : target.applicationId
-              ? { ...row, applicationStatus: 'SHORTLISTED' }
-              : { ...row, talentShortlisted: true },
-        ),
-      );
-      toast.success('Candidate shortlisted');
-      setShortlistTarget(null);
-    } catch (err) {
-      const text = userFacingError(err, 'shortlist candidate');
-      setShortlistError(text);
-      toast.error(text);
-    } finally {
-      setBusyId('');
-    }
   }
 
   if (awaitingAdmin) {
@@ -566,60 +523,30 @@ export default function EmployerCandidatesPage() {
               <div className="ev-match-grid">
                 {results.map((row, index) => {
                   const name = candidateName(row);
-                  const isShortlisted = row.applicationStatus === 'SHORTLISTED' || Boolean(row.talentShortlisted);
-                  const canShortlist = row.applicationId
-                    ? ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(String(row.applicationStatus || 'APPLIED'))
-                    : !row.talentShortlisted;
-                  const shortlistBusy = busyId === `shortlist-${row.id}`;
                   return (
-                    <div key={row.id} className="ev-match-grid__item">
-                      <MatchedCandidateCard
-                        rank={index + 1}
-                        name={name}
-                        city={formatLocation(row.city, row.state)}
-                        photoUrl={row.photoUrl}
-                        skills={row.skills || []}
-                        totalScore={row.matchScore || 0}
-                        skillsScore={row.skillsScore ?? 0}
-                        experienceScore={row.experienceScore ?? 0}
-                        reasons={row.reasons || []}
-                        gaps={row.gaps || []}
-                        badge={row.appliedToEmployer || row.applicationId ? 'applied' : 'matched'}
-                        jobId={jobId}
-                        candidateId={row.id}
-                        href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
-                      />
-                      {canShortlist ? (
-                        <button
-                          type="button"
-                          className="ev-btn ev-btn--sm ev-candcard__shortlist ev-mt-sm"
-                          disabled={shortlistBusy}
-                          onClick={() =>
-                            setShortlistTarget({
-                              candidateId: row.id,
-                              applicationId: row.applicationId || null,
-                              name,
-                            })
-                          }
-                        >
-                          {shortlistBusy ? '…' : 'Shortlist'}
-                        </button>
-                      ) : null}
-                      {isShortlisted ? (
-                        <span className="ev-candcard__shortlisted" data-testid="shortlisted-badge">
-                          Shortlisted ✓
-                        </span>
-                      ) : null}
-                    </div>
+                    <MatchedCandidateCard
+                      key={row.id}
+                      rank={index + 1}
+                      name={name}
+                      city={formatLocation(row.city, row.state)}
+                      photoUrl={row.photoUrl}
+                      skills={row.skills || []}
+                      totalScore={row.matchScore || 0}
+                      skillsScore={row.skillsScore ?? 0}
+                      experienceScore={row.experienceScore ?? 0}
+                      reasons={row.reasons || []}
+                      gaps={row.gaps || []}
+                      badge={row.appliedToEmployer || row.applicationId ? 'applied' : 'matched'}
+                      jobId={jobId}
+                      candidateId={row.id}
+                      href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
+                    />
                   );
                 })}
               </div>
             ) : (
             <ul className="ev-cand-grid ev-plain-list">
               {results.map((row) => {
-                const isShortlisted = row.applicationStatus === 'SHORTLISTED' || Boolean(row.talentShortlisted);
-                const canShortlist = false;
-                const shortlistBusy = busyId === `shortlist-${row.id}`;
                 const skillLabels = row.skills
                   .map(shortSkillLabel)
                   .filter(Boolean)
@@ -687,31 +614,6 @@ export default function EmployerCandidatesPage() {
                       >
                         View profile
                       </Link>
-                      {canShortlist ? (
-                        <button
-                          type="button"
-                          className="ev-btn ev-btn--sm ev-candcard__shortlist"
-                          disabled={shortlistBusy}
-                          onClick={() =>
-                            setShortlistTarget({
-                              candidateId: row.id,
-                              applicationId: row.applicationId || null,
-                              name,
-                            })
-                          }
-                        >
-                          {shortlistBusy ? '…' : 'Shortlist'}
-                        </button>
-                      ) : null}
-                      {isShortlisted ? (
-                        <span
-                          className="ev-candcard__shortlisted"
-                          data-testid="shortlisted-badge"
-                          title={row.applicationId ? undefined : 'Saved to your private shortlist for this job'}
-                        >
-                          Shortlisted ✓
-                        </span>
-                      ) : null}
                     </footer>
                   </li>
                 );
@@ -745,22 +647,6 @@ export default function EmployerCandidatesPage() {
           </>
         ) : null}
       </section>
-
-      <ShortlistConfirmModal
-        open={Boolean(shortlistTarget)}
-        candidateName={shortlistTarget?.name || 'Candidate'}
-        jobTitle={selectedJob?.title}
-        busy={Boolean(shortlistTarget && busyId === `shortlist-${shortlistTarget.candidateId}`)}
-        error={shortlistError}
-        onCancel={() => {
-          setShortlistTarget(null);
-          setShortlistError('');
-        }}
-        onConfirm={(note) => {
-          if (!shortlistTarget) return;
-          return shortlist(shortlistTarget, note);
-        }}
-      />
     </EmployerShellFallback>
   );
 }
