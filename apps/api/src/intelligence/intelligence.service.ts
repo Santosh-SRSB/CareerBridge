@@ -68,6 +68,56 @@ const ROLE_TITLE_STOP = new Set([
   'executive',
 ]);
 
+/** Short tech tokens that are valid skills even under 3 characters. */
+const SHORT_SKILL_ALLOW = new Set(['c', 'c++', 'c#', 'r', 'go', 'js', 'ts', 'ui', 'ux', 'qa', 'hr']);
+
+function normalizeSkill(raw: string): string {
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9+#.\s-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function skillTokens(raw: string): string[] {
+  return normalizeSkill(raw)
+    .split(/[\s,/|+-]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .filter((t) => t.length >= 3 || SHORT_SKILL_ALLOW.has(t));
+}
+
+/**
+ * True when candidate skill meaningfully matches a required/preferred skill.
+ * Rejects naive substring traps like skill "C" matching "Client & Interview Coordination".
+ */
+export function skillsLooselyEqual(required: string, candidateSkill: string): boolean {
+  const want = normalizeSkill(required);
+  const have = normalizeSkill(candidateSkill);
+  if (!want || !have) return false;
+  if (want === have) return true;
+
+  // Whole-phrase containment only for meaningful lengths (avoid "c" ⊂ "recruitment").
+  const minPhrase = 4;
+  if (want.length >= minPhrase && have.length >= minPhrase) {
+    if (have.includes(want) || want.includes(have)) return true;
+  }
+
+  const wantTokens = skillTokens(want);
+  const haveTokens = new Set(skillTokens(have));
+  if (!wantTokens.length || !haveTokens.size) return false;
+
+  // Every distinctive required token must appear in the candidate skill line.
+  // "Full-Cycle Recruitment" must not match "Python" or lone "C".
+  return wantTokens.every((token) => haveTokens.has(token) || [...haveTokens].some((h) => h.includes(token) && token.length >= 4));
+}
+
+/** Count how many required skills are covered by the candidate skill list. */
+export function countSkillOverlap(required: string[], candidateSkills: string[]): string[] {
+  return required.filter((need) => candidateSkills.some((have) => skillsLooselyEqual(need, have)));
+}
+
 /** 0–100: how well interests / titles / skills match the job title (same-field token match). */
 export function roleTitleFitPercent(
   jobTitle: string | null | undefined,
@@ -144,17 +194,14 @@ const QUESTIONS: Record<string, string[]> = {
 @Injectable()
 export class IntelligenceService {
   match(candidate: MatchCandidate, job: MatchJob): JobMatch {
-    const required = job.requiredSkills.map((item) => item.toLowerCase());
-    const preferred = (job.preferredSkills || []).map((item) => item.toLowerCase());
-    const skills = candidate.skills.map((item) => item.toLowerCase());
-    const overlap = required.filter((skill) =>
-      skills.some((item) => item.includes(skill) || skill.includes(item)),
-    );
-    const preferredOverlap = preferred.filter((skill) =>
-      skills.some((item) => item.includes(skill) || skill.includes(item)),
-    );
+    const required = (job.requiredSkills || []).map((item) => String(item || '').trim()).filter(Boolean);
+    const preferred = (job.preferredSkills || []).map((item) => String(item || '').trim()).filter(Boolean);
+    const skills = (candidate.skills || []).map((item) => String(item || '').trim()).filter(Boolean);
+    const overlap = countSkillOverlap(required, skills);
+    const preferredOverlap = countSkillOverlap(preferred, skills);
 
     // Never award a free skills score — empty skill lists used to give everyone 70 and show all profiles.
+    // Score only from real required/preferred overlap or same-field role-title fit (no static defaults).
     const skillScore = required.length
       ? Math.round((overlap.length / required.length) * 100)
       : preferred.length
@@ -167,7 +214,7 @@ export class IntelligenceService {
 
     const preferredSkillScore = preferred.length
       ? Math.round((preferredOverlap.length / preferred.length) * 100)
-      : 70;
+      : 0;
 
     const w = ATS_JOB_MATCH_WEIGHTS;
     const candidatePlace = splitPlace(candidate.city, candidate.state);
@@ -195,8 +242,9 @@ export class IntelligenceService {
       Boolean(job.experience) &&
       job.experience !== 'NONE' &&
       !/fresher|0\s*[-–]\s*1|entry/i.test(job.experience || '');
+    // No silent 100 when JD has no parseable band — treat as unscored (0 pts) so fresher≠senior.
     const expFit = experienceFitPercent(years, job.experience);
-    const experiencePoints = Math.floor(((expFit ?? 100) / 100) * w.experience);
+    const experiencePoints = Math.floor(((expFit ?? 0) / 100) * w.experience);
     const experienceScore = pctOf(experiencePoints, w.experience);
 
     const educationCount = candidate.educationCount ?? 0;

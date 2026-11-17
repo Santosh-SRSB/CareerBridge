@@ -3606,7 +3606,7 @@ a.ev-stat:hover {
   background: #0b0e5c73;
 }
 
-.ev-app .ep-modal__card,
+.ev-app .ep-modal__card:not(.ep-modal__card--resume),
 .ev-app .ep-ivdesk__modal-card {
   width: min(100%, 480px);
   max-height: calc(100dvh - 32px);
@@ -3615,6 +3615,24 @@ a.ev-stat:hover {
   border: 1px solid var(--ev-line);
   border-radius: 20px;
   box-shadow: 0 24px 60px #10137c33;
+}
+
+/* Resume preview must stay true fullscreen (do not inherit 480px dialog width). */
+.ev-app .ep-modal.ep-modal--resume {
+  padding: 0;
+  place-items: stretch;
+}
+.ev-app .ep-modal__card--resume {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 12px 14px 14px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .ev-app .ep-modal__eyebrow,

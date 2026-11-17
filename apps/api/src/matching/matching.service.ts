@@ -142,13 +142,24 @@ export class MatchingService {
       });
     }
     const profile = await this.prisma.jobSkillProfile.findUnique({ where: { jobId: job.id } });
-    const requiredSkills = profile
+    // Always derive from the live job row in DB (title + description + stored skill lists).
+    // Never keep stale static match reasons detached from the current JD.
+    const extracted = this.intelligence.extractSkillsFromJobText({
+      title: job.title,
+      description: job.description,
+      requiredSkills: parseList(job.requiredSkills),
+      preferredSkills: parseList(job.preferredSkills),
+    });
+    const storedRequired = profile
       ? parseList(profile.requiredSkillsJson)
       : parseList(job.requiredSkills);
-    const preferredSkills = profile
+    const storedPreferred = profile
       ? parseList(profile.preferredSkillsJson)
       : parseList(job.preferredSkills);
-    const experienceYearsMin = profile?.experienceYearsMin || 0;
+    const requiredSkills = storedRequired.length ? storedRequired : extracted.requiredSkills;
+    const preferredSkills = storedPreferred.length ? storedPreferred : extracted.preferredSkills;
+    const experienceYearsMin =
+      profile?.experienceYearsMin || extracted.experienceYearsMin || 0;
 
     // Ensure job profile + JD chunks exist in pgvector (required for semantic score).
     await this.documentIndex

@@ -89,3 +89,45 @@ test('empty required skills uses role title fit, not a free 70', () => {
   );
   assert.equal(hit.byKey.skills, 80);
 });
+
+test('short skill C does not false-match Client & Interview Coordination', () => {
+  const { match, byKey } = points(
+    { skills: ['C', 'Python', 'SQL', 'React'] },
+    {
+      title: 'Talent Acquisition Executive',
+      category: 'HR',
+      requiredSkills: [
+        'Full-Cycle Recruitment',
+        'Candidate Sourcing',
+        'Client & Interview Coordination',
+      ],
+      experience: '2–3 Years',
+    },
+  );
+  assert.equal(byKey.skills, 0);
+  assert.equal(match.skillScore, 0);
+  assert.ok(match.score < 60);
+});
+
+test('recruitment skills match TA required skills from the job, not IT chips', () => {
+  const { byKey, match } = points(
+    {
+      skills: ['Full-Cycle Recruitment', 'Candidate Sourcing', 'Client & Interview Coordination', 'Naukri'],
+      experienceYears: 2.5,
+      careerInterests: ['Talent Acquisition', 'HR'],
+    },
+    {
+      title: 'Talent Acquisition Executive',
+      category: 'HR',
+      requiredSkills: [
+        'Full-Cycle Recruitment',
+        'Candidate Sourcing',
+        'Client & Interview Coordination',
+      ],
+      experience: '2–3 Years',
+    },
+  );
+  assert.equal(byKey.skills, 80);
+  assert.equal(byKey.experience, 5);
+  assert.ok(match.score >= 80);
+});

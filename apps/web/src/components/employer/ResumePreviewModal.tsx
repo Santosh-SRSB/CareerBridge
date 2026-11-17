@@ -41,7 +41,7 @@ export function ResumePreviewModal({ open, fileName, mimeType, content, kind, on
   return (
     <div className="ep-modal ep-modal--resume" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <button type="button" className="ep-modal__backdrop" aria-label="Close resume preview" onClick={onClose} />
-      <div className="ep-modal__card ep-modal__card--resume">
+      <div className="ep-modal__card ep-modal__card--resume" style={{ width: '100vw', height: '100dvh', maxWidth: '100vw', maxHeight: '100dvh', margin: 0, borderRadius: 0 }}>
         <header className="ep-modal__head ep-modal__head--resume">
           <div>
             <p className="ep-modal__eyebrow">Resume</p>
