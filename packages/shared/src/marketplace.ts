@@ -1227,6 +1227,12 @@ export type EmployerCandidateSearchResult = {
   skillsTotal?: number;
   latestRole: { title: string; company: string } | null;
   matchScore: number | null;
+  /** JD skills points (max ATS_JOB_MATCH_WEIGHTS.skills) when a job is selected. */
+  skillsScore?: number | null;
+  /** JD experience points (max ATS_JOB_MATCH_WEIGHTS.experience) when a job is selected. */
+  experienceScore?: number | null;
+  reasons?: string[];
+  gaps?: string[];
   appliedToEmployer: boolean;
   applicationId?: string | null;
   applicationStatus?: string | null;

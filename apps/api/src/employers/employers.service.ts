@@ -1070,6 +1070,7 @@ export class EmployersService {
         const liveMatch = this.scoreApplicationMatch(candidate, job);
         const breakdown = toAtsMatchBreakdown(liveMatch);
         const skillsPts = breakdown.factors.find((f) => f.key === 'skills')?.score ?? 0;
+        const experiencePts = breakdown.factors.find((f) => f.key === 'experience')?.score ?? 0;
         // Applicants always stay visible; talent-pool rows still need JD/track fit.
         if (!isApplicant) {
           if (skillsPts < MIN_JOB_MATCH_SKILLS_POINTS) return null;
@@ -1092,6 +1093,10 @@ export class EmployersService {
         return {
           match: matchByCandidate.get(candidateId) || null,
           liveScore: breakdown.score,
+          skillsScore: skillsPts,
+          experienceScore: experiencePts,
+          reasons: breakdown.reasons || [],
+          gaps: breakdown.gaps || [],
           candidate,
           candidateYears,
           currentlyEmployed,
@@ -1132,39 +1137,55 @@ export class EmployersService {
     );
 
     const candidatePayload = await Promise.all(
-      pageRows.map(async ({ liveScore, candidate, currentlyEmployed, application, availability }) => {
-        const latestRole = candidate.experiences[0];
-        const skillNames = candidate.skills.map((item) => item.name);
-        const matchScore = Math.round(liveScore);
-        return {
-          id: candidate.id,
-          firstName: candidate.firstName,
-          lastName: candidate.lastName,
-          city: candidate.city,
-          state: candidate.state,
-          highestEducation: candidate.highestEducation,
-          preferredLanguage: candidate.preferredLanguage,
-          experienceYears: candidate.totalExperienceYears || 0,
-          experienceMonths: candidate.totalExperienceMonths || 0,
-          stillInCollege: candidate.stillInCollege,
-          openToRelocating: candidate.openToRelocating,
+      pageRows.map(
+        async ({
+          liveScore,
+          skillsScore,
+          experienceScore,
+          reasons,
+          gaps,
+          candidate,
           currentlyEmployed,
-          availabilityLabel: availability.label,
-          availabilityTone: availability.tone,
-          profileCompletion: candidate.profileCompletion,
-          skills: skillNames.slice(0, 6),
-          skillsTotal: skillNames.length,
-          latestRole: latestRole
-            ? { title: latestRole.jobTitle, company: latestRole.company }
-            : null,
-          matchScore,
-          appliedToEmployer: Boolean(application),
-          applicationId: application?.id || null,
-          applicationStatus: application?.status || null,
-          talentShortlisted: talentShortlisted.has(candidate.id),
-          photoUrl: await readableCandidatePhotoUrl(this.storage, candidate.id, candidate.photoUrl),
-        };
-      }),
+          application,
+          availability,
+        }) => {
+          const latestRole = candidate.experiences[0];
+          const skillNames = candidate.skills.map((item) => item.name);
+          const matchScore = Math.round(liveScore);
+          return {
+            id: candidate.id,
+            firstName: candidate.firstName,
+            lastName: candidate.lastName,
+            city: candidate.city,
+            state: candidate.state,
+            highestEducation: candidate.highestEducation || null,
+            preferredLanguage: candidate.preferredLanguage,
+            experienceYears: Number(candidate.totalExperienceYears || 0),
+            experienceMonths: Number(candidate.totalExperienceMonths || 0),
+            stillInCollege: candidate.stillInCollege,
+            openToRelocating: candidate.openToRelocating,
+            currentlyEmployed,
+            availabilityLabel: availability.label || 'Available',
+            availabilityTone: availability.tone || 'neutral',
+            profileCompletion: candidate.profileCompletion,
+            skills: skillNames.slice(0, 8),
+            skillsTotal: skillNames.length,
+            latestRole: latestRole
+              ? { title: latestRole.jobTitle, company: latestRole.company }
+              : null,
+            matchScore,
+            skillsScore,
+            experienceScore,
+            reasons,
+            gaps,
+            appliedToEmployer: Boolean(application),
+            applicationId: application?.id || null,
+            applicationStatus: application?.status || null,
+            talentShortlisted: talentShortlisted.has(candidate.id),
+            photoUrl: await readableCandidatePhotoUrl(this.storage, candidate.id, candidate.photoUrl),
+          };
+        },
+      ),
     );
 
     return {

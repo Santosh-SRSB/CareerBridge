@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { PROFILE_MATCH_LABEL, atsMatchBandInfo } from '@careerbridge/shared';
+import { ATS_JOB_MATCH_WEIGHTS, PROFILE_MATCH_LABEL, atsMatchBandInfo } from '@careerbridge/shared';
 import { EvAvatar, EvPill } from '@/components/employer/ui';
 import { matchPillTone } from '@/lib/employer-ui-status';
 
@@ -150,15 +150,15 @@ export function MatchedCandidateCard({
         <div>
           <small>Skills fit</small>
           <b>
-            {Math.round(skillsScore)}
-            <span>/40</span>
+            {Math.min(ATS_JOB_MATCH_WEIGHTS.skills, Math.max(0, Math.round(skillsScore)))}
+            <span>/{ATS_JOB_MATCH_WEIGHTS.skills}</span>
           </b>
         </div>
         <div>
           <small>Experience fit</small>
           <b>
-            {Math.round(experienceScore)}
-            <span>/20</span>
+            {Math.min(ATS_JOB_MATCH_WEIGHTS.experience, Math.max(0, Math.round(experienceScore)))}
+            <span>/{ATS_JOB_MATCH_WEIGHTS.experience}</span>
           </b>
         </div>
       </div>

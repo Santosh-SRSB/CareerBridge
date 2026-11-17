@@ -364,7 +364,12 @@ export class MatchingService {
       }
     }
 
-    scored.sort((a, b) => b.totalScore - a.totalScore);
+    // Applicants first, then remaining talent by JD match score.
+    scored.sort(
+      (a, b) =>
+        Number(Boolean(b.applicationId)) - Number(Boolean(a.applicationId)) ||
+        b.totalScore - a.totalScore,
+    );
     const top = scored.slice(0, 40);
 
     await this.prisma.$transaction([

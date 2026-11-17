@@ -11,8 +11,6 @@ import {
   CANDIDATE_SEARCH_SORTS,
   DEFAULT_LANGUAGES,
   JOB_SKILL_SUGGESTIONS,
-  PROFILE_MATCH_LABEL,
-  atsMatchBandInfo,
 } from '@careerbridge/shared';
 import {
   getEmployerMe,
@@ -27,6 +25,7 @@ import {
   isEmployerAdminVerified,
 } from '@/components/EmployerPortal';
 import { ShortlistConfirmModal } from '@/components/employer/ShortlistConfirmModal';
+import { MatchedCandidateCard } from '@/components/employer/MatchedCandidateCard';
 import { EvAlert, EvAvatar, EvEmpty, EvPageHead, EvSkeleton } from '@/components/employer/ui';
 import { CitySelect } from '@/components/ui/CitySelect';
 import { SearchableCreatableSelect } from '@/components/ui/SearchableCreatableSelect';
@@ -563,12 +562,63 @@ export default function EmployerCandidatesPage() {
               </span>
             </div>
 
+            {jobId ? (
+              <div className="ev-match-grid">
+                {results.map((row, index) => {
+                  const name = candidateName(row);
+                  const isShortlisted = row.applicationStatus === 'SHORTLISTED' || Boolean(row.talentShortlisted);
+                  const canShortlist = row.applicationId
+                    ? ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(String(row.applicationStatus || 'APPLIED'))
+                    : !row.talentShortlisted;
+                  const shortlistBusy = busyId === `shortlist-${row.id}`;
+                  return (
+                    <div key={row.id} className="ev-match-grid__item">
+                      <MatchedCandidateCard
+                        rank={index + 1}
+                        name={name}
+                        city={formatLocation(row.city, row.state)}
+                        photoUrl={row.photoUrl}
+                        skills={row.skills || []}
+                        totalScore={row.matchScore || 0}
+                        skillsScore={row.skillsScore ?? 0}
+                        experienceScore={row.experienceScore ?? 0}
+                        reasons={row.reasons || []}
+                        gaps={row.gaps || []}
+                        badge={row.appliedToEmployer || row.applicationId ? 'applied' : 'matched'}
+                        jobId={jobId}
+                        candidateId={row.id}
+                        href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
+                      />
+                      {canShortlist ? (
+                        <button
+                          type="button"
+                          className="ev-btn ev-btn--sm ev-candcard__shortlist ev-mt-sm"
+                          disabled={shortlistBusy}
+                          onClick={() =>
+                            setShortlistTarget({
+                              candidateId: row.id,
+                              applicationId: row.applicationId || null,
+                              name,
+                            })
+                          }
+                        >
+                          {shortlistBusy ? '…' : 'Shortlist'}
+                        </button>
+                      ) : null}
+                      {isShortlisted ? (
+                        <span className="ev-candcard__shortlisted" data-testid="shortlisted-badge">
+                          Shortlisted ✓
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
             <ul className="ev-cand-grid ev-plain-list">
               {results.map((row) => {
                 const isShortlisted = row.applicationStatus === 'SHORTLISTED' || Boolean(row.talentShortlisted);
-                const canShortlist = row.applicationId
-                  ? ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(String(row.applicationStatus || 'APPLIED'))
-                  : Boolean(jobId) && !row.talentShortlisted;
+                const canShortlist = false;
                 const shortlistBusy = busyId === `shortlist-${row.id}`;
                 const skillLabels = row.skills
                   .map(shortSkillLabel)
@@ -577,7 +627,6 @@ export default function EmployerCandidatesPage() {
                 const visibleSkills = skillLabels.slice(0, 3);
                 const moreSkills = Math.max((row.skillsTotal || row.skills.length) - visibleSkills.length, 0);
                 const availabilityTone = row.availabilityTone || 'neutral';
-                const band = row.matchScore !== null ? atsMatchBandInfo(row.matchScore) : null;
                 const name = candidateName(row);
                 const educationFull = row.highestEducation?.trim() || 'Not provided';
                 const education = shortEducation(educationFull);
@@ -593,17 +642,6 @@ export default function EmployerCandidatesPage() {
                         <h3 title={name}>{name}</h3>
                         <p className="ev-candcard__loc">{location}</p>
                       </div>
-                      {band && row.matchScore !== null ? (
-                        <div
-                          className={`ev-candcard__match ev-candcard__match--${band.color}`}
-                          title={`${PROFILE_MATCH_LABEL} for the selected job · ${band.label}`}
-                          aria-label={`${PROFILE_MATCH_LABEL} ${row.matchScore} out of 100 · ${band.label}`}
-                        >
-                          <span className="ev-candcard__score">{row.matchScore}</span>
-                          <span className="ev-candcard__score-label">Match</span>
-                          <span className="ev-candcard__band">{band.shortLabel}</span>
-                        </div>
-                      ) : null}
                     </header>
 
                     <div className="ev-candcard__stats" aria-label="Candidate summary">
@@ -644,11 +682,7 @@ export default function EmployerCandidatesPage() {
 
                     <footer className="ev-candcard__actions">
                       <Link
-                        href={
-                          jobId
-                            ? `/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`
-                            : `/employer/candidates/${row.id}`
-                        }
+                        href={`/employer/candidates/${row.id}`}
                         className="ev-btn ev-btn--ghost ev-btn--sm ev-candcard__view"
                       >
                         View profile
@@ -683,6 +717,7 @@ export default function EmployerCandidatesPage() {
                 );
               })}
             </ul>
+            )}
 
             {pageCount > 1 ? (
               <nav className="ev-pager" aria-label="Candidate pages">

@@ -108,6 +108,11 @@ export default function EmployerJobApplicationsPage() {
       seen.add(key);
       out.push(row);
     }
+    out.sort(
+      (a, b) =>
+        Number(Boolean(b.applicationId)) - Number(Boolean(a.applicationId)) ||
+        (b.totalScore || 0) - (a.totalScore || 0),
+    );
     return out.map((row, index) => ({ ...row, rank: index + 1 }));
   }, [matches]);
 

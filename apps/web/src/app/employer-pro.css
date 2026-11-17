@@ -8471,18 +8471,22 @@ a.ep-prohead__cta {
   margin-top: 16px;
 }
 .ep-modal--resume {
-  padding: 8px;
+  padding: 0;
   place-items: stretch;
+  inset: 0;
 }
 .ep-modal__card--resume {
-  width: min(1280px, calc(100vw - 16px));
-  height: calc(100vh - 16px);
-  max-height: calc(100vh - 16px);
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 14px 16px 16px;
-  margin: 0 auto;
-  border-radius: 14px;
+  padding: 12px 14px 14px;
+  margin: 0;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
 }
 .ep-modal__head--resume {
   display: flex;
@@ -8496,18 +8500,19 @@ a.ep-prohead__cta {
   flex-shrink: 0;
 }
 .ep-resume-preview {
-  margin-top: 12px;
+  margin-top: 10px;
   flex: 1 1 auto;
   min-height: 0;
   border: 1px solid #eef0ff;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
   background: #f7f8fc;
 }
 .ep-resume-preview__frame {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: calc(100vh - 120px);
+  min-height: calc(100vh - 88px);
   border: 0;
   background: #fff;
 }
