@@ -636,6 +636,29 @@
   margin: 6px 0 12px;
 }
 
+.ev-match-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.ev-match-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ev-results-head--sub {
+  margin: 0 0 4px;
+}
+
+.ev-results-head--sub h3 {
+  margin: 0;
+  font-family: var(--ev-serif);
+  font-size: 15px;
+  color: var(--ev-ink);
+}
+
 .ev-results-head h2 {
   margin: 0;
   font-family: var(--ev-serif);

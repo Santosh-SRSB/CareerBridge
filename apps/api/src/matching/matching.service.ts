@@ -8,10 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import {
   ATS_JOB_MATCH_WEIGHTS,
   ErrorCode as SharedError,
-  MIN_JOB_MATCH_SKILLS_POINTS,
   applyAtsMatchScoreGates,
   careerTracksCompatible,
   employerCandidateUnlockLimit,
+  passesUnappliedJobMatch,
 } from '@careerbridge/shared';
 import {
   applicationTransitionError,
@@ -310,19 +310,27 @@ export class MatchingService {
       const semanticScore =
         fromPg != null ? Math.round(Math.max(0, Math.min(1, fromPg)) * 100) : 0;
 
-      // Drop weak skill fit and cross-track mixes (IT on Non-IT jobs and vice versa).
-      if (skillsScore < MIN_JOB_MATCH_SKILLS_POINTS) {
-        continue;
-      }
+      // Unapplied pool: same career track + at least 2 of role/skills/experience/JD.
+      const roleCompatible = careerTracksCompatible(
+        { title: job.title, category: job.category },
+        {
+          interests: parseList(candidate.careerInterests),
+          skills: candidate.skills.map((item) => item.name),
+          experienceTitles: candidate.experiences.map((item) => item.jobTitle).filter(Boolean),
+        },
+      );
+      const jdSignals =
+        locationScore > 0 ||
+        (jobLanguages.length > 0 && languageScore > 0) ||
+        base.categoryScore >= 100 ||
+        Boolean(base.reasons?.some((reason) => !/^education on file$/i.test(String(reason || '').trim())));
       if (
-        !careerTracksCompatible(
-          { title: job.title, category: job.category },
-          {
-            interests: parseList(candidate.careerInterests),
-            skills: candidate.skills.map((item) => item.name),
-            experienceTitles: candidate.experiences.map((item) => item.jobTitle).filter(Boolean),
-          },
-        )
+        !passesUnappliedJobMatch({
+          roleCompatible,
+          skillsPoints: skillsScore,
+          experiencePoints: experienceScore,
+          jdSignals,
+        })
       ) {
         continue;
       }

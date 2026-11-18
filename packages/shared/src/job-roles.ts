@@ -111,6 +111,50 @@ export function careerTracksCompatible(
 /** Minimum skills points (of 80) required to appear in a job talent pool. */
 export const MIN_JOB_MATCH_SKILLS_POINTS = 16;
 
+/** Unapplied talent-pool rows must hit at least this many of role / skills / experience / JD. */
+export const MIN_UNAPPLIED_MATCH_DIMENSIONS = 2;
+
+export type JobMatchDimensionInput = {
+  roleCompatible: boolean;
+  skillsPoints: number;
+  experiencePoints: number;
+  /** Location / language / category / role-title signals from the live JD. */
+  jdSignals?: boolean;
+};
+
+export type JobMatchDimensionHits = {
+  role: boolean;
+  skills: boolean;
+  experience: boolean;
+  jd: boolean;
+  count: number;
+};
+
+/** Count which of role / skills / experience / JD matched for a candidate vs a job. */
+export function jobMatchDimensionHits(input: JobMatchDimensionInput): JobMatchDimensionHits {
+  const role = Boolean(input.roleCompatible);
+  const skills = Number(input.skillsPoints || 0) > 0;
+  const experience = Number(input.experiencePoints || 0) > 0;
+  const jd = Boolean(input.jdSignals);
+  return {
+    role,
+    skills,
+    experience,
+    jd,
+    count: [role, skills, experience, jd].filter(Boolean).length,
+  };
+}
+
+/**
+ * Unapplied pool gate: same career track (IT↔Non-IT), and at least 2 of
+ * role / skills / experience / JD so partial fits still surface under Applied.
+ */
+export function passesUnappliedJobMatch(input: JobMatchDimensionInput): boolean {
+  const hits = jobMatchDimensionHits(input);
+  if (!hits.role) return false;
+  return hits.count >= MIN_UNAPPLIED_MATCH_DIMENSIONS;
+}
+
 function mergeCatalog(): Record<string, string[]> {
   const out: Record<string, string[]> = {
     IT: [...BASE_JOB_ROLE_CATALOG.IT],

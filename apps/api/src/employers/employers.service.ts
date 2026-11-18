@@ -34,8 +34,8 @@ import {
   panFormatError,
   parseLinkedinUrl,
   toAtsMatchBreakdown,
-  MIN_JOB_MATCH_SKILLS_POINTS,
   careerTracksCompatible,
+  passesUnappliedJobMatch,
 } from '@careerbridge/shared';
 import { GstService } from '../gst/gst.service';
 import { normalizeGstin, validateGstinFormat } from '../gst/gst.validator';
@@ -1071,20 +1071,33 @@ export class EmployersService {
         const breakdown = toAtsMatchBreakdown(liveMatch);
         const skillsPts = breakdown.factors.find((f) => f.key === 'skills')?.score ?? 0;
         const experiencePts = breakdown.factors.find((f) => f.key === 'experience')?.score ?? 0;
-        // Applicants always stay visible; talent-pool rows still need JD/track fit.
+        const locationPts = breakdown.factors.find((f) => f.key === 'location')?.score ?? 0;
+        // Applicants always stay visible; unapplied need same track + 2 of role/skills/exp/JD.
         if (!isApplicant) {
-          if (skillsPts < MIN_JOB_MATCH_SKILLS_POINTS) return null;
+          const roleCompatible = careerTracksCompatible(
+            { title: job.title, category: job.category },
+            {
+              interests: parseList(candidate.careerInterests),
+              skills: candidate.skills.map((item) => item.name),
+              experienceTitles: (candidate.experiences || [])
+                .map((item) => item.jobTitle)
+                .filter((title): title is string => Boolean(title)),
+            },
+          );
+          const jdSignals =
+            locationPts > 0 ||
+            Boolean(
+              (breakdown.reasons || []).some(
+                (reason) => !/^education on file$/i.test(String(reason || '').trim()),
+              ),
+            );
           if (
-            !careerTracksCompatible(
-              { title: job.title, category: job.category },
-              {
-                interests: parseList(candidate.careerInterests),
-                skills: candidate.skills.map((item) => item.name),
-                experienceTitles: (candidate.experiences || [])
-                  .map((item) => item.jobTitle)
-                  .filter((title): title is string => Boolean(title)),
-              },
-            )
+            !passesUnappliedJobMatch({
+              roleCompatible,
+              skillsPoints: skillsPts,
+              experiencePoints: experiencePts,
+              jdSignals,
+            })
           ) {
             return null;
           }

@@ -520,30 +520,63 @@ export default function EmployerCandidatesPage() {
             </div>
 
             {jobId ? (
-              <div className="ev-match-grid">
-                {results.map((row, index) => {
-                  const name = candidateName(row);
-                  return (
-                    <MatchedCandidateCard
-                      key={row.id}
-                      rank={index + 1}
-                      name={name}
-                      city={formatLocation(row.city, row.state)}
-                      photoUrl={row.photoUrl}
-                      skills={row.skills || []}
-                      totalScore={row.matchScore || 0}
-                      skillsScore={row.skillsScore ?? 0}
-                      experienceScore={row.experienceScore ?? 0}
-                      reasons={row.reasons || []}
-                      gaps={row.gaps || []}
-                      badge={row.appliedToEmployer || row.applicationId ? 'applied' : 'matched'}
-                      jobId={jobId}
-                      candidateId={row.id}
-                      href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
-                    />
-                  );
-                })}
-              </div>
+              (() => {
+                const appliedRows = results.filter((row) => Boolean(row.appliedToEmployer || row.applicationId));
+                const unappliedRows = results.filter((row) => !row.appliedToEmployer && !row.applicationId);
+                const renderMatchCard = (row: (typeof results)[number], rank: number) => (
+                  <MatchedCandidateCard
+                    key={row.id}
+                    rank={rank}
+                    name={candidateName(row)}
+                    city={formatLocation(row.city, row.state)}
+                    photoUrl={row.photoUrl}
+                    skills={row.skills || []}
+                    totalScore={row.matchScore || 0}
+                    skillsScore={row.skillsScore ?? 0}
+                    experienceScore={row.experienceScore ?? 0}
+                    reasons={row.reasons || []}
+                    gaps={row.gaps || []}
+                    badge={row.appliedToEmployer || row.applicationId ? 'applied' : 'matched'}
+                    jobId={jobId}
+                    candidateId={row.id}
+                    href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
+                  />
+                );
+                return (
+                  <div className="ev-match-sections">
+                    {appliedRows.length > 0 ? (
+                      <section className="ev-match-section" aria-label="Applied candidates">
+                        <div className="ev-results-head ev-results-head--sub">
+                          <h3>Applied</h3>
+                          <span className="ev-sub">
+                            {appliedRows.length} {appliedRows.length === 1 ? 'candidate' : 'candidates'}
+                          </span>
+                        </div>
+                        <div className="ev-match-grid">
+                          {appliedRows.map((row, index) => renderMatchCard(row, index + 1))}
+                        </div>
+                      </section>
+                    ) : null}
+                    {unappliedRows.length > 0 ? (
+                      <section className="ev-match-section" aria-label="Unapplied matched candidates">
+                        <div className="ev-results-head ev-results-head--sub">
+                          <h3>Unapplied matched</h3>
+                          <span className="ev-sub">
+                            {unappliedRows.length}{' '}
+                            {unappliedRows.length === 1 ? 'candidate' : 'candidates'} · role / skills /
+                            experience / JD
+                          </span>
+                        </div>
+                        <div className="ev-match-grid">
+                          {unappliedRows.map((row, index) =>
+                            renderMatchCard(row, appliedRows.length + index + 1),
+                          )}
+                        </div>
+                      </section>
+                    ) : null}
+                  </div>
+                );
+              })()
             ) : (
             <ul className="ev-cand-grid ev-plain-list">
               {results.map((row) => {

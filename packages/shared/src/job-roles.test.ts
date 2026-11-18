@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   careerTracksCompatible,
   detectRoleCategory,
+  passesUnappliedJobMatch,
   resolveCareerTrack,
   uniqueRoles,
 } from './job-roles';
@@ -56,6 +57,36 @@ test('careerTracksCompatible blocks IT profiles on Non-IT jobs and vice versa', 
       { title: 'Backend Developer', category: 'Technology' },
       { interests: ['Sales Executive'], skills: ['Cold calling'] },
     ),
+    false,
+  );
+});
+
+test('passesUnappliedJobMatch needs same track plus at least one more of skills/exp/JD', () => {
+  assert.equal(
+    passesUnappliedJobMatch({
+      roleCompatible: true,
+      skillsPoints: 0,
+      experiencePoints: 0,
+      jdSignals: false,
+    }),
+    false,
+  );
+  assert.equal(
+    passesUnappliedJobMatch({
+      roleCompatible: true,
+      skillsPoints: 0,
+      experiencePoints: 0,
+      jdSignals: true,
+    }),
+    true,
+  );
+  assert.equal(
+    passesUnappliedJobMatch({
+      roleCompatible: false,
+      skillsPoints: 40,
+      experiencePoints: 5,
+      jdSignals: true,
+    }),
     false,
   );
 });
