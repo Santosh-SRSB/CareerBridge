@@ -5,6 +5,7 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 import { GoogleTag } from "@/components/GoogleTag";
 import { MetaPixel } from "@/components/MetaPixel";
 import { PushNotificationBootstrap } from "@/components/PushNotificationBootstrap";
+import { PwaRegister } from "@/components/PwaRegister";
 import { Toaster } from "@/components/ui/Toast";
 import "./globals.css";
 
@@ -60,10 +61,28 @@ export const metadata: Metadata = {
   title: "SRSB CareerBridge | Build your career. Build your future.",
   description:
     "Create your free Career Passport, improve your skills with AI, practice interviews, and find jobs. Free for candidates.",
+  applicationName: "SRSB Career Bridge",
+  manifest: "/manifest.json",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#1522eb" },
+    { media: "(prefers-color-scheme: dark)", color: "#1522eb" },
+  ],
+  appleWebApp: {
+    capable: true,
+    title: "Career Bridge",
+    statusBarStyle: "default",
+  },
   icons: {
-    icon: [{ url: "/srsb-mark.png", type: "image/png" }],
-    shortcut: ["/srsb-mark.png"],
-    apple: [{ url: "/srsb-mark.png" }],
+    icon: [
+      { url: "/icons/pwa-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/pwa-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/srsb-mark.png", type: "image/png" },
+    ],
+    shortcut: ["/icons/pwa-192.png"],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 
@@ -81,6 +100,7 @@ export default function RootLayout({
         <GoogleTag />
         <MetaPixel />
         <AuthCookieSync />
+        <PwaRegister />
         <PushNotificationBootstrap />
         {children}
         <Toaster />

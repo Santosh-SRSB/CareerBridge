@@ -1,0 +1,36 @@
+{
+  "id": "/?source=pwa",
+  "name": "SRSB Career Bridge",
+  "short_name": "Career Bridge",
+  "description": "Create your free Career Passport, improve your skills with AI, practice interviews, and find jobs. Free for candidates. Post jobs and hire good-fit candidates.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#1522eb",
+  "categories": ["business", "education", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwa-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "prefer_related_applications": false
+}
