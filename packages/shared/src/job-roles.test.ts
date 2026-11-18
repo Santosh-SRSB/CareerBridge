@@ -37,6 +37,17 @@ test('resolveCareerTrack keeps Talent Acquisition / BD on Non-IT even if JD ment
   );
 });
 
+test('resolveCareerTrack title wins over a wrong Software Development category', () => {
+  assert.equal(
+    resolveCareerTrack({ title: 'Talent Acquisition Executive', category: 'Software Development' }),
+    'NON_IT',
+  );
+  assert.equal(
+    resolveCareerTrack({ title: 'HR Executive', category: 'Technology' }),
+    'NON_IT',
+  );
+});
+
 test('careerTracksCompatible blocks IT profiles on Non-IT jobs and vice versa', () => {
   assert.equal(
     careerTracksCompatible(
@@ -61,7 +72,7 @@ test('careerTracksCompatible blocks IT profiles on Non-IT jobs and vice versa', 
   );
 });
 
-test('passesUnappliedJobMatch needs same track plus at least one more of skills/exp/JD', () => {
+test('passesUnappliedJobMatch needs same track plus posted JD skill overlap', () => {
   assert.equal(
     passesUnappliedJobMatch({
       roleCompatible: true,
@@ -75,8 +86,17 @@ test('passesUnappliedJobMatch needs same track plus at least one more of skills/
     passesUnappliedJobMatch({
       roleCompatible: true,
       skillsPoints: 0,
-      experiencePoints: 0,
+      experiencePoints: 5,
       jdSignals: true,
+    }),
+    false,
+  );
+  assert.equal(
+    passesUnappliedJobMatch({
+      roleCompatible: true,
+      skillsPoints: 26,
+      experiencePoints: 0,
+      jdSignals: false,
     }),
     true,
   );

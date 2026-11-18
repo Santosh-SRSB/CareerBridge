@@ -70,7 +70,10 @@ import {
 } from './company-logo.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { USABLE_RESUME_WHERE } from '../resumes/resume-eligibility';
-import { IntelligenceService } from '../intelligence/intelligence.service';
+import {
+  countSkillOverlap,
+  IntelligenceService,
+} from '../intelligence/intelligence.service';
 import { MatchingService } from '../matching/matching.service';
 import { InterviewWhatsAppService } from '../whatsapp/interview-whatsapp.service';
 import { consentedWhatsAppNumber } from '../whatsapp/interview-lifecycle.util';
@@ -957,6 +960,23 @@ export class EmployersService {
     const candidateIds = Array.from(
       new Set([...matchRows.map((row) => row.candidateId), ...applications.map((row) => row.candidateId)]),
     );
+    // Live JD skills from posted description + stored lists (never rely on a stale static set alone).
+    const extractedJd = this.intelligence.extractSkillsFromJobText({
+      title: job.title,
+      description: job.description,
+      requiredSkills: parseList(job.requiredSkills),
+      preferredSkills: parseList(job.preferredSkills || '[]'),
+    });
+    const storedRequired = parseList(job.requiredSkills);
+    const jdRequiredSkills = storedRequired.length ? storedRequired : extractedJd.requiredSkills;
+    const jdPreferredSkills = parseList(job.preferredSkills || '[]').length
+      ? parseList(job.preferredSkills || '[]')
+      : extractedJd.preferredSkills;
+    const jobForMatch = {
+      ...job,
+      requiredSkills: JSON.stringify(jdRequiredSkills),
+      preferredSkills: JSON.stringify(jdPreferredSkills),
+    };
 
     if (!candidateIds.length) {
       return {
@@ -1067,18 +1087,20 @@ export class EmployersService {
           if (kind !== query.availability) return null;
         }
 
-        const liveMatch = this.scoreApplicationMatch(candidate, job);
+        const liveMatch = this.scoreApplicationMatch(candidate, jobForMatch);
         const breakdown = toAtsMatchBreakdown(liveMatch);
         const skillsPts = breakdown.factors.find((f) => f.key === 'skills')?.score ?? 0;
         const experiencePts = breakdown.factors.find((f) => f.key === 'experience')?.score ?? 0;
         const locationPts = breakdown.factors.find((f) => f.key === 'location')?.score ?? 0;
-        // Applicants always stay visible; unapplied need same track + 2 of role/skills/exp/JD.
+        const skillNames = candidate.skills.map((item) => item.name);
+        const matchedSkills = countSkillOverlap(jdRequiredSkills, skillNames);
+        // Applicants always stay visible; unapplied need same track + posted JD skill overlap.
         if (!isApplicant) {
           const roleCompatible = careerTracksCompatible(
             { title: job.title, category: job.category },
             {
               interests: parseList(candidate.careerInterests),
-              skills: candidate.skills.map((item) => item.name),
+              skills: skillNames,
               experienceTitles: (candidate.experiences || [])
                 .map((item) => item.jobTitle)
                 .filter((title): title is string => Boolean(title)),
@@ -1110,6 +1132,7 @@ export class EmployersService {
           experienceScore: experiencePts,
           reasons: breakdown.reasons || [],
           gaps: breakdown.gaps || [],
+          matchedSkills,
           candidate,
           candidateYears,
           currentlyEmployed,
@@ -1125,10 +1148,11 @@ export class EmployersService {
     } else if (query.sort === 'experience') {
       filtered.sort((a, b) => b.candidateYears - a.candidateYears || b.liveScore - a.liveScore);
     } else {
-      // Best match: applicants first by score, then talent matches by score.
+      // Best match: applicants first, then highest posted-JD skills fit, then overall score.
       filtered.sort(
         (a, b) =>
           Number(b.isApplicant) - Number(a.isApplicant) ||
+          b.skillsScore - a.skillsScore ||
           b.liveScore - a.liveScore ||
           (b.match?.totalScore || 0) - (a.match?.totalScore || 0),
       );
@@ -1157,6 +1181,7 @@ export class EmployersService {
           experienceScore,
           reasons,
           gaps,
+          matchedSkills,
           candidate,
           currentlyEmployed,
           application,
@@ -1165,6 +1190,8 @@ export class EmployersService {
           const latestRole = candidate.experiences[0];
           const skillNames = candidate.skills.map((item) => item.name);
           const matchScore = Math.round(liveScore);
+          // Card chips: only skills that overlap the posted JD (not unrelated Python/SQL on TA).
+          const displaySkills = (matchedSkills.length ? matchedSkills : []).slice(0, 8);
           return {
             id: candidate.id,
             firstName: candidate.firstName,
@@ -1181,8 +1208,8 @@ export class EmployersService {
             availabilityLabel: availability.label || 'Available',
             availabilityTone: availability.tone || 'neutral',
             profileCompletion: candidate.profileCompletion,
-            skills: skillNames.slice(0, 8),
-            skillsTotal: skillNames.length,
+            skills: displaySkills,
+            skillsTotal: matchedSkills.length || skillNames.length,
             latestRole: latestRole
               ? { title: latestRole.jobTitle, company: latestRole.company }
               : null,

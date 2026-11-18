@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   ATS_JOB_MATCH_WEIGHTS,
   applyAtsMatchScoreGates,
+  categorizeRole,
   experienceFitPercent,
   findStateForCity,
   normalizeCityName,
@@ -292,13 +293,24 @@ export class IntelligenceService {
       .filter((skill) => !preferredOverlap.includes(skill))
       .map(titleCase)
       .slice(0, 3);
+    // Don't surface a tech category as FIT when the job title is clearly HR/Sales/etc.
+    const titleRole = categorizeRole(job.title || '');
+    const titleIsNonIt =
+      titleRole === 'HR' ||
+      titleRole === 'SALES' ||
+      titleRole === 'MARKETING' ||
+      titleRole === 'FINANCE';
+    const categoryReason =
+      categoryScore === 100 && !(titleIsNonIt && /software|technology|\bit\b/i.test(job.category || ''))
+        ? job.category
+        : '';
     const reasons = [
       overlap.length
         ? `${overlap.length} of ${required.length || overlap.length} required skills`
         : '',
       overlap.length ? overlap.slice(0, 3).map(titleCase).join(', ') : '',
       locationScore === 100 ? 'Location matches the job' : locationPoints > 0 ? 'Same state as the job' : '',
-      categoryScore === 100 ? job.category : '',
+      categoryReason,
       educationScore === 100 ? 'Education on file' : '',
       jobLanguages.length && languageScore === 100 ? 'Language fit' : '',
       hasExp && jobNeedsExp && experienceScore === 100 ? 'Relevant experience' : '',
@@ -550,6 +562,16 @@ export class IntelligenceService {
       'css',
       'teamwork',
       'data entry',
+      'full-cycle recruitment',
+      'full cycle recruitment',
+      'candidate sourcing',
+      'talent acquisition',
+      'recruitment',
+      'naukri',
+      'linkedin',
+      'screening',
+      'interview coordination',
+      'client coordination',
     ];
     const blob = `${input.title} ${input.description} ${(input.requiredSkills || []).join(' ')}`.toLowerCase();
     const found = known.filter((skill) => blob.includes(skill.replace('.js', '')));

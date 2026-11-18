@@ -65,6 +65,13 @@ export function resolveCareerTrack(input: {
   skills?: string[];
   experienceTitles?: string[];
 }): CareerTrack {
+  // Job title wins over a mis-tagged category (e.g. Talent Acquisition saved as Software Development).
+  const titleCat = categorizeRole(String(input.title || ''));
+  if (titleCat === 'HR' || titleCat === 'SALES' || titleCat === 'MARKETING' || titleCat === 'FINANCE') {
+    return 'NON_IT';
+  }
+  if (titleCat === 'IT') return 'IT';
+
   const category = (input.category || '').trim();
   if ((TECH_JOB_CATEGORIES as readonly string[]).includes(category)) return 'IT';
   if ((NON_TECH_JOB_CATEGORIES as readonly string[]).includes(category)) return 'NON_IT';
@@ -146,12 +153,14 @@ export function jobMatchDimensionHits(input: JobMatchDimensionInput): JobMatchDi
 }
 
 /**
- * Unapplied pool gate: same career track (IT↔Non-IT), and at least 2 of
- * role / skills / experience / JD so partial fits still surface under Applied.
+ * Unapplied pool gate: same career track (IT↔Non-IT), real posted-JD skill overlap,
+ * and at least 2 of role / skills / experience / JD.
  */
 export function passesUnappliedJobMatch(input: JobMatchDimensionInput): boolean {
   const hits = jobMatchDimensionHits(input);
   if (!hits.role) return false;
+  // Location-only / experience-only must not fill Unapplied for the wrong job family.
+  if (!hits.skills) return false;
   return hits.count >= MIN_UNAPPLIED_MATCH_DIMENSIONS;
 }
 
