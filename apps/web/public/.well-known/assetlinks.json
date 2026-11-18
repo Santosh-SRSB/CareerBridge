@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.srsb.careerbridge",
+      "sha256_cert_fingerprints": [
+        "C0:3D:BA:88:FC:61:79:6D:56:31:AE:7C:3D:B0:2E:C7:D8:03:5C:99:B2:47:9B:70:BB:7D:1A:CB:72:F7:DA:CB"
+      ]
+    }
+  }
+]
