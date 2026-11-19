@@ -69,7 +69,7 @@ export const metadata: Metadata = {
   ],
   appleWebApp: {
     capable: true,
-    title: "Career Bridge",
+    title: "SRSB Career Bridge",
     statusBarStyle: "default",
   },
   icons: {
