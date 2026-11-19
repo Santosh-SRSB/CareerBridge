@@ -17,6 +17,7 @@ const STATIC: MetadataRoute.Sitemap = [
   { url: `${SITE}/courses`, changeFrequency: 'weekly', priority: 0.7 },
   { url: `${SITE}/support`, changeFrequency: 'monthly', priority: 0.6 },
   { url: `${SITE}/privacy`, changeFrequency: 'yearly', priority: 0.4 },
+  { url: `${SITE}/delete-account`, changeFrequency: 'yearly', priority: 0.4 },
   { url: `${SITE}/terms`, changeFrequency: 'yearly', priority: 0.4 },
   { url: `${SITE}/employer/terms`, changeFrequency: 'yearly', priority: 0.4 },
 ];
