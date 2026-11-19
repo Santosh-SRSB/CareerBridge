@@ -6,7 +6,6 @@ import type { EmployerCandidateSearchResult, EmployerJobSummary } from '@careerb
 import {
   CANDIDATE_AVAILABILITY_FILTERS,
   CANDIDATE_EDUCATION_FILTERS,
-  CANDIDATE_EXPERIENCE_FILTERS,
   CANDIDATE_SEARCH_MAX_SKILLS,
   CANDIDATE_SEARCH_SORTS,
   DEFAULT_LANGUAGES,
@@ -169,7 +168,12 @@ export default function EmployerCandidatesPage() {
         q: f.q.trim() || undefined,
         city: f.city.trim() || undefined,
         skills: f.skills.length ? f.skills : undefined,
-        experience: f.experience || undefined,
+        experienceMin: (() => {
+          const raw = f.experience.trim();
+          if (!raw) return undefined;
+          const n = Number(raw);
+          return Number.isFinite(n) && n >= 0 ? n : undefined;
+        })(),
         language: f.language || undefined,
         education: f.education || undefined,
         passOutYearFrom: f.passOutYearFrom ? Number(f.passOutYearFrom) : undefined,
@@ -344,14 +348,16 @@ export default function EmployerCandidatesPage() {
           </div>
           <label>
             Experience
-            <select value={filters.experience} onChange={(e) => patchFilters({ experience: e.target.value })}>
-              <option value="">Any experience</option>
-              {CANDIDATE_EXPERIENCE_FILTERS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
+            <input
+              type="number"
+              min={0}
+              max={50}
+              step={1}
+              inputMode="numeric"
+              value={filters.experience}
+              onChange={(e) => patchFilters({ experience: e.target.value })}
+              placeholder="Min years (e.g. 2)"
+            />
           </label>
           <div>
             <SearchableCreatableSelect
