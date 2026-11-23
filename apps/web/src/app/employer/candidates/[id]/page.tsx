@@ -143,15 +143,16 @@ export default function EmployerCandidateProfilePage() {
   }
 
   async function loadResumeFile() {
-    if (!profile?.hasResume) return null;
+    // Resume download only after the candidate has applied.
+    if (!profile?.hasResume || !profile.application) return null;
     return downloadEmployerCandidateResume(
       profile.id,
-      resolvedJobId || profile.application?.jobId,
+      resolvedJobId || profile.application.jobId,
     );
   }
 
   async function viewResume() {
-    if (!profile?.hasResume) return;
+    if (!profile?.hasResume || !profile.application) return;
     setBusy('RESUME');
     setError('');
     try {

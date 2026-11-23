@@ -9,8 +9,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   JOB_DEPARTMENTS,
   JOB_EDUCATION_LEVELS,
-  JOB_EXPERIENCE_RANGES,
-  toJobExperienceRange,
   JOB_SKILL_SUGGESTIONS,
   JOB_TITLE_SUGGESTIONS,
   JOB_TYPES,
@@ -127,36 +125,6 @@ function ChoiceGrid({
   );
 }
 
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
-  required?: boolean;
-}) {
-  return (
-    <label className="ev-form ev-field">
-      <span className="ev-flabel">
-        {label}
-        {required ? <em aria-hidden="true"> *</em> : null}
-      </span>
-      <select required={required} value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 export default function NewJobPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -170,7 +138,7 @@ export default function NewJobPage() {
   const [city, setCity] = useState('Bengaluru');
   const [workMode, setWorkMode] = useState<(typeof WORK_MODES)[number]>('HYBRID');
   const [jobType, setJobType] = useState<(typeof JOB_TYPES)[number]>('FULL_TIME');
-  const [experience, setExperience] = useState<(typeof JOB_EXPERIENCE_RANGES)[number]>('2–5 yrs');
+  const [experience, setExperience] = useState('2–5 yrs');
   const [salaryMin, setSalaryMin] = useState('');
   const [salaryMax, setSalaryMax] = useState('');
   const [languages, setLanguages] = useState<string[]>(['English', 'Tamil']);
@@ -247,8 +215,7 @@ export default function NewJobPage() {
         if (job.jobType && (JOB_TYPES as readonly string[]).includes(String(job.jobType))) {
           setJobType(job.jobType as (typeof JOB_TYPES)[number]);
         }
-        const storedExperience = toJobExperienceRange(job.experience ? String(job.experience) : null);
-        if (storedExperience) setExperience(storedExperience);
+        if (job.experience) setExperience(String(job.experience));
         if (job.educationMin) {
           setEducationMin(String(job.educationMin));
         }
@@ -715,12 +682,12 @@ export default function NewJobPage() {
 
             {step === 2 ? (
               <div className="ev-stack">
-                <SelectField
+                <Input
                   label="Experience"
                   required
                   value={experience}
-                  onChange={(value) => setExperience(value as (typeof JOB_EXPERIENCE_RANGES)[number])}
-                  options={JOB_EXPERIENCE_RANGES.map((item) => ({ value: item, label: item }))}
+                  onChange={(e) => setExperience(e.target.value)}
+                  placeholder="e.g. Fresher, 2–5 yrs, 3 years"
                 />
                 <div>
                   <SkillSearchCombobox
