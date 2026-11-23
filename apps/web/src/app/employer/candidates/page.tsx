@@ -621,7 +621,7 @@ export default function EmployerCandidatesPage() {
                     {appliedRows.length > 0 ? (
                       <section className="ev-match-section" aria-label="Applied candidates">
                         <div className="ev-results-head ev-results-head--sub">
-                          <h3>Applied</h3>
+                          <h3>Applied candidate</h3>
                           <span className="ev-sub">
                             {appliedRows.length} {appliedRows.length === 1 ? 'candidate' : 'candidates'}
                           </span>
@@ -634,7 +634,7 @@ export default function EmployerCandidatesPage() {
                     {unappliedRows.length > 0 ? (
                       <section className="ev-match-section" aria-label="Unapplied matched candidates">
                         <div className="ev-results-head ev-results-head--sub">
-                          <h3>Unapplied matched</h3>
+                          <h3>Unapplied candidate</h3>
                           <span className="ev-sub">
                             {unappliedRows.length}{' '}
                             {unappliedRows.length === 1 ? 'candidate' : 'candidates'} · role / skills /
@@ -650,7 +650,7 @@ export default function EmployerCandidatesPage() {
                     ) : appliedRows.length > 0 ? (
                       <section className="ev-match-section" aria-label="Unapplied matched candidates">
                         <div className="ev-results-head ev-results-head--sub">
-                          <h3>Unapplied matched</h3>
+                          <h3>Unapplied candidate</h3>
                           <span className="ev-sub">0 candidates</span>
                         </div>
                         <p className="ev-sub" style={{ margin: '0 0 8px' }}>
