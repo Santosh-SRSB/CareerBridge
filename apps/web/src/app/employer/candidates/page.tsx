@@ -588,77 +588,59 @@ export default function EmployerCandidatesPage() {
               (() => {
                 const appliedRows = results.filter((row) => Boolean(row.appliedToEmployer || row.applicationId));
                 const unappliedRows = results.filter((row) => !row.appliedToEmployer && !row.applicationId);
-                const renderMatchCard = (row: (typeof results)[number], rank: number) => {
-                  const applied = Boolean(row.appliedToEmployer || row.applicationId);
-                  const name = candidateName(row);
-                  return (
-                    <MatchedCandidateCard
-                      key={row.id}
-                      rank={rank}
-                      name={name}
-                      city={formatLocation(row.city, row.state)}
-                      photoUrl={row.photoUrl}
-                      skills={row.skills || []}
-                      totalScore={row.matchScore || 0}
-                      skillsScore={row.skillsScore ?? 0}
-                      experienceScore={row.experienceScore ?? 0}
-                      reasons={row.reasons || []}
-                      gaps={row.gaps || []}
-                      badge={applied ? 'applied' : 'matched'}
-                      jobId={jobId}
-                      candidateId={row.id}
-                      href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}&page=${page}`}
-                      invited={invitedIds.has(row.id)}
-                      notifying={notifyingId === row.id}
-                      onNotify={
-                        applied ? undefined : () => void onNotifyCandidate(row.id, name)
-                      }
-                    />
-                  );
-                };
+                // One grid keeps full rows of 3 when the page has a full page-size (12) of cards.
+                // Separate Applied/Unapplied grids left a lonely last card (e.g. 10 unapplied → 1 leftover).
+                const ordered = [...appliedRows, ...unappliedRows];
                 return (
                   <div className="ev-match-sections">
-                    {appliedRows.length > 0 ? (
-                      <section className="ev-match-section" aria-label="Applied candidates">
-                        <div className="ev-results-head ev-results-head--sub">
-                          <h3>Applied candidate</h3>
-                          <span className="ev-sub">
-                            {appliedRows.length} {appliedRows.length === 1 ? 'candidate' : 'candidates'}
-                          </span>
-                        </div>
-                        <div className="ev-match-grid">
-                          {appliedRows.map((row, index) => renderMatchCard(row, index + 1))}
-                        </div>
-                      </section>
-                    ) : null}
-                    {unappliedRows.length > 0 ? (
-                      <section className="ev-match-section" aria-label="Unapplied matched candidates">
-                        <div className="ev-results-head ev-results-head--sub">
-                          <h3>Unapplied candidate</h3>
-                          <span className="ev-sub">
-                            {unappliedRows.length}{' '}
-                            {unappliedRows.length === 1 ? 'candidate' : 'candidates'} · role / skills /
-                            experience / JD
-                          </span>
-                        </div>
-                        <div className="ev-match-grid">
-                          {unappliedRows.map((row, index) =>
-                            renderMatchCard(row, appliedRows.length + index + 1),
-                          )}
-                        </div>
-                      </section>
-                    ) : appliedRows.length > 0 ? (
-                      <section className="ev-match-section" aria-label="Unapplied matched candidates">
-                        <div className="ev-results-head ev-results-head--sub">
-                          <h3>Unapplied candidate</h3>
-                          <span className="ev-sub">0 candidates</span>
-                        </div>
-                        <p className="ev-sub" style={{ margin: '0 0 8px' }}>
-                          No unapplied talent passed JD fit for this job yet. Try Rank matches on the job
-                          page, or broaden the posted skills.
-                        </p>
-                      </section>
-                    ) : null}
+                    <div className="ev-results-head ev-results-head--sub">
+                      <h3>
+                        {appliedRows.length} Applied candidate
+                        {appliedRows.length === 1 ? '' : 's'}
+                        {' · '}
+                        {unappliedRows.length} Unapplied candidate
+                        {unappliedRows.length === 1 ? '' : 's'}
+                      </h3>
+                      <span className="ev-sub">
+                        {ordered.length} on this page · role / skills / experience / JD
+                      </span>
+                    </div>
+                    {ordered.length > 0 ? (
+                      <div className="ev-match-grid" aria-label="Matched candidates">
+                        {ordered.map((row, index) => {
+                          const applied = Boolean(row.appliedToEmployer || row.applicationId);
+                          const name = candidateName(row);
+                          return (
+                            <MatchedCandidateCard
+                              key={row.id}
+                              rank={(page - 1) * PAGE_SIZE + index + 1}
+                              name={name}
+                              city={formatLocation(row.city, row.state)}
+                              photoUrl={row.photoUrl}
+                              skills={Array.isArray(row.skills) ? row.skills.filter((s) => typeof s === 'string') : []}
+                              totalScore={Number(row.matchScore) || 0}
+                              skillsScore={Number(row.skillsScore) || 0}
+                              experienceScore={Number(row.experienceScore) || 0}
+                              reasons={Array.isArray(row.reasons) ? row.reasons.map(String) : []}
+                              gaps={Array.isArray(row.gaps) ? row.gaps.map(String) : []}
+                              badge={applied ? 'applied' : 'matched'}
+                              jobId={jobId}
+                              candidateId={row.id}
+                              href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}&page=${page}`}
+                              invited={invitedIds.has(row.id)}
+                              notifying={notifyingId === row.id}
+                              onNotify={
+                                applied ? undefined : () => void onNotifyCandidate(row.id, name)
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="ev-sub" style={{ margin: '0 0 8px' }}>
+                        No candidates matched this job on this page.
+                      </p>
+                    )}
                   </div>
                 );
               })()

@@ -41,16 +41,16 @@ function cleanLocation(city?: string | null) {
 }
 
 function displayName(name: string) {
-  return name
+  return String(name || '')
     .trim()
     .split(/\s+/)
     .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part))
-    .join(' ');
+    .join(' ') || 'Candidate';
 }
 
 /** Normalize long catalog labels into short chip text. */
-function shortSkill(skill: string) {
-  const raw = skill.trim();
+function shortSkill(skill: unknown) {
+  const raw = String(skill ?? '').trim();
   if (!raw) return '';
   const paren = raw.match(/\(([^)]+)\)/);
   if (paren?.[1]) {
@@ -68,10 +68,11 @@ function shortSkill(skill: string) {
     .slice(0, 28);
 }
 
-function uniqueSkills(skills: string[]) {
+function uniqueSkills(skills: unknown) {
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const skill of skills) {
+  const list = Array.isArray(skills) ? skills : [];
+  for (const skill of list) {
     const label = shortSkill(skill);
     if (!label) continue;
     const key = label.toLowerCase();
@@ -101,7 +102,8 @@ export function MatchedCandidateCard({
   notifying = false,
   onNotify,
 }: MatchedCandidateCardProps) {
-  const info = atsMatchBandInfo(totalScore);
+  const safeScore = Number.isFinite(Number(totalScore)) ? Number(totalScore) : 0;
+  const info = atsMatchBandInfo(safeScore);
   const location = cleanLocation(city);
   const allSkills = uniqueSkills(skills);
   const topSkills = allSkills.slice(0, 4);
@@ -111,7 +113,7 @@ export function MatchedCandidateCard({
     (candidateId
       ? `/employer/candidates/${candidateId}${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`
       : null);
-  const score = Math.round(totalScore);
+  const score = Math.round(safeScore);
   const applied = badge === 'applied';
   const canNotify = Boolean(onNotify && candidateId && jobId && !applied);
 
@@ -137,27 +139,33 @@ export function MatchedCandidateCard({
 
       <div className="ev-mcc__badges">
         {badge === 'matched' ? (
-          <EvPill tone="blue">Matched</EvPill>
+          <EvPill tone="blue">Unapplied candidate</EvPill>
         ) : badge === 'applied' ? (
-          <EvPill tone="blue">Applied</EvPill>
+          <EvPill tone="blue">Applied candidate</EvPill>
         ) : (
           badge
         )}
-        <EvPill tone={matchPillTone(info.color)}>{info.label}</EvPill>
+        <EvPill tone={matchPillTone(info?.color || 'grey')}>{info?.label || 'Low Match'}</EvPill>
       </div>
 
       <div className="ev-mcc__metrics" aria-label="Fit breakdown">
         <div>
           <small>Skills fit</small>
           <b>
-            {Math.min(ATS_JOB_MATCH_WEIGHTS.skills, Math.max(0, Math.round(skillsScore)))}
+            {Math.min(
+              ATS_JOB_MATCH_WEIGHTS.skills,
+              Math.max(0, Math.round(Number(skillsScore) || 0)),
+            )}
             <span>/{ATS_JOB_MATCH_WEIGHTS.skills}</span>
           </b>
         </div>
         <div>
           <small>Experience fit</small>
           <b>
-            {Math.min(ATS_JOB_MATCH_WEIGHTS.experience, Math.max(0, Math.round(experienceScore)))}
+            {Math.min(
+              ATS_JOB_MATCH_WEIGHTS.experience,
+              Math.max(0, Math.round(Number(experienceScore) || 0)),
+            )}
             <span>/{ATS_JOB_MATCH_WEIGHTS.experience}</span>
           </b>
         </div>
@@ -179,19 +187,19 @@ export function MatchedCandidateCard({
           <p className="ev-sub ev-mcc__empty">No skills listed</p>
         )}
 
-        {(reasons[0] || gaps.length > 0) && (
+        {(reasons[0] || (Array.isArray(gaps) && gaps.length > 0)) && (
           <div className="ev-mcc__notes">
             {reasons[0] ? (
               <p className="ev-mcc__fit">
                 <span>Fit</span>
-                {reasons[0]}
-                {reasons[1] ? ` · ${reasons[1]}` : ''}
+                {String(reasons[0])}
+                {reasons[1] ? ` · ${String(reasons[1])}` : ''}
               </p>
             ) : null}
-            {gaps.length > 0 ? (
+            {Array.isArray(gaps) && gaps.length > 0 ? (
               <p className="ev-mcc__gaps">
                 <span>Gaps</span>
-                {gaps.slice(0, 2).join(', ')}
+                {gaps.slice(0, 2).map(String).join(', ')}
               </p>
             ) : null}
           </div>

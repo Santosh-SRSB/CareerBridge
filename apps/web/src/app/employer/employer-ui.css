@@ -1988,12 +1988,24 @@ a.ev-stat:hover {
   }
 }
 
-/* Uniform matched-candidate cards (job matches grid) */
+/* Uniform matched-candidate cards — 3 columns so a full page (12) ends on a complete row */
 .ev-match-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .ev-match-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .ev-match-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .ev-mcc {
