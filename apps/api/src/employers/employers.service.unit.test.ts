@@ -561,7 +561,7 @@ describe('Fix 1 — resume download needs employer ownership + application or ma
     const { svc, calls } = harness({ strictResumeVisibility: true });
     await assert.rejects(svc.downloadCandidateResume('uA', CAND, 'JA3'), (err) => {
       assert.ok(err instanceof ForbiddenException);
-      assert.match(httpMessage(err), /not included in your current payment plan|not applied/i);
+      assert.match(httpMessage(err), /only after the candidate applies|Notify/i);
       return true;
     });
     assert.equal(calls.downloads.length, 0);
