@@ -183,9 +183,16 @@ export default function EmployerCandidateProfilePage() {
     }
   }
 
+  const returnPage = Math.max(1, Number(searchParams.get('page') || '1') || 1);
   const backHref = fromApps
     ? `/employer/applications${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`
-    : '/employer/candidates';
+    : (() => {
+        const params = new URLSearchParams();
+        if (jobId) params.set('jobId', jobId);
+        if (returnPage > 1) params.set('page', String(returnPage));
+        const qs = params.toString();
+        return qs ? `/employer/candidates?${qs}` : '/employer/candidates';
+      })();
 
   const locationLine = profile ? formatLocation(profile.city, profile.state) : '';
 

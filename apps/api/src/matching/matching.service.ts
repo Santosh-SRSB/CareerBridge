@@ -156,8 +156,9 @@ export class MatchingService {
     const storedPreferred = profile
       ? parseList(profile.preferredSkillsJson)
       : parseList(job.preferredSkills);
-    const requiredSkills = storedRequired.length ? storedRequired : extracted.requiredSkills;
-    const preferredSkills = storedPreferred.length ? storedPreferred : extracted.preferredSkills;
+    // Merge stored + title/description extraction so a mis-tagged skill list cannot wipe role skills.
+    const requiredSkills = mergeSkillLists(storedRequired, extracted.requiredSkills);
+    const preferredSkills = mergeSkillLists(storedPreferred, extracted.preferredSkills);
     const experienceYearsMin =
       profile?.experienceYearsMin || extracted.experienceYearsMin || 0;
 
@@ -185,13 +186,15 @@ export class MatchingService {
     const applicationByCandidate = new Map(applications.map((row) => [row.candidateId, row.id]));
 
     const candidates = await this.prisma.candidate.findMany({
+      where: { onboardingCompleted: true },
       include: {
         skills: true,
         experiences: { select: { jobTitle: true }, orderBy: { startDate: 'desc' }, take: 5 },
         interviews: { where: { score: { not: null } }, select: { score: true } },
         resumes: { select: { id: true, rawText: true, summary: true }, take: 1 },
       },
-      take: 200,
+      orderBy: [{ profileCompletion: 'desc' }, { updatedAt: 'desc' }],
+      take: 500,
     });
 
     let pgScores = jobVector?.length
@@ -311,6 +314,8 @@ export class MatchingService {
         fromPg != null ? Math.round(Math.max(0, Math.min(1, fromPg)) * 100) : 0;
 
       // Unapplied pool: same career track + at least 2 of role/skills/experience/JD.
+      // Applicants always stay in the ranked list even when skills/track gate fails.
+      const isApplicant = applicationByCandidate.has(candidate.id);
       const roleCompatible = careerTracksCompatible(
         { title: job.title, category: job.category },
         {
@@ -325,6 +330,7 @@ export class MatchingService {
         base.categoryScore >= 100 ||
         Boolean(base.reasons?.some((reason) => !/^education on file$/i.test(String(reason || '').trim())));
       if (
+        !isApplicant &&
         !passesUnappliedJobMatch({
           roleCompatible,
           skillsPoints: skillsScore,
@@ -879,6 +885,24 @@ function parseList(raw: string | null | undefined) {
   } catch {
     return [];
   }
+}
+
+/** Deduped union preserving first-seen casing; caps length for ATS skill lists. */
+function mergeSkillLists(...lists: string[][]) {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const list of lists) {
+    for (const raw of list || []) {
+      const trimmed = String(raw || '').trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(trimmed);
+      if (out.length >= 16) return out;
+    }
+  }
+  return out;
 }
 
 function safeJson(raw: string) {

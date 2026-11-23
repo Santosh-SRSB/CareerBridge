@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { EmployerCandidateSearchResult, EmployerJobSummary } from '@careerbridge/shared';
 import {
   CANDIDATE_AVAILABILITY_FILTERS,
@@ -135,7 +136,17 @@ function shortSkillLabel(skill: string) {
     .slice(0, 22);
 }
 
+function candidatesListHref(opts: { jobId?: string; page?: number; q?: string }) {
+  const params = new URLSearchParams();
+  if (opts.jobId) params.set('jobId', opts.jobId);
+  if (opts.page && opts.page > 1) params.set('page', String(opts.page));
+  if (opts.q?.trim()) params.set('q', opts.q.trim().slice(0, 100));
+  const qs = params.toString();
+  return qs ? `/employer/candidates?${qs}` : '/employer/candidates';
+}
+
 export default function EmployerCandidatesPage() {
+  const router = useRouter();
   const [jobs, setJobs] = useState<EmployerJobSummary[]>([]);
   const [filters, setFilters] = useState<CandidateFilters>(EMPTY_FILTERS);
   const { items: languageOptions } = useCatalog('languages', DEFAULT_LANGUAGES);
@@ -162,6 +173,12 @@ export default function EmployerCandidatesPage() {
     setFilters((prev) => ({ ...prev, ...patch }));
   }
 
+  function syncListUrl(selectedJobId: string, nextPage: number, f: CandidateFilters) {
+    router.replace(candidatesListHref({ jobId: selectedJobId || undefined, page: nextPage, q: f.q }), {
+      scroll: false,
+    });
+  }
+
   async function onNotifyCandidate(candidateId: string, name: string) {
     if (!jobId) return;
     setError('');
@@ -184,7 +201,12 @@ export default function EmployerCandidatesPage() {
     }
   }
 
-  async function runSearch(selectedJobId: string, f: CandidateFilters = filters, nextPage = 1) {
+  async function runSearch(
+    selectedJobId: string,
+    f: CandidateFilters = filters,
+    nextPage = 1,
+    opts?: { syncUrl?: boolean },
+  ) {
     setSearching(true);
     setError('');
     setLoadFailed(false);
@@ -214,7 +236,9 @@ export default function EmployerCandidatesPage() {
       setUnlockLimit(data.unlockLimit);
       setTotalMatched(data.totalMatched);
       setTotal(data.total ?? data.candidates?.length ?? 0);
-      setPage(data.page ?? nextPage);
+      const resolvedPage = data.page ?? nextPage;
+      setPage(resolvedPage);
+      if (opts?.syncUrl !== false) syncListUrl(selectedJobId, resolvedPage, f);
     } catch (err) {
       const status = (err as { status?: number }).status;
       if (status && status >= 400 && status < 500) {
@@ -232,11 +256,15 @@ export default function EmployerCandidatesPage() {
   function loadJobs(initial: CandidateFilters = EMPTY_FILTERS) {
     setLoading(true);
     setJobsError(false);
+    const params = new URLSearchParams(window.location.search);
+    const urlJobId = (params.get('jobId') || '').trim();
+    const urlPage = Math.max(1, Number(params.get('page') || '1') || 1);
     listEmployerJobs()
       .then(async (rows) => {
         setJobs(rows);
-        setJobId('');
-        await runSearch('', initial);
+        const selected = urlJobId && rows.some((job) => job.id === urlJobId) ? urlJobId : '';
+        setJobId(selected);
+        await runSearch(selected, initial, urlPage, { syncUrl: true });
       })
       .catch(() => {
         setJobs([]);
@@ -579,7 +607,7 @@ export default function EmployerCandidatesPage() {
                       badge={applied ? 'applied' : 'matched'}
                       jobId={jobId}
                       candidateId={row.id}
-                      href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
+                      href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}&page=${page}`}
                       invited={invitedIds.has(row.id)}
                       notifying={notifyingId === row.id}
                       onNotify={
@@ -618,6 +646,17 @@ export default function EmployerCandidatesPage() {
                             renderMatchCard(row, appliedRows.length + index + 1),
                           )}
                         </div>
+                      </section>
+                    ) : appliedRows.length > 0 ? (
+                      <section className="ev-match-section" aria-label="Unapplied matched candidates">
+                        <div className="ev-results-head ev-results-head--sub">
+                          <h3>Unapplied matched</h3>
+                          <span className="ev-sub">0 candidates</span>
+                        </div>
+                        <p className="ev-sub" style={{ margin: '0 0 8px' }}>
+                          No unapplied talent passed JD fit for this job yet. Try Rank matches on the job
+                          page, or broaden the posted skills.
+                        </p>
                       </section>
                     ) : null}
                   </div>
@@ -688,7 +727,7 @@ export default function EmployerCandidatesPage() {
 
                     <footer className="ev-candcard__actions">
                       <Link
-                        href={`/employer/candidates/${row.id}`}
+                        href={`/employer/candidates/${row.id}?page=${page}`}
                         className="ev-btn ev-btn--ghost ev-btn--sm ev-candcard__view"
                       >
                         View profile

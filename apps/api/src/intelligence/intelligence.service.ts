@@ -202,16 +202,18 @@ export class IntelligenceService {
     const preferredOverlap = countSkillOverlap(preferred, skills);
 
     // Never award a free skills score — empty skill lists used to give everyone 70 and show all profiles.
-    // Score only from real required/preferred overlap or same-field role-title fit (no static defaults).
-    const skillScore = required.length
+    // Score from required/preferred overlap; fall back to same-field role-title fit when overlap is empty.
+    const titleFit = roleTitleFitPercent(job.title, [
+      ...candidate.careerInterests,
+      ...candidate.skills,
+      ...(candidate.experienceTitles || []),
+    ]);
+    const overlapScore = required.length
       ? Math.round((overlap.length / required.length) * 100)
       : preferred.length
         ? Math.round((preferredOverlap.length / preferred.length) * 100)
-        : roleTitleFitPercent(job.title, [
-            ...candidate.careerInterests,
-            ...candidate.skills,
-            ...(candidate.experienceTitles || []),
-          ]);
+        : 0;
+    const skillScore = overlap.length || preferredOverlap.length ? overlapScore : titleFit || overlapScore;
 
     const preferredSkillScore = preferred.length
       ? Math.round((preferredOverlap.length / preferred.length) * 100)
@@ -575,10 +577,29 @@ export class IntelligenceService {
     ];
     const blob = `${input.title} ${input.description} ${(input.requiredSkills || []).join(' ')}`.toLowerCase();
     const found = known.filter((skill) => blob.includes(skill.replace('.js', '')));
+    // Title/role hints so a thin or mis-tagged JD still surfaces the right talent pool.
+    const titleHints: Array<[RegExp, string[]]> = [
+      [/\bfront[\s-]?end|react developer|ui developer|web developer\b/i, ['React', 'JavaScript', 'HTML', 'CSS', 'TypeScript']],
+      [/\bback[\s-]?end|node\.?js developer|api developer\b/i, ['Node.js', 'JavaScript', 'SQL', 'API']],
+      [/\bfull[\s-]?stack\b/i, ['React', 'JavaScript', 'Node.js', 'HTML', 'CSS', 'SQL']],
+      [/\b(software|java) developer|software engineer\b/i, ['Java', 'JavaScript', 'SQL']],
+      [/\bpython developer|django|flask|fastapi\b/i, ['Python', 'SQL']],
+      [/\bdata analyst|data scientist\b/i, ['SQL', 'Python', 'Excel']],
+      [/\bdevops|sre\b/i, ['AWS', 'Docker', 'Linux']],
+      [/\bqa|sdet|test automation\b/i, ['JavaScript', 'Java', 'SQL']],
+      [/\btalent acquisition|recruiter|recruitment\b/i, ['Talent Acquisition', 'Recruitment', 'LinkedIn', 'Naukri']],
+      [/\bdigital marketing|seo|content marketer\b/i, ['SEO', 'Communication']],
+      [/\bsales executive|business development\b/i, ['Sales', 'Communication']],
+    ];
+    const fromTitle: string[] = [];
+    for (const [re, skills] of titleHints) {
+      if (re.test(input.title || '') || re.test(blob)) fromTitle.push(...skills);
+    }
     const normalized = Array.from(
       new Set([
         ...(input.requiredSkills || []).map((item) => item.trim()).filter(Boolean),
         ...found.map((item) => titleCase(item === 'nodejs' ? 'Node.js' : item)),
+        ...fromTitle,
       ]),
     );
     const yearsMatch = blob.match(/(\d+)\+?\s*(?:years|yrs)/);
@@ -590,6 +611,7 @@ export class IntelligenceService {
       extractionRaw: {
         method: 'rule_based_v1',
         matchedTerms: found,
+        titleHints: fromTitle,
       },
     };
   }

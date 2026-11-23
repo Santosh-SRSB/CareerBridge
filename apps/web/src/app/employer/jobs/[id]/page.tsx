@@ -135,7 +135,7 @@ export default function EmployerJobApplicationsPage() {
     });
   }, [items, matchByApp]);
 
-  async function load() {
+  async function load(opts?: { autoRankIfEmpty?: boolean }) {
     const job = await getEmployerJob(params.id).catch(() => null);
     if (job) {
       setJobDetail(job as Record<string, unknown>);
@@ -146,7 +146,11 @@ export default function EmployerJobApplicationsPage() {
     const nextItems = await listEmployerApplications(params.id).catch(() => [] as EmployerApplication[]);
     setItems(nextItems);
 
-    const nextMatches = await listJobMatches(params.id).catch(() => [] as JobMatchRow[]);
+    let nextMatches = await listJobMatches(params.id).catch(() => [] as JobMatchRow[]);
+    // First visit with an empty ranked pool — compute matches so Unapplied/Applied show for this JD.
+    if (opts?.autoRankIfEmpty && nextMatches.length === 0) {
+      nextMatches = await recomputeJobMatches(params.id).catch(() => [] as JobMatchRow[]);
+    }
     setMatches(nextMatches);
     setInvitedIds((prev) => {
       const next = new Set(prev);
@@ -158,7 +162,7 @@ export default function EmployerJobApplicationsPage() {
   }
 
   useEffect(() => {
-    void load().finally(() => setLoading(false));
+    void load({ autoRankIfEmpty: true }).finally(() => setLoading(false));
   }, [params.id]);
 
   async function onRank() {

@@ -968,10 +968,36 @@ export class EmployersService {
       preferredSkills: parseList(job.preferredSkills || '[]'),
     });
     const storedRequired = parseList(job.requiredSkills);
-    const jdRequiredSkills = storedRequired.length ? storedRequired : extractedJd.requiredSkills;
-    const jdPreferredSkills = parseList(job.preferredSkills || '[]').length
-      ? parseList(job.preferredSkills || '[]')
-      : extractedJd.preferredSkills;
+    const storedPreferred = parseList(job.preferredSkills || '[]');
+    // Merge stored + title/description extraction so role skills still surface for Unapplied.
+    const jdRequiredSkills = (() => {
+      const out: string[] = [];
+      const seen = new Set<string>();
+      for (const raw of [...storedRequired, ...extractedJd.requiredSkills]) {
+        const trimmed = String(raw || '').trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(trimmed);
+        if (out.length >= 16) break;
+      }
+      return out;
+    })();
+    const jdPreferredSkills = (() => {
+      const out: string[] = [];
+      const seen = new Set<string>();
+      for (const raw of [...storedPreferred, ...extractedJd.preferredSkills]) {
+        const trimmed = String(raw || '').trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(trimmed);
+        if (out.length >= 16) break;
+      }
+      return out;
+    })();
     const jobForMatch = {
       ...job,
       requiredSkills: JSON.stringify(jdRequiredSkills),
