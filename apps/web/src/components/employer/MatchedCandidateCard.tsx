@@ -199,20 +199,20 @@ export function MatchedCandidateCard({
       </div>
 
       <div className="ev-mcc__actions">
+        {profileHref ? (
+          <Link href={profileHref} className="ev-btn ev-btn--ghost ev-mcc__cta">
+            View profile
+          </Link>
+        ) : null}
         {canNotify ? (
           <button
             type="button"
-            className="ev-btn ev-btn--ghost ev-mcc__notify"
+            className="ev-btn ev-mcc__notify"
             disabled={notifying || invited}
             onClick={() => onNotify?.()}
           >
-            {notifying ? 'Sending…' : invited ? 'Notified' : 'Notify candidate'}
+            {notifying ? 'Sending…' : invited ? 'Notified' : 'Notify'}
           </button>
-        ) : null}
-        {profileHref ? (
-          <Link href={profileHref} className="ev-btn ev-mcc__cta">
-            Open profile
-          </Link>
         ) : null}
       </div>
     </article>

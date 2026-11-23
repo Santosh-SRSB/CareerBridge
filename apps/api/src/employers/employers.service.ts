@@ -1481,7 +1481,13 @@ export class EmployersService {
 
     const candidate = await this.prisma.candidate.findUnique({
       where: { id: candidateId },
-      select: { id: true, userId: true },
+      select: {
+        id: true,
+        userId: true,
+        firstName: true,
+        whatsappOptIn: true,
+        whatsappNumber: true,
+      },
     });
     if (!candidate) {
       throw new NotFoundException({
@@ -1506,23 +1512,56 @@ export class EmployersService {
       where: { userId: candidate.userId, type: 'JOB_INVITE', link },
       select: { id: true },
     });
-    if (existing) {
-      return { ok: true as const, alreadyNotified: true, candidateId, jobId: job.id };
-    }
 
     const vars = {
       company: employer.companyName || 'An employer',
       jobTitle: job.title,
     };
-    await this.notifications.create({
-      userId: candidate.userId,
-      ...renderDefaultNotification('JOB_INVITE', vars),
-      templateKey: 'JOB_INVITE',
-      templateVars: vars,
-      type: 'JOB_INVITE',
-      link,
-    });
-    return { ok: true as const, alreadyNotified: false, candidateId, jobId: job.id };
+    const rendered = renderDefaultNotification('JOB_INVITE', vars);
+
+    if (!existing) {
+      await this.notifications.create({
+        userId: candidate.userId,
+        ...rendered,
+        templateKey: 'JOB_INVITE',
+        templateVars: vars,
+        type: 'JOB_INVITE',
+        link,
+      });
+    }
+
+    // Opted-in WhatsApp only — never fall back to login phone.
+    let whatsappSent = false;
+    const waTo = consentedWhatsAppNumber(candidate);
+    if (waTo) {
+      const first = (candidate.firstName || '').trim() || 'there';
+      const body = [
+        `Hi ${first},`,
+        '',
+        `${vars.company} invited you to apply for ${vars.jobTitle} on SRSB CareerBridge.`,
+        '',
+        'Open the app to view the job and apply if interested.',
+      ].join('\n');
+      try {
+        await this.whatsapp.sendText({
+          to: waTo,
+          body,
+          candidateId: candidate.id,
+          messageType: 'job_invite',
+        });
+        whatsappSent = true;
+      } catch {
+        // In-app invite still counts; WhatsApp is best-effort.
+      }
+    }
+
+    return {
+      ok: true as const,
+      alreadyNotified: Boolean(existing),
+      whatsappSent,
+      candidateId,
+      jobId: job.id,
+    };
   }
 
   async candidateView(userId: string, candidateId: string, jobId?: string) {
@@ -1587,7 +1626,8 @@ export class EmployersService {
         : null;
     const match = job ? this.scoreApplicationMatch(candidate, job) : null;
 
-    const resumeId = applied?.resumeId || candidate.resumes[0]?.id || null;
+    // Unapplied talent: profile only — never expose resume until they apply.
+    const resumeId = applied ? applied.resumeId || candidate.resumes[0]?.id || null : null;
 
     return {
       id: candidate.id,
@@ -1633,41 +1673,29 @@ export class EmployersService {
   async downloadCandidateResume(userId: string, candidateId: string, jobId?: string) {
     const employer = await this.requireEmployer(userId);
     const requestedJobId = jobId?.trim() || undefined;
-    // Prefer an application on this employer's job; otherwise allow matched/visible talent for that job.
+    // Resume only after the candidate applied to this employer's job (never for unapplied matches).
     const applied = await this.prisma.application.findFirst({
       where: {
         candidateId,
         job: { employerId: employer.id },
+        status: { not: 'WITHDRAWN' },
         ...(requestedJobId ? { jobId: requestedJobId } : {}),
       },
       include: { candidate: { select: { userId: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
-    let ownerUserId = applied?.candidate.userId || null;
     if (!applied) {
-      if (!requestedJobId) {
-        throw new ForbiddenException({
-          code: SharedError.BUSINESS_RULE_VIOLATION,
-          message: 'Resume is available only for candidates who applied to your jobs.',
-        });
-      }
-      await this.matching.assertCandidateVisibleForJob(userId, requestedJobId, candidateId);
-      const candidate = await this.prisma.candidate.findUnique({
-        where: { id: candidateId },
-        select: { userId: true },
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message:
+          'Resume is available only after the candidate applies. Use Notify to invite them to apply.',
       });
-      if (!candidate) {
-        throw new NotFoundException({
-          code: SharedError.RESOURCE_NOT_FOUND,
-          message: 'Candidate profile was not found',
-        });
-      }
-      ownerUserId = candidate.userId;
     }
 
+    const ownerUserId = applied.candidate.userId;
     const resumeId =
-      applied?.resumeId ||
+      applied.resumeId ||
       (
         await this.prisma.resume.findFirst({
           where: { candidateId, ...USABLE_RESUME_WHERE },

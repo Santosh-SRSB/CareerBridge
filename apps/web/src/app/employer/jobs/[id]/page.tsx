@@ -233,7 +233,9 @@ export default function EmployerJobApplicationsPage() {
       setMessage(
         result.alreadyNotified
           ? `${name} was already invited to apply.`
-          : `Invite sent to ${name}. They can apply from their notifications.`,
+          : result.whatsappSent
+            ? `Invite sent to ${name} (in-app + WhatsApp).`
+            : `Invite sent to ${name}. WhatsApp only goes to opted-in numbers.`,
       );
     } catch (err) {
       setError(userFacingError(err, 'notify candidate'));

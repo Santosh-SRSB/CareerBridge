@@ -1476,13 +1476,16 @@ export async function setTalentShortlist(candidateId: string, jobId: string, sho
 }
 
 export async function inviteCandidateToJob(candidateId: string, jobId: string) {
-  return request<{ ok: boolean; alreadyNotified: boolean; candidateId: string; jobId: string }>(
-    `/employers/candidates/${candidateId}/invite`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ jobId }),
-    },
-  );
+  return request<{
+    ok: boolean;
+    alreadyNotified: boolean;
+    whatsappSent?: boolean;
+    candidateId: string;
+    jobId: string;
+  }>(`/employers/candidates/${candidateId}/invite`, {
+    method: 'POST',
+    body: JSON.stringify({ jobId }),
+  });
 }
 
 export async function searchEmployerCandidates(params: {

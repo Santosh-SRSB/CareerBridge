@@ -13,6 +13,7 @@ import {
 } from '@careerbridge/shared';
 import {
   getEmployerMe,
+  inviteCandidateToJob,
   listEmployerJobs,
   searchEmployerCandidates,
 } from '@/lib/api';
@@ -151,11 +152,36 @@ export default function EmployerCandidatesPage() {
   const [jobsError, setJobsError] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [awaitingAdmin, setAwaitingAdmin] = useState(false);
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(() => new Set());
+  const [notifyingId, setNotifyingId] = useState('');
 
   function patchFilters(patch: Partial<CandidateFilters>) {
     setFilters((prev) => ({ ...prev, ...patch }));
+  }
+
+  async function onNotifyCandidate(candidateId: string, name: string) {
+    if (!jobId) return;
+    setError('');
+    setMessage('');
+    setNotifyingId(candidateId);
+    try {
+      const result = await inviteCandidateToJob(candidateId, jobId);
+      setInvitedIds((prev) => new Set(prev).add(candidateId));
+      setMessage(
+        result.alreadyNotified
+          ? `${name} was already invited.`
+          : result.whatsappSent
+            ? `Invite sent to ${name} (in-app + WhatsApp).`
+            : `Invite sent to ${name}. WhatsApp only goes to opted-in numbers.`,
+      );
+    } catch (err) {
+      setError(userFacingError(err, 'notify candidate'));
+    } finally {
+      setNotifyingId('');
+    }
   }
 
   async function runSearch(selectedJobId: string, f: CandidateFilters = filters, nextPage = 1) {
@@ -469,6 +495,11 @@ export default function EmployerCandidatesPage() {
             <EvAlert tone="error">{error}</EvAlert>
           </div>
         ) : null}
+        {message ? (
+          <div className="ev-mt-sm">
+            <EvAlert tone="ok">{message}</EvAlert>
+          </div>
+        ) : null}
 
         <div className="ev-form-actions">
           <button type="button" className="ev-lnk ev-lnk--mut" onClick={clearFilters}>
@@ -529,25 +560,34 @@ export default function EmployerCandidatesPage() {
               (() => {
                 const appliedRows = results.filter((row) => Boolean(row.appliedToEmployer || row.applicationId));
                 const unappliedRows = results.filter((row) => !row.appliedToEmployer && !row.applicationId);
-                const renderMatchCard = (row: (typeof results)[number], rank: number) => (
-                  <MatchedCandidateCard
-                    key={row.id}
-                    rank={rank}
-                    name={candidateName(row)}
-                    city={formatLocation(row.city, row.state)}
-                    photoUrl={row.photoUrl}
-                    skills={row.skills || []}
-                    totalScore={row.matchScore || 0}
-                    skillsScore={row.skillsScore ?? 0}
-                    experienceScore={row.experienceScore ?? 0}
-                    reasons={row.reasons || []}
-                    gaps={row.gaps || []}
-                    badge={row.appliedToEmployer || row.applicationId ? 'applied' : 'matched'}
-                    jobId={jobId}
-                    candidateId={row.id}
-                    href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
-                  />
-                );
+                const renderMatchCard = (row: (typeof results)[number], rank: number) => {
+                  const applied = Boolean(row.appliedToEmployer || row.applicationId);
+                  const name = candidateName(row);
+                  return (
+                    <MatchedCandidateCard
+                      key={row.id}
+                      rank={rank}
+                      name={name}
+                      city={formatLocation(row.city, row.state)}
+                      photoUrl={row.photoUrl}
+                      skills={row.skills || []}
+                      totalScore={row.matchScore || 0}
+                      skillsScore={row.skillsScore ?? 0}
+                      experienceScore={row.experienceScore ?? 0}
+                      reasons={row.reasons || []}
+                      gaps={row.gaps || []}
+                      badge={applied ? 'applied' : 'matched'}
+                      jobId={jobId}
+                      candidateId={row.id}
+                      href={`/employer/candidates/${row.id}?jobId=${encodeURIComponent(jobId)}`}
+                      invited={invitedIds.has(row.id)}
+                      notifying={notifyingId === row.id}
+                      onNotify={
+                        applied ? undefined : () => void onNotifyCandidate(row.id, name)
+                      }
+                    />
+                  );
+                };
                 return (
                   <div className="ev-match-sections">
                     {appliedRows.length > 0 ? (

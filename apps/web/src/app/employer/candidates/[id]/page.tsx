@@ -128,7 +128,9 @@ export default function EmployerCandidateProfilePage() {
       const name = candidateName(profile);
       const text = result.alreadyNotified
         ? `${name} was already invited to apply.`
-        : `Invite sent to ${name}. They can apply from their notifications.`;
+        : result.whatsappSent
+          ? `Invite sent to ${name} (in-app + WhatsApp).`
+          : `Invite sent to ${name}. WhatsApp only goes to opted-in numbers.`;
       setMessage(text);
       toast.success(text);
     } catch (err) {
@@ -302,7 +304,13 @@ export default function EmployerCandidateProfilePage() {
                 </div>
                 <div>
                   <small>RESUME</small>
-                  <b>{profile.hasResume ? 'Available' : 'No resume'}</b>
+                  <b>
+                    {application
+                      ? profile.hasResume
+                        ? 'Available'
+                        : 'No resume'
+                      : 'Hidden until they apply — use Notify'}
+                  </b>
                 </div>
                 {profile.openToRelocating ? (
                   <div>
@@ -320,7 +328,17 @@ export default function EmployerCandidateProfilePage() {
                     disabled={busy !== '' || invited}
                     onClick={() => void notifyCandidate()}
                   >
-                    {busy === 'NOTIFY' ? 'Sending…' : invited ? 'Notified' : 'Notify candidate'}
+                    {busy === 'NOTIFY' ? 'Sending…' : invited ? 'Notified' : 'Notify'}
+                  </button>
+                ) : null}
+                {application && profile.hasResume ? (
+                  <button
+                    type="button"
+                    className="ev-btn ev-btn--ghost"
+                    disabled={busy !== ''}
+                    onClick={() => void viewResume()}
+                  >
+                    {busy === 'RESUME' ? 'Opening…' : 'View resume'}
                   </button>
                 ) : null}
                 {application && ['APPLIED', 'UNDER_REVIEW', 'ON_HOLD'].includes(application.status) ? (
@@ -348,16 +366,6 @@ export default function EmployerCandidateProfilePage() {
                   >
                     Schedule interview
                   </Link>
-                ) : null}
-                {profile.hasResume ? (
-                  <button
-                    type="button"
-                    className="ev-btn ev-btn--ghost"
-                    disabled={busy !== ''}
-                    onClick={() => void viewResume()}
-                  >
-                    {busy === 'RESUME' ? 'Opening…' : 'View resume'}
-                  </button>
                 ) : null}
                 {application && !FINAL_APPLICATION_STATUSES.includes(application.status) ? (
                   <button

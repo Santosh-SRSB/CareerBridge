@@ -566,12 +566,16 @@ describe('Fix 1 — resume download needs employer ownership + application or ma
     });
     assert.equal(calls.downloads.length, 0);
   });
-  it('matched talent (no application) → download OK from candidate resume', async () => {
+  it('matched talent (no application) → 403 resume until they apply', async () => {
     const { svc, calls, db, prisma } = harness({ strictResumeVisibility: true });
     db.candidateMatches.push({ jobId: 'JA3', candidateId: CAND, rank: 1 });
     (prisma as any).resume.findFirst = async () => ({ id: 'R-MATCH' });
-    await svc.downloadCandidateResume('uA', CAND, 'JA3');
-    assert.deepEqual(calls.downloads, [{ userId: 'cU', resumeId: 'R-MATCH' }]);
+    await assert.rejects(svc.downloadCandidateResume('uA', CAND, 'JA3'), (err) => {
+      assert.ok(err instanceof ForbiddenException);
+      assert.match(httpMessage(err), /only after the candidate applies|Notify/i);
+      return true;
+    });
+    assert.equal(calls.downloads.length, 0);
   });
   it("employer B → 403, with or without employer A's job id", async () => {
     const { svc, calls } = harness({ strictResumeVisibility: true });
