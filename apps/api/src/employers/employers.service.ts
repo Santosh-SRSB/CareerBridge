@@ -16,6 +16,8 @@ import {
   activeJobLimitMessage,
   activeJobLimitReached,
   candidateViewLimitMessage,
+  loginSeatLimitMessage,
+  loginSeatLimitReached,
   subscriptionRequiredMessage,
   designationError,
   emailError,
@@ -91,7 +93,11 @@ import { StorageService } from '../common/storage/storage.service';
 import { readableCandidatePhotoUrl } from '../candidates/profile-photo.util';
 import { candidateInterviewUrl, interviewMeetingUrl } from '../common/web/public-web-url';
 import { TestimonialsService } from '../testimonials/testimonials.service';
-import { employerPlanUsage } from './employer-plan';
+import {
+  companyLoginSeatLimit,
+  countCompanyLoginSeats,
+  employerPlanUsage,
+} from './employer-plan';
 import { closedAtForStatusChange } from './job-lifecycle';
 
 const APPLICATION_STATUS_NOTICE: Partial<Record<ApplicationStatus, NotificationTemplateKey>> = {
@@ -329,6 +335,10 @@ export class EmployersService {
       gst,
       verifiedTradeName.length >= 2 ? verifiedTradeName : employer.companyName,
     );
+    // OD-07 — joining an existing company consumes a recruiter seat (owner counts).
+    if (!created && employer.companyId !== company.id) {
+      await this.assertCompanyLoginSeatAllowance(company.id);
+    }
     const previousGst = this.pii.decrypt('employers.gst_number', employer.gstNumber);
     const gstChanged = normalizeGstin(previousGst || '') !== gst;
     const current = employer.verificationStatus;
@@ -757,6 +767,20 @@ export class EmployersService {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
         message: activeJobLimitMessage(usage.activeJobLimit),
+      });
+    }
+  }
+
+  /** Block a new login from joining a company that is already at its plan seat limit. */
+  private async assertCompanyLoginSeatAllowance(companyId: string) {
+    const [used, limit] = await Promise.all([
+      countCompanyLoginSeats(this.prisma, companyId),
+      companyLoginSeatLimit(this.prisma, companyId),
+    ]);
+    if (loginSeatLimitReached(used, limit) && limit != null) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: loginSeatLimitMessage(limit),
       });
     }
   }

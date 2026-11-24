@@ -124,7 +124,11 @@ export default function EmployerBillingPage() {
               <p className="ev-plan-meta">
                 Active jobs: {usage.activeJobs}
                 {usage.activeJobLimit > 0 ? ` of ${usage.activeJobLimit}` : subscription?.active ? '' : ' (subscription required)'}
-                {usage.loginSeats != null ? ` · Seats: ${usage.loginSeats}` : ''}
+                {usage.loginSeats != null
+                  ? ` · Seats: ${usage.loginSeatsUsed ?? 0} of ${usage.loginSeats}`
+                  : usage.loginSeatsUsed != null
+                    ? ` · Seats: ${usage.loginSeatsUsed}`
+                    : ''}
               </p>
               <Link
                 href={

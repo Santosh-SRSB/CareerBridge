@@ -21,13 +21,14 @@ Source: Employer Persona & Subscription Monetization guide. **DEV only** — pro
 - Razorpay order + verify + UPI sync + webhook activate `EmployerSubscription`
 - Pricing / buy UI + post-job client gate
 - Deploy DEV green for subscription commits
+- Catalogue + public plans API; job/view metering from active subscription
+- Verification gate before checkout; Razorpay webhook event ledger (idempotency)
+- Employer Billing portal + welcome landing plans strip (additive)
+- Recruiter seat enforcement on KYC join (company-scoped; OD-07 owner counts)
 
 ## Still building (todo order)
 
-1. Catalogue prices + feature entitlements + public plans API
-2. Usage periods / wire limits from active subscription
-3. Verification gate + webhook event idempotency
-4. Enforce jobs / seats / views
-5. Employer portal usage UI
-6. Welcome plans section
-7. Enterprise offer + admin basics
+1. Entitlement flags (e.g. Starter DB shortlist) + expired vs never-paid messages
+2. Enterprise offer + Super Admin grant/revenue basics
+3. Expiry / low-usage notifications
+4. Admin metering alignment to `sub:*` periods

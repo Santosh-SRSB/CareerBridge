@@ -22,6 +22,47 @@ export async function loadEmployerPlanSettings(prisma: PrismaService) {
   return parseEmployerPlanSettings(Object.fromEntries(rows.map((row) => [row.key, row.value])));
 }
 
+/** Active employer logins on a company — owner counts toward the seat limit (OD-07). */
+export async function countCompanyLoginSeats(prisma: PrismaService, companyId: string): Promise<number> {
+  const rows = await prisma.employer.findMany({
+    where: {
+      companyId,
+      user: {
+        status: 'ACTIVE',
+        userType: { in: ['EMPLOYER_ADMIN', 'EMPLOYER_RECRUITER'] },
+      },
+    },
+    select: { id: true },
+  });
+  return rows.length;
+}
+
+/**
+ * Catalogue seat limit from the best active subscription among employers on this company.
+ * null = no paid plan yet, or Enterprise (unlimited).
+ */
+export async function companyLoginSeatLimit(
+  prisma: PrismaService,
+  companyId: string,
+  now = new Date(),
+): Promise<number | null> {
+  const members = await prisma.employer.findMany({
+    where: { companyId },
+    select: { id: true },
+  });
+  if (!members.length) return null;
+  const sub = await prisma.employerSubscription.findFirst({
+    where: {
+      employerId: { in: members.map((m) => m.id) },
+      status: 'ACTIVE',
+      endsAt: { gt: now },
+    },
+    orderBy: { endsAt: 'desc' },
+  });
+  if (!sub) return null;
+  return getEmployerSubscriptionPlan(sub.planId)?.loginSeats ?? null;
+}
+
 /**
  * Authoritative usage for entitlement checks.
  * Prefer active EmployerSubscription catalogue limits; fall back to legacy platform_settings.
@@ -31,7 +72,7 @@ export async function employerPlanUsage(
   employerId: string,
   now = new Date(),
 ): Promise<EmployerPlanUsage> {
-  const [activeJobs, subscription] = await Promise.all([
+  const [activeJobs, subscription, employer] = await Promise.all([
     prisma.job.count({ where: { employerId, status: { in: [...ACTIVE_JOB_STATUSES] } } }),
     prisma.employerSubscription.findFirst({
       where: {
@@ -41,7 +82,18 @@ export async function employerPlanUsage(
       },
       orderBy: { endsAt: 'desc' },
     }),
+    prisma.employer.findFirst({
+      where: { id: employerId },
+      select: { companyId: true },
+    }),
   ]);
+
+  const companyId = employer?.companyId ?? null;
+  const loginSeatsUsed = companyId
+    ? await countCompanyLoginSeats(prisma, companyId)
+    : subscription
+      ? 1
+      : null;
 
   if (subscription) {
     const catalog = getEmployerSubscriptionPlan(subscription.planId);
@@ -60,6 +112,7 @@ export async function employerPlanUsage(
       candidateViews,
       candidateViewCredits: catalog?.candidateViewCredits ?? 0,
       loginSeats: catalog?.loginSeats ?? null,
+      loginSeatsUsed,
     };
   }
 
@@ -67,6 +120,7 @@ export async function employerPlanUsage(
   const candidateViews = await prisma.employerCandidateView.count({
     where: { employerId, period },
   });
+  const companySeats = companyId ? await companyLoginSeatLimit(prisma, companyId, now) : null;
   return {
     plan: 'NONE',
     planId: null,
@@ -78,7 +132,8 @@ export async function employerPlanUsage(
     activeJobLimit: 0,
     candidateViews,
     candidateViewCredits: 0,
-    loginSeats: null,
+    loginSeats: companySeats,
+    loginSeatsUsed,
   };
 }
 

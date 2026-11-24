@@ -289,6 +289,15 @@ function harness(opts: Opts = {}) {
     employer: {
       findUnique: async ({ where }: Row) => db.employers.find((e) => e.userId === where.userId) ?? null,
       findFirst: async ({ where }: Row) => db.employers.find((e) => matches(e, where, db)) ?? null,
+      findMany: async ({ where }: Row) =>
+        db.employers
+          .filter((e) => {
+            if (where?.companyId && e.companyId !== where.companyId) return false;
+            if (where?.id?.in && !where.id.in.includes(e.id)) return false;
+            // Nested user filter is treated as ACTIVE employer staff in unit doubles.
+            return true;
+          })
+          .map((e) => ({ id: e.id, companyId: e.companyId })),
       update: async ({ where, data }: Row) => {
         calls.employerUpdates.push(data);
         const row = db.employers.find((e) => e.id === where.id)!;
@@ -378,17 +387,23 @@ function harness(opts: Opts = {}) {
       findMany: async ({ where }: Row) => db.settings.filter((s) => where.key.in.includes(s.key)),
     },
     employerSubscription: {
-      findFirst: async ({ where }: Row) => {
+      findFirst: async ({ where, orderBy }: Row) => {
         const now = where?.endsAt?.gt instanceof Date ? where.endsAt.gt : new Date(0);
-        return (
-          db.subscriptions.find(
-            (s) =>
-              s.employerId === where.employerId &&
-              s.status === where.status &&
-              s.endsAt instanceof Date &&
-              s.endsAt > now,
-          ) ?? null
-        );
+        const employerIds = where?.employerId?.in
+          ? where.employerId.in
+          : where?.employerId != null
+            ? [where.employerId]
+            : null;
+        const rows = db.subscriptions.filter((s) => {
+          if (employerIds && !employerIds.includes(s.employerId)) return false;
+          if (where?.status && s.status !== where.status) return false;
+          if (!(s.endsAt instanceof Date) || !(s.endsAt > now)) return false;
+          return true;
+        });
+        if (orderBy?.endsAt === 'desc') {
+          rows.sort((a, b) => b.endsAt.getTime() - a.endsAt.getTime());
+        }
+        return rows[0] ?? null;
       },
     },
     employerCandidateView: {
@@ -782,6 +797,26 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
       gstinMasked: '27AAPFU*****1ZV',
       existing: true,
     });
+  });
+
+  it('blocks a second login when the company Starter plan already uses its only seat', async () => {
+    const { svc, db } = harness();
+    await svc.saveKyc('uU', kyc());
+    db.subscriptions.push({
+      id: 'SUB_U_STARTER',
+      employerId: EMP_U,
+      planId: 'starter',
+      status: 'ACTIVE',
+      startsAt: new Date('2026-01-01T00:00:00.000Z'),
+      endsAt: new Date('2099-01-01T00:00:00.000Z'),
+    });
+    await assert.rejects(svc.saveKyc('uB', kyc()), (err) => {
+      assert.ok(err instanceof ForbiddenException);
+      const body = (err as ForbiddenException).getResponse() as { message?: string };
+      assert.match(String(body.message || ''), /seat limit \(1\)/i);
+      return true;
+    });
+    assert.equal(employer(db, EMP_B).companyId, null);
   });
 
   it("a later account never overwrites the company's canonical details", async () => {

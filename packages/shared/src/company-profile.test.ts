@@ -4,6 +4,7 @@ import { COMPANY_SIZES, isCompanySize, parseLinkedinUrl } from './company-profil
 import {
   activeJobLimitReached,
   candidateViewCreditsLeft,
+  loginSeatLimitReached,
   parseEmployerPlanSettings,
 } from './employer-plan';
 
@@ -54,6 +55,7 @@ test('plan usage helpers', () => {
     candidateViews: 40,
     candidateViewCredits: 100,
     loginSeats: 1,
+    loginSeatsUsed: 1,
   };
   assert.equal(activeJobLimitReached(base), true);
   assert.equal(activeJobLimitReached({ ...base, activeJobs: 4 }), false);
@@ -61,4 +63,7 @@ test('plan usage helpers', () => {
   assert.equal(candidateViewCreditsLeft(base), 60);
   assert.equal(candidateViewCreditsLeft({ ...base, candidateViews: 150 }), 0);
   assert.equal(candidateViewCreditsLeft({ ...base, candidateViewCredits: 0 }), null);
+  assert.equal(loginSeatLimitReached(1, 1), true);
+  assert.equal(loginSeatLimitReached(0, 1), false);
+  assert.equal(loginSeatLimitReached(5, null), false);
 });

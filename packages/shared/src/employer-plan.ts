@@ -39,7 +39,10 @@ export type EmployerPlanUsage = {
   candidateViews: number;
   /** Period database-view allowance. 0 = unlimited (legacy settings only). */
   candidateViewCredits: number;
+  /** Catalogue login seat limit; null = unlimited / unknown (Enterprise or no plan). */
   loginSeats: number | null;
+  /** Active employer logins on the company (owner counts — OD-07). null when unknown. */
+  loginSeatsUsed: number | null;
 };
 
 export function activeJobLimitReached(usage: Pick<EmployerPlanUsage, 'activeJobs' | 'activeJobLimit'>) {
@@ -65,4 +68,13 @@ export function subscriptionRequiredMessage() {
 
 export function subscriptionExpiredMessage() {
   return 'Your subscription has expired. Existing records are retained, but you cannot publish or reactivate jobs until you renew.';
+}
+
+/** OD-07 — owner counts; `null` limit means unlimited (Enterprise). */
+export function loginSeatLimitReached(used: number, limit: number | null) {
+  return limit != null && limit > 0 && used >= limit;
+}
+
+export function loginSeatLimitMessage(limit: number) {
+  return `This company has reached the recruiter login seat limit (${limit}) for its plan. Upgrade the plan or remove an existing login to add another.`;
 }
