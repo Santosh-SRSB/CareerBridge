@@ -18,6 +18,12 @@ export class BillingController {
     return this.billing.listPublicPlans();
   }
 
+  /** Safe gateway status for UI diagnostics (no secrets). */
+  @Get('employer/payment-gateway')
+  paymentGateway(@CurrentUser() _user: { id: string }) {
+    return this.billing.paymentGatewayStatus();
+  }
+
   @Get('employer/subscription')
   subscription(@CurrentUser() user: { id: string }) {
     return this.billing.getActiveSubscription(user.id);
@@ -44,7 +50,8 @@ export class BillingController {
   webhook(
     @Req() req: ReqWithRaw,
     @Headers('x-razorpay-signature') signature: string | undefined,
+    @Headers('x-razorpay-event-id') eventId: string | undefined,
   ) {
-    return this.billing.handleWebhook(req.rawBody, signature);
+    return this.billing.handleWebhook(req.rawBody, signature, eventId);
   }
 }

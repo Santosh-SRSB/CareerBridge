@@ -20,6 +20,9 @@ export function WelcomeRoleNav({ role }: { role: WelcomeRole }) {
     { href: '/', label: 'Home', current: false },
     { href: '/welcome', label: 'Candidates', current: role === 'candidate' },
     { href: '/employer/welcome', label: 'Employers', current: role === 'employer' },
+    ...(role === 'employer'
+      ? [{ href: '/employer/welcome#plans', label: 'Plans', current: false }]
+      : []),
   ];
 
   useEffect(() => {

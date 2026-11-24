@@ -760,6 +760,20 @@ model EmployerSubscription {
   @@map("employer_subscriptions")
 }
 
+/// Provider webhook event ledger — unique event_id prevents duplicate activation.
+model RazorpayWebhookEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique @map("event_id")
+  eventType   String   @map("event_type")
+  paymentId   String?  @map("payment_id")
+  orderId     String?  @map("order_id")
+  processedAt DateTime @default(now()) @map("processed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@map("razorpay_webhook_events")
+}
+
 enum EmployerInterviewStatus {
   PROPOSED
   SCHEDULED

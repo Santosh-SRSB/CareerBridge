@@ -14,7 +14,7 @@ import {
   type EmployerSubscriptionPlanId,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { razorpayConfigured, razorpayKeyId, razorpayMode } from './razorpay.config';
+import { razorpayConfigured, razorpayKeyId, razorpayMode, razorpayPublicStatus } from './razorpay.config';
 import {
   createRazorpayOrder,
   fetchRazorpayOrderPayments,
@@ -40,7 +40,12 @@ export class BillingService {
         'Opening applicants to your own jobs does not consume database views.',
       ],
       plans: listPublicEmployerSubscriptionPlans(),
+      razorpay: razorpayPublicStatus(),
     };
+  }
+
+  paymentGatewayStatus() {
+    return razorpayPublicStatus();
   }
 
   async getActiveSubscription(userId: string) {
@@ -99,6 +104,18 @@ export class BillingService {
     }
 
     const employer = await this.requireEmployer(userId);
+    // Guide §7.1 — no checkout while employer is still UNVERIFIED (KYC not started).
+    const status = String(
+      employer.verified && employer.verificationStatus === 'UNVERIFIED'
+        ? 'VERIFIED'
+        : employer.verificationStatus || 'UNVERIFIED',
+    ).toUpperCase();
+    if (status === 'UNVERIFIED') {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: 'Please complete employer account verification before purchasing a plan.',
+      });
+    }
     const receipt = `pl_${planId}_${Date.now().toString(36)}`.slice(0, 40);
 
     const payment = await this.prisma.employerPayment.create({
@@ -277,8 +294,12 @@ export class BillingService {
     return { ...payload, pending: false as const };
   }
 
-  /** Razorpay webhook: payment.captured (idempotent). */
-  async handleWebhook(rawBody: Buffer | undefined, signature: string | undefined) {
+  /** Razorpay webhook: payment.captured (idempotent via event ledger). */
+  async handleWebhook(
+    rawBody: Buffer | undefined,
+    signature: string | undefined,
+    eventIdHeader?: string,
+  ) {
     if (!rawBody?.length) {
       throw new BadRequestException({ code: SharedError.VALIDATION_ERROR, message: 'Empty webhook body' });
     }
@@ -289,7 +310,11 @@ export class BillingService {
       });
     }
 
-    let event: { event?: string; payload?: { payment?: { entity?: Record<string, unknown> } } };
+    let event: {
+      event?: string;
+      created_at?: number;
+      payload?: { payment?: { entity?: Record<string, unknown> } };
+    };
     try {
       event = JSON.parse(rawBody.toString('utf8'));
     } catch {
@@ -304,6 +329,28 @@ export class BillingService {
     const orderId = typeof entity?.order_id === 'string' ? entity.order_id : '';
     const paymentId = typeof entity?.id === 'string' ? entity.id : '';
     if (!orderId || !paymentId) return { ok: true, ignored: true };
+
+    const eventId =
+      (eventIdHeader || '').trim() ||
+      `payment.captured:${paymentId}:${event.created_at ?? 'na'}`;
+
+    try {
+      await this.prisma.razorpayWebhookEvent.create({
+        data: {
+          id: randomUUID(),
+          eventId,
+          eventType: 'payment.captured',
+          paymentId,
+          orderId,
+        },
+      });
+    } catch (err: unknown) {
+      // Duplicate event id → already processed.
+      if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+        return { ok: true, duplicate: true };
+      }
+      throw err;
+    }
 
     const payment = await this.prisma.employerPayment.findFirst({
       where: { razorpayOrderId: orderId },
