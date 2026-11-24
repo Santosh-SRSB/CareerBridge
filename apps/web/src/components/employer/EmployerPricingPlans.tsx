@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import {
   EMPLOYER_SUBSCRIPTION_PLANS,
@@ -135,7 +135,7 @@ function Mascot({ id }: { id: EmployerSubscriptionPlanId }) {
   );
 }
 
-function burst(e: MouseEvent) {
+function burst(e: { clientX: number; clientY: number }) {
   if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   for (let i = 0; i < 26; i += 1) {
     const d = document.createElement('i');
@@ -215,7 +215,7 @@ export function EmployerPricingPlans({
 
   const selected = selectedId ? getEmployerSubscriptionPlan(selectedId) : undefined;
 
-  function handlePlanClick(plan: EmployerSubscriptionPlan, e: MouseEvent) {
+  function handlePlanClick(plan: EmployerSubscriptionPlan, e: { clientX: number; clientY: number }) {
     burst(e);
     if (plan.contactSales) return;
     setSelectedId(plan.id);
@@ -330,13 +330,17 @@ export function EmployerPricingPlans({
                   <Link
                     className="cb-price__btn"
                     href={href}
-                    onClick={(e) => handlePlanClick(plan, e)}
+                    onClick={(e: { clientX: number; clientY: number }) => handlePlanClick(plan, e)}
                   >
                     {plan.cta}
                     <ArrowIcon />
                   </Link>
                 ) : (
-                  <button type="button" className="cb-price__btn" onClick={(e) => handlePlanClick(plan, e)}>
+                  <button
+                    type="button"
+                    className="cb-price__btn"
+                    onClick={(e: { clientX: number; clientY: number }) => handlePlanClick(plan, e)}
+                  >
                     {plan.cta}
                     <ArrowIcon />
                   </button>

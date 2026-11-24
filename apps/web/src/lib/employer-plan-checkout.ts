@@ -46,11 +46,16 @@ export async function checkoutEmployerPlan(plan: EmployerSubscriptionPlan) {
     return { mode: order.mode as 'live' | 'test', planId: plan.id };
   }
 
+  const checkout = paid as {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  };
   await verifyEmployerPlanPayment({
     paymentId: order.paymentId,
-    razorpayOrderId: paid.razorpay_order_id,
-    razorpayPaymentId: paid.razorpay_payment_id,
-    razorpaySignature: paid.razorpay_signature,
+    razorpayOrderId: checkout.razorpay_order_id,
+    razorpayPaymentId: checkout.razorpay_payment_id,
+    razorpaySignature: checkout.razorpay_signature,
   });
   markEmployerPlanForJobPost(plan.id);
   return { mode: order.mode as 'live' | 'test', planId: plan.id };
