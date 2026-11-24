@@ -19,6 +19,7 @@ export * from './ai-availability';
 export * from './registration-validation';
 export * from './business-identifiers';
 export * from './employer-plan';
+export * from './employer-subscription-plans';
 export * from './company-profile';
 export * from './resume-summary';
 export * from './job-roles';

@@ -53,7 +53,7 @@ const HERO_SLIDES = [
 ] as const;
 
 const MOVE_NEXT = [
-  { href: '/employer/jobs/new', label: 'Post a job' },
+  { href: '/employer/payments/buy?intent=post-job', label: 'Post a job' },
   { href: '/employer/candidates', label: 'Review candidates' },
   { href: '/employer/interviews/schedule', label: 'Schedule interview' },
   { href: '/employer/reports', label: 'See analytics' },
@@ -131,7 +131,7 @@ function DashboardHero({ companyLabel }: { companyLabel: string }) {
           <span className="ev-caret" aria-hidden />
         </h1>
         <p>Skills, experience, or location — shortlist from the people who already applied, then book an interview.</p>
-        <Link href="/employer/jobs/new" className="ev-btn ev-btn--amber">
+        <Link href="/employer/payments/buy?intent=post-job" className="ev-btn ev-btn--amber">
           Post a job
         </Link>
       </div>
@@ -372,7 +372,7 @@ export default function EmployerDashboardPage() {
               title="Welcome! Create your first job to start receiving applications."
               body="Post a job and CareerBridge will match it with candidates from your area."
               action={
-                <Link href="/employer/jobs/new" className="ev-btn">
+                <Link href="/employer/payments/buy?intent=post-job" className="ev-btn">
                   Create Job
                 </Link>
               }
@@ -425,7 +425,7 @@ export default function EmployerDashboardPage() {
                 title="No open roles"
                 body="Post a job to start receiving applicants."
                 action={
-                  <Link href="/employer/jobs/new" className="ev-btn">
+                  <Link href="/employer/payments/buy?intent=post-job" className="ev-btn">
                     Post a job
                   </Link>
                 }
@@ -505,7 +505,7 @@ export default function EmployerDashboardPage() {
             <EvEmpty
               title="No applications yet"
               action={
-                <Link href="/employer/jobs/new" className="ev-btn">
+                <Link href="/employer/payments/buy?intent=post-job" className="ev-btn">
                   Post a job
                 </Link>
               }

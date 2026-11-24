@@ -1452,6 +1452,69 @@ export async function getEmployerPlanUsage() {
   return request<EmployerPlanUsage>('/employers/plan-usage');
 }
 
+export type EmployerSubscriptionStatus = {
+  active: boolean;
+  mode: string;
+  planId: string | null;
+  endsAt: string | null;
+  paymentRequired: boolean;
+  startsAt?: string | null;
+};
+
+export async function getEmployerSubscription() {
+  return request<EmployerSubscriptionStatus>('/billing/employer/subscription');
+}
+
+export type EmployerPlanOrder = {
+  paymentId: string;
+  orderId: string;
+  amountPaise: number;
+  currency: string;
+  keyId: string;
+  mode: string;
+  plan: {
+    id: string;
+    name: string;
+    priceLabel: string;
+    periodLabel: string;
+    durationDays: number;
+  };
+};
+
+export async function createEmployerPlanOrder(planId: string) {
+  return request<EmployerPlanOrder>(`/billing/employer/plans/${encodeURIComponent(planId)}/order`, {
+    method: 'POST',
+  });
+}
+
+export async function verifyEmployerPlanPayment(payload: {
+  paymentId: string;
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+}) {
+  return request<{ ok: boolean; paymentId: string; planId: string | null; active: boolean; endsAt: string | null }>(
+    '/billing/employer/payments/verify',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function syncEmployerPlanPayment(paymentId: string) {
+  return request<{
+    ok?: boolean;
+    pending?: boolean;
+    active: boolean;
+    paymentId: string;
+    planId: string | null;
+    endsAt: string | null;
+  }>(`/billing/employer/payments/${encodeURIComponent(paymentId)}/sync`, {
+    method: 'POST',
+  });
+}
+
 export async function listAllEmployerApplications() {
   return request<EmployerApplication[]>('/employers/applications');
 }

@@ -91,7 +91,7 @@ export default function EmployerBillingPage() {
           <div className="ev-grid ev-g2 ev-mt">
             <section className="ev-card ev-plan" aria-label="Current plan">
               <small className="ev-eyebrow">CURRENT PLAN</small>
-              <h2 className="ev-h2">Starter · Free</h2>
+              <h2 className="ev-h2">Starter · Free trial</h2>
               <p className="ev-sub">
                 {usage.activeJobLimit > 0 ? `Up to ${usage.activeJobLimit} active jobs` : 'Unlimited active jobs'}
                 {' · '}
@@ -104,6 +104,9 @@ export default function EmployerBillingPage() {
                 Active jobs: {usage.activeJobs}
                 {usage.activeJobLimit > 0 ? ` of ${usage.activeJobLimit}` : ''}
               </p>
+              <Link href="/employer/payments/buy" className="ev-btn ev-btn--amber" style={{ marginTop: 12 }}>
+                View subscription plans
+              </Link>
             </section>
             <CreditsCard usage={usage} />
           </div>
@@ -192,7 +195,7 @@ function CreditsCard({ usage }: { usage: EmployerPlanUsage }) {
             : `${usage.candidateViews} of ${usage.candidateViewCredits} used this month`}
       </p>
       <Link href="/employer/payments/buy" className="ev-btn ev-btn--amber">
-        Buy More Credits
+        Upgrade plan
       </Link>
     </section>
   );

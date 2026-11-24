@@ -384,6 +384,7 @@ model Employer {
   company        Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   jobs           Job[]
   payments       EmployerPayment[]
+  subscriptions  EmployerSubscription[]
   hiringOutcomes HiringOutcome[]
   interviews     EmployerInterview[]
   candidateViews EmployerCandidateView[]
@@ -712,26 +713,51 @@ model HiringOutcome {
 }
 
 model EmployerPayment {
-  id              String        @id @default(uuid())
-  employerId      String        @map("employer_id")
-  jobId           String?       @map("job_id")
-  hiringOutcomeId String?       @unique @map("hiring_outcome_id")
-  amountPaise     Int           @map("amount_paise")
-  currency        String        @default("INR")
-  status          PaymentStatus @default(PENDING)
-  provider        String?
-  providerRef     String?       @map("provider_ref")
-  description     String?
-  paidAt          DateTime?     @map("paid_at")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id                String        @id @default(uuid())
+  employerId        String        @map("employer_id")
+  jobId             String?       @map("job_id")
+  hiringOutcomeId   String?       @unique @map("hiring_outcome_id")
+  /// Subscription catalog id (starter|growth|business); null for legacy job-post fees.
+  planId            String?       @map("plan_id")
+  amountPaise       Int           @map("amount_paise")
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  provider          String?
+  providerRef       String?       @map("provider_ref")
+  razorpayOrderId   String?       @map("razorpay_order_id")
+  razorpayPaymentId String?       @map("razorpay_payment_id")
+  description       String?
+  paidAt            DateTime?     @map("paid_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  employer      Employer       @relation(fields: [employerId], references: [id], onDelete: Cascade)
-  job           Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  hiringOutcome HiringOutcome? @relation(fields: [hiringOutcomeId], references: [id], onDelete: SetNull)
+  employer      Employer              @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  job           Job?                  @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  hiringOutcome HiringOutcome?        @relation(fields: [hiringOutcomeId], references: [id], onDelete: SetNull)
+  subscription  EmployerSubscription?
 
   @@index([employerId, status])
+  @@index([razorpayOrderId])
   @@map("employer_payments")
+}
+
+/// Active employer subscription unlocked only after verified Razorpay payment (or mock in local).
+model EmployerSubscription {
+  id         String   @id @default(uuid())
+  employerId String   @map("employer_id")
+  planId     String   @map("plan_id")
+  status     String   @default("ACTIVE")
+  startsAt   DateTime @map("starts_at")
+  endsAt     DateTime @map("ends_at")
+  paymentId  String?  @unique @map("payment_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  employer Employer         @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  payment  EmployerPayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([employerId, status, endsAt])
+  @@map("employer_subscriptions")
 }
 
 enum EmployerInterviewStatus {
