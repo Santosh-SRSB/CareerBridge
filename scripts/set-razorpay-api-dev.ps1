@@ -32,9 +32,11 @@ if ($webhook) {
   $envPairs += "RAZORPAY_WEBHOOK_SECRET=$webhook"
 }
 
+# Quote as one arg so PowerShell does not split on commas / @ in secrets.
+$joined = ($envPairs -join ",")
 gcloud run services update $Service `
   --project=$Project `
   --region=$Region `
-  --update-env-vars=($envPairs -join ",")
+  "--update-env-vars=$joined"
 
 Write-Host "Done. Also add https://srsbcareerbridge.co.in (and www) under Razorpay → Settings → Website & app."
