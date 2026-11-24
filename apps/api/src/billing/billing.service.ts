@@ -14,6 +14,7 @@ import {
   type EmployerSubscriptionPlanId,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { renderDefaultNotification } from '../notifications/notification-templates';
 import { razorpayConfigured, razorpayKeyId, razorpayMode, razorpayPublicStatus } from './razorpay.config';
 import {
   createRazorpayOrder,
@@ -51,6 +52,7 @@ export class BillingService {
   async getActiveSubscription(userId: string) {
     const employer = await this.requireEmployer(userId);
     await this.expireStale(employer.id);
+    await this.maybeNotifySubscriptionLifecycle(employer.userId, employer.id);
     const row = await this.prisma.employerSubscription.findFirst({
       where: {
         employerId: employer.id,
@@ -430,6 +432,82 @@ export class BillingService {
       where: { employerId, status: 'ACTIVE', endsAt: { lte: new Date() } },
       data: { status: 'EXPIRED' },
     });
+  }
+
+  /** In-app renew reminders when employer opens Billing / subscription status (at most once per day). */
+  private async maybeNotifySubscriptionLifecycle(userId: string, employerId: string) {
+    const now = new Date();
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const active = await this.prisma.employerSubscription.findFirst({
+      where: { employerId, status: 'ACTIVE', endsAt: { gt: now } },
+      orderBy: { endsAt: 'desc' },
+    });
+    if (active) {
+      const daysLeft = Math.ceil((active.endsAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+      if (daysLeft > 7) return;
+      const planName = getEmployerSubscriptionPlan(active.planId)?.name || active.planId;
+      const recent = await this.prisma.notification.findFirst({
+        where: {
+          userId,
+          type: 'BILLING',
+          title: 'Subscription ending soon',
+          createdAt: { gte: dayAgo },
+        },
+        select: { id: true },
+      });
+      if (recent) return;
+      const endsOn = active.endsAt.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+      const rendered = renderDefaultNotification('SUBSCRIPTION_EXPIRING_SOON', {
+        planName,
+        endsOn,
+        daysLeft: String(daysLeft),
+      });
+      await this.prisma.notification
+        .create({
+          data: {
+            userId,
+            title: rendered.title,
+            body: rendered.body,
+            type: 'BILLING',
+            link: '/employer/payments',
+          },
+        })
+        .catch(() => undefined);
+      return;
+    }
+
+    const expired = await this.prisma.employerSubscription.findFirst({
+      where: { employerId, status: 'EXPIRED' },
+      orderBy: { endsAt: 'desc' },
+    });
+    if (!expired) return;
+    const recent = await this.prisma.notification.findFirst({
+      where: {
+        userId,
+        type: 'BILLING',
+        title: 'Subscription expired',
+        createdAt: { gte: dayAgo },
+      },
+      select: { id: true },
+    });
+    if (recent) return;
+    const planName = getEmployerSubscriptionPlan(expired.planId)?.name || expired.planId;
+    const rendered = renderDefaultNotification('SUBSCRIPTION_EXPIRED', { planName });
+    await this.prisma.notification
+      .create({
+        data: {
+          userId,
+          title: rendered.title,
+          body: rendered.body,
+          type: 'BILLING',
+          link: '/employer/payments',
+        },
+      })
+      .catch(() => undefined);
   }
 
   private async requireEmployer(userId: string) {

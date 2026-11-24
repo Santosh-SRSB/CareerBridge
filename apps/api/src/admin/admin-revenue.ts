@@ -28,12 +28,21 @@ export function bucketFor(groups: PaymentStatusGroup[], status: string): Payment
   return { count: group?._count._all ?? 0, amountInr: paiseToInr(group?._sum.amountPaise) };
 }
 
-export function revenueBySource(input: { totalPaise: number; jobPostingPaise: number; hiringFeePaise: number }) {
+export function revenueBySource(input: {
+  totalPaise: number;
+  jobPostingPaise: number;
+  hiringFeePaise: number;
+  subscriptionPaise?: number;
+}) {
   const jobPostingFeesInr = paiseToInr(input.jobPostingPaise);
   const hiringFeesInr = paiseToInr(input.hiringFeePaise);
+  const subscriptionPlansInr = paiseToInr(input.subscriptionPaise ?? 0);
+  const accounted =
+    input.jobPostingPaise + input.hiringFeePaise + (input.subscriptionPaise ?? 0);
   return {
     jobPostingFeesInr,
     hiringFeesInr,
-    otherInr: Math.max(0, paiseToInr(input.totalPaise - input.jobPostingPaise - input.hiringFeePaise)),
+    subscriptionPlansInr,
+    otherInr: Math.max(0, paiseToInr(input.totalPaise - accounted)),
   };
 }

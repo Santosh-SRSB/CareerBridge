@@ -16,9 +16,9 @@ import {
   activeJobLimitMessage,
   activeJobLimitReached,
   candidateViewLimitMessage,
+  getEmployerSubscriptionPlan,
   loginSeatLimitMessage,
   loginSeatLimitReached,
-  subscriptionRequiredMessage,
   designationError,
   emailError,
   experienceFilterRange,
@@ -97,6 +97,7 @@ import {
   companyLoginSeatLimit,
   countCompanyLoginSeats,
   employerPlanUsage,
+  employerSubscriptionBlockMessage,
 } from './employer-plan';
 import { closedAtForStatusChange } from './job-lifecycle';
 
@@ -734,7 +735,7 @@ export class EmployersService {
     if (!usage.subscriptionActive) {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: subscriptionRequiredMessage(),
+        message: await employerSubscriptionBlockMessage(this.prisma, employerId),
       });
     }
     const period = usage.period;
@@ -760,13 +761,32 @@ export class EmployersService {
     if (!usage.subscriptionActive) {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: subscriptionRequiredMessage(),
+        message: await employerSubscriptionBlockMessage(this.prisma, employerId),
       });
     }
     if (activeJobLimitReached(usage)) {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,
         message: activeJobLimitMessage(usage.activeJobLimit),
+      });
+    }
+  }
+
+  /** OD-11 — Starter cannot shortlist from the candidate database (talent pool). */
+  private async assertCandidateDatabaseShortlistAllowed(employerId: string) {
+    const usage = await employerPlanUsage(this.prisma, employerId);
+    if (!usage.subscriptionActive || !usage.planId) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: await employerSubscriptionBlockMessage(this.prisma, employerId),
+      });
+    }
+    const plan = getEmployerSubscriptionPlan(usage.planId);
+    if (!plan?.entitlements.candidateDatabaseShortlist) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message:
+          'Candidate database shortlist is not included in your plan. Upgrade to Growth or higher to shortlist talent-pool candidates.',
       });
     }
   }
@@ -1518,6 +1538,7 @@ export class EmployersService {
 
     const key = { employerId: employer.id, candidateId, jobId: job.id };
     if (shortlisted) {
+      await this.assertCandidateDatabaseShortlistAllowed(employer.id);
       const employerNote = note?.trim().slice(0, 500) || null;
       await this.prisma.employerTalentShortlist.upsert({
         where: { employerId_candidateId_jobId: key },

@@ -710,6 +710,7 @@ export class MatchingService {
       id: row.id,
       jobId: row.jobId,
       hiringOutcomeId: row.hiringOutcomeId,
+      planId: row.planId ?? null,
       amountPaise: row.amountPaise,
       currency: row.currency,
       status: row.status,

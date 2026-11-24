@@ -444,12 +444,40 @@ export function DetailPanel({
           <Section title="Plan & credits">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Plan" value={plan?.name} />
+              <Field label="Plan id" value={(plan as { planId?: string | null } | undefined)?.planId} />
+              <Field
+                label="Status"
+                value={
+                  (plan as { active?: boolean } | undefined)?.active === true
+                    ? 'Active'
+                    : (plan as { active?: boolean } | undefined)?.active === false
+                      ? 'Inactive'
+                      : null
+                }
+              />
+              <Field
+                label="Ends"
+                value={
+                  (plan as { endsAt?: string | null } | undefined)?.endsAt
+                    ? new Date(String((plan as { endsAt?: string | null }).endsAt)).toLocaleDateString('en-IN')
+                    : null
+                }
+              />
               <Field label="Billing period" value={plan?.period} />
               <Field
                 label="Active jobs"
                 value={
                   plan
                     ? `${txt(plan.activeJobs)} / ${plan.activeJobLimit == null ? 'Unlimited' : txt(plan.activeJobLimit)}`
+                    : null
+                }
+              />
+              <Field
+                label="Login seats"
+                value={
+                  (plan as { loginSeats?: number | null; loginSeatsUsed?: number | null } | undefined)?.loginSeats !=
+                  null
+                    ? `${txt((plan as { loginSeatsUsed?: number | null }).loginSeatsUsed ?? 0)} / ${txt((plan as { loginSeats?: number | null }).loginSeats)}`
                     : null
                 }
               />

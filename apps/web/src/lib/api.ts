@@ -1404,6 +1404,7 @@ export type EmployerPaymentRow = {
   id: string;
   jobId: string;
   hiringOutcomeId: string;
+  planId?: string | null;
   amountPaise: number;
   currency: string;
   status: string;
@@ -1893,6 +1894,24 @@ export async function verifyEmployer(id: string) {
   });
 }
 
+export async function grantAdminEmployerSubscription(
+  employerId: string,
+  planId: 'starter' | 'growth' | 'business' | 'enterprise',
+  durationDays?: number,
+) {
+  return request<{
+    ok: true;
+    employerId: string;
+    planId: string;
+    startsAt: string;
+    endsAt: string;
+    subscriptionId: string;
+  }>(`/admin/employers/${employerId}/subscription`, {
+    method: 'POST',
+    body: JSON.stringify({ planId, ...(durationDays != null ? { durationDays } : {}) }),
+  });
+}
+
 export async function impersonateAdminEmployer(employerId: string) {
   return request<
     AuthSession & {
@@ -2067,7 +2086,12 @@ export type AdminRevenue = {
   payingEmployers: number;
   newEmployersThisMonth: number;
   creditsConsumedThisMonth: number;
-  bySource: { jobPostingFeesInr: number; hiringFeesInr: number; otherInr: number };
+  bySource: {
+    jobPostingFeesInr: number;
+    hiringFeesInr: number;
+    subscriptionPlansInr?: number;
+    otherInr: number;
+  };
   excluded: Record<'pending' | 'failed' | 'refunded', { count: number; amountInr: number }>;
   definition: string;
   paymentGatewayConfigured: boolean;

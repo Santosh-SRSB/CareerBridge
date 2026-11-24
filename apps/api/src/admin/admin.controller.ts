@@ -14,7 +14,8 @@ import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
 import { Throttle } from '@nestjs/throttler';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
 import { AdminService } from './admin.service';
 import { AdminAccountDeletionService } from './admin-account-deletion.service';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -97,6 +98,18 @@ class CreateAdminDto {
 class StatusDto {
   @IsIn(['ACTIVE', 'INACTIVE', 'SUSPENDED'])
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+}
+
+class GrantEmployerSubscriptionDto {
+  @IsIn(['starter', 'growth', 'business', 'enterprise'])
+  planId: 'starter' | 'growth' | 'business' | 'enterprise';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(730)
+  durationDays?: number;
 }
 
 class JobStatusDto {
@@ -256,6 +269,17 @@ export class AdminController {
   @Post('employers/:id/verify')
   verify(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.admin.verifyEmployer(user.id, id);
+  }
+
+  /** DEV / ops — grant or extend a catalogue plan without Razorpay (Enterprise + courtesy). */
+  @Post('employers/:id/subscription')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  grantEmployerSubscription(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: GrantEmployerSubscriptionDto,
+  ) {
+    return this.admin.grantEmployerSubscription(user.id, id, dto.planId, dto.durationDays);
   }
 
   @Post('employers/:id/impersonate')

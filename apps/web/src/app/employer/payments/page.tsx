@@ -82,6 +82,15 @@ export default function EmployerBillingPage() {
         year: 'numeric',
       })
     : null;
+  const endsAtMs = subscription?.endsAt ? new Date(subscription.endsAt).getTime() : null;
+  const daysLeft =
+    subscription?.active && endsAtMs != null
+      ? Math.ceil((endsAtMs - Date.now()) / (24 * 60 * 60 * 1000))
+      : null;
+  const showRenewBanner =
+    !loading &&
+    !error &&
+    (!subscription?.active || (daysLeft != null && daysLeft <= 7));
 
   return (
     <EmployerShellFallback title="Billing">
@@ -99,6 +108,20 @@ export default function EmployerBillingPage() {
       {error && !loading ? (
         <div className="ev-mt">
           <ErrorState message={error} onRetry={load} />
+        </div>
+      ) : null}
+      {showRenewBanner ? (
+        <div className="ev-card ev-mt" role="status" style={{ borderColor: '#c9a227' }}>
+          <p className="ev-sub" style={{ margin: 0 }}>
+            {!subscription?.active
+              ? 'No active subscription — renew or choose a plan to post jobs and view candidates.'
+              : daysLeft != null && daysLeft <= 0
+                ? 'Your subscription ends today. Renew to keep posting jobs and viewing candidates.'
+                : `Your subscription ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Renew to avoid interruption.`}
+          </p>
+          <Link href="/employer/payments/buy" className="ev-btn ev-btn--amber" style={{ marginTop: 10 }}>
+            Renew or change plan
+          </Link>
         </div>
       ) : null}
       {loading ? (
@@ -168,15 +191,21 @@ export default function EmployerBillingPage() {
                     <tr>
                       <th>Date</th>
                       <th>Description</th>
+                      <th>Plan</th>
                       <th>Amount</th>
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {payments.map((row) => (
+                    {payments.map((row) => {
+                      const planName = row.planId
+                        ? getEmployerSubscriptionPlan(row.planId)?.name || row.planId
+                        : '—';
+                      return (
                       <tr key={row.id}>
                         <td>{new Date(row.createdAt).toLocaleDateString('en-IN')}</td>
                         <td>{row.description || 'Payment'}</td>
+                        <td>{planName}</td>
                         <td>
                           <b>
                             {(row.amountPaise / 100).toLocaleString('en-IN', {
@@ -189,7 +218,8 @@ export default function EmployerBillingPage() {
                           <EvPill>{row.status}</EvPill>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

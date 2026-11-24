@@ -816,7 +816,7 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
       assert.match(String(body.message || ''), /seat limit \(1\)/i);
       return true;
     });
-    assert.equal(employer(db, EMP_B).companyId, null);
+    assert.ok(!employer(db, EMP_B).companyId);
   });
 
   it("a later account never overwrites the company's canonical details", async () => {

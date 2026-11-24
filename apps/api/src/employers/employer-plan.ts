@@ -2,6 +2,8 @@ import {
   getEmployerSubscriptionPlan,
   EMPLOYER_PLAN_SETTING_DEFAULTS,
   parseEmployerPlanSettings,
+  subscriptionExpiredMessage,
+  subscriptionRequiredMessage,
   type EmployerPlanUsage,
 } from '@careerbridge/shared';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -135,6 +137,24 @@ export async function employerPlanUsage(
     loginSeats: companySeats,
     loginSeatsUsed,
   };
+}
+
+/** Distinct expired vs never-purchased copy for publish/view gates. */
+export async function employerSubscriptionBlockMessage(
+  prisma: PrismaService,
+  employerId: string,
+  now = new Date(),
+): Promise<string> {
+  const active = await prisma.employerSubscription.findFirst({
+    where: { employerId, status: 'ACTIVE', endsAt: { gt: now } },
+    select: { id: true },
+  });
+  if (active) return subscriptionRequiredMessage();
+  const prior = await prisma.employerSubscription.findFirst({
+    where: { employerId },
+    select: { id: true },
+  });
+  return prior ? subscriptionExpiredMessage() : subscriptionRequiredMessage();
 }
 
 /** @deprecated Exported for tests that still seed platform settings. */

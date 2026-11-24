@@ -25,10 +25,13 @@ Source: Employer Persona & Subscription Monetization guide. **DEV only** — pro
 - Verification gate before checkout; Razorpay webhook event ledger (idempotency)
 - Employer Billing portal + welcome landing plans strip (additive)
 - Recruiter seat enforcement on KYC join (company-scoped; OD-07 owner counts)
+- OD-11 talent-pool shortlist entitlement; expired vs never-paid gate messages
+- Admin revenue: gateway flag + subscription plan source bucket
+- Admin grant subscription API (`POST /admin/employers/:id/subscription`)
+- Billing renew banner + in-app expiry/expiring notifications (on subscription read)
 
 ## Still building (todo order)
 
-1. Entitlement flags (e.g. Starter DB shortlist) + expired vs never-paid messages
-2. Enterprise offer + Super Admin grant/revenue basics
-3. Expiry / low-usage notifications
-4. Admin metering alignment to `sub:*` periods
+1. Dedicated Enterprise offer table + admin grant UI control in drawer
+2. Admin metering alignment to `sub:*` periods (not calendar-month only)
+3. Optional usage event ledger beyond candidate views
