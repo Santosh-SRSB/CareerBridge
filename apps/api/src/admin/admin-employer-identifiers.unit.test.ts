@@ -49,6 +49,7 @@ function harness(overrides: Record<string, unknown>) {
     employerInterview: { findMany: async () => [] },
     platformSetting: { findMany: async () => [] },
     job: { count: async () => 0 },
+    employerSubscription: { findFirst: async () => null },
     employerCandidateView: { count: async () => 0 },
     auditLog: { create: async () => ({}), findMany: async () => [] },
     user: { findMany: async () => [] },
