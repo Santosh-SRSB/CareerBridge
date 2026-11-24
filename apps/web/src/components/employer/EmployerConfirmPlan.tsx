@@ -395,7 +395,7 @@ export function EmployerConfirmPlan({
                 <i>2</i>
                 <div>
                   <b>Pay with Razorpay</b>
-                  Checkout will be connected next
+                  Secure checkout · server-controlled amount
                 </div>
               </div>
               <div className="cb-confirm__nx">

@@ -1465,6 +1465,37 @@ export async function getEmployerSubscription() {
   return request<EmployerSubscriptionStatus>('/billing/employer/subscription');
 }
 
+export type PublicSubscriptionPlansResponse = {
+  currency: 'INR';
+  renewalType: 'manual';
+  notes: string[];
+  plans: Array<{
+    id: string;
+    name: string;
+    tagline: string;
+    priceLabel: string;
+    periodLabel: string;
+    priceHint: string;
+    features: string[];
+    cta: string;
+    recommended: boolean;
+    contactSales: boolean;
+    purchasableOnline: boolean;
+    amountPaise: number | null;
+    currency: 'INR';
+    durationDays: number | null;
+    activeJobLimit: number | null;
+    loginSeats: number | null;
+    candidateViewCredits: number | null;
+    renewalType: 'manual';
+  }>;
+};
+
+/** Guide §6.3 — public plan catalogue (no auth). */
+export async function listPublicSubscriptionPlans() {
+  return request<PublicSubscriptionPlansResponse>('/billing/subscription-plans', { auth: false });
+}
+
 export type EmployerPlanOrder = {
   paymentId: string;
   orderId: string;

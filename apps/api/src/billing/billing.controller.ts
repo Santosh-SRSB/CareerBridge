@@ -11,6 +11,13 @@ type ReqWithRaw = Request & { rawBody?: Buffer };
 export class BillingController {
   constructor(private readonly billing: BillingService) {}
 
+  /** Guide §6.3 — public catalogue (display-safe fields only). */
+  @Public()
+  @Get('subscription-plans')
+  listPublicPlans() {
+    return this.billing.listPublicPlans();
+  }
+
   @Get('employer/subscription')
   subscription(@CurrentUser() user: { id: string }) {
     return this.billing.getActiveSubscription(user.id);

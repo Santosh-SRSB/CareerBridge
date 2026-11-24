@@ -357,7 +357,7 @@ export function EmployerPricingPlans({
               {selected.periodLabel}
             </h2>
             <p>
-              Confirm this plan to continue. Razorpay checkout will be connected next — no payment is taken yet.
+              Confirm this plan to continue to secure Razorpay checkout. Amount is set by the server.
             </p>
             <Link
               className="cb-price__btn"

@@ -10,6 +10,7 @@ import {
 import {
   ErrorCode as SharedError,
   getEmployerSubscriptionPlan,
+  listPublicEmployerSubscriptionPlans,
   type EmployerSubscriptionPlanId,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,6 +29,19 @@ export class BillingService {
   private readonly log = new Logger(BillingService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  listPublicPlans() {
+    return {
+      currency: 'INR' as const,
+      renewalType: 'manual' as const,
+      notes: [
+        'Active job posts are concurrent limits — closing a job frees a slot.',
+        'Candidate database views are per subscription period and do not roll over.',
+        'Opening applicants to your own jobs does not consume database views.',
+      ],
+      plans: listPublicEmployerSubscriptionPlans(),
+    };
+  }
 
   async getActiveSubscription(userId: string) {
     const employer = await this.requireEmployer(userId);
