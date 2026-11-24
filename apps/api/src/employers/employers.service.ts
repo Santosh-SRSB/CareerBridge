@@ -16,6 +16,7 @@ import {
   activeJobLimitMessage,
   activeJobLimitReached,
   candidateViewLimitMessage,
+  subscriptionRequiredMessage,
   designationError,
   emailError,
   experienceFilterRange,
@@ -90,7 +91,7 @@ import { StorageService } from '../common/storage/storage.service';
 import { readableCandidatePhotoUrl } from '../candidates/profile-photo.util';
 import { candidateInterviewUrl, interviewMeetingUrl } from '../common/web/public-web-url';
 import { TestimonialsService } from '../testimonials/testimonials.service';
-import { employerPlanUsage, usagePeriod } from './employer-plan';
+import { employerPlanUsage } from './employer-plan';
 import { closedAtForStatusChange } from './job-lifecycle';
 
 const APPLICATION_STATUS_NOTICE: Partial<Record<ApplicationStatus, NotificationTemplateKey>> = {
@@ -712,34 +713,46 @@ export class EmployersService {
   }
 
   /**
-   * Each distinct candidate profile opened in a month uses one view credit. Profiles of candidates who
-   * applied to the employer's jobs are always viewable, but still counted in usage.
+   * Candidate database views (BR-03 / OD-06): charge once per employer–candidate per subscription period.
+   * Own-job applicants never consume a database view.
    */
   private async recordCandidateView(employerId: string, candidateId: string, jobId: string | null, applied: boolean) {
-    const period = usagePeriod();
+    // Applicants to own jobs: free, not metered (guide BR-03).
+    if (applied) return;
+
+    const usage = await employerPlanUsage(this.prisma, employerId);
+    if (!usage.subscriptionActive) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: subscriptionRequiredMessage(),
+      });
+    }
+    const period = usage.period;
     const existing = await this.prisma.employerCandidateView.findUnique({
       where: { employerId_candidateId_period: { employerId, candidateId, period } },
     });
     if (existing) return;
-    if (!applied) {
-      const usage = await employerPlanUsage(this.prisma, employerId);
-      if (usage.candidateViewCredits > 0 && usage.candidateViews >= usage.candidateViewCredits) {
-        throw new ForbiddenException({
-          code: SharedError.BUSINESS_RULE_VIOLATION,
-          message: candidateViewLimitMessage(usage.candidateViewCredits),
-        });
-      }
+    if (usage.candidateViewCredits > 0 && usage.candidateViews >= usage.candidateViewCredits) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: candidateViewLimitMessage(usage.candidateViewCredits),
+      });
     }
     await this.prisma.employerCandidateView
       .create({ data: { employerId, candidateId, jobId, period } })
       .catch((err: unknown) => {
-        // A concurrent request may have inserted the same (employer, candidate, month) row.
         if (!(err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002')) throw err;
       });
   }
 
   private async assertActiveJobAllowance(employerId: string) {
     const usage = await employerPlanUsage(this.prisma, employerId);
+    if (!usage.subscriptionActive) {
+      throw new ForbiddenException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: subscriptionRequiredMessage(),
+      });
+    }
     if (activeJobLimitReached(usage)) {
       throw new ForbiddenException({
         code: SharedError.BUSINESS_RULE_VIOLATION,

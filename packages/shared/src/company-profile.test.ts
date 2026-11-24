@@ -43,7 +43,18 @@ test('plan settings: defaults apply to missing or invalid values; only 0 means u
 });
 
 test('plan usage helpers', () => {
-  const base = { plan: 'STARTER' as const, period: '2026-09', activeJobs: 5, activeJobLimit: 5, candidateViews: 40, candidateViewCredits: 100 };
+  const base = {
+    plan: 'STARTER',
+    planId: 'starter',
+    subscriptionActive: true,
+    endsAt: null,
+    period: '2026-09',
+    activeJobs: 5,
+    activeJobLimit: 5,
+    candidateViews: 40,
+    candidateViewCredits: 100,
+    loginSeats: 1,
+  };
   assert.equal(activeJobLimitReached(base), true);
   assert.equal(activeJobLimitReached({ ...base, activeJobs: 4 }), false);
   assert.equal(activeJobLimitReached({ ...base, activeJobLimit: 0, activeJobs: 99 }), false);
