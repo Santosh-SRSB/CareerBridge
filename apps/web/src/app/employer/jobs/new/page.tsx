@@ -42,6 +42,10 @@ import { CategorySelect } from '@/components/ui/CategorySelect';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkillSearchCombobox } from '@/components/resume/SkillSearchCombobox';
 import { EvAlert, EvEmpty, EvSkeleton, EvStepHead } from '@/components/employer/ui';
+import {
+  EMPLOYER_POST_JOB_PRICING_HREF,
+  canEmployerPostJob,
+} from '@/lib/employer-plan-gate';
 
 const STEPS = [
   {
@@ -173,6 +177,30 @@ export default function NewJobPage() {
   const [bootLoading, setBootLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [awaitingAdmin, setAwaitingAdmin] = useState(false);
+  const [planGatePending, setPlanGatePending] = useState(!editJobId);
+
+  useEffect(() => {
+    if (editJobId) {
+      setPlanGatePending(false);
+      return;
+    }
+    let cancelled = false;
+    canEmployerPostJob()
+      .then((ok) => {
+        if (cancelled) return;
+        if (ok) {
+          setPlanGatePending(false);
+          return;
+        }
+        router.replace(EMPLOYER_POST_JOB_PRICING_HREF);
+      })
+      .catch(() => {
+        if (!cancelled) router.replace(EMPLOYER_POST_JOB_PRICING_HREF);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editJobId, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -555,6 +583,19 @@ export default function NewJobPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (planGatePending) {
+    return (
+      <EmployerShellFallback title="Post a job">
+        <div className="ev-wzp">
+          <div className="ev-mt">
+            <EvSkeleton height={220} />
+          </div>
+          <p className="ev-status">Opening pricing…</p>
+        </div>
+      </EmployerShellFallback>
+    );
   }
 
   if (bootLoading) {

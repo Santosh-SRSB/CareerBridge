@@ -192,7 +192,7 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
         id: 'job',
         label: 'Post your first job',
         done: events.length > 0,
-        href: '/employer/jobs/new',
+        href: '/employer/payments/buy?intent=post-job',
       },
       {
         id: 'review',
@@ -341,7 +341,7 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
               <EvEmpty
                 title="No live roles yet"
                 action={
-                  <Link href="/employer/jobs/new" className="ev-btn ev-mt-sm">
+                  <Link href="/employer/payments/buy?intent=post-job" className="ev-btn ev-mt-sm">
                     Post a job
                   </Link>
                 }
@@ -422,7 +422,7 @@ function ProfileDesk({ profile: initial }: { profile: EmployerProfile }) {
                 </li>
               ))}
             </ul>
-            <Link href="/employer/jobs/new" className="ev-btn ev-mt-sm">
+            <Link href="/employer/payments/buy?intent=post-job" className="ev-btn ev-mt-sm">
               Add new job
             </Link>
           </article>

@@ -103,6 +103,34 @@ export const NOTIFICATION_TEMPLATES = {
     title: 'Invite from Employer',
     body: '{{company}} invited you to apply for {{jobTitle}}.',
   },
+  SUBSCRIPTION_EXPIRING_SOON: {
+    label: 'Subscription expiring soon (to employer)',
+    audience: 'EMPLOYER',
+    variables: ['planName', 'endsOn', 'daysLeft'],
+    title: 'Subscription ending soon',
+    body: 'Your {{planName}} plan ends on {{endsOn}} ({{daysLeft}} day(s) left). Renew from Billing to keep posting jobs and viewing candidates.',
+  },
+  SUBSCRIPTION_EXPIRED: {
+    label: 'Subscription expired (to employer)',
+    audience: 'EMPLOYER',
+    variables: ['planName'],
+    title: 'Subscription expired',
+    body: 'Your {{planName}} plan has expired. Existing jobs and applications are retained. Renew from Billing to publish again.',
+  },
+  PAYMENT_SUCCESS: {
+    label: 'Payment successful (to employer)',
+    audience: 'EMPLOYER',
+    variables: ['planName', 'amount', 'endsOn'],
+    title: 'Payment successful',
+    body: 'Your {{planName}} plan ({{amount}}) is active until {{endsOn}}. Open Billing to see usage and renew later.',
+  },
+  ENTERPRISE_OFFER_READY: {
+    label: 'Enterprise offer available (to employer)',
+    audience: 'EMPLOYER',
+    variables: ['amount', 'days'],
+    title: 'Enterprise offer ready',
+    body: 'An Enterprise offer for {{amount}} ({{days}} days) is ready. Open Billing to review and pay online.',
+  },
 } as const satisfies Record<string, Omit<NotificationTemplateDefinition, 'key'>>;
 
 export type NotificationTemplateKey = keyof typeof NOTIFICATION_TEMPLATES;

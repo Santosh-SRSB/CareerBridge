@@ -1,4 +1,5 @@
-/** Starter (free) plan allowances. Super Admin can change them in Settings; 0 means unlimited. */
+/** Employer usage helpers. Limits prefer active paid subscription; legacy platform_settings remain fallback. */
+
 export const EMPLOYER_PLAN_SETTING_DEFAULTS = {
   'billing.starterActiveJobLimit': '0',
   'billing.starterCandidateViewCredits': '100',
@@ -24,15 +25,24 @@ export function parseEmployerPlanSettings(
 }
 
 export type EmployerPlanUsage = {
-  plan: 'STARTER';
-  /** Calendar month in India time, YYYY-MM. */
+  /** Display / legacy label. Prefer `planId` for catalogue lookups. */
+  plan: string;
+  planId: string | null;
+  /** True when a paid EmployerSubscription is ACTIVE and not past endsAt. */
+  subscriptionActive: boolean;
+  endsAt: string | null;
+  /** Usage bucket key (subscription id or calendar month fallback). */
   period: string;
   activeJobs: number;
-  /** 0 = unlimited. */
+  /** Concurrent active job limit. 0 = unlimited (legacy settings only). */
   activeJobLimit: number;
   candidateViews: number;
-  /** 0 = unlimited. */
+  /** Period database-view allowance. 0 = unlimited (legacy settings only). */
   candidateViewCredits: number;
+  /** Catalogue login seat limit; null = unlimited / unknown (Enterprise or no plan). */
+  loginSeats: number | null;
+  /** Active employer logins on the company (owner counts — OD-07). null when unknown. */
+  loginSeatsUsed: number | null;
 };
 
 export function activeJobLimitReached(usage: Pick<EmployerPlanUsage, 'activeJobs' | 'activeJobLimit'>) {
@@ -45,9 +55,26 @@ export function candidateViewCreditsLeft(usage: Pick<EmployerPlanUsage, 'candida
 }
 
 export function activeJobLimitMessage(limit: number) {
-  return `Your Starter plan allows up to ${limit} active jobs. Close or pause a job, or buy more credits, to publish this one.`;
+  return `You have reached the active job-post limit (${limit}) for your plan. Close an existing job or upgrade your plan to publish another.`;
 }
 
 export function candidateViewLimitMessage(limit: number) {
-  return `You have used all ${limit} candidate profile views included this month. Buy more credits to view more candidates.`;
+  return `You have used all ${limit} candidate database views for this subscription period. Upgrade or renew to continue candidate discovery.`;
+}
+
+export function subscriptionRequiredMessage() {
+  return 'An active employer subscription is required. Choose a plan and complete payment to continue.';
+}
+
+export function subscriptionExpiredMessage() {
+  return 'Your subscription has expired. Existing records are retained, but you cannot publish or reactivate jobs until you renew.';
+}
+
+/** OD-07 — owner counts; `null` limit means unlimited (Enterprise). */
+export function loginSeatLimitReached(used: number, limit: number | null) {
+  return limit != null && limit > 0 && used >= limit;
+}
+
+export function loginSeatLimitMessage(limit: number) {
+  return `This company has reached the recruiter login seat limit (${limit}) for its plan. Upgrade the plan or remove an existing login to add another.`;
 }

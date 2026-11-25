@@ -2,21 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { candidateViewCreditsLeft, type EmployerPlanUsage } from '@careerbridge/shared';
+import {
+  candidateViewCreditsLeft,
+  getEmployerSubscriptionPlan,
+  type EmployerPlanUsage,
+} from '@careerbridge/shared';
 import {
   getEmployerDashboard,
   getEmployerPlanUsage,
+  getEmployerSubscription,
   listEmployerPayments,
+  listMyEnterpriseOffers,
   type EmployerPaymentRow,
+  type EmployerSubscriptionStatus,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { EvEmpty, EvPageHead, EvPill, EvSkeleton, EvStat } from '@/components/employer/ui';
 import { ErrorState } from '@/components/ui/StateViews';
-import { LOAD_ERROR_MESSAGE } from '@/lib/client-errors';
+import { LOAD_ERROR_MESSAGE, userFacingError } from '@/lib/client-errors';
+import { checkoutEnterpriseOffer } from '@/lib/employer-plan-checkout';
+import { toast } from '@/components/ui/Toast';
 
 function periodLabel(period: string) {
+  if (period.startsWith('sub:')) return 'current subscription period';
   const [year, month] = period.split('-').map(Number);
-  if (!year || !month) return 'this month';
+  if (!year || !month) return 'this period';
   return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('en-IN', {
     month: 'long',
     year: 'numeric',
@@ -31,8 +41,21 @@ export default function EmployerBillingPage() {
   const [shortlisted, setShortlisted] = useState(0);
   const [interviews, setInterviews] = useState(0);
   const [usage, setUsage] = useState<EmployerPlanUsage | null>(null);
+  const [subscription, setSubscription] = useState<EmployerSubscriptionStatus | null>(null);
   const [payments, setPayments] = useState<EmployerPaymentRow[]>([]);
   const [paymentsFailed, setPaymentsFailed] = useState(false);
+  const [enterpriseOffers, setEnterpriseOffers] = useState<
+    Array<{
+      id: string;
+      amountPaise: number;
+      durationDays: number;
+      activeJobLimit: number;
+      loginSeats: number;
+      candidateViewCredits: number;
+      expiresAt: string | null;
+    }>
+  >([]);
+  const [offerPayingId, setOfferPayingId] = useState('');
 
   function load() {
     setLoading(true);
@@ -41,17 +64,21 @@ export default function EmployerBillingPage() {
     Promise.all([
       getEmployerDashboard(),
       getEmployerPlanUsage(),
+      getEmployerSubscription().catch(() => null),
       listEmployerPayments().catch(() => {
         setPaymentsFailed(true);
         return [] as EmployerPaymentRow[];
       }),
+      listMyEnterpriseOffers().catch(() => ({ offers: [] })),
     ])
-      .then(([dash, planUsage, rows]) => {
+      .then(([dash, planUsage, sub, rows, offers]) => {
         setApplications(dash.applications);
         setShortlisted(dash.shortlisted);
         setInterviews(dash.interviews);
         setUsage(planUsage);
+        setSubscription(sub);
         setPayments(rows);
+        setEnterpriseOffers(offers.offers || []);
       })
       .catch(() => setError(LOAD_ERROR_MESSAGE))
       .finally(() => setLoading(false));
@@ -61,12 +88,33 @@ export default function EmployerBillingPage() {
     load();
   }, []);
 
+  const catalog = getEmployerSubscriptionPlan(subscription?.planId || usage?.planId);
+  const planTitle = subscription?.active
+    ? `${catalog?.name || subscription.planId} · Active`
+    : 'No active paid plan';
+  const endsLabel = subscription?.endsAt
+    ? new Date(subscription.endsAt).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })
+    : null;
+  const endsAtMs = subscription?.endsAt ? new Date(subscription.endsAt).getTime() : null;
+  const daysLeft =
+    subscription?.active && endsAtMs != null
+      ? Math.ceil((endsAtMs - Date.now()) / (24 * 60 * 60 * 1000))
+      : null;
+  const showRenewBanner =
+    !loading &&
+    !error &&
+    (!subscription?.active || (daysLeft != null && daysLeft <= 7));
+
   return (
     <EmployerShellFallback title="Billing">
       <EvPageHead
         eyebrow="Account"
         title="Billing"
-        subtitle="Your plan, monthly credits and billing history."
+        subtitle="Your subscription, usage and payment history."
         actions={
           <Link href="/employer" className="ev-btn ev-btn--ghost">
             ← Dashboard
@@ -77,6 +125,20 @@ export default function EmployerBillingPage() {
       {error && !loading ? (
         <div className="ev-mt">
           <ErrorState message={error} onRetry={load} />
+        </div>
+      ) : null}
+      {showRenewBanner ? (
+        <div className="ev-card ev-mt" role="status" style={{ borderColor: '#c9a227' }}>
+          <p className="ev-sub" style={{ margin: 0 }}>
+            {!subscription?.active
+              ? 'No active subscription — renew or choose a plan to post jobs and view candidates.'
+              : daysLeft != null && daysLeft <= 0
+                ? 'Your subscription ends today. Renew to keep posting jobs and viewing candidates.'
+                : `Your subscription ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Renew to avoid interruption.`}
+          </p>
+          <Link href="/employer/payments/buy" className="ev-btn ev-btn--amber" style={{ marginTop: 10 }}>
+            Renew or change plan
+          </Link>
         </div>
       ) : null}
       {loading ? (
@@ -91,27 +153,94 @@ export default function EmployerBillingPage() {
           <div className="ev-grid ev-g2 ev-mt">
             <section className="ev-card ev-plan" aria-label="Current plan">
               <small className="ev-eyebrow">CURRENT PLAN</small>
-              <h2 className="ev-h2">Starter · Free</h2>
+              <h2 className="ev-h2">{planTitle}</h2>
               <p className="ev-sub">
-                {usage.activeJobLimit > 0 ? `Up to ${usage.activeJobLimit} active jobs` : 'Unlimited active jobs'}
-                {' · '}
-                {usage.candidateViewCredits > 0
-                  ? `${usage.candidateViewCredits} candidate profile views per month`
-                  : 'unlimited candidate profile views'}
-                . Profiles of candidates who applied to your jobs are always free to view.
+                {subscription?.active
+                  ? endsLabel
+                    ? `Valid until ${endsLabel}. Manual renewal.`
+                    : 'Active subscription. Manual renewal.'
+                  : 'Choose a plan to unlock Post a job, recruiter seats and candidate database views.'}
               </p>
               <p className="ev-plan-meta">
                 Active jobs: {usage.activeJobs}
-                {usage.activeJobLimit > 0 ? ` of ${usage.activeJobLimit}` : ''}
+                {usage.activeJobLimit > 0 ? ` of ${usage.activeJobLimit}` : subscription?.active ? '' : ' (subscription required)'}
+                {usage.loginSeats != null
+                  ? ` · Seats: ${usage.loginSeatsUsed ?? 0} of ${usage.loginSeats}`
+                  : usage.loginSeatsUsed != null
+                    ? ` · Seats: ${usage.loginSeatsUsed}`
+                    : ''}
               </p>
+              <Link
+                href={
+                  subscription?.active
+                    ? '/employer/payments/buy'
+                    : '/employer/payments/buy?intent=post-job'
+                }
+                className="ev-btn ev-btn--amber"
+                style={{ marginTop: 12 }}
+              >
+                {subscription?.active ? 'Renew or change plan' : 'View subscription plans'}
+              </Link>
             </section>
             <CreditsCard usage={usage} />
           </div>
 
-          <section className="ev-mt" aria-label="Usage this month">
+          {enterpriseOffers.length > 0 ? (
+            <section className="ev-card ev-mt" aria-label="Enterprise offers">
+              <h2 className="ev-h2">Your Enterprise offer</h2>
+              <p className="ev-sub">Configured by SRSB — pay online with the exact approved amount.</p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0' }}>
+                {enterpriseOffers.map((offer) => (
+                  <li
+                    key={offer.id}
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 12,
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 0',
+                      borderTop: '1px solid rgba(0,0,0,0.08)',
+                    }}
+                  >
+                    <div>
+                      <strong>₹{Math.round(offer.amountPaise / 100).toLocaleString('en-IN')}</strong>
+                      <span className="ev-sub">
+                        {' '}
+                        · {offer.durationDays} days · {offer.activeJobLimit} jobs · {offer.loginSeats} seats ·{' '}
+                        {offer.candidateViewCredits} views
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="ev-btn ev-btn--amber"
+                      disabled={Boolean(offerPayingId)}
+                      onClick={async () => {
+                        setOfferPayingId(offer.id);
+                        try {
+                          await checkoutEnterpriseOffer(offer.id);
+                          toast.success('Enterprise plan payment successful.');
+                          load();
+                        } catch (err) {
+                          const msg = userFacingError(err, 'complete payment');
+                          if (!/cancel/i.test(msg)) toast.error(msg);
+                        } finally {
+                          setOfferPayingId('');
+                        }
+                      }}
+                    >
+                      {offerPayingId === offer.id ? 'Opening checkout…' : 'Pay offer'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <section className="ev-mt" aria-label="Usage this period">
             <h2 className="ev-h2">Usage overview · {periodLabel(usage.period)}</h2>
             <div className="ev-grid ev-g4">
-              <EvStat label="Candidate views" value={usage.candidateViews} />
+              <EvStat label="Candidate DB views" value={usage.candidateViews} />
               <EvStat label="Applications received" value={applications} />
               <EvStat label="Shortlists" value={shortlisted} />
               <EvStat label="Interviews scheduled" value={interviews} />
@@ -131,15 +260,21 @@ export default function EmployerBillingPage() {
                     <tr>
                       <th>Date</th>
                       <th>Description</th>
+                      <th>Plan</th>
                       <th>Amount</th>
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {payments.map((row) => (
+                    {payments.map((row) => {
+                      const planName = row.planId
+                        ? getEmployerSubscriptionPlan(row.planId)?.name || row.planId
+                        : '—';
+                      return (
                       <tr key={row.id}>
                         <td>{new Date(row.createdAt).toLocaleDateString('en-IN')}</td>
-                        <td>{row.description || 'Job posting'}</td>
+                        <td>{row.description || 'Payment'}</td>
+                        <td>{planName}</td>
                         <td>
                           <b>
                             {(row.amountPaise / 100).toLocaleString('en-IN', {
@@ -152,7 +287,8 @@ export default function EmployerBillingPage() {
                           <EvPill>{row.status}</EvPill>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -165,14 +301,23 @@ export default function EmployerBillingPage() {
 }
 
 function CreditsCard({ usage }: { usage: EmployerPlanUsage }) {
-  const unlimited = usage.candidateViewCredits <= 0;
+  const unlimited = usage.candidateViewCredits <= 0 && usage.subscriptionActive;
   const left = candidateViewCreditsLeft(usage);
-  const pct = unlimited ? 100 : Math.round(((left ?? 0) / usage.candidateViewCredits) * 100);
+  const pct =
+    !usage.subscriptionActive || unlimited
+      ? 100
+      : Math.round(((left ?? 0) / Math.max(1, usage.candidateViewCredits)) * 100);
   return (
     <section className="ev-card ev-plan" aria-label="Credits remaining">
-      <small className="ev-eyebrow">CREDITS REMAINING</small>
-      <b className="ev-plan-value">{unlimited ? 'Unlimited' : `${left} credits remaining`}</b>
-      {unlimited ? null : (
+      <small className="ev-eyebrow">DATABASE VIEWS</small>
+      <b className="ev-plan-value">
+        {!usage.subscriptionActive
+          ? 'Subscription required'
+          : unlimited
+            ? 'Unlimited'
+            : `${left} views remaining`}
+      </b>
+      {usage.subscriptionActive && !unlimited ? (
         <div
           className="ev-bar"
           role="progressbar"
@@ -183,16 +328,18 @@ function CreditsCard({ usage }: { usage: EmployerPlanUsage }) {
         >
           <i style={{ width: `${pct}%` }} />
         </div>
-      )}
+      ) : null}
       <p className="ev-sub">
-        {unlimited
-          ? 'Candidate profile views are not limited on your plan.'
-          : left === 0
-            ? 'No credits remaining. You can still view candidates who applied to your jobs.'
-            : `${usage.candidateViews} of ${usage.candidateViewCredits} used this month`}
+        {!usage.subscriptionActive
+          ? 'Purchase a plan to open candidate profiles from search. Own-job applicants stay free.'
+          : unlimited
+            ? 'Candidate profile views are not limited on your plan.'
+            : left === 0
+              ? 'No views remaining. You can still open candidates who applied to your jobs.'
+              : `${usage.candidateViews} of ${usage.candidateViewCredits} used this period`}
       </p>
       <Link href="/employer/payments/buy" className="ev-btn ev-btn--amber">
-        Buy More Credits
+        {usage.subscriptionActive ? 'Upgrade plan' : 'Choose a plan'}
       </Link>
     </section>
   );

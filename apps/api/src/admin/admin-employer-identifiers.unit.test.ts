@@ -39,6 +39,8 @@ function harness(overrides: Record<string, unknown>) {
   const prisma = {
     employer: {
       findUnique: async () => employer,
+      findFirst: async () => ({ id: employer.id, companyId: (employer as { companyId?: string | null }).companyId ?? null }),
+      findMany: async () => [],
       update: async (args: { data: Record<string, unknown>; select?: Record<string, true> }) => {
         updates.push(args);
         const next: Record<string, unknown> = { ...employer, ...args.data };
@@ -49,6 +51,7 @@ function harness(overrides: Record<string, unknown>) {
     employerInterview: { findMany: async () => [] },
     platformSetting: { findMany: async () => [] },
     job: { count: async () => 0 },
+    employerSubscription: { findFirst: async () => null },
     employerCandidateView: { count: async () => 0 },
     auditLog: { create: async () => ({}), findMany: async () => [] },
     user: { findMany: async () => [] },

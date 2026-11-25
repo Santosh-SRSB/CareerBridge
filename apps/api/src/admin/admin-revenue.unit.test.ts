@@ -20,6 +20,7 @@ function payment(over: Row): Row {
     employerId: 'e1',
     jobId: null,
     hiringOutcomeId: null,
+    planId: null,
     providerRef: null,
     amountPaise: 0,
     status: 'PAID',
@@ -72,7 +73,12 @@ describe('Revenue — canonical calculation', () => {
     assert.equal(r.revenueThisMonthInr, 0);
     assert.equal(r.paidPayments, 0);
     assert.equal(r.payingEmployers, 0);
-    assert.deepEqual(r.bySource, { jobPostingFeesInr: 0, hiringFeesInr: 0, otherInr: 0 });
+    assert.deepEqual(r.bySource, {
+      jobPostingFeesInr: 0,
+      hiringFeesInr: 0,
+      subscriptionPlansInr: 0,
+      otherInr: 0,
+    });
     assert.deepEqual(r.excluded, {
       pending: { count: 0, amountInr: 0 },
       failed: { count: 0, amountInr: 0 },
@@ -100,16 +106,25 @@ describe('Revenue — canonical calculation', () => {
     });
   });
 
-  it('splits paid revenue into job posting fees, hiring fees and other', async () => {
+  it('splits paid revenue into job posting fees, hiring fees, subscriptions and other', async () => {
     const r = await revenue([
       payment({ amountPaise: 99900, providerRef: 'job_post:j1' }),
       payment({ amountPaise: 99900, providerRef: 'job_post:j2' }),
       payment({ amountPaise: 499900, hiringOutcomeId: 'h1' }),
+      payment({ amountPaise: 99900, planId: 'starter' }),
       payment({ amountPaise: 25000, provider: 'MANUAL' }),
     ]);
-    assert.deepEqual(r.bySource, { jobPostingFeesInr: 1998, hiringFeesInr: 4999, otherInr: 250 });
+    assert.deepEqual(r.bySource, {
+      jobPostingFeesInr: 1998,
+      hiringFeesInr: 4999,
+      subscriptionPlansInr: 999,
+      otherInr: 250,
+    });
     assert.equal(
-      r.bySource.jobPostingFeesInr + r.bySource.hiringFeesInr + r.bySource.otherInr,
+      r.bySource.jobPostingFeesInr +
+        r.bySource.hiringFeesInr +
+        (r.bySource.subscriptionPlansInr ?? 0) +
+        r.bySource.otherInr,
       r.totalRevenueInr,
     );
   });
@@ -163,6 +178,15 @@ describe('Revenue — canonical calculation', () => {
     assert.equal(paiseToInr(12345), 123.45);
     assert.deepEqual(bucketFor([], 'FAILED'), { count: 0, amountInr: 0 });
     assert.equal(revenueBySource({ totalPaise: 100, jobPostingPaise: 100, hiringFeePaise: 100 }).otherInr, 0);
+    assert.equal(
+      revenueBySource({
+        totalPaise: 300,
+        jobPostingPaise: 100,
+        hiringFeePaise: 100,
+        subscriptionPaise: 100,
+      }).subscriptionPlansInr,
+      1,
+    );
   });
 
   it('the revenue route keeps its Super Admin / Admin access', () => {

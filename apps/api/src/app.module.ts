@@ -28,6 +28,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
 import { RetentionModule } from './retention/retention.module';
 import { ReferralsModule } from './referrals/referrals.module';
+import { BillingModule } from './billing/billing.module';
 import { SeedService } from './platform/seed.service';
 import { HealthController } from './health.controller';
 import { PlatformController } from './platform/platform.controller';
@@ -73,6 +74,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     TestimonialsModule,
     RetentionModule,
     ReferralsModule,
+    BillingModule,
   ],
   controllers: [HealthController, PlatformController],
   providers: [

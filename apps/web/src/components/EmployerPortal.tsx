@@ -77,7 +77,13 @@ function isActive(pathname: string, key: string) {
   if (key === 'analytics') return pathname.startsWith('/employer/reports');
   if (key === 'notifications') return pathname.startsWith('/notifications');
   if (key === 'profile') return pathname.startsWith('/employer/profile');
-  if (key === 'billing') return pathname.startsWith('/employer/payments') || pathname.startsWith('/employer/billing');
+  if (key === 'billing') {
+    return (
+      pathname.startsWith('/employer/payments') ||
+      pathname.startsWith('/employer/billing') ||
+      pathname.startsWith('/employer/pricing')
+    );
+  }
   return false;
 }
 

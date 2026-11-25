@@ -7,7 +7,14 @@ import {
   adminInterviewStatusLabel,
   adminWhatsAppStatusLabel,
 } from '@/lib/admin-interview-status';
-import { downloadAdminCandidateResume, saveBase64File } from '@/lib/api';
+import {
+  createAdminEnterpriseOffer,
+  downloadAdminCandidateResume,
+  extendAdminEmployerSubscription,
+  grantAdminEmployerSubscription,
+  saveBase64File,
+  suspendAdminEmployerSubscription,
+} from '@/lib/api';
 import { userFacingError } from '@/lib/client-errors';
 
 /** Every module shares the portal palette; values resolve against the tokens on `.role-shell`. */
@@ -280,8 +287,19 @@ export function DetailPanel({
 }) {
   const kind = String(data.kind || '');
   const candidateId = String(data.id ?? '');
+  const employerId = kind === 'employers' ? String(data.id ?? '') : '';
   const [resumeBusyId, setResumeBusyId] = useState('');
   const [resumeError, setResumeError] = useState('');
+  const [grantPlan, setGrantPlan] = useState<'starter' | 'growth' | 'business' | 'enterprise'>('starter');
+  const [grantDays, setGrantDays] = useState('30');
+  const [grantBusy, setGrantBusy] = useState(false);
+  const [grantMsg, setGrantMsg] = useState('');
+  const [offerAmountInr, setOfferAmountInr] = useState('9999');
+  const [offerDays, setOfferDays] = useState('90');
+  const [offerJobs, setOfferJobs] = useState('20');
+  const [offerSeats, setOfferSeats] = useState('10');
+  const [offerViews, setOfferViews] = useState('5000');
+  const [offerBusy, setOfferBusy] = useState(false);
   const adminStatus = typeof data.adminStatus === 'string' ? data.adminStatus : '';
   const adminStatusLabel = adminInterviewStatusLabel(adminStatus);
   const status = adminStatus || String(data.accountStatus ?? data.status ?? '');
@@ -444,12 +462,40 @@ export function DetailPanel({
           <Section title="Plan & credits">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Plan" value={plan?.name} />
+              <Field label="Plan id" value={(plan as { planId?: string | null } | undefined)?.planId} />
+              <Field
+                label="Status"
+                value={
+                  (plan as { active?: boolean } | undefined)?.active === true
+                    ? 'Active'
+                    : (plan as { active?: boolean } | undefined)?.active === false
+                      ? 'Inactive'
+                      : null
+                }
+              />
+              <Field
+                label="Ends"
+                value={
+                  (plan as { endsAt?: string | null } | undefined)?.endsAt
+                    ? new Date(String((plan as { endsAt?: string | null }).endsAt)).toLocaleDateString('en-IN')
+                    : null
+                }
+              />
               <Field label="Billing period" value={plan?.period} />
               <Field
                 label="Active jobs"
                 value={
                   plan
                     ? `${txt(plan.activeJobs)} / ${plan.activeJobLimit == null ? 'Unlimited' : txt(plan.activeJobLimit)}`
+                    : null
+                }
+              />
+              <Field
+                label="Login seats"
+                value={
+                  (plan as { loginSeats?: number | null; loginSeatsUsed?: number | null } | undefined)?.loginSeats !=
+                  null
+                    ? `${txt((plan as { loginSeatsUsed?: number | null }).loginSeatsUsed ?? 0)} / ${txt((plan as { loginSeats?: number | null }).loginSeats)}`
                     : null
                 }
               />
@@ -465,6 +511,172 @@ export function DetailPanel({
             </div>
           </Section>
         )}
+
+        {kind === 'employers' && employerId ? (
+          <Section title="Billing actions">
+            <div className="grid gap-2">
+              <label className="sa-muted text-[11px] font-semibold uppercase tracking-wide">
+                Grant plan
+                <select
+                  className="sa-input mt-1 w-full text-sm"
+                  value={grantPlan}
+                  onChange={(e) => setGrantPlan(e.target.value as typeof grantPlan)}
+                >
+                  <option value="starter">Starter</option>
+                  <option value="growth">Growth</option>
+                  <option value="business">Business</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </label>
+              <label className="sa-muted text-[11px] font-semibold uppercase tracking-wide">
+                Duration (days)
+                <input
+                  className="sa-input mt-1 w-full text-sm"
+                  type="number"
+                  min={1}
+                  max={730}
+                  value={grantDays}
+                  onChange={(e) => setGrantDays(e.target.value)}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="sa-btn sa-btn--solid min-h-9 px-3 text-xs"
+                  disabled={grantBusy}
+                  onClick={async () => {
+                    setGrantBusy(true);
+                    setGrantMsg('');
+                    try {
+                      const days = Number(grantDays);
+                      await grantAdminEmployerSubscription(
+                        employerId,
+                        grantPlan,
+                        Number.isFinite(days) && days > 0 ? days : undefined,
+                      );
+                      setGrantMsg('Subscription granted.');
+                    } catch (err) {
+                      setGrantMsg(userFacingError(err, 'grant subscription'));
+                    } finally {
+                      setGrantBusy(false);
+                    }
+                  }}
+                >
+                  Grant
+                </button>
+                <button
+                  type="button"
+                  className="sa-btn sa-btn--line min-h-9 px-3 text-xs"
+                  disabled={grantBusy}
+                  onClick={async () => {
+                    setGrantBusy(true);
+                    setGrantMsg('');
+                    try {
+                      await extendAdminEmployerSubscription(employerId, 30, 'Admin +30 days');
+                      setGrantMsg('Extended by 30 days.');
+                    } catch (err) {
+                      setGrantMsg(userFacingError(err, 'extend subscription'));
+                    } finally {
+                      setGrantBusy(false);
+                    }
+                  }}
+                >
+                  +30 days
+                </button>
+                <button
+                  type="button"
+                  className="sa-btn sa-btn--line min-h-9 px-3 text-xs"
+                  disabled={grantBusy}
+                  onClick={async () => {
+                    setGrantBusy(true);
+                    setGrantMsg('');
+                    try {
+                      await suspendAdminEmployerSubscription(employerId);
+                      setGrantMsg('Subscription suspended.');
+                    } catch (err) {
+                      setGrantMsg(userFacingError(err, 'suspend subscription'));
+                    } finally {
+                      setGrantBusy(false);
+                    }
+                  }}
+                >
+                  Suspend
+                </button>
+              </div>
+              <p className="sa-muted mt-2 text-[11px] font-semibold uppercase tracking-wide">Enterprise offer</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  className="sa-input text-sm"
+                  type="number"
+                  min={1}
+                  placeholder="Amount ₹"
+                  value={offerAmountInr}
+                  onChange={(e) => setOfferAmountInr(e.target.value)}
+                />
+                <input
+                  className="sa-input text-sm"
+                  type="number"
+                  min={1}
+                  placeholder="Days"
+                  value={offerDays}
+                  onChange={(e) => setOfferDays(e.target.value)}
+                />
+                <input
+                  className="sa-input text-sm"
+                  type="number"
+                  min={1}
+                  placeholder="Jobs"
+                  value={offerJobs}
+                  onChange={(e) => setOfferJobs(e.target.value)}
+                />
+                <input
+                  className="sa-input text-sm"
+                  type="number"
+                  min={1}
+                  placeholder="Seats"
+                  value={offerSeats}
+                  onChange={(e) => setOfferSeats(e.target.value)}
+                />
+                <input
+                  className="sa-input col-span-2 text-sm"
+                  type="number"
+                  min={1}
+                  placeholder="Candidate views"
+                  value={offerViews}
+                  onChange={(e) => setOfferViews(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                className="sa-btn sa-btn--solid min-h-9 px-3 text-xs"
+                disabled={offerBusy}
+                onClick={async () => {
+                  setOfferBusy(true);
+                  setGrantMsg('');
+                  try {
+                    const amountInr = Number(offerAmountInr);
+                    await createAdminEnterpriseOffer(employerId, {
+                      amountPaise: Math.round(amountInr * 100),
+                      durationDays: Number(offerDays) || 90,
+                      activeJobLimit: Number(offerJobs) || 20,
+                      loginSeats: Number(offerSeats) || 10,
+                      candidateViewCredits: Number(offerViews) || 5000,
+                      validDays: 30,
+                    });
+                    setGrantMsg('Enterprise offer created — employer notified.');
+                  } catch (err) {
+                    setGrantMsg(userFacingError(err, 'create enterprise offer'));
+                  } finally {
+                    setOfferBusy(false);
+                  }
+                }}
+              >
+                Create Enterprise offer
+              </button>
+              {grantMsg ? <p className="sa-muted text-xs">{grantMsg}</p> : null}
+            </div>
+          </Section>
+        ) : null}
 
         {Boolean(kind === 'jobs' || employer || data.description) && (
           <Section title="Job info">

@@ -1404,6 +1404,7 @@ export type EmployerPaymentRow = {
   id: string;
   jobId: string;
   hiringOutcomeId: string;
+  planId?: string | null;
   amountPaise: number;
   currency: string;
   status: string;
@@ -1450,6 +1451,100 @@ export async function listEmployerApplications(jobId: string) {
 
 export async function getEmployerPlanUsage() {
   return request<EmployerPlanUsage>('/employers/plan-usage');
+}
+
+export type EmployerSubscriptionStatus = {
+  active: boolean;
+  mode: string;
+  planId: string | null;
+  endsAt: string | null;
+  paymentRequired: boolean;
+  startsAt?: string | null;
+};
+
+export async function getEmployerSubscription() {
+  return request<EmployerSubscriptionStatus>('/billing/employer/subscription');
+}
+
+export type PublicSubscriptionPlansResponse = {
+  currency: 'INR';
+  renewalType: 'manual';
+  notes: string[];
+  plans: Array<{
+    id: string;
+    name: string;
+    tagline: string;
+    priceLabel: string;
+    periodLabel: string;
+    priceHint: string;
+    features: string[];
+    cta: string;
+    recommended: boolean;
+    contactSales: boolean;
+    purchasableOnline: boolean;
+    amountPaise: number | null;
+    currency: 'INR';
+    durationDays: number | null;
+    activeJobLimit: number | null;
+    loginSeats: number | null;
+    candidateViewCredits: number | null;
+    renewalType: 'manual';
+  }>;
+};
+
+/** Guide §6.3 — public plan catalogue (no auth). */
+export async function listPublicSubscriptionPlans() {
+  return request<PublicSubscriptionPlansResponse>('/billing/subscription-plans', { auth: false });
+}
+
+export type EmployerPlanOrder = {
+  paymentId: string;
+  orderId: string;
+  amountPaise: number;
+  currency: string;
+  keyId: string;
+  mode: string;
+  plan: {
+    id: string;
+    name: string;
+    priceLabel: string;
+    periodLabel: string;
+    durationDays: number;
+  };
+};
+
+export async function createEmployerPlanOrder(planId: string) {
+  return request<EmployerPlanOrder>(`/billing/employer/plans/${encodeURIComponent(planId)}/order`, {
+    method: 'POST',
+  });
+}
+
+export async function verifyEmployerPlanPayment(payload: {
+  paymentId: string;
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+}) {
+  return request<{ ok: boolean; paymentId: string; planId: string | null; active: boolean; endsAt: string | null }>(
+    '/billing/employer/payments/verify',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function syncEmployerPlanPayment(paymentId: string) {
+  return request<{
+    ok?: boolean;
+    pending?: boolean;
+    active: boolean;
+    paymentId: string;
+    planId: string | null;
+    endsAt: string | null;
+  }>(`/billing/employer/payments/${encodeURIComponent(paymentId)}/sync`, {
+    method: 'POST',
+  });
 }
 
 export async function listAllEmployerApplications() {
@@ -1799,6 +1894,97 @@ export async function verifyEmployer(id: string) {
   });
 }
 
+export async function grantAdminEmployerSubscription(
+  employerId: string,
+  planId: 'starter' | 'growth' | 'business' | 'enterprise',
+  durationDays?: number,
+) {
+  return request<{
+    ok: true;
+    employerId: string;
+    planId: string;
+    startsAt: string;
+    endsAt: string;
+    subscriptionId: string;
+  }>(`/admin/employers/${employerId}/subscription`, {
+    method: 'POST',
+    body: JSON.stringify({ planId, ...(durationDays != null ? { durationDays } : {}) }),
+  });
+}
+
+export async function createAdminEnterpriseOffer(
+  employerId: string,
+  body: {
+    amountPaise: number;
+    durationDays: number;
+    activeJobLimit: number;
+    loginSeats: number;
+    candidateViewCredits: number;
+    validDays?: number;
+    notes?: string;
+  },
+) {
+  return request<{
+    ok: true;
+    offerId: string;
+    employerId: string;
+    amountPaise: number;
+    durationDays: number;
+    expiresAt: string | null;
+  }>(`/admin/employers/${encodeURIComponent(employerId)}/enterprise-offers`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function extendAdminEmployerSubscription(employerId: string, extraDays: number, reason?: string) {
+  return request<{ ok: true; subscriptionId: string; endsAt: string }>(
+    `/admin/employers/${encodeURIComponent(employerId)}/subscription/extend`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ extraDays, ...(reason ? { reason } : {}) }),
+    },
+  );
+}
+
+export async function suspendAdminEmployerSubscription(employerId: string) {
+  return request<{ ok: true; suspended: number }>(
+    `/admin/employers/${encodeURIComponent(employerId)}/subscription/suspend`,
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+}
+
+export async function listMyEnterpriseOffers() {
+  return request<{
+    offers: Array<{
+      id: string;
+      amountPaise: number;
+      currency: string;
+      durationDays: number;
+      activeJobLimit: number;
+      loginSeats: number;
+      candidateViewCredits: number;
+      expiresAt: string | null;
+      notes: string | null;
+    }>;
+  }>('/billing/employer/enterprise-offers');
+}
+
+export async function createEnterpriseOfferOrder(offerId: string) {
+  return request<{
+    paymentId: string;
+    orderId: string;
+    amountPaise: number;
+    currency: string;
+    keyId: string;
+    mode: string;
+    offerId: string;
+    plan: { id: string; name: string; priceLabel: string; periodLabel: string; durationDays: number };
+  }>(`/billing/employer/enterprise-offers/${encodeURIComponent(offerId)}/order`, {
+    method: 'POST',
+  });
+}
+
 export async function impersonateAdminEmployer(employerId: string) {
   return request<
     AuthSession & {
@@ -1973,7 +2159,12 @@ export type AdminRevenue = {
   payingEmployers: number;
   newEmployersThisMonth: number;
   creditsConsumedThisMonth: number;
-  bySource: { jobPostingFeesInr: number; hiringFeesInr: number; otherInr: number };
+  bySource: {
+    jobPostingFeesInr: number;
+    hiringFeesInr: number;
+    subscriptionPlansInr?: number;
+    otherInr: number;
+  };
   excluded: Record<'pending' | 'failed' | 'refunded', { count: number; amountInr: number }>;
   definition: string;
   paymentGatewayConfigured: boolean;

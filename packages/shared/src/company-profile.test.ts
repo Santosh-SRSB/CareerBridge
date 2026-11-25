@@ -4,6 +4,7 @@ import { COMPANY_SIZES, isCompanySize, parseLinkedinUrl } from './company-profil
 import {
   activeJobLimitReached,
   candidateViewCreditsLeft,
+  loginSeatLimitReached,
   parseEmployerPlanSettings,
 } from './employer-plan';
 
@@ -43,11 +44,26 @@ test('plan settings: defaults apply to missing or invalid values; only 0 means u
 });
 
 test('plan usage helpers', () => {
-  const base = { plan: 'STARTER' as const, period: '2026-09', activeJobs: 5, activeJobLimit: 5, candidateViews: 40, candidateViewCredits: 100 };
+  const base = {
+    plan: 'STARTER',
+    planId: 'starter',
+    subscriptionActive: true,
+    endsAt: null,
+    period: '2026-09',
+    activeJobs: 5,
+    activeJobLimit: 5,
+    candidateViews: 40,
+    candidateViewCredits: 100,
+    loginSeats: 1,
+    loginSeatsUsed: 1,
+  };
   assert.equal(activeJobLimitReached(base), true);
   assert.equal(activeJobLimitReached({ ...base, activeJobs: 4 }), false);
   assert.equal(activeJobLimitReached({ ...base, activeJobLimit: 0, activeJobs: 99 }), false);
   assert.equal(candidateViewCreditsLeft(base), 60);
   assert.equal(candidateViewCreditsLeft({ ...base, candidateViews: 150 }), 0);
   assert.equal(candidateViewCreditsLeft({ ...base, candidateViewCredits: 0 }), null);
+  assert.equal(loginSeatLimitReached(1, 1), true);
+  assert.equal(loginSeatLimitReached(0, 1), false);
+  assert.equal(loginSeatLimitReached(5, null), false);
 });
