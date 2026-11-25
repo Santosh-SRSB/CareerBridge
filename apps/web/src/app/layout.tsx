@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter, Manrope, Outfit, Poppins, Space_Grotesk, Space_Mono } from "next/font/google";
+import { Baloo_2, Fraunces, Inter, Manrope, Outfit, Poppins, Space_Grotesk, Space_Mono } from "next/font/google";
 import { AuthCookieSync } from "@/components/AuthCookieSync";
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 import { GoogleTag } from "@/components/GoogleTag";
@@ -57,6 +57,13 @@ const spaceMono = Space_Mono({
   display: "swap",
 });
 
+const baloo2 = Baloo_2({
+  variable: "--font-baloo-2",
+  subsets: ["latin"],
+  weight: ["700", "800"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "SRSB CareerBridge | Build your career. Build your future.",
   description:
@@ -94,7 +101,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${outfit.variable} ${spaceGrotesk.variable} ${poppins.variable} ${fraunces.variable} ${manrope.variable} ${spaceMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${outfit.variable} ${spaceGrotesk.variable} ${poppins.variable} ${fraunces.variable} ${manrope.variable} ${spaceMono.variable} ${baloo2.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-fog font-sans text-ink">
         <GoogleTag />

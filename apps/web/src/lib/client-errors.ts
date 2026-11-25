@@ -38,11 +38,15 @@ export function isUnauthorizedError(err: unknown) {
  */
 export function userFacingError(err: unknown, action?: string): string {
   if (isNetworkError(err)) return NETWORK_ERROR_MESSAGE;
-  if (isServerError(err) || !asErrorLike(err)?.message) {
-    return action ? `Unable to ${action}. Please try again.` : GENERIC_ERROR_MESSAGE;
-  }
   const message = String(asErrorLike(err)?.message || '').trim();
-  if (!message || /internal server error|prisma|stack trace|ECONN|NEXT_PUBLIC_|cannot read propert/i.test(message)) {
+  const status = errorStatus(err);
+  // Prefer API business messages (incl. 503 checkout unavailable) over a generic toast.
+  const safeBusiness =
+    Boolean(message) &&
+    !/internal server error|prisma|stack trace|ECONN|NEXT_PUBLIC_|cannot read propert/i.test(message) &&
+    (typeof status !== 'number' || status < 500 || status === 503);
+  if (safeBusiness) return message;
+  if (isServerError(err) || !message) {
     return action ? `Unable to ${action}. Please try again.` : GENERIC_ERROR_MESSAGE;
   }
   return message;

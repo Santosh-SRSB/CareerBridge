@@ -112,9 +112,14 @@ export function RevenuePanel() {
           {data.bySource ? (
             <div className="border-t border-[var(--sa-line)]" data-testid="revenue-by-source">
               <p className="sa-label px-4 pt-3">Paid revenue by source</p>
-              <div className="sa-gridlines mt-2 grid gap-px sm:grid-cols-3">
+              <div className="sa-gridlines mt-2 grid gap-px sm:grid-cols-2 lg:grid-cols-4">
                 <Tile label="Job posting fees" value={inr(data.bySource.jobPostingFeesInr)} tone="brand" />
                 <Tile label="Hiring fees" value={inr(data.bySource.hiringFeesInr)} tone="brand" />
+                <Tile
+                  label="Subscription plans"
+                  value={inr(data.bySource.subscriptionPlansInr ?? 0)}
+                  tone="brand"
+                />
                 <Tile label="Other paid revenue" value={inr(data.bySource.otherInr)} tone="brand" />
               </div>
             </div>

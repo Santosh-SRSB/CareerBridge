@@ -14,7 +14,8 @@ import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserType } from '../prisma/client';
 import { Throttle } from '@nestjs/throttler';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
 import { AdminService } from './admin.service';
 import { AdminAccountDeletionService } from './admin-account-deletion.service';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -97,6 +98,72 @@ class CreateAdminDto {
 class StatusDto {
   @IsIn(['ACTIVE', 'INACTIVE', 'SUSPENDED'])
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+}
+
+class GrantEmployerSubscriptionDto {
+  @IsIn(['starter', 'growth', 'business', 'enterprise'])
+  planId: 'starter' | 'growth' | 'business' | 'enterprise';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(730)
+  durationDays?: number;
+}
+
+class CreateEnterpriseOfferDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(100)
+  amountPaise: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(730)
+  durationDays: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  activeJobLimit: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  loginSeats: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  candidateViewCredits: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  validDays?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+class ExtendSubscriptionDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  extraDays: number;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
 
 class JobStatusDto {
@@ -256,6 +323,43 @@ export class AdminController {
   @Post('employers/:id/verify')
   verify(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.admin.verifyEmployer(user.id, id);
+  }
+
+  /** DEV / ops — grant or extend a catalogue plan without Razorpay (Enterprise + courtesy). */
+  @Post('employers/:id/subscription')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  grantEmployerSubscription(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: GrantEmployerSubscriptionDto,
+  ) {
+    return this.admin.grantEmployerSubscription(user.id, id, dto.planId, dto.durationDays);
+  }
+
+  @Post('employers/:id/enterprise-offers')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  createEnterpriseOffer(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: CreateEnterpriseOfferDto,
+  ) {
+    return this.admin.createEnterpriseOffer(user.id, id, dto);
+  }
+
+  @Post('employers/:id/subscription/extend')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  extendSubscription(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: ExtendSubscriptionDto,
+  ) {
+    return this.admin.extendEmployerSubscription(user.id, id, dto.extraDays, dto.reason);
+  }
+
+  @Post('employers/:id/subscription/suspend')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  suspendSubscription(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.admin.suspendEmployerSubscription(user.id, id);
   }
 
   @Post('employers/:id/impersonate')

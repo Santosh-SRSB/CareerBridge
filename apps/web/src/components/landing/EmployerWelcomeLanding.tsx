@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { EMPLOYER_SUBSCRIPTION_PLANS } from '@careerbridge/shared';
 import { WelcomeRoleNav } from '@/components/landing/WelcomeChrome';
 import { RoleOfferPopup } from '@/components/landing/RoleOfferPopup';
 import { HomeFooter } from '@/components/landing/home/HomeFooter';
@@ -212,6 +213,55 @@ export function EmployerWelcomeLanding() {
             ))}
           </section>
 
+          {/* Additive plans strip — does not replace hero, features, or free-month CTA. */}
+          <section className="wl-plans" id="plans" aria-labelledby="wl-plans-title">
+            <div className="wl-wrap">
+              <div className="wl-head wl-observe">
+                <p className="hl-eyebrow hl-reveal">Plans</p>
+                <h2 className="wl-head__title hl-reveal" id="wl-plans-title">
+                  Clear pricing for every hiring stage
+                </h2>
+                <p className="wl-head__lede hl-reveal">
+                  Concurrent job posts, recruiter seats and candidate database views. Own-job applicants never use
+                  database views. Manual renewal.
+                </p>
+              </div>
+              <div className="wl-plans__grid wl-observe">
+                {EMPLOYER_SUBSCRIPTION_PLANS.map((plan) => (
+                  <article
+                    key={plan.id}
+                    className={`wl-plan-card hl-reveal${plan.recommended ? ' wl-plan-card--rec' : ''}`}
+                  >
+                    {plan.recommended ? <span className="wl-plan-card__badge">Recommended</span> : null}
+                    <h3 className="wl-plan-card__name">{plan.name}</h3>
+                    <p className="wl-plan-card__price">
+                      {plan.priceLabel}
+                      {plan.periodLabel ? <span>{plan.periodLabel}</span> : null}
+                    </p>
+                    <p className="wl-plan-card__tag">{plan.tagline}</p>
+                    <ul className="wl-plan-card__list">
+                      {plan.features.slice(0, 4).map((f) => (
+                        <li key={f}>{f}</li>
+                      ))}
+                    </ul>
+                    {plan.contactSales ? (
+                      <a className="hl-btn hl-btn--ghost" href={`mailto:support@srsbcareerbridge.com`}>
+                        {plan.cta}
+                      </a>
+                    ) : (
+                      <Link className="hl-btn hl-btn--primary" href={`/login?role=employer&plan=${plan.id}`}>
+                        {plan.cta}
+                      </Link>
+                    )}
+                  </article>
+                ))}
+              </div>
+              <p className="wl-plans__more hl-reveal">
+                <Link href="/pricing">Full plan comparison</Link>
+              </p>
+            </div>
+          </section>
+
           <section className="wl-cta" id="start">
             <div className="wl-cta__card wl-observe">
               <svg className="wl-cta__deco" viewBox="0 0 520 520" fill="none" stroke="currentColor" aria-hidden="true" focusable="false">
@@ -230,6 +280,9 @@ export function EmployerWelcomeLanding() {
                 </Link>
                 <Link className="hl-btn hl-btn--lg wl-btn--outline-light" href="/login?role=employer">
                   Login
+                </Link>
+                <Link className="hl-btn hl-btn--lg wl-btn--outline-light" href="#plans">
+                  View plans
                 </Link>
               </div>
             </div>

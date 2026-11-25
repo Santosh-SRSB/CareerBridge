@@ -350,7 +350,7 @@ export function EmployerMarketingLanding() {
             <a href="#post">Post a job</a>
             <a href="#hire">Find talent</a>
             <a href="#features">Products</a>
-            <a href="#pricing">Pricing</a>
+            <Link href="/pricing">Pricing</Link>
             <a href="#resources">Resources</a>
           </nav>
 
@@ -651,13 +651,13 @@ export function EmployerMarketingLanding() {
           <div className="cb-emkt-ready__blob" aria-hidden />
           <div className="cb-emkt-ready__card">
             <h2>Ready to find your next hired candidate?</h2>
-            <p>Create your employer account, verify email, and post your first role today.</p>
+            <p>Clear plans from ₹999 — pick Starter, Growth, Business or Enterprise, then sign in to checkout.</p>
             <div className="cb-emkt-ready__actions">
-              <Link href={REGISTER_HREF} className="cb-emkt-hero__cta cb-emkt-shimmer">
-                Post a job
+              <Link href="/pricing" className="cb-emkt-hero__cta cb-emkt-shimmer">
+                View pricing
               </Link>
-              <Link href={LOGIN_HREF} className="cb-emkt-ready__login">
-                Already hiring? Sign in
+              <Link href={REGISTER_HREF} className="cb-emkt-ready__login">
+                Post a job
               </Link>
             </div>
           </div>
@@ -704,7 +704,7 @@ export function EmployerMarketingLanding() {
               <h3>Employers</h3>
               <Link href={REGISTER_HREF}>Post a job</Link>
               <a href="#features">Products</a>
-              <a href="#pricing">Pricing</a>
+              <Link href="/pricing">Pricing</Link>
               <a href="#faq">FAQ</a>
             </div>
             <div>

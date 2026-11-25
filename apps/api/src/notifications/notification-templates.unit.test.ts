@@ -105,6 +105,6 @@ describe('notification templates', () => {
     assert.equal(invite.customized, false);
     assert.deepEqual(invite.variables, ['company', 'jobTitle']);
     assert.equal(invite.defaultTitle, 'Invite from Employer');
-    assert.ok(list.length >= 13);
+    assert.ok(list.length >= 15);
   });
 });

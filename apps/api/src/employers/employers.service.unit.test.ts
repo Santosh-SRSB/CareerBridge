@@ -129,6 +129,25 @@ function makeDb() {
     candidateViews: [] as Row[],
     companies: [] as Row[],
     candidateMatches: [] as Row[],
+    // Default paid Business plan so fixture PUBLISHED jobs do not trip Starter's 1-job limit.
+    subscriptions: [
+      {
+        id: 'SUB_A',
+        employerId: EMP_A,
+        planId: 'business',
+        status: 'ACTIVE',
+        startsAt: new Date('2026-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+      },
+      {
+        id: 'SUB_B',
+        employerId: EMP_B,
+        planId: 'business',
+        status: 'ACTIVE',
+        startsAt: new Date('2026-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+      },
+    ] as Row[],
   };
 }
 type Db = ReturnType<typeof makeDb>;
@@ -270,6 +289,15 @@ function harness(opts: Opts = {}) {
     employer: {
       findUnique: async ({ where }: Row) => db.employers.find((e) => e.userId === where.userId) ?? null,
       findFirst: async ({ where }: Row) => db.employers.find((e) => matches(e, where, db)) ?? null,
+      findMany: async ({ where }: Row) =>
+        db.employers
+          .filter((e) => {
+            if (where?.companyId && e.companyId !== where.companyId) return false;
+            if (where?.id?.in && !where.id.in.includes(e.id)) return false;
+            // Nested user filter is treated as ACTIVE employer staff in unit doubles.
+            return true;
+          })
+          .map((e) => ({ id: e.id, companyId: e.companyId })),
       update: async ({ where, data }: Row) => {
         calls.employerUpdates.push(data);
         const row = db.employers.find((e) => e.id === where.id)!;
@@ -357,6 +385,26 @@ function harness(opts: Opts = {}) {
     resume: { findFirst: async () => null },
     platformSetting: {
       findMany: async ({ where }: Row) => db.settings.filter((s) => where.key.in.includes(s.key)),
+    },
+    employerSubscription: {
+      findFirst: async ({ where, orderBy }: Row) => {
+        const now = where?.endsAt?.gt instanceof Date ? where.endsAt.gt : new Date(0);
+        const employerIds = where?.employerId?.in
+          ? where.employerId.in
+          : where?.employerId != null
+            ? [where.employerId]
+            : null;
+        const rows = db.subscriptions.filter((s) => {
+          if (employerIds && !employerIds.includes(s.employerId)) return false;
+          if (where?.status && s.status !== where.status) return false;
+          if (!(s.endsAt instanceof Date) || !(s.endsAt > now)) return false;
+          return true;
+        });
+        if (orderBy?.endsAt === 'desc') {
+          rows.sort((a, b) => b.endsAt.getTime() - a.endsAt.getTime());
+        }
+        return rows[0] ?? null;
+      },
     },
     employerCandidateView: {
       findUnique: async ({ where }: Row) => {
@@ -749,6 +797,26 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
       gstinMasked: '27AAPFU*****1ZV',
       existing: true,
     });
+  });
+
+  it('blocks a second login when the company Starter plan already uses its only seat', async () => {
+    const { svc, db } = harness();
+    await svc.saveKyc('uU', kyc());
+    db.subscriptions.push({
+      id: 'SUB_U_STARTER',
+      employerId: EMP_U,
+      planId: 'starter',
+      status: 'ACTIVE',
+      startsAt: new Date('2026-01-01T00:00:00.000Z'),
+      endsAt: new Date('2099-01-01T00:00:00.000Z'),
+    });
+    await assert.rejects(svc.saveKyc('uB', kyc()), (err) => {
+      assert.ok(err instanceof ForbiddenException);
+      const body = (err as ForbiddenException).getResponse() as { message?: string };
+      assert.match(String(body.message || ''), /seat limit \(1\)/i);
+      return true;
+    });
+    assert.ok(!employer(db, EMP_B).companyId);
   });
 
   it("a later account never overwrites the company's canonical details", async () => {
@@ -1385,37 +1453,48 @@ describe('Fix 9 — application transitions', () => {
     assert.match(String(calls.notifications.at(-1)?.body), /Feedback: Looking for more React experience/);
     assert.equal(calls.notifications.length, 3);
   });
-  it('Starter plan: publishing beyond the active-job limit is refused; nothing written', async () => {
+  it('Starter subscription: publishing beyond the active-job limit is refused; upgrade frees the slot', async () => {
     const { svc, calls, db } = harness();
-    db.settings.push({ key: 'billing.starterActiveJobLimit', value: '5' });
+    const sub = db.subscriptions.find((s) => s.id === 'SUB_A')!;
+    sub.planId = 'starter'; // concurrent limit 1
     db.employers.find((e) => e.id === EMP_A)!.verificationStatus = 'VERIFIED';
-    db.jobs.push(
-      { id: 'JA4', employerId: EMP_A, title: 'Job A4', status: 'PENDING_REVIEW' },
-      { id: 'JA5', employerId: EMP_A, title: 'Job A5', status: 'PUBLISHED' },
-      { id: 'JA6', employerId: EMP_A, title: 'Job A6', status: 'DRAFT', salaryMin: 216000, salaryMax: 264000 },
-    );
+    // Fixture already has JA1–JA3 PUBLISHED; keep one active and draft a new one.
+    for (const id of ['JA2', 'JA3']) {
+      Object.assign(db.jobs.find((j) => j.id === id)!, { status: 'CLOSED' });
+    }
+    db.jobs.push({
+      id: 'JA6',
+      employerId: EMP_A,
+      title: 'Job A6',
+      status: 'DRAFT',
+      salaryMin: 216000,
+      salaryMax: 264000,
+    });
     await assert.rejects(svc.setStatus('uA', 'JA6', 'PUBLISHED' as any), (err) => {
       assert.equal(httpStatus(err), 403);
-      assert.match(httpMessage(err), /5 active jobs/);
+      assert.match(httpMessage(err), /active job-post limit/i);
       return true;
     });
     assert.equal(calls.jobUpdates.length, 0);
-    const unlimited = db.settings.find((s) => s.key === 'billing.starterActiveJobLimit')!;
-    unlimited.value = '0';
+    sub.planId = 'growth'; // limit 5
     const res: any = await svc.setStatus('uA', 'JA6', 'PUBLISHED' as any);
     assert.equal(res.status, 'PUBLISHED');
   });
-  it('Starter plan: candidate view credits are counted once per candidate per month and enforced', async () => {
+  it('Subscription: candidate DB views once per period; own applicants never consume a view', async () => {
     const { svc, db } = harness();
-    db.settings.push({ key: 'billing.starterCandidateViewCredits', value: '1' });
+    const sub = db.subscriptions.find((s) => s.id === 'SUB_A')!;
+    sub.planId = 'starter'; // 100 views / period
+    const period = `sub:${sub.id}`;
+    for (let i = 0; i < 100; i += 1) {
+      db.candidateViews.push({ employerId: EMP_A, candidateId: `filled-${i}`, period });
+    }
     const record = (candidateId: string, applied: boolean) =>
       (svc as any).recordCandidateView(EMP_A, candidateId, 'JA1', applied);
-    await record(CAND, false);
-    await record(CAND, false);
-    assert.equal(db.candidateViews.length, 1);
-    await assert.rejects(record(CAND_OTHER, false), (err) => httpStatus(err) === 403);
-    await record(CAND_OTHER, true);
-    assert.equal(db.candidateViews.length, 2);
+    await assert.rejects(record(CAND, false), (err) => httpStatus(err) === 403);
+    await record(CAND_OTHER, true); // BR-03: own applicant — not metered
+    assert.equal(db.candidateViews.length, 100);
+    await record(CAND, true);
+    assert.equal(db.candidateViews.length, 100);
   });
   it('hiring outcome cannot revive a WITHDRAWN application', async () => {
     const matching = new MatchingService(

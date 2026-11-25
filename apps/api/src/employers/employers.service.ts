@@ -16,6 +16,9 @@ import {
   activeJobLimitMessage,
   activeJobLimitReached,
   candidateViewLimitMessage,
+  getEmployerSubscriptionPlan,
+  loginSeatLimitMessage,
+  loginSeatLimitReached,
   designationError,
   emailError,
   experienceFilterRange,
@@ -90,7 +93,13 @@ import { StorageService } from '../common/storage/storage.service';
 import { readableCandidatePhotoUrl } from '../candidates/profile-photo.util';
 import { candidateInterviewUrl, interviewMeetingUrl } from '../common/web/public-web-url';
 import { TestimonialsService } from '../testimonials/testimonials.service';
-import { employerPlanUsage, usagePeriod } from './employer-plan';
+import {
+  companyLoginSeatLimit,
+  countCompanyLoginSeats,
+  employerPlanUsage,
+  employerSubscriptionBlockMessage,
+  employerSubscriptionsLive,
+} from './employer-plan';
 import { closedAtForStatusChange } from './job-lifecycle';
 
 const APPLICATION_STATUS_NOTICE: Partial<Record<ApplicationStatus, NotificationTemplateKey>> = {
@@ -328,6 +337,10 @@ export class EmployersService {
       gst,
       verifiedTradeName.length >= 2 ? verifiedTradeName : employer.companyName,
     );
+    // OD-07 — joining an existing company consumes a recruiter seat (owner counts).
+    if (!created && employer.companyId !== company.id) {
+      await this.assertCompanyLoginSeatAllowance(company.id);
+    }
     const previousGst = this.pii.decrypt('employers.gst_number', employer.gstNumber);
     const gstChanged = normalizeGstin(previousGst || '') !== gst;
     const current = employer.verificationStatus;
@@ -493,6 +506,11 @@ export class EmployersService {
       if (bucket) bucket.count += 1;
     }
 
+    const usage = await employerPlanUsage(this.prisma, employer.id);
+    const plan = usage.planId ? getEmployerSubscriptionPlan(usage.planId) : null;
+    // Flag off: keep current live dashboard (show job performance). Flag on: Business+ entitlement.
+    const allowJobReports = !employerSubscriptionsLive() || Boolean(plan?.entitlements.jobPerformanceReports);
+
     return {
       openJobs: jobs.filter((item) => item.status === 'PUBLISHED').length,
       applications,
@@ -504,16 +522,19 @@ export class EmployersService {
         label,
         count,
       })),
-      jobPerformance: jobs
-        .filter((item) => item.status === 'PUBLISHED')
-        .map((item) => ({
-          jobId: item.id,
-          title: item.title,
-          applications: item._count.applications,
-          views: item.viewCount,
-        }))
-        .sort((a, b) => b.applications - a.applications || b.views - a.views)
-        .slice(0, 10),
+      jobPerformance: allowJobReports
+        ? jobs
+            .filter((item) => item.status === 'PUBLISHED')
+            .map((item) => ({
+              jobId: item.id,
+              title: item.title,
+              applications: item._count.applications,
+              views: item.viewCount,
+            }))
+            .sort((a, b) => b.applications - a.applications || b.views - a.views)
+            .slice(0, 10)
+        : [],
+      jobPerformanceIncluded: allowJobReports,
       recent: recent.map((item) => ({
         candidateName: [item.candidate.firstName, item.candidate.lastName].filter(Boolean).join(' ') || 'Candidate',
         candidateId: item.candidate.id,
@@ -712,38 +733,108 @@ export class EmployersService {
   }
 
   /**
-   * Each distinct candidate profile opened in a month uses one view credit. Profiles of candidates who
-   * applied to the employer's jobs are always viewable, but still counted in usage.
+   * Candidate database views (BR-03 / OD-06): charge once per employer–candidate per subscription period.
+   * Own-job applicants never consume a database view.
    */
   private async recordCandidateView(employerId: string, candidateId: string, jobId: string | null, applied: boolean) {
-    const period = usagePeriod();
+    // Applicants to own jobs: free, not metered (guide BR-03).
+    if (applied) return;
+
+    const usage = await employerPlanUsage(this.prisma, employerId);
+    if (!usage.subscriptionActive) {
+      const message = await employerSubscriptionBlockMessage(this.prisma, employerId);
+      throw new ForbiddenException({
+        code: /expired/i.test(message) ? SharedError.SUBSCRIPTION_EXPIRED : SharedError.SUBSCRIPTION_REQUIRED,
+        message,
+      });
+    }
+    const period = usage.period;
     const existing = await this.prisma.employerCandidateView.findUnique({
       where: { employerId_candidateId_period: { employerId, candidateId, period } },
     });
     if (existing) return;
-    if (!applied) {
-      const usage = await employerPlanUsage(this.prisma, employerId);
-      if (usage.candidateViewCredits > 0 && usage.candidateViews >= usage.candidateViewCredits) {
-        throw new ForbiddenException({
-          code: SharedError.BUSINESS_RULE_VIOLATION,
-          message: candidateViewLimitMessage(usage.candidateViewCredits),
-        });
-      }
+    if (usage.candidateViewCredits > 0 && usage.candidateViews >= usage.candidateViewCredits) {
+      throw new ForbiddenException({
+        code: SharedError.CANDIDATE_VIEW_LIMIT_REACHED,
+        message: candidateViewLimitMessage(usage.candidateViewCredits),
+      });
     }
     await this.prisma.employerCandidateView
       .create({ data: { employerId, candidateId, jobId, period } })
       .catch((err: unknown) => {
-        // A concurrent request may have inserted the same (employer, candidate, month) row.
         if (!(err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002')) throw err;
       });
   }
 
   private async assertActiveJobAllowance(employerId: string) {
     const usage = await employerPlanUsage(this.prisma, employerId);
+    if (!usage.subscriptionActive) {
+      const message = await employerSubscriptionBlockMessage(this.prisma, employerId);
+      throw new ForbiddenException({
+        code: /expired/i.test(message) ? SharedError.SUBSCRIPTION_EXPIRED : SharedError.SUBSCRIPTION_REQUIRED,
+        message,
+      });
+    }
     if (activeJobLimitReached(usage)) {
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
+        code: SharedError.ACTIVE_JOB_LIMIT_REACHED,
         message: activeJobLimitMessage(usage.activeJobLimit),
+      });
+    }
+  }
+
+  /** OD-11 — Starter cannot shortlist from the candidate database (talent pool). */
+  private async assertCandidateDatabaseShortlistAllowed(employerId: string) {
+    if (!employerSubscriptionsLive()) return;
+    const usage = await employerPlanUsage(this.prisma, employerId);
+    if (!usage.subscriptionActive || !usage.planId) {
+      const message = await employerSubscriptionBlockMessage(this.prisma, employerId);
+      throw new ForbiddenException({
+        code: /expired/i.test(message) ? SharedError.SUBSCRIPTION_EXPIRED : SharedError.SUBSCRIPTION_REQUIRED,
+        message,
+      });
+    }
+    const plan = getEmployerSubscriptionPlan(usage.planId);
+    if (!plan?.entitlements.candidateDatabaseShortlist) {
+      throw new ForbiddenException({
+        code: SharedError.PLAN_FEATURE_NOT_INCLUDED,
+        message:
+          'Candidate database shortlist is not included in your plan. Upgrade to Growth or higher to shortlist talent-pool candidates.',
+      });
+    }
+  }
+
+  /** Guide §10.5 — advanced candidate filters (Growth+). */
+  private async assertAdvancedCandidateFiltersAllowed(employerId: string) {
+    if (!employerSubscriptionsLive()) return;
+    const usage = await employerPlanUsage(this.prisma, employerId);
+    if (!usage.subscriptionActive || !usage.planId) {
+      const message = await employerSubscriptionBlockMessage(this.prisma, employerId);
+      throw new ForbiddenException({
+        code: /expired/i.test(message) ? SharedError.SUBSCRIPTION_EXPIRED : SharedError.SUBSCRIPTION_REQUIRED,
+        message,
+      });
+    }
+    const plan = getEmployerSubscriptionPlan(usage.planId);
+    if (!plan?.entitlements.advancedCandidateFilters) {
+      throw new ForbiddenException({
+        code: SharedError.PLAN_FEATURE_NOT_INCLUDED,
+        message: 'Advanced candidate filters are not included in your plan. Upgrade to Growth or higher.',
+      });
+    }
+  }
+
+  /** Block a new login from joining a company that is already at its plan seat limit. */
+  private async assertCompanyLoginSeatAllowance(companyId: string) {
+    if (!employerSubscriptionsLive()) return;
+    const [used, limit] = await Promise.all([
+      countCompanyLoginSeats(this.prisma, companyId),
+      companyLoginSeatLimit(this.prisma, companyId),
+    ]);
+    if (loginSeatLimitReached(used, limit) && limit != null) {
+      throw new ForbiddenException({
+        code: SharedError.RECRUITER_SEAT_LIMIT_REACHED,
+        message: loginSeatLimitMessage(limit),
       });
     }
   }
@@ -1290,6 +1381,19 @@ export class EmployersService {
       pageSize?: number;
     },
   ) {
+    const usesAdvancedFilters = Boolean(
+      (query.experienceMin && query.experienceMin > 0) ||
+        query.experience?.trim() ||
+        query.language?.trim() ||
+        query.education?.trim() ||
+        query.passOutYear ||
+        query.passOutYearFrom ||
+        query.passOutYearTo ||
+        query.availability?.trim(),
+    );
+    if (usesAdvancedFilters) {
+      await this.assertAdvancedCandidateFiltersAllowed(employerId);
+    }
     const skillFilters = Array.from(
       new Set(
         [...(query.skills || []), ...(query.skill ? [query.skill] : [])]
@@ -1481,6 +1585,7 @@ export class EmployersService {
 
     const key = { employerId: employer.id, candidateId, jobId: job.id };
     if (shortlisted) {
+      await this.assertCandidateDatabaseShortlistAllowed(employer.id);
       const employerNote = note?.trim().slice(0, 500) || null;
       await this.prisma.employerTalentShortlist.upsert({
         where: { employerId_candidateId_jobId: key },
