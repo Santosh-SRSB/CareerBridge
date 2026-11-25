@@ -32,6 +32,18 @@ const TEST_PII_ENV: Record<string, string> = {
   PII_ENCRYPTION_KEYS: `t1:${Buffer.alloc(32, 7).toString('base64')}`,
   PII_LOOKUP_KEY: Buffer.alloc(32, 9).toString('base64'),
 };
+
+/** Subscription entitlement assertions require the LIVE flag (prod default remains off). */
+async function withSubscriptionsLive<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = process.env.EMPLOYER_SUBSCRIPTIONS_LIVE;
+  process.env.EMPLOYER_SUBSCRIPTIONS_LIVE = 'true';
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env.EMPLOYER_SUBSCRIPTIONS_LIVE;
+    else process.env.EMPLOYER_SUBSCRIPTIONS_LIVE = prev;
+  }
+}
 const testPii = (env: Record<string, string> = TEST_PII_ENV) =>
   new PiiCryptoService({ get: (key: string) => env[key] ?? '' } as any);
 const PII = testPii();
@@ -800,23 +812,25 @@ describe('Multiple employer accounts under one GSTIN link to one company', () =>
   });
 
   it('blocks a second login when the company Starter plan already uses its only seat', async () => {
-    const { svc, db } = harness();
-    await svc.saveKyc('uU', kyc());
-    db.subscriptions.push({
-      id: 'SUB_U_STARTER',
-      employerId: EMP_U,
-      planId: 'starter',
-      status: 'ACTIVE',
-      startsAt: new Date('2026-01-01T00:00:00.000Z'),
-      endsAt: new Date('2099-01-01T00:00:00.000Z'),
+    await withSubscriptionsLive(async () => {
+      const { svc, db } = harness();
+      await svc.saveKyc('uU', kyc());
+      db.subscriptions.push({
+        id: 'SUB_U_STARTER',
+        employerId: EMP_U,
+        planId: 'starter',
+        status: 'ACTIVE',
+        startsAt: new Date('2026-01-01T00:00:00.000Z'),
+        endsAt: new Date('2099-01-01T00:00:00.000Z'),
+      });
+      await assert.rejects(svc.saveKyc('uB', kyc()), (err) => {
+        assert.ok(err instanceof ForbiddenException);
+        const body = (err as ForbiddenException).getResponse() as { message?: string };
+        assert.match(String(body.message || ''), /seat limit \(1\)/i);
+        return true;
+      });
+      assert.ok(!employer(db, EMP_B).companyId);
     });
-    await assert.rejects(svc.saveKyc('uB', kyc()), (err) => {
-      assert.ok(err instanceof ForbiddenException);
-      const body = (err as ForbiddenException).getResponse() as { message?: string };
-      assert.match(String(body.message || ''), /seat limit \(1\)/i);
-      return true;
-    });
-    assert.ok(!employer(db, EMP_B).companyId);
   });
 
   it("a later account never overwrites the company's canonical details", async () => {
@@ -1454,47 +1468,51 @@ describe('Fix 9 — application transitions', () => {
     assert.equal(calls.notifications.length, 3);
   });
   it('Starter subscription: publishing beyond the active-job limit is refused; upgrade frees the slot', async () => {
-    const { svc, calls, db } = harness();
-    const sub = db.subscriptions.find((s) => s.id === 'SUB_A')!;
-    sub.planId = 'starter'; // concurrent limit 1
-    db.employers.find((e) => e.id === EMP_A)!.verificationStatus = 'VERIFIED';
-    // Fixture already has JA1–JA3 PUBLISHED; keep one active and draft a new one.
-    for (const id of ['JA2', 'JA3']) {
-      Object.assign(db.jobs.find((j) => j.id === id)!, { status: 'CLOSED' });
-    }
-    db.jobs.push({
-      id: 'JA6',
-      employerId: EMP_A,
-      title: 'Job A6',
-      status: 'DRAFT',
-      salaryMin: 216000,
-      salaryMax: 264000,
+    await withSubscriptionsLive(async () => {
+      const { svc, calls, db } = harness();
+      const sub = db.subscriptions.find((s) => s.id === 'SUB_A')!;
+      sub.planId = 'starter'; // concurrent limit 1
+      db.employers.find((e) => e.id === EMP_A)!.verificationStatus = 'VERIFIED';
+      // Fixture already has JA1–JA3 PUBLISHED; keep one active and draft a new one.
+      for (const id of ['JA2', 'JA3']) {
+        Object.assign(db.jobs.find((j) => j.id === id)!, { status: 'CLOSED' });
+      }
+      db.jobs.push({
+        id: 'JA6',
+        employerId: EMP_A,
+        title: 'Job A6',
+        status: 'DRAFT',
+        salaryMin: 216000,
+        salaryMax: 264000,
+      });
+      await assert.rejects(svc.setStatus('uA', 'JA6', 'PUBLISHED' as any), (err) => {
+        assert.equal(httpStatus(err), 403);
+        assert.match(httpMessage(err), /active job-post limit/i);
+        return true;
+      });
+      assert.equal(calls.jobUpdates.length, 0);
+      sub.planId = 'growth'; // limit 5
+      const res: any = await svc.setStatus('uA', 'JA6', 'PUBLISHED' as any);
+      assert.equal(res.status, 'PUBLISHED');
     });
-    await assert.rejects(svc.setStatus('uA', 'JA6', 'PUBLISHED' as any), (err) => {
-      assert.equal(httpStatus(err), 403);
-      assert.match(httpMessage(err), /active job-post limit/i);
-      return true;
-    });
-    assert.equal(calls.jobUpdates.length, 0);
-    sub.planId = 'growth'; // limit 5
-    const res: any = await svc.setStatus('uA', 'JA6', 'PUBLISHED' as any);
-    assert.equal(res.status, 'PUBLISHED');
   });
   it('Subscription: candidate DB views once per period; own applicants never consume a view', async () => {
-    const { svc, db } = harness();
-    const sub = db.subscriptions.find((s) => s.id === 'SUB_A')!;
-    sub.planId = 'starter'; // 100 views / period
-    const period = `sub:${sub.id}`;
-    for (let i = 0; i < 100; i += 1) {
-      db.candidateViews.push({ employerId: EMP_A, candidateId: `filled-${i}`, period });
-    }
-    const record = (candidateId: string, applied: boolean) =>
-      (svc as any).recordCandidateView(EMP_A, candidateId, 'JA1', applied);
-    await assert.rejects(record(CAND, false), (err) => httpStatus(err) === 403);
-    await record(CAND_OTHER, true); // BR-03: own applicant — not metered
-    assert.equal(db.candidateViews.length, 100);
-    await record(CAND, true);
-    assert.equal(db.candidateViews.length, 100);
+    await withSubscriptionsLive(async () => {
+      const { svc, db } = harness();
+      const sub = db.subscriptions.find((s) => s.id === 'SUB_A')!;
+      sub.planId = 'starter'; // 100 views / period
+      const period = `sub:${sub.id}`;
+      for (let i = 0; i < 100; i += 1) {
+        db.candidateViews.push({ employerId: EMP_A, candidateId: `filled-${i}`, period });
+      }
+      const record = (candidateId: string, applied: boolean) =>
+        (svc as any).recordCandidateView(EMP_A, candidateId, 'JA1', applied);
+      await assert.rejects(record(CAND, false), (err) => httpStatus(err) === 403);
+      await record(CAND_OTHER, true); // BR-03: own applicant — not metered
+      assert.equal(db.candidateViews.length, 100);
+      await record(CAND, true);
+      assert.equal(db.candidateViews.length, 100);
+    });
   });
   it('hiring outcome cannot revive a WITHDRAWN application', async () => {
     const matching = new MatchingService(
