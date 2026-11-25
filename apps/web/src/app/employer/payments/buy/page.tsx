@@ -78,7 +78,14 @@ function BuyCreditsInner() {
       toast.success(`${plan.name} plan payment successful.`);
     } catch (err) {
       const msg = userFacingError(err, 'complete payment');
-      if (!/cancel/i.test(msg)) toast.error(msg);
+      if (/cancel/i.test(msg)) return;
+      if (/does not match registered website|risk_check|website.*not.*registered/i.test(msg)) {
+        toast.error(
+          'Razorpay blocked this live payment: add https://www.srsbcareerbridge.co.in under Account & Settings → Website and app, wait for approval, then pay again.',
+        );
+        return;
+      }
+      toast.error(msg);
     } finally {
       setPaying(false);
     }

@@ -441,7 +441,7 @@ export function EmployerConfirmPlan({
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M5 12l4 4 10-10" />
             </svg>
-            Fixed prices, no surprises
+            Transparent pricing
           </span>
           <span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -452,7 +452,8 @@ export function EmployerConfirmPlan({
           </span>
         </div>
         <p className="cb-confirm__foot">
-          Need help choosing? Write to <a href={`mailto:${EMPLOYER_SUPPORT_EMAIL}`}>{EMPLOYER_SUPPORT_EMAIL}</a>
+          UPI QR pays this order only — plan unlocks for your logged-in employer account, not for whoever scans.
+          Need help? Write to <a href={`mailto:${EMPLOYER_SUPPORT_EMAIL}`}>{EMPLOYER_SUPPORT_EMAIL}</a>
         </p>
       </main>
     </div>

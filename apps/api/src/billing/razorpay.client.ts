@@ -93,6 +93,21 @@ export type RazorpayPaymentEntity = {
   error_reason?: string | null;
 };
 
+/** Server-side: fetch order (status `paid` is the reliable UPI QR success signal). */
+export async function fetchRazorpayOrder(orderId: string): Promise<RazorpayOrder | null> {
+  if (razorpayMode() === 'mock') return null;
+  const res = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(orderId)}`, {
+    method: 'GET',
+    headers: { Authorization: basicAuthHeader() },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Razorpay order fetch failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  return (await res.json()) as RazorpayOrder;
+}
+
 /** Server-side: list payments for an order (used when Checkout handler does not fire after UPI QR). */
 export async function fetchRazorpayOrderPayments(orderId: string): Promise<RazorpayPaymentEntity[]> {
   if (razorpayMode() === 'mock') return [];

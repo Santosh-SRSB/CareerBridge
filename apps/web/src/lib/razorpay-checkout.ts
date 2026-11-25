@@ -4,10 +4,13 @@ export type RazorpayCheckoutSuccess = {
   razorpay_signature: string;
 };
 
-type RazorpayConstructor = new (options: Record<string, unknown>) => {
+type RazorpayInstance = {
   open: () => void;
+  close: () => void;
   on: (event: string, handler: (response: unknown) => void) => void;
 };
+
+type RazorpayConstructor = new (options: Record<string, unknown>) => RazorpayInstance;
 
 declare global {
   interface Window {
@@ -57,21 +60,40 @@ export async function openRazorpayCheckout(input: {
   return new Promise((resolve, reject) => {
     let settled = false;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let rzp: RazorpayInstance;
+
+    const clearPoll = () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
+    const closeModal = () => {
+      try {
+        rzp?.close();
+      } catch {
+        /* modal may already be gone */
+      }
+    };
 
     const finish = (value: RazorpayCheckoutSuccess | { synced: true }) => {
       if (settled) return;
       settled = true;
-      if (pollTimer) clearInterval(pollTimer);
+      clearPoll();
+      // Mark settled before close so ondismiss does not treat this as cancel.
+      closeModal();
       resolve(value);
     };
     const fail = (err: Error) => {
       if (settled) return;
       settled = true;
-      if (pollTimer) clearInterval(pollTimer);
+      clearPoll();
+      closeModal();
       reject(err);
     };
 
-    const rzp = new window.Razorpay!({
+    rzp = new window.Razorpay!({
       key: input.keyId,
       amount: input.amountPaise,
       currency: input.currency,
@@ -102,23 +124,27 @@ export async function openRazorpayCheckout(input: {
         },
       },
     });
-    rzp.on('payment.failed', () => fail(new Error('Payment failed')));
+    rzp.on('payment.failed', () => {
+      // UPI QR can still succeed after a failed attempt — keep polling, do not close.
+    });
     rzp.open();
 
     if (input.pollPaid) {
-      pollTimer = setInterval(() => {
+      const tick = () => {
         void input.pollPaid!()
           .then((ok) => {
             if (ok) finish({ synced: true });
           })
           .catch((err) => {
             const msg = err instanceof Error ? err.message : String(err || '');
-            // Definitive Razorpay failures (website mismatch, risk block, etc.) — stop waiting.
-            if (/blocked|does not match|payment failed|risk_check|BAD_REQUEST/i.test(msg)) {
+            // Only stop for hard website/risk blocks — not transient UPI failures.
+            if (/does not match registered website|risk_check|website.*not.*registered/i.test(msg)) {
               fail(err instanceof Error ? err : new Error(msg));
             }
           });
-      }, 3000);
+      };
+      tick();
+      pollTimer = setInterval(tick, 2000);
     }
   });
 }

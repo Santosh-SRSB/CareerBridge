@@ -29,15 +29,20 @@ $env:RAZORPAY_WEBHOOK_SECRET = "whsec_..."
 .\scripts\set-razorpay-api-dev.ps1
 ```
 
-## Website allowlist (required for Live Checkout)
+## Website allowlist (required for Live Checkout) — DO THIS FIRST
 
-Razorpay → Settings → Website and app → add:
+Live UPI/QR will show success in Paytm/GPay but Razorpay **blocks capture** until the checkout domain is registered:
 
-- `https://www.srsbcareerbridge.co.in`
-- `https://srsbcareerbridge.co.in` (after DNS points to the app — currently parking)
-- Cloud Run web URL if testing there
+Razorpay Dashboard → **Account & Settings** → **Website and app settings** → **Business website details** → add:
 
-Without this, UPI/live payments fail with “website does not match registered website(s)”.
+- `https://www.srsbcareerbridge.co.in` (primary — used by employers on DEV)
+- `https://srsbcareerbridge.co.in` (apex, if it serves the app)
+- Cloud Run web URL if you test checkout there
+
+Submit for review (often minutes for checks, up to 24–48h for agent approval).
+
+Without this, every live Checkout payment fails with:
+`Payment blocked as website does not match registered website(s)`.
 
 ## Behaviour if keys are missing
 

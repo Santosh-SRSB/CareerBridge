@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -39,7 +39,8 @@ export class BillingController {
     return this.billing.verifyCheckout(user.id, body);
   }
 
-  /** Poll after UPI QR — Checkout handler may never fire on localhost. */
+  /** Poll after UPI QR — Checkout handler may never fire; keep 200 so clients treat pending as OK. */
+  @HttpCode(200)
   @Post('employer/payments/:paymentId/sync')
   sync(@CurrentUser() user: { id: string }, @Param('paymentId') paymentId: string) {
     return this.billing.syncCheckoutStatus(user.id, paymentId);

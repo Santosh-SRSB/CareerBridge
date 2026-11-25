@@ -18,6 +18,7 @@ import { renderDefaultNotification } from '../notifications/notification-templat
 import { razorpayConfigured, razorpayKeyId, razorpayMode, razorpayPublicStatus } from './razorpay.config';
 import {
   createRazorpayOrder,
+  fetchRazorpayOrder,
   fetchRazorpayOrderPayments,
   verifyPaymentSignature,
   verifyWebhookSignature,
@@ -239,8 +240,9 @@ export class BillingService {
   }
 
   /**
-   * UPI QR often completes without Checkout `handler`. Server asks Razorpay for captured
-   * payments on our order and unlocks if amount matches (no client signature needed).
+   * UPI QR often completes without Checkout `handler`. Server asks Razorpay for order
+   * status / captured payments and unlocks (no client signature needed).
+   * Early UPI failures must NOT stop polling — user can still pay the same QR.
    */
   async syncCheckoutStatus(userId: string, paymentId: string) {
     const employer = await this.requireEmployer(userId);
@@ -261,36 +263,52 @@ export class BillingService {
       return { ok: false as const, pending: true as const, active: false, planId: null, endsAt: null, paymentId };
     }
 
-    const items = await fetchRazorpayOrderPayments(payment.razorpayOrderId);
+    const orderId = payment.razorpayOrderId;
+    const order = await fetchRazorpayOrder(orderId);
+    const items = await fetchRazorpayOrderPayments(orderId);
     const captured = items.find(
       (p) =>
         (p.status === 'captured' || p.status === 'authorized') &&
         Number(p.amount) === payment.amountPaise,
     );
-    if (!captured) {
-      const failed = items.find((p) => p.status === 'failed');
-      if (failed && items.every((p) => p.status === 'failed')) {
+    const orderPaid = order?.status === 'paid';
+    const successPay =
+      captured ||
+      (orderPaid
+        ? items.find((p) => p.status === 'captured' || p.status === 'authorized') || items[0]
+        : undefined);
+
+    if (!successPay && !orderPaid) {
+      // Website allowlist / risk blocks are definitive — surface so Checkout can close with a clear error.
+      const blocked = items.find((p) => {
+        if (p.status !== 'failed') return false;
+        const reason = `${p.error_description || ''} ${p.error_reason || ''}`;
+        return /does not match registered website|payment_risk_check_failed|risk_check/i.test(reason);
+      });
+      if (blocked) {
         const reason =
-          (typeof failed.error_description === 'string' && failed.error_description.trim()) ||
-          'Payment failed at Razorpay. Try again from the registered website.';
-        await this.prisma.employerPayment.update({
-          where: { id: payment.id },
-          data: { status: 'FAILED', razorpayPaymentId: failed.id },
-        });
+          (typeof blocked.error_description === 'string' && blocked.error_description.trim()) ||
+          'Payment blocked by Razorpay. Add www.srsbcareerbridge.co.in under Razorpay → Settings → Website and app, then retry.';
         throw new BadRequestException({
           code: SharedError.BUSINESS_RULE_VIOLATION,
           message: reason,
         });
       }
+      // Other failed UPI attempts: keep pending so the same QR can still succeed.
       return { ok: false as const, pending: true as const, active: false, planId: null, endsAt: null, paymentId };
     }
+
+    const razorpayPaymentId =
+      (successPay && typeof successPay.id === 'string' && successPay.id) ||
+      payment.razorpayPaymentId ||
+      `order_paid_${orderId}`;
 
     await this.activatePaidSubscription({
       paymentId: payment.id,
       employerId: employer.id,
       planId: payment.planId,
-      razorpayPaymentId: captured.id,
-      razorpayOrderId: payment.razorpayOrderId,
+      razorpayPaymentId,
+      razorpayOrderId: orderId,
     });
     const payload = await this.subscriptionPayload(employer.id, payment.id);
     return { ...payload, pending: false as const };
