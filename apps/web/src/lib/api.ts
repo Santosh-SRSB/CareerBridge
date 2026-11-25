@@ -1912,6 +1912,79 @@ export async function grantAdminEmployerSubscription(
   });
 }
 
+export async function createAdminEnterpriseOffer(
+  employerId: string,
+  body: {
+    amountPaise: number;
+    durationDays: number;
+    activeJobLimit: number;
+    loginSeats: number;
+    candidateViewCredits: number;
+    validDays?: number;
+    notes?: string;
+  },
+) {
+  return request<{
+    ok: true;
+    offerId: string;
+    employerId: string;
+    amountPaise: number;
+    durationDays: number;
+    expiresAt: string | null;
+  }>(`/admin/employers/${encodeURIComponent(employerId)}/enterprise-offers`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function extendAdminEmployerSubscription(employerId: string, extraDays: number, reason?: string) {
+  return request<{ ok: true; subscriptionId: string; endsAt: string }>(
+    `/admin/employers/${encodeURIComponent(employerId)}/subscription/extend`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ extraDays, ...(reason ? { reason } : {}) }),
+    },
+  );
+}
+
+export async function suspendAdminEmployerSubscription(employerId: string) {
+  return request<{ ok: true; suspended: number }>(
+    `/admin/employers/${encodeURIComponent(employerId)}/subscription/suspend`,
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+}
+
+export async function listMyEnterpriseOffers() {
+  return request<{
+    offers: Array<{
+      id: string;
+      amountPaise: number;
+      currency: string;
+      durationDays: number;
+      activeJobLimit: number;
+      loginSeats: number;
+      candidateViewCredits: number;
+      expiresAt: string | null;
+      notes: string | null;
+    }>;
+  }>('/billing/employer/enterprise-offers');
+}
+
+export async function createEnterpriseOfferOrder(offerId: string) {
+  return request<{
+    paymentId: string;
+    orderId: string;
+    amountPaise: number;
+    currency: string;
+    keyId: string;
+    mode: string;
+    offerId: string;
+    plan: { id: string; name: string; priceLabel: string; periodLabel: string; durationDays: number };
+  }>(`/billing/employer/enterprise-offers/${encodeURIComponent(offerId)}/order`, {
+    method: 'POST',
+  });
+}
+
 export async function impersonateAdminEmployer(employerId: string) {
   return request<
     AuthSession & {

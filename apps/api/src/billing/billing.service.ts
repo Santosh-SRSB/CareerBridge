@@ -115,7 +115,7 @@ export class BillingService {
     ).toUpperCase();
     if (status === 'UNVERIFIED') {
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
+        code: SharedError.EMPLOYER_VERIFICATION_REQUIRED,
         message: 'Please complete employer account verification before purchasing a plan.',
       });
     }
@@ -396,7 +396,35 @@ export class BillingService {
     razorpayOrderId: string;
   }) {
     const plan = getEmployerSubscriptionPlan(input.planId);
-    const days = plan?.durationDays ?? 30;
+    const payment = await this.prisma.employerPayment.findUnique({
+      where: { id: input.paymentId },
+      select: { enterpriseOfferId: true, amountPaise: true },
+    });
+    let days = plan?.durationDays ?? 30;
+    let entitlementsJson: string | null = null;
+    if (payment?.enterpriseOfferId) {
+      const offer = await this.prisma.employerEnterpriseOffer.findUnique({
+        where: { id: payment.enterpriseOfferId },
+      });
+      if (offer) {
+        days = offer.durationDays;
+        entitlementsJson = JSON.stringify({
+          activeJobLimit: offer.activeJobLimit,
+          loginSeats: offer.loginSeats,
+          candidateViewCredits: offer.candidateViewCredits,
+          advancedCandidateFilters: true,
+          candidateDatabaseShortlist: true,
+          jobPerformanceReports: true,
+        });
+      }
+    } else if (plan) {
+      entitlementsJson = JSON.stringify({
+        activeJobLimit: plan.activeJobLimit,
+        loginSeats: plan.loginSeats,
+        candidateViewCredits: plan.candidateViewCredits,
+        ...plan.entitlements,
+      });
+    }
     const startsAt = new Date();
     const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
 
@@ -413,6 +441,13 @@ export class BillingService {
         },
       });
 
+      if (payment?.enterpriseOfferId) {
+        await tx.employerEnterpriseOffer.updateMany({
+          where: { id: payment.enterpriseOfferId, status: { in: ['APPROVED', 'PENDING'] } },
+          data: { status: 'PURCHASED' },
+        });
+      }
+
       await tx.employerSubscription.updateMany({
         where: { employerId: input.employerId, status: 'ACTIVE' },
         data: { status: 'EXPIRED' },
@@ -423,6 +458,7 @@ export class BillingService {
           id: randomUUID(),
           employerId: input.employerId,
           planId: input.planId,
+          entitlementsJson,
           status: 'ACTIVE',
           startsAt,
           endsAt,
@@ -430,6 +466,173 @@ export class BillingService {
         },
       });
     });
+
+    await this.notifyPaymentSuccess(input.employerId, {
+      planId: input.planId,
+      amountPaise: payment?.amountPaise ?? plan?.amountPaise ?? 0,
+      endsAt,
+    });
+  }
+
+  /** Guide §12 — checkout an admin-approved Enterprise offer (server-side amount only). */
+  async createEnterpriseOfferOrder(userId: string, offerIdRaw: string) {
+    if (!razorpayConfigured()) {
+      throw new ServiceUnavailableException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: 'Payment gateway is not configured. Add Razorpay keys in the API environment.',
+      });
+    }
+    const employer = await this.requireEmployer(userId);
+    const status = String(
+      employer.verified && employer.verificationStatus === 'UNVERIFIED'
+        ? 'VERIFIED'
+        : employer.verificationStatus || 'UNVERIFIED',
+    ).toUpperCase();
+    if (status === 'UNVERIFIED') {
+      throw new ForbiddenException({
+        code: SharedError.EMPLOYER_VERIFICATION_REQUIRED,
+        message: 'Please complete employer account verification before purchasing a plan.',
+      });
+    }
+
+    const offerId = String(offerIdRaw || '').trim();
+    const offer = await this.prisma.employerEnterpriseOffer.findFirst({
+      where: { id: offerId, employerId: employer.id },
+    });
+    if (!offer || offer.status !== 'APPROVED') {
+      throw new BadRequestException({
+        code: SharedError.ENTERPRISE_OFFER_UNAVAILABLE,
+        message: 'This Enterprise offer is not available. Contact support if you need a new quote.',
+      });
+    }
+    if (offer.expiresAt && offer.expiresAt.getTime() <= Date.now()) {
+      await this.prisma.employerEnterpriseOffer.update({
+        where: { id: offer.id },
+        data: { status: 'EXPIRED' },
+      });
+      throw new BadRequestException({
+        code: SharedError.ENTERPRISE_OFFER_UNAVAILABLE,
+        message: 'This Enterprise offer has expired. Ask support for a refreshed offer.',
+      });
+    }
+
+    const receipt = `ent_${offer.id.slice(0, 8)}_${Date.now().toString(36)}`.slice(0, 40);
+    const payment = await this.prisma.employerPayment.create({
+      data: {
+        employerId: employer.id,
+        planId: 'enterprise',
+        enterpriseOfferId: offer.id,
+        amountPaise: offer.amountPaise,
+        currency: offer.currency || 'INR',
+        status: 'PENDING',
+        provider: 'razorpay',
+        description: `Enterprise offer ${offer.id.slice(0, 8)}`,
+      },
+    });
+
+    try {
+      const order = await createRazorpayOrder({
+        amountPaise: offer.amountPaise,
+        currency: offer.currency || 'INR',
+        receipt,
+        notes: {
+          employerId: employer.id,
+          paymentId: payment.id,
+          planId: 'enterprise',
+          enterpriseOfferId: offer.id,
+        },
+      });
+      await this.prisma.employerPayment.update({
+        where: { id: payment.id },
+        data: { razorpayOrderId: order.id, providerRef: order.id },
+      });
+      return {
+        paymentId: payment.id,
+        orderId: order.id,
+        amountPaise: offer.amountPaise,
+        currency: offer.currency || 'INR',
+        keyId: razorpayMode() === 'mock' ? 'rzp_test_mock' : razorpayKeyId(),
+        mode: razorpayMode(),
+        offerId: offer.id,
+        plan: {
+          id: 'enterprise' as const,
+          name: 'Enterprise',
+          priceLabel: `₹${Math.round(offer.amountPaise / 100).toLocaleString('en-IN')}`,
+          periodLabel: ` / ${offer.durationDays} days`,
+          durationDays: offer.durationDays,
+        },
+      };
+    } catch (err) {
+      await this.prisma.employerPayment.update({
+        where: { id: payment.id },
+        data: { status: 'FAILED' },
+      });
+      this.log.error(`Razorpay enterprise order failed for payment ${payment.id}`, err as Error);
+      throw new ServiceUnavailableException({
+        code: SharedError.BUSINESS_RULE_VIOLATION,
+        message: 'Could not start checkout. Please try again in a moment.',
+      });
+    }
+  }
+
+  async listMyEnterpriseOffers(userId: string) {
+    const employer = await this.requireEmployer(userId);
+    const now = new Date();
+    const rows = await this.prisma.employerEnterpriseOffer.findMany({
+      where: {
+        employerId: employer.id,
+        status: 'APPROVED',
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return {
+      offers: rows.map((o) => ({
+        id: o.id,
+        amountPaise: o.amountPaise,
+        currency: o.currency,
+        durationDays: o.durationDays,
+        activeJobLimit: o.activeJobLimit,
+        loginSeats: o.loginSeats,
+        candidateViewCredits: o.candidateViewCredits,
+        expiresAt: o.expiresAt?.toISOString() ?? null,
+        notes: o.notes,
+      })),
+    };
+  }
+
+  private async notifyPaymentSuccess(
+    employerId: string,
+    input: { planId: string; amountPaise: number; endsAt: Date },
+  ) {
+    const employer = await this.prisma.employer.findUnique({
+      where: { id: employerId },
+      select: { userId: true },
+    });
+    if (!employer) return;
+    const planName = getEmployerSubscriptionPlan(input.planId)?.name || input.planId;
+    const amount = `₹${Math.round((input.amountPaise || 0) / 100).toLocaleString('en-IN')}`;
+    const endsOn = input.endsAt.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const rendered = renderDefaultNotification('PAYMENT_SUCCESS', {
+      planName,
+      amount,
+      endsOn,
+    });
+    await this.prisma.notification
+      .create({
+        data: {
+          userId: employer.userId,
+          title: rendered.title,
+          body: rendered.body,
+          type: 'BILLING',
+          link: '/employer/payments',
+        },
+      })
+      .catch(() => undefined);
   }
 
   private async subscriptionPayload(employerId: string, paymentId: string) {

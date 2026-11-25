@@ -34,6 +34,16 @@ export class BillingController {
     return this.billing.createPlanOrder(user.id, planId);
   }
 
+  @Get('employer/enterprise-offers')
+  listEnterpriseOffers(@CurrentUser() user: { id: string }) {
+    return this.billing.listMyEnterpriseOffers(user.id);
+  }
+
+  @Post('employer/enterprise-offers/:offerId/order')
+  createEnterpriseOrder(@CurrentUser() user: { id: string }, @Param('offerId') offerId: string) {
+    return this.billing.createEnterpriseOfferOrder(user.id, offerId);
+  }
+
   @Post('employer/payments/verify')
   verify(@CurrentUser() user: { id: string }, @Body() body: VerifyCheckoutDto) {
     return this.billing.verifyCheckout(user.id, body);

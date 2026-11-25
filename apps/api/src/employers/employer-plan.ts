@@ -62,7 +62,10 @@ export async function companyLoginSeatLimit(
     orderBy: { endsAt: 'desc' },
   });
   if (!sub) return null;
-  return getEmployerSubscriptionPlan(sub.planId)?.loginSeats ?? null;
+  const snap = parseSubscriptionEntitlementSnapshot(
+    (sub as { entitlementsJson?: string | null }).entitlementsJson,
+  );
+  return snap?.loginSeats ?? getEmployerSubscriptionPlan(sub.planId)?.loginSeats ?? null;
 }
 
 /**
@@ -99,6 +102,9 @@ export async function employerPlanUsage(
 
   if (subscription) {
     const catalog = getEmployerSubscriptionPlan(subscription.planId);
+    const snap = parseSubscriptionEntitlementSnapshot(
+      (subscription as { entitlementsJson?: string | null }).entitlementsJson,
+    );
     const period = `sub:${subscription.id}`;
     const candidateViews = await prisma.employerCandidateView.count({
       where: { employerId, period },
@@ -110,10 +116,10 @@ export async function employerPlanUsage(
       endsAt: subscription.endsAt.toISOString(),
       period,
       activeJobs,
-      activeJobLimit: catalog?.activeJobLimit ?? 0,
+      activeJobLimit: snap?.activeJobLimit ?? catalog?.activeJobLimit ?? 0,
       candidateViews,
-      candidateViewCredits: catalog?.candidateViewCredits ?? 0,
-      loginSeats: catalog?.loginSeats ?? null,
+      candidateViewCredits: snap?.candidateViewCredits ?? catalog?.candidateViewCredits ?? 0,
+      loginSeats: snap?.loginSeats ?? catalog?.loginSeats ?? null,
       loginSeatsUsed,
     };
   }
@@ -155,6 +161,28 @@ export async function employerSubscriptionBlockMessage(
     select: { id: true },
   });
   return prior ? subscriptionExpiredMessage() : subscriptionRequiredMessage();
+}
+
+/** Purchase snapshot on EmployerSubscription.entitlementsJson (Enterprise / plan versioning). */
+export type SubscriptionEntitlementSnapshot = {
+  activeJobLimit?: number | null;
+  loginSeats?: number | null;
+  candidateViewCredits?: number | null;
+  advancedCandidateFilters?: boolean;
+  candidateDatabaseShortlist?: boolean;
+  jobPerformanceReports?: boolean;
+};
+
+export function parseSubscriptionEntitlementSnapshot(
+  raw: string | null | undefined,
+): SubscriptionEntitlementSnapshot | null {
+  if (!raw?.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as SubscriptionEntitlementSnapshot;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /** @deprecated Exported for tests that still seed platform settings. */

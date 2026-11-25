@@ -112,6 +112,60 @@ class GrantEmployerSubscriptionDto {
   durationDays?: number;
 }
 
+class CreateEnterpriseOfferDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(100)
+  amountPaise: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(730)
+  durationDays: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  activeJobLimit: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  loginSeats: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  candidateViewCredits: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  validDays?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+class ExtendSubscriptionDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  extraDays: number;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 class JobStatusDto {
   @IsIn(['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'PAUSED', 'CLOSED'])
   status: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'PAUSED' | 'CLOSED';
@@ -280,6 +334,32 @@ export class AdminController {
     @Body() dto: GrantEmployerSubscriptionDto,
   ) {
     return this.admin.grantEmployerSubscription(user.id, id, dto.planId, dto.durationDays);
+  }
+
+  @Post('employers/:id/enterprise-offers')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  createEnterpriseOffer(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: CreateEnterpriseOfferDto,
+  ) {
+    return this.admin.createEnterpriseOffer(user.id, id, dto);
+  }
+
+  @Post('employers/:id/subscription/extend')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  extendSubscription(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: ExtendSubscriptionDto,
+  ) {
+    return this.admin.extendEmployerSubscription(user.id, id, dto.extraDays, dto.reason);
+  }
+
+  @Post('employers/:id/subscription/suspend')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  suspendSubscription(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.admin.suspendEmployerSubscription(user.id, id);
   }
 
   @Post('employers/:id/impersonate')

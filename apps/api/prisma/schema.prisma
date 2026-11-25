@@ -383,15 +383,41 @@ model Employer {
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   company        Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
   jobs           Job[]
-  payments       EmployerPayment[]
-  subscriptions  EmployerSubscription[]
-  hiringOutcomes HiringOutcome[]
-  interviews     EmployerInterview[]
-  candidateViews EmployerCandidateView[]
+  payments         EmployerPayment[]
+  subscriptions    EmployerSubscription[]
+  enterpriseOffers EmployerEnterpriseOffer[]
+  hiringOutcomes   HiringOutcome[]
+  interviews       EmployerInterview[]
+  candidateViews   EmployerCandidateView[]
   talentShortlists EmployerTalentShortlist[]
 
   @@index([companyId])
   @@map("employers")
+}
+
+/// Guide §12 — employer-specific Enterprise offer (admin-configured; not browser-supplied amounts).
+model EmployerEnterpriseOffer {
+  id                   String    @id @default(uuid())
+  employerId           String    @map("employer_id")
+  amountPaise          Int       @map("amount_paise")
+  currency             String    @default("INR")
+  durationDays         Int       @map("duration_days")
+  activeJobLimit       Int       @map("active_job_limit")
+  loginSeats           Int       @map("login_seats")
+  candidateViewCredits Int       @map("candidate_view_credits")
+  /// PENDING | APPROVED | PURCHASED | EXPIRED | CANCELLED
+  status               String    @default("APPROVED")
+  approvedByUserId     String?   @map("approved_by_user_id")
+  approvedAt           DateTime? @map("approved_at")
+  expiresAt            DateTime? @map("expires_at")
+  notes                String?   @db.Text
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  employer Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@index([employerId, status])
+  @@map("employer_enterprise_offers")
 }
 
 model Job {
@@ -717,8 +743,10 @@ model EmployerPayment {
   employerId        String        @map("employer_id")
   jobId             String?       @map("job_id")
   hiringOutcomeId   String?       @unique @map("hiring_outcome_id")
-  /// Subscription catalog id (starter|growth|business); null for legacy job-post fees.
+  /// Subscription catalog id (starter|growth|business|enterprise); null for legacy job-post fees.
   planId            String?       @map("plan_id")
+  /// Guide §12 — when set, checkout used an admin-approved Enterprise offer.
+  enterpriseOfferId String?       @map("enterprise_offer_id")
   amountPaise       Int           @map("amount_paise")
   currency          String        @default("INR")
   status            PaymentStatus @default(PENDING)
@@ -738,6 +766,7 @@ model EmployerPayment {
 
   @@index([employerId, status])
   @@index([razorpayOrderId])
+  @@index([enterpriseOfferId])
   @@map("employer_payments")
 }
 
@@ -746,6 +775,8 @@ model EmployerSubscription {
   id         String   @id @default(uuid())
   employerId String   @map("employer_id")
   planId     String   @map("plan_id")
+  /// Snapshot of purchased limits/features (Enterprise offers + future plan versioning).
+  entitlementsJson String? @map("entitlements_json") @db.Text
   status     String   @default("ACTIVE")
   startsAt   DateTime @map("starts_at")
   endsAt     DateTime @map("ends_at")

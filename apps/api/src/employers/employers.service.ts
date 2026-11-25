@@ -505,6 +505,10 @@ export class EmployersService {
       if (bucket) bucket.count += 1;
     }
 
+    const usage = await employerPlanUsage(this.prisma, employer.id);
+    const plan = usage.planId ? getEmployerSubscriptionPlan(usage.planId) : null;
+    const allowJobReports = Boolean(plan?.entitlements.jobPerformanceReports);
+
     return {
       openJobs: jobs.filter((item) => item.status === 'PUBLISHED').length,
       applications,
@@ -516,16 +520,19 @@ export class EmployersService {
         label,
         count,
       })),
-      jobPerformance: jobs
-        .filter((item) => item.status === 'PUBLISHED')
-        .map((item) => ({
-          jobId: item.id,
-          title: item.title,
-          applications: item._count.applications,
-          views: item.viewCount,
-        }))
-        .sort((a, b) => b.applications - a.applications || b.views - a.views)
-        .slice(0, 10),
+      jobPerformance: allowJobReports
+        ? jobs
+            .filter((item) => item.status === 'PUBLISHED')
+            .map((item) => ({
+              jobId: item.id,
+              title: item.title,
+              applications: item._count.applications,
+              views: item.viewCount,
+            }))
+            .sort((a, b) => b.applications - a.applications || b.views - a.views)
+            .slice(0, 10)
+        : [],
+      jobPerformanceIncluded: allowJobReports,
       recent: recent.map((item) => ({
         candidateName: [item.candidate.firstName, item.candidate.lastName].filter(Boolean).join(' ') || 'Candidate',
         candidateId: item.candidate.id,
@@ -733,9 +740,10 @@ export class EmployersService {
 
     const usage = await employerPlanUsage(this.prisma, employerId);
     if (!usage.subscriptionActive) {
+      const message = await employerSubscriptionBlockMessage(this.prisma, employerId);
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: await employerSubscriptionBlockMessage(this.prisma, employerId),
+        code: /expired/i.test(message) ? SharedError.SUBSCRIPTION_EXPIRED : SharedError.SUBSCRIPTION_REQUIRED,
+        message,
       });
     }
     const period = usage.period;
@@ -745,7 +753,7 @@ export class EmployersService {
     if (existing) return;
     if (usage.candidateViewCredits > 0 && usage.candidateViews >= usage.candidateViewCredits) {
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
+        code: SharedError.CANDIDATE_VIEW_LIMIT_REACHED,
         message: candidateViewLimitMessage(usage.candidateViewCredits),
       });
     }
@@ -759,14 +767,15 @@ export class EmployersService {
   private async assertActiveJobAllowance(employerId: string) {
     const usage = await employerPlanUsage(this.prisma, employerId);
     if (!usage.subscriptionActive) {
+      const message = await employerSubscriptionBlockMessage(this.prisma, employerId);
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: await employerSubscriptionBlockMessage(this.prisma, employerId),
+        code: /expired/i.test(message) ? SharedError.SUBSCRIPTION_EXPIRED : SharedError.SUBSCRIPTION_REQUIRED,
+        message,
       });
     }
     if (activeJobLimitReached(usage)) {
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
+        code: SharedError.ACTIVE_JOB_LIMIT_REACHED,
         message: activeJobLimitMessage(usage.activeJobLimit),
       });
     }
@@ -776,17 +785,37 @@ export class EmployersService {
   private async assertCandidateDatabaseShortlistAllowed(employerId: string) {
     const usage = await employerPlanUsage(this.prisma, employerId);
     if (!usage.subscriptionActive || !usage.planId) {
+      const message = await employerSubscriptionBlockMessage(this.prisma, employerId);
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
-        message: await employerSubscriptionBlockMessage(this.prisma, employerId),
+        code: /expired/i.test(message) ? SharedError.SUBSCRIPTION_EXPIRED : SharedError.SUBSCRIPTION_REQUIRED,
+        message,
       });
     }
     const plan = getEmployerSubscriptionPlan(usage.planId);
     if (!plan?.entitlements.candidateDatabaseShortlist) {
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
+        code: SharedError.PLAN_FEATURE_NOT_INCLUDED,
         message:
           'Candidate database shortlist is not included in your plan. Upgrade to Growth or higher to shortlist talent-pool candidates.',
+      });
+    }
+  }
+
+  /** Guide §10.5 — advanced candidate filters (Growth+). */
+  private async assertAdvancedCandidateFiltersAllowed(employerId: string) {
+    const usage = await employerPlanUsage(this.prisma, employerId);
+    if (!usage.subscriptionActive || !usage.planId) {
+      const message = await employerSubscriptionBlockMessage(this.prisma, employerId);
+      throw new ForbiddenException({
+        code: /expired/i.test(message) ? SharedError.SUBSCRIPTION_EXPIRED : SharedError.SUBSCRIPTION_REQUIRED,
+        message,
+      });
+    }
+    const plan = getEmployerSubscriptionPlan(usage.planId);
+    if (!plan?.entitlements.advancedCandidateFilters) {
+      throw new ForbiddenException({
+        code: SharedError.PLAN_FEATURE_NOT_INCLUDED,
+        message: 'Advanced candidate filters are not included in your plan. Upgrade to Growth or higher.',
       });
     }
   }
@@ -799,7 +828,7 @@ export class EmployersService {
     ]);
     if (loginSeatLimitReached(used, limit) && limit != null) {
       throw new ForbiddenException({
-        code: SharedError.BUSINESS_RULE_VIOLATION,
+        code: SharedError.RECRUITER_SEAT_LIMIT_REACHED,
         message: loginSeatLimitMessage(limit),
       });
     }
@@ -1347,6 +1376,19 @@ export class EmployersService {
       pageSize?: number;
     },
   ) {
+    const usesAdvancedFilters = Boolean(
+      (query.experienceMin && query.experienceMin > 0) ||
+        query.experience?.trim() ||
+        query.language?.trim() ||
+        query.education?.trim() ||
+        query.passOutYear ||
+        query.passOutYearFrom ||
+        query.passOutYearTo ||
+        query.availability?.trim(),
+    );
+    if (usesAdvancedFilters) {
+      await this.assertAdvancedCandidateFiltersAllowed(employerId);
+    }
     const skillFilters = Array.from(
       new Set(
         [...(query.skills || []), ...(query.skill ? [query.skill] : [])]

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getEmployerSubscriptionPlan, type EmployerSubscriptionPlan } from '@careerbridge/shared';
@@ -8,6 +8,7 @@ import { EmployerConfirmPlan } from '@/components/employer/EmployerConfirmPlan';
 import { EmployerPricingPlans } from '@/components/employer/EmployerPricingPlans';
 import { toast } from '@/components/ui/Toast';
 import { userFacingError } from '@/lib/client-errors';
+import { getEmployerMe } from '@/lib/api';
 import { checkoutEmployerPlan } from '@/lib/employer-plan-checkout';
 import { EMPLOYER_POST_JOB_HREF } from '@/lib/employer-plan-gate';
 import './buy-fullpage.css';
@@ -68,9 +69,25 @@ function BuyCreditsInner() {
   const selected = useMemo(() => getEmployerSubscriptionPlan(planId), [planId]);
   const [paying, setPaying] = useState(false);
   const [paidPlan, setPaidPlan] = useState<EmployerSubscriptionPlan | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+
+  useEffect(() => {
+    void getEmployerMe()
+      .then((me) => {
+        const status = String(me.verificationStatus || 'UNVERIFIED').toUpperCase();
+        const verified = Boolean(me.verified) || status === 'VERIFIED' || status === 'APPROVED';
+        setNeedsVerification(!verified && status === 'UNVERIFIED');
+      })
+      .catch(() => setNeedsVerification(false));
+  }, []);
 
   async function continueAfterConfirm(plan: EmployerSubscriptionPlan) {
     if (plan.contactSales || paying) return;
+    if (needsVerification) {
+      toast.error('Complete employer verification before purchasing a plan.');
+      router.push('/employer/kyc');
+      return;
+    }
     setPaying(true);
     try {
       await checkoutEmployerPlan(plan);
@@ -79,6 +96,11 @@ function BuyCreditsInner() {
     } catch (err) {
       const msg = userFacingError(err, 'complete payment');
       if (/cancel/i.test(msg)) return;
+      if (/verification/i.test(msg)) {
+        toast.error(msg);
+        router.push('/employer/kyc');
+        return;
+      }
       if (/does not match registered website|risk_check|website.*not.*registered/i.test(msg)) {
         toast.error(
           'Razorpay blocked this live payment: add https://www.srsbcareerbridge.co.in under Account & Settings → Website and app, wait for approval, then pay again.',
@@ -104,6 +126,28 @@ function BuyCreditsInner() {
 
   if (paidPlan) {
     return <PaymentSuccessScreen plan={paidPlan} intentPostJob={intentPostJob} />;
+  }
+
+  if (needsVerification) {
+    return (
+      <main className="cb-buy-full cb-buy-full--success" role="status">
+        <div className="cb-buy-full__success-card">
+          <p className="cb-buy-full__eyebrow">Verification required</p>
+          <h1>Verify your employer account</h1>
+          <p className="cb-buy-full__tag">
+            Complete KYC before checkout. Plans stay available after verification.
+          </p>
+          <div className="cb-buy-full__actions">
+            <Link href="/employer/kyc" className="cb-buy-full__cta">
+              Continue to verification
+            </Link>
+            <Link href="/employer/payments" className="cb-buy-full__ghost">
+              Back to Billing
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   if (selected && !selected.contactSales) {

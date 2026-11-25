@@ -1,20 +1,22 @@
 import type { EmployerSubscriptionPlan } from '@careerbridge/shared';
 import {
   createEmployerPlanOrder,
+  createEnterpriseOfferOrder,
   syncEmployerPlanPayment,
   verifyEmployerPlanPayment,
 } from '@/lib/api';
 import { markEmployerPlanForJobPost } from '@/lib/employer-plan-gate';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
 
-/** Secure checkout: server creates order → Razorpay (or mock) → server verifies → unlock plan. */
-export async function checkoutEmployerPlan(plan: EmployerSubscriptionPlan) {
-  if (plan.contactSales || plan.amountPaise == null) {
-    throw new Error('This plan cannot be purchased online.');
-  }
-
-  const order = await createEmployerPlanOrder(plan.id);
-
+async function finishRazorpayOrder(order: {
+  paymentId: string;
+  orderId: string;
+  amountPaise: number;
+  currency: string;
+  keyId: string;
+  mode: string;
+  plan: { id: string; name: string; priceLabel: string };
+}) {
   if (order.mode === 'mock') {
     await verifyEmployerPlanPayment({
       paymentId: order.paymentId,
@@ -22,8 +24,8 @@ export async function checkoutEmployerPlan(plan: EmployerSubscriptionPlan) {
       razorpayPaymentId: `pay_mock_${Date.now().toString(36)}`,
       razorpaySignature: 'mock_signature',
     });
-    markEmployerPlanForJobPost(plan.id);
-    return { mode: 'mock' as const, planId: plan.id };
+    markEmployerPlanForJobPost(order.plan.id);
+    return { mode: 'mock' as const, planId: order.plan.id };
   }
 
   const pollPaid = async () => {
@@ -42,8 +44,8 @@ export async function checkoutEmployerPlan(plan: EmployerSubscriptionPlan) {
   });
 
   if ('synced' in paid && paid.synced) {
-    markEmployerPlanForJobPost(plan.id);
-    return { mode: order.mode as 'live' | 'test', planId: plan.id };
+    markEmployerPlanForJobPost(order.plan.id);
+    return { mode: order.mode as 'live' | 'test', planId: order.plan.id };
   }
 
   const checkout = paid as {
@@ -57,6 +59,21 @@ export async function checkoutEmployerPlan(plan: EmployerSubscriptionPlan) {
     razorpayPaymentId: checkout.razorpay_payment_id,
     razorpaySignature: checkout.razorpay_signature,
   });
-  markEmployerPlanForJobPost(plan.id);
-  return { mode: order.mode as 'live' | 'test', planId: plan.id };
+  markEmployerPlanForJobPost(order.plan.id);
+  return { mode: order.mode as 'live' | 'test', planId: order.plan.id };
+}
+
+/** Secure checkout: server creates order → Razorpay (or mock) → server verifies → unlock plan. */
+export async function checkoutEmployerPlan(plan: EmployerSubscriptionPlan) {
+  if (plan.contactSales || plan.amountPaise == null) {
+    throw new Error('This plan cannot be purchased online.');
+  }
+  const order = await createEmployerPlanOrder(plan.id);
+  return finishRazorpayOrder(order);
+}
+
+/** Guide §12 — pay an admin-approved Enterprise offer (server-controlled amount). */
+export async function checkoutEnterpriseOffer(offerId: string) {
+  const order = await createEnterpriseOfferOrder(offerId);
+  return finishRazorpayOrder(order);
 }

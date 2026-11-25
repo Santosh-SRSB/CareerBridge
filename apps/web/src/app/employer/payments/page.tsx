@@ -12,13 +12,16 @@ import {
   getEmployerPlanUsage,
   getEmployerSubscription,
   listEmployerPayments,
+  listMyEnterpriseOffers,
   type EmployerPaymentRow,
   type EmployerSubscriptionStatus,
 } from '@/lib/api';
 import { EmployerShellFallback } from '@/components/EmployerPortal';
 import { EvEmpty, EvPageHead, EvPill, EvSkeleton, EvStat } from '@/components/employer/ui';
 import { ErrorState } from '@/components/ui/StateViews';
-import { LOAD_ERROR_MESSAGE } from '@/lib/client-errors';
+import { LOAD_ERROR_MESSAGE, userFacingError } from '@/lib/client-errors';
+import { checkoutEnterpriseOffer } from '@/lib/employer-plan-checkout';
+import { toast } from '@/components/ui/Toast';
 
 function periodLabel(period: string) {
   if (period.startsWith('sub:')) return 'current subscription period';
@@ -41,6 +44,18 @@ export default function EmployerBillingPage() {
   const [subscription, setSubscription] = useState<EmployerSubscriptionStatus | null>(null);
   const [payments, setPayments] = useState<EmployerPaymentRow[]>([]);
   const [paymentsFailed, setPaymentsFailed] = useState(false);
+  const [enterpriseOffers, setEnterpriseOffers] = useState<
+    Array<{
+      id: string;
+      amountPaise: number;
+      durationDays: number;
+      activeJobLimit: number;
+      loginSeats: number;
+      candidateViewCredits: number;
+      expiresAt: string | null;
+    }>
+  >([]);
+  const [offerPayingId, setOfferPayingId] = useState('');
 
   function load() {
     setLoading(true);
@@ -54,14 +69,16 @@ export default function EmployerBillingPage() {
         setPaymentsFailed(true);
         return [] as EmployerPaymentRow[];
       }),
+      listMyEnterpriseOffers().catch(() => ({ offers: [] })),
     ])
-      .then(([dash, planUsage, sub, rows]) => {
+      .then(([dash, planUsage, sub, rows, offers]) => {
         setApplications(dash.applications);
         setShortlisted(dash.shortlisted);
         setInterviews(dash.interviews);
         setUsage(planUsage);
         setSubscription(sub);
         setPayments(rows);
+        setEnterpriseOffers(offers.offers || []);
       })
       .catch(() => setError(LOAD_ERROR_MESSAGE))
       .finally(() => setLoading(false));
@@ -167,6 +184,58 @@ export default function EmployerBillingPage() {
             </section>
             <CreditsCard usage={usage} />
           </div>
+
+          {enterpriseOffers.length > 0 ? (
+            <section className="ev-card ev-mt" aria-label="Enterprise offers">
+              <h2 className="ev-h2">Your Enterprise offer</h2>
+              <p className="ev-sub">Configured by SRSB — pay online with the exact approved amount.</p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0' }}>
+                {enterpriseOffers.map((offer) => (
+                  <li
+                    key={offer.id}
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 12,
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 0',
+                      borderTop: '1px solid rgba(0,0,0,0.08)',
+                    }}
+                  >
+                    <div>
+                      <strong>₹{Math.round(offer.amountPaise / 100).toLocaleString('en-IN')}</strong>
+                      <span className="ev-sub">
+                        {' '}
+                        · {offer.durationDays} days · {offer.activeJobLimit} jobs · {offer.loginSeats} seats ·{' '}
+                        {offer.candidateViewCredits} views
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="ev-btn ev-btn--amber"
+                      disabled={Boolean(offerPayingId)}
+                      onClick={async () => {
+                        setOfferPayingId(offer.id);
+                        try {
+                          await checkoutEnterpriseOffer(offer.id);
+                          toast.success('Enterprise plan payment successful.');
+                          load();
+                        } catch (err) {
+                          const msg = userFacingError(err, 'complete payment');
+                          if (!/cancel/i.test(msg)) toast.error(msg);
+                        } finally {
+                          setOfferPayingId('');
+                        }
+                      }}
+                    >
+                      {offerPayingId === offer.id ? 'Opening checkout…' : 'Pay offer'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className="ev-mt" aria-label="Usage this period">
             <h2 className="ev-h2">Usage overview · {periodLabel(usage.period)}</h2>

@@ -26,6 +26,7 @@ import { ResumesService } from '../resumes/resumes.service';
 import { PII_UNAVAILABLE, PiiCryptoService } from '../common/crypto/pii-crypto.service';
 import { employerPlanUsage, usagePeriod } from '../employers/employer-plan';
 import { razorpayConfigured } from '../billing/razorpay.config';
+import { renderDefaultNotification } from '../notifications/notification-templates';
 import { closedAtForStatusChange } from '../employers/job-lifecycle';
 import { ACTIVE_INTERVIEW_STATUSES, INTERVIEW_RESCHEDULED_AUDIT_ACTION } from '../employers/employer-policy';
 import {
@@ -952,6 +953,12 @@ export class AdminService {
     }
     const startsAt = new Date();
     const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
+    const entitlementsJson = JSON.stringify({
+      activeJobLimit: plan.activeJobLimit,
+      loginSeats: plan.loginSeats,
+      candidateViewCredits: plan.candidateViewCredits,
+      ...plan.entitlements,
+    });
     await this.prisma.employerSubscription.updateMany({
       where: { employerId, status: 'ACTIVE' },
       data: { status: 'EXPIRED' },
@@ -961,6 +968,7 @@ export class AdminService {
         id: randomUUID(),
         employerId,
         planId: plan.id,
+        entitlementsJson,
         status: 'ACTIVE',
         startsAt,
         endsAt,
@@ -982,6 +990,127 @@ export class AdminService {
       endsAt: endsAt.toISOString(),
       subscriptionId: row.id,
     };
+  }
+
+  /** Guide §12 — create employer-specific Enterprise offer for online checkout. */
+  async createEnterpriseOffer(
+    actorId: string,
+    employerId: string,
+    dto: {
+      amountPaise: number;
+      durationDays: number;
+      activeJobLimit: number;
+      loginSeats: number;
+      candidateViewCredits: number;
+      validDays?: number;
+      notes?: string;
+    },
+  ) {
+    const employer = await this.prisma.employer.findUnique({ where: { id: employerId } });
+    if (!employer) {
+      throw new NotFoundException({ code: ErrorCode.RESOURCE_NOT_FOUND, message: 'Employer was not found' });
+    }
+    const now = new Date();
+    const expiresAt =
+      dto.validDays && dto.validDays > 0
+        ? new Date(now.getTime() + dto.validDays * 24 * 60 * 60 * 1000)
+        : null;
+    const offer = await this.prisma.employerEnterpriseOffer.create({
+      data: {
+        id: randomUUID(),
+        employerId,
+        amountPaise: dto.amountPaise,
+        currency: 'INR',
+        durationDays: dto.durationDays,
+        activeJobLimit: dto.activeJobLimit,
+        loginSeats: dto.loginSeats,
+        candidateViewCredits: dto.candidateViewCredits,
+        status: 'APPROVED',
+        approvedByUserId: actorId,
+        approvedAt: now,
+        expiresAt,
+        notes: dto.notes?.trim() || null,
+      },
+    });
+    const amount = `₹${Math.round(dto.amountPaise / 100).toLocaleString('en-IN')}`;
+    const rendered = renderDefaultNotification('ENTERPRISE_OFFER_READY', {
+      amount,
+      days: String(dto.durationDays),
+    });
+    await this.prisma.notification
+      .create({
+        data: {
+          userId: employer.userId,
+          title: rendered.title,
+          body: rendered.body,
+          type: 'BILLING',
+          link: '/employer/payments',
+        },
+      })
+      .catch(() => undefined);
+    await this.writeAudit({
+      userId: actorId,
+      action: 'CREATE_ENTERPRISE_OFFER',
+      resourceType: 'EMPLOYER',
+      resourceId: employerId,
+      newValue: { offerId: offer.id, amountPaise: dto.amountPaise, durationDays: dto.durationDays },
+    });
+    return {
+      ok: true as const,
+      offerId: offer.id,
+      employerId,
+      amountPaise: offer.amountPaise,
+      durationDays: offer.durationDays,
+      expiresAt: offer.expiresAt?.toISOString() ?? null,
+    };
+  }
+
+  async extendEmployerSubscription(actorId: string, employerId: string, extraDays: number, reason?: string) {
+    const sub = await this.prisma.employerSubscription.findFirst({
+      where: { employerId, status: 'ACTIVE', endsAt: { gt: new Date() } },
+      orderBy: { endsAt: 'desc' },
+    });
+    if (!sub) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'No active subscription to extend.',
+      });
+    }
+    const endsAt = new Date(sub.endsAt.getTime() + extraDays * 24 * 60 * 60 * 1000);
+    await this.prisma.employerSubscription.update({
+      where: { id: sub.id },
+      data: { endsAt },
+    });
+    await this.writeAudit({
+      userId: actorId,
+      action: 'EXTEND_EMPLOYER_SUBSCRIPTION',
+      resourceType: 'EMPLOYER',
+      resourceId: employerId,
+      oldValue: { endsAt: sub.endsAt.toISOString() },
+      newValue: { endsAt: endsAt.toISOString(), extraDays, reason: reason || null },
+    });
+    return { ok: true as const, subscriptionId: sub.id, endsAt: endsAt.toISOString() };
+  }
+
+  async suspendEmployerSubscription(actorId: string, employerId: string) {
+    const result = await this.prisma.employerSubscription.updateMany({
+      where: { employerId, status: 'ACTIVE' },
+      data: { status: 'SUSPENDED' },
+    });
+    if (!result.count) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'No active subscription to suspend.',
+      });
+    }
+    await this.writeAudit({
+      userId: actorId,
+      action: 'SUSPEND_EMPLOYER_SUBSCRIPTION',
+      resourceType: 'EMPLOYER',
+      resourceId: employerId,
+      newValue: { status: 'SUSPENDED', count: result.count },
+    });
+    return { ok: true as const, suspended: result.count };
   }
 
   /**
@@ -2150,7 +2279,12 @@ export class AdminService {
           })
           .then((rows) => rows.length),
         this.prisma.employer.count({ where: { createdAt: { gte: monthStart } } }),
-        this.prisma.employerCandidateView.count({ where: { period } }),
+        // Guide WP-2: preference to subscription-period views (`sub:…`); calendar month is legacy fallback.
+        this.prisma.employerCandidateView.count({
+          where: {
+            OR: [{ period: { startsWith: 'sub:' } }, { period }],
+          },
+        }),
         this.prisma.employerPayment.aggregate({
           where: { ...paid, providerRef: { startsWith: JOB_POSTING_PROVIDER_REF_PREFIX } },
           _sum: { amountPaise: true },
