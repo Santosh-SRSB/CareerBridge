@@ -23,6 +23,7 @@ import {
   verifyPaymentSignature,
   verifyWebhookSignature,
 } from './razorpay.client';
+import { employerSubscriptionsLive } from '../employers/employer-plan';
 
 const PAID_PLAN_IDS = new Set(['starter', 'growth', 'business']);
 
@@ -52,6 +53,18 @@ export class BillingService {
 
   async getActiveSubscription(userId: string) {
     const employer = await this.requireEmployer(userId);
+    // Prod safety: until EMPLOYER_SUBSCRIPTIONS_LIVE=true, treat as entitled (legacy free Starter).
+    // Prevents web job-post gate from forcing checkout and breaking live employers.
+    if (!employerSubscriptionsLive()) {
+      return {
+        active: true as const,
+        mode: razorpayMode(),
+        planId: null,
+        endsAt: null,
+        paymentRequired: false,
+        enforcement: 'legacy' as const,
+      };
+    }
     await this.expireStale(employer.id);
     await this.maybeNotifySubscriptionLifecycle(employer.userId, employer.id);
     const row = await this.prisma.employerSubscription.findFirst({
@@ -69,6 +82,7 @@ export class BillingService {
         planId: null,
         endsAt: null,
         paymentRequired: true,
+        enforcement: 'subscription' as const,
       };
     }
     return {
@@ -78,6 +92,7 @@ export class BillingService {
       endsAt: row.endsAt.toISOString(),
       paymentRequired: false,
       startsAt: row.startsAt.toISOString(),
+      enforcement: 'subscription' as const,
     };
   }
 
