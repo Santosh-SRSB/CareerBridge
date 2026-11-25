@@ -362,6 +362,12 @@ export class AdminController {
     return this.admin.suspendEmployerSubscription(user.id, id);
   }
 
+  @Get('subscriptions')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  listSubscriptions(@Query('query') query?: string, @Query('status') status?: string) {
+    return this.admin.listEmployerSubscriptions(query, status);
+  }
+
   @Post('employers/:id/impersonate')
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
   impersonateEmployer(

@@ -1406,13 +1406,72 @@ export type EmployerPaymentRow = {
   hiringOutcomeId: string;
   planId?: string | null;
   amountPaise: number;
+  taxablePaise?: number | null;
+  gstPaise?: number | null;
   currency: string;
   status: string;
   provider: string | null;
   description: string | null;
   createdAt: string;
   paidAt: string | null;
+  invoiceId?: string | null;
+  invoiceNumber?: string | null;
+  invoiceStatus?: string | null;
 };
+
+export type EmployerInvoiceRow = {
+  id: string;
+  invoiceNumber: string;
+  paymentId: string;
+  planId: string | null;
+  sacCode: string;
+  seller: {
+    name: string;
+    gstin: string;
+    address: string;
+    email: string | null;
+    phone: string | null;
+  };
+  buyer: {
+    name: string;
+    gstin: string | null;
+    stateCode: string | null;
+    address: string | null;
+  };
+  placeOfSupply: string;
+  taxMode: string;
+  lineDescription: string;
+  taxablePaise: number;
+  cgstPaise: number;
+  sgstPaise: number;
+  igstPaise: number;
+  gstRatePercent: number;
+  totalPaise: number;
+  amountInWords: string;
+  currency: string;
+  status: string;
+  issuedAt: string;
+  paymentStatus: string | null;
+  razorpayPaymentId: string | null;
+  paidAt: string | null;
+};
+
+export async function listEmployerInvoices() {
+  return request<{ invoices: EmployerInvoiceRow[] }>('/billing/employer/invoices');
+}
+
+export async function getEmployerInvoice(id: string) {
+  return request<{
+    invoice: EmployerInvoiceRow;
+    sellerBank: {
+      accountName: string;
+      accountNo: string;
+      ifsc: string;
+      branch: string;
+      bankName: string;
+    };
+  }>(`/billing/employer/invoices/${encodeURIComponent(id)}`);
+}
 
 export async function listEmployerPayments() {
   return request<EmployerPaymentRow[]>('/employers/me/payments');

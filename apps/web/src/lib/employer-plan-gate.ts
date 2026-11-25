@@ -68,4 +68,5 @@ export async function canEmployerPostJob(): Promise<boolean> {
 }
 
 export const EMPLOYER_POST_JOB_PRICING_HREF = '/employer/payments/buy?intent=post-job';
+/** Always use this for "Post a job" CTAs — page redirects to buy only when no active plan. */
 export const EMPLOYER_POST_JOB_HREF = '/employer/jobs/new';

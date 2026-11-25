@@ -170,17 +170,23 @@ export default function EmployerBillingPage() {
                     ? ` · Seats: ${usage.loginSeatsUsed}`
                     : ''}
               </p>
-              <Link
-                href={
-                  subscription?.active
-                    ? '/employer/payments/buy'
-                    : '/employer/payments/buy?intent=post-job'
-                }
-                className="ev-btn ev-btn--amber"
-                style={{ marginTop: 12 }}
-              >
-                {subscription?.active ? 'Renew or change plan' : 'View subscription plans'}
-              </Link>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                {subscription?.active ? (
+                  <Link href="/employer/jobs/new" className="ev-btn ev-btn--amber">
+                    Post a job
+                  </Link>
+                ) : null}
+                <Link
+                  href={
+                    subscription?.active
+                      ? '/employer/payments/buy'
+                      : '/employer/payments/buy?intent=post-job'
+                  }
+                  className={subscription?.active ? 'ev-btn ev-btn--ghost' : 'ev-btn ev-btn--amber'}
+                >
+                  {subscription?.active ? 'Renew or change plan' : 'View subscription plans'}
+                </Link>
+              </div>
             </section>
             <CreditsCard usage={usage} />
           </div>
@@ -261,7 +267,10 @@ export default function EmployerBillingPage() {
                       <th>Date</th>
                       <th>Description</th>
                       <th>Plan</th>
-                      <th>Amount</th>
+                      <th>Taxable</th>
+                      <th>GST</th>
+                      <th>Total</th>
+                      <th>Invoice</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -270,18 +279,29 @@ export default function EmployerBillingPage() {
                       const planName = row.planId
                         ? getEmployerSubscriptionPlan(row.planId)?.name || row.planId
                         : '—';
+                      const inr = (paise: number) =>
+                        (paise / 100).toLocaleString('en-IN', {
+                          style: 'currency',
+                          currency: row.currency || 'INR',
+                        });
                       return (
                       <tr key={row.id}>
                         <td>{new Date(row.createdAt).toLocaleDateString('en-IN')}</td>
                         <td>{row.description || 'Payment'}</td>
                         <td>{planName}</td>
+                        <td>{row.taxablePaise != null ? inr(row.taxablePaise) : '—'}</td>
+                        <td>{row.gstPaise != null ? inr(row.gstPaise) : '—'}</td>
                         <td>
-                          <b>
-                            {(row.amountPaise / 100).toLocaleString('en-IN', {
-                              style: 'currency',
-                              currency: row.currency || 'INR',
-                            })}
-                          </b>
+                          <b>{inr(row.amountPaise)}</b>
+                        </td>
+                        <td>
+                          {row.invoiceId ? (
+                            <Link href={`/employer/payments/invoices/${row.invoiceId}`} className="ev-lnk">
+                              {row.invoiceNumber || 'View'}
+                            </Link>
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td>
                           <EvPill>{row.status}</EvPill>

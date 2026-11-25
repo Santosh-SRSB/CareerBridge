@@ -53,6 +53,7 @@ const TABS: SuperAdminNavId[] = [
   'dashboard',
   'candidates',
   'employers',
+  'subscriptions',
   'jobs',
   'applications',
   'interviews',
@@ -69,6 +70,7 @@ const TABS: SuperAdminNavId[] = [
 const LIST_TABS: SuperAdminNavId[] = [
   'candidates',
   'employers',
+  'subscriptions',
   'jobs',
   'applications',
   'interviews',

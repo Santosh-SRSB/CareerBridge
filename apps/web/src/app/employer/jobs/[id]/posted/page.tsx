@@ -119,7 +119,7 @@ function JobPostedBody() {
         }
         actions={
           <>
-            <Link href="/employer/payments/buy?intent=post-job" className="ev-btn">
+            <Link href="/employer/jobs/new" className="ev-btn">
               Post another job
             </Link>
             <Link href="/employer/jobs" className="ev-btn ev-btn--ghost">
@@ -246,7 +246,7 @@ function JobPostedBody() {
             <Link href={`/employer/jobs/${params.id}`} className="ev-lnk">
               Open job details
             </Link>
-            <Link href="/employer/payments/buy?intent=post-job" className="ev-lnk">
+            <Link href="/employer/jobs/new" className="ev-lnk">
               Post another job →
             </Link>
             <Link href="/employer/jobs" className="ev-lnk">

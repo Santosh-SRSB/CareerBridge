@@ -81,6 +81,7 @@ const TABS: SuperAdminNavId[] = [
   'dashboard',
   'candidates',
   'employers',
+  'subscriptions',
   'jobs',
   'applications',
   'interviews',
@@ -99,6 +100,7 @@ const TABS: SuperAdminNavId[] = [
 const LIST_TABS: SuperAdminNavId[] = [
   'candidates',
   'employers',
+  'subscriptions',
   'jobs',
   'applications',
   'interviews',
@@ -359,7 +361,11 @@ export default function SuperAdminDashboardInner() {
       if (q) params.set('query', q);
       if (
         statusFilter &&
-        (tab === 'jobs' || tab === 'applications' || tab === 'interviews' || tab === 'candidates')
+        (tab === 'jobs' ||
+          tab === 'applications' ||
+          tab === 'interviews' ||
+          tab === 'candidates' ||
+          tab === 'subscriptions')
       ) {
         params.set('status', statusFilter);
       }
@@ -1201,6 +1207,7 @@ export default function SuperAdminDashboardInner() {
                 tab === 'interviews' ||
                 tab === 'candidates' ||
                 tab === 'employers' ||
+                tab === 'subscriptions' ||
                 tab === 'admins' ? (
                   <select
                     value={statusFilter}
@@ -1234,6 +1241,12 @@ export default function SuperAdminDashboardInner() {
                       ADMIN_INTERVIEW_STATUS_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
+                        </option>
+                      ))}
+                    {tab === 'subscriptions' &&
+                      ['ACTIVE', 'EXPIRED', 'SUSPENDED'].map((s) => (
+                        <option key={s} value={s}>
+                          {s}
                         </option>
                       ))}
                     {(tab === 'candidates' || tab === 'employers' || tab === 'admins') &&
@@ -1507,6 +1520,57 @@ export default function SuperAdminDashboardInner() {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {tab === 'subscriptions' && !listLoading && rows.length > 0 && (
+              <div className="space-y-2">
+                {sortedRows.map((row) => {
+                  const id = String(row.id ?? '');
+                  const status = String(row.status ?? '');
+                  const bar =
+                    status === 'ACTIVE' ? 'sa-strip--ok' : status === 'SUSPENDED' ? 'sa-strip--bad' : 'sa-strip--muted';
+                  const taxable = Number(row.taxablePaise ?? 0);
+                  const gst = Number(row.gstPaise ?? 0);
+                  const total = Number(row.amountPaise ?? 0);
+                  const inr = (paise: number) =>
+                    (paise / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
+                  return (
+                    <article key={id} className="sa-ccard flex items-stretch">
+                      <div className={`w-1.5 shrink-0 ${bar}`} />
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="sa-ink font-bold [overflow-wrap:anywhere]">
+                            {cell(row.companyName)} · {cell(row.planName)}
+                          </p>
+                          <p className="sa-muted text-xs">
+                            Seats {cell(row.loginSeats)} · Jobs {cell(row.activeJobLimit)} · Views{' '}
+                            {cell(row.candidateViewCredits)}
+                            {row.invoiceNumber ? ` · Invoice ${cell(row.invoiceNumber)}` : ''}
+                          </p>
+                          <p className="sa-muted text-xs">
+                            {total > 0
+                              ? `${inr(taxable)} + GST ${inr(gst)} = ${inr(total)}`
+                              : 'No payment linked'}
+                            {' · '}
+                            Ends{' '}
+                            {row.endsAt
+                              ? new Date(String(row.endsAt)).toLocaleDateString('en-IN')
+                              : '—'}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusPill status={status} />
+                          {row.employerId ? (
+                            <ActionBtn onClick={() => void openDetail('employers', String(row.employerId))}>
+                              Employer
+                            </ActionBtn>
+                          ) : null}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
 

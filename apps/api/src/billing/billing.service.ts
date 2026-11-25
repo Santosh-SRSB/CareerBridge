@@ -9,13 +9,24 @@ import {
 } from '@nestjs/common';
 import {
   ErrorCode as SharedError,
+  SRSB_INVOICE_SELLER,
+  amountInWordsInr,
+  computeSubscriptionGst,
+  formatInrFromPaise,
   getEmployerSubscriptionPlan,
   listPublicEmployerSubscriptionPlans,
   type EmployerSubscriptionPlanId,
 } from '@careerbridge/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { PiiCryptoService } from '../common/crypto/pii-crypto.service';
 import { renderDefaultNotification } from '../notifications/notification-templates';
-import { razorpayConfigured, razorpayKeyId, razorpayMode, razorpayPublicStatus } from './razorpay.config';
+import {
+  razorpayConfigured,
+  razorpayKeyId,
+  razorpayMode,
+  razorpayPublicStatus,
+  subscriptionTestAmountPaise,
+} from './razorpay.config';
 import {
   createRazorpayOrder,
   fetchRazorpayOrder,
@@ -26,23 +37,60 @@ import {
 import { employerSubscriptionsLive } from '../employers/employer-plan';
 
 const PAID_PLAN_IDS = new Set(['starter', 'growth', 'business']);
+const INVOICE_SEQ_KEY = 'employer_subscription_invoice_seq';
 
 @Injectable()
 export class BillingService {
   private readonly log = new Logger(BillingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pii: PiiCryptoService,
+  ) {}
 
   listPublicPlans() {
+    const testPaise = subscriptionTestAmountPaise();
+    const plans = listPublicEmployerSubscriptionPlans().map((plan) => {
+      if (plan.amountPaise == null || plan.contactSales) {
+        return { ...plan, gst: null as ReturnType<typeof computeSubscriptionGst> | null };
+      }
+      const taxable = testPaise ?? plan.amountPaise;
+      const gst = computeSubscriptionGst(taxable);
+      const priceLabel =
+        testPaise != null
+          ? formatInrFromPaise(taxable)
+          : plan.priceLabel;
+      return {
+        ...plan,
+        amountPaise: taxable,
+        priceLabel,
+        priceHint:
+          testPaise != null
+            ? 'Test pricing · exclusive of GST'
+            : 'One-time · exclusive of 18% GST',
+        gst: {
+          taxablePaise: gst.taxablePaise,
+          gstPaise: gst.gstPaise,
+          totalPaise: gst.totalPaise,
+          gstRatePercent: gst.gstRatePercent,
+          taxMode: gst.taxMode,
+          cgstPaise: gst.cgstPaise,
+          sgstPaise: gst.sgstPaise,
+          igstPaise: gst.igstPaise,
+        },
+      };
+    });
     return {
       currency: 'INR' as const,
       renewalType: 'manual' as const,
+      gstNote: 'Listed plan prices are exclusive of 18% GST. Checkout charges taxable + GST.',
       notes: [
         'Active job posts are concurrent limits — closing a job frees a slot.',
         'Candidate database views are per subscription period and do not roll over.',
         'Opening applicants to your own jobs does not consume database views.',
+        'Plan price is exclusive of GST; 18% GST is added at checkout (CGST+SGST or IGST by state).',
       ],
-      plans: listPublicEmployerSubscriptionPlans(),
+      plans,
       razorpay: razorpayPublicStatus(),
     };
   }
@@ -120,6 +168,7 @@ export class BillingService {
         message: 'This plan cannot be purchased online.',
       });
     }
+    const taxablePaise = subscriptionTestAmountPaise() ?? plan.amountPaise;
 
     const employer = await this.requireEmployer(userId);
     // Guide §7.1 — no checkout while employer is still UNVERIFIED (KYC not started).
@@ -134,29 +183,37 @@ export class BillingService {
         message: 'Please complete employer account verification before purchasing a plan.',
       });
     }
+    const buyerGstin = this.decryptEmployerGstin(employer.gstNumber);
+    const gst = computeSubscriptionGst(taxablePaise, buyerGstin);
+    const amountPaise = gst.totalPaise;
+    const priceLabel = formatInrFromPaise(taxablePaise);
     const receipt = `pl_${planId}_${Date.now().toString(36)}`.slice(0, 40);
 
     const payment = await this.prisma.employerPayment.create({
       data: {
         employerId: employer.id,
         planId: plan.id,
-        amountPaise: plan.amountPaise,
+        amountPaise,
+        taxablePaise: gst.taxablePaise,
+        gstPaise: gst.gstPaise,
         currency: 'INR',
         status: 'PENDING',
         provider: 'razorpay',
-        description: `Employer plan: ${plan.name}`,
+        description: `Employer plan: ${plan.name} (excl. GST ${formatInrFromPaise(gst.taxablePaise)} + GST ${formatInrFromPaise(gst.gstPaise)})`,
       },
     });
 
     try {
       const order = await createRazorpayOrder({
-        amountPaise: plan.amountPaise,
+        amountPaise,
         currency: 'INR',
         receipt,
         notes: {
           employerId: employer.id,
           paymentId: payment.id,
           planId: plan.id,
+          taxablePaise: String(gst.taxablePaise),
+          gstPaise: String(gst.gstPaise),
         },
       });
 
@@ -171,14 +228,26 @@ export class BillingService {
       return {
         paymentId: payment.id,
         orderId: order.id,
-        amountPaise: plan.amountPaise,
+        amountPaise,
+        taxablePaise: gst.taxablePaise,
+        gstPaise: gst.gstPaise,
         currency: 'INR',
         keyId: razorpayMode() === 'mock' ? 'rzp_test_mock' : razorpayKeyId(),
         mode: razorpayMode(),
+        gst: {
+          taxablePaise: gst.taxablePaise,
+          gstPaise: gst.gstPaise,
+          totalPaise: gst.totalPaise,
+          gstRatePercent: gst.gstRatePercent,
+          taxMode: gst.taxMode,
+          cgstPaise: gst.cgstPaise,
+          sgstPaise: gst.sgstPaise,
+          igstPaise: gst.igstPaise,
+        },
         plan: {
           id: plan.id,
           name: plan.name,
-          priceLabel: plan.priceLabel,
+          priceLabel,
           periodLabel: plan.periodLabel,
           durationDays: plan.durationDays,
         },
@@ -413,7 +482,13 @@ export class BillingService {
     const plan = getEmployerSubscriptionPlan(input.planId);
     const payment = await this.prisma.employerPayment.findUnique({
       where: { id: input.paymentId },
-      select: { enterpriseOfferId: true, amountPaise: true },
+      select: {
+        enterpriseOfferId: true,
+        amountPaise: true,
+        taxablePaise: true,
+        gstPaise: true,
+        description: true,
+      },
     });
     let days = plan?.durationDays ?? 30;
     let entitlementsJson: string | null = null;
@@ -482,11 +557,248 @@ export class BillingService {
       });
     });
 
+    try {
+      await this.issueSubscriptionInvoice({
+        paymentId: input.paymentId,
+        employerId: input.employerId,
+        planId: input.planId,
+        issuedAt: startsAt,
+      });
+    } catch (err) {
+      this.log.error(`Invoice issue failed for payment ${input.paymentId}`, err as Error);
+    }
+
     await this.notifyPaymentSuccess(input.employerId, {
       planId: input.planId,
       amountPaise: payment?.amountPaise ?? plan?.amountPaise ?? 0,
       endsAt,
     });
+  }
+
+  private decryptEmployerGstin(stored: string | null | undefined): string | null {
+    if (!stored) return null;
+    try {
+      const raw = this.pii.decrypt('employers.gst_number', stored);
+      const g = String(raw || '')
+        .trim()
+        .toUpperCase();
+      return g.length >= 15 ? g : null;
+    } catch {
+      const g = String(stored || '')
+        .trim()
+        .toUpperCase();
+      return g.length >= 15 && !g.includes(':') ? g : null;
+    }
+  }
+
+  private async nextInvoiceNumber(tx: {
+    platformSetting: {
+      findUnique: PrismaService['platformSetting']['findUnique'];
+      upsert: PrismaService['platformSetting']['upsert'];
+    };
+  }) {
+    const row = await tx.platformSetting.findUnique({ where: { key: INVOICE_SEQ_KEY } });
+    const next = Math.max(1, Number(row?.value || '0') + 1);
+    await tx.platformSetting.upsert({
+      where: { key: INVOICE_SEQ_KEY },
+      create: { key: INVOICE_SEQ_KEY, value: String(next) },
+      update: { value: String(next) },
+    });
+    return `SRSB${String(next).padStart(4, '0')}`;
+  }
+
+  private async issueSubscriptionInvoice(input: {
+    paymentId: string;
+    employerId: string;
+    planId: string;
+    issuedAt: Date;
+  }) {
+    const existing = await this.prisma.employerInvoice.findUnique({
+      where: { paymentId: input.paymentId },
+    });
+    if (existing) return existing;
+
+    const payment = await this.prisma.employerPayment.findUnique({
+      where: { id: input.paymentId },
+    });
+    if (!payment || payment.status !== 'PAID') return null;
+
+    const employer = await this.prisma.employer.findUnique({
+      where: { id: input.employerId },
+      include: { company: true },
+    });
+    if (!employer) return null;
+
+    const buyerGstin = this.decryptEmployerGstin(employer.gstNumber);
+    const taxable =
+      payment.taxablePaise != null
+        ? payment.taxablePaise
+        : Math.round(payment.amountPaise / 1.18);
+    const gst = computeSubscriptionGst(taxable, buyerGstin);
+    const totalPaise = payment.amountPaise;
+    const gstPaise = payment.gstPaise ?? gst.gstPaise;
+    let cgstPaise = 0;
+    let sgstPaise = 0;
+    let igstPaise = 0;
+    if (gst.taxMode === 'CGST_SGST') {
+      cgstPaise = Math.floor(gstPaise / 2);
+      sgstPaise = gstPaise - cgstPaise;
+    } else {
+      igstPaise = gstPaise;
+    }
+    const plan = getEmployerSubscriptionPlan(input.planId);
+    const lineDescription = `CareerBridge employer subscription — ${plan?.name || input.planId} plan`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const invoiceNumber = await this.nextInvoiceNumber(tx);
+      return tx.employerInvoice.create({
+        data: {
+          id: randomUUID(),
+          invoiceNumber,
+          paymentId: input.paymentId,
+          employerId: input.employerId,
+          planId: input.planId,
+          sacCode: gst.sac,
+          sellerName: SRSB_INVOICE_SELLER.legalName,
+          sellerGstin: SRSB_INVOICE_SELLER.gstin,
+          sellerAddress: SRSB_INVOICE_SELLER.addressLine,
+          sellerEmail: SRSB_INVOICE_SELLER.email,
+          sellerPhone: SRSB_INVOICE_SELLER.phone,
+          buyerName: employer.companyName || employer.company?.name || 'Employer',
+          buyerGstin,
+          buyerStateCode: gst.buyerStateCode,
+          buyerAddress: [employer.city, employer.state].filter(Boolean).join(', ') || null,
+          placeOfSupply: gst.placeOfSupply,
+          taxMode: gst.taxMode,
+          lineDescription,
+          taxablePaise: taxable,
+          cgstPaise,
+          sgstPaise,
+          igstPaise,
+          gstRatePercent: gst.gstRatePercent,
+          totalPaise,
+          amountInWords: amountInWordsInr(totalPaise),
+          currency: payment.currency || 'INR',
+          status: 'ISSUED',
+          issuedAt: input.issuedAt,
+        },
+      });
+    });
+  }
+
+  async listMyInvoices(userId: string) {
+    const employer = await this.requireEmployer(userId);
+    const rows = await this.prisma.employerInvoice.findMany({
+      where: { employerId: employer.id },
+      orderBy: { issuedAt: 'desc' },
+      include: {
+        payment: { select: { status: true, razorpayPaymentId: true, paidAt: true } },
+      },
+    });
+    return {
+      invoices: rows.map((row) => this.serializeInvoice(row)),
+    };
+  }
+
+  async getMyInvoice(userId: string, invoiceIdRaw: string) {
+    const employer = await this.requireEmployer(userId);
+    const id = String(invoiceIdRaw || '').trim();
+    const row = await this.prisma.employerInvoice.findFirst({
+      where: {
+        employerId: employer.id,
+        OR: [{ id }, { invoiceNumber: id }],
+      },
+      include: {
+        payment: { select: { status: true, razorpayPaymentId: true, paidAt: true, planId: true } },
+      },
+    });
+    if (!row) {
+      throw new NotFoundException({
+        code: SharedError.RESOURCE_NOT_FOUND,
+        message: 'Invoice was not found.',
+      });
+    }
+    return {
+      invoice: this.serializeInvoice(row),
+      sellerBank: SRSB_INVOICE_SELLER.bank,
+    };
+  }
+
+  private serializeInvoice(
+    row: {
+      id: string;
+      invoiceNumber: string;
+      paymentId: string;
+      employerId: string;
+      planId: string | null;
+      sacCode: string;
+      sellerName: string;
+      sellerGstin: string;
+      sellerAddress: string;
+      sellerEmail: string | null;
+      sellerPhone: string | null;
+      buyerName: string;
+      buyerGstin: string | null;
+      buyerStateCode: string | null;
+      buyerAddress: string | null;
+      placeOfSupply: string;
+      taxMode: string;
+      lineDescription: string;
+      taxablePaise: number;
+      cgstPaise: number;
+      sgstPaise: number;
+      igstPaise: number;
+      gstRatePercent: number;
+      totalPaise: number;
+      amountInWords: string;
+      currency: string;
+      status: string;
+      issuedAt: Date;
+      payment?: {
+        status?: string;
+        razorpayPaymentId?: string | null;
+        paidAt?: Date | null;
+        planId?: string | null;
+      } | null;
+    },
+  ) {
+    return {
+      id: row.id,
+      invoiceNumber: row.invoiceNumber,
+      paymentId: row.paymentId,
+      employerId: row.employerId,
+      planId: row.planId,
+      sacCode: row.sacCode,
+      seller: {
+        name: row.sellerName,
+        gstin: row.sellerGstin,
+        address: row.sellerAddress,
+        email: row.sellerEmail,
+        phone: row.sellerPhone,
+      },
+      buyer: {
+        name: row.buyerName,
+        gstin: row.buyerGstin,
+        stateCode: row.buyerStateCode,
+        address: row.buyerAddress,
+      },
+      placeOfSupply: row.placeOfSupply,
+      taxMode: row.taxMode,
+      lineDescription: row.lineDescription,
+      taxablePaise: row.taxablePaise,
+      cgstPaise: row.cgstPaise,
+      sgstPaise: row.sgstPaise,
+      igstPaise: row.igstPaise,
+      gstRatePercent: row.gstRatePercent,
+      totalPaise: row.totalPaise,
+      amountInWords: row.amountInWords,
+      currency: row.currency,
+      status: row.status,
+      issuedAt: row.issuedAt.toISOString(),
+      paymentStatus: row.payment?.status ?? null,
+      razorpayPaymentId: row.payment?.razorpayPaymentId ?? null,
+      paidAt: row.payment?.paidAt?.toISOString() ?? null,
+    };
   }
 
   /** Guide §12 — checkout an admin-approved Enterprise offer (server-side amount only). */
@@ -531,23 +843,28 @@ export class BillingService {
       });
     }
 
+    const buyerGstin = this.decryptEmployerGstin(employer.gstNumber);
+    const gst = computeSubscriptionGst(offer.amountPaise, buyerGstin);
+    const amountPaise = gst.totalPaise;
     const receipt = `ent_${offer.id.slice(0, 8)}_${Date.now().toString(36)}`.slice(0, 40);
     const payment = await this.prisma.employerPayment.create({
       data: {
         employerId: employer.id,
         planId: 'enterprise',
         enterpriseOfferId: offer.id,
-        amountPaise: offer.amountPaise,
+        amountPaise,
+        taxablePaise: gst.taxablePaise,
+        gstPaise: gst.gstPaise,
         currency: offer.currency || 'INR',
         status: 'PENDING',
         provider: 'razorpay',
-        description: `Enterprise offer ${offer.id.slice(0, 8)}`,
+        description: `Enterprise offer ${offer.id.slice(0, 8)} (excl. GST ${formatInrFromPaise(gst.taxablePaise)} + GST ${formatInrFromPaise(gst.gstPaise)})`,
       },
     });
 
     try {
       const order = await createRazorpayOrder({
-        amountPaise: offer.amountPaise,
+        amountPaise,
         currency: offer.currency || 'INR',
         receipt,
         notes: {
@@ -555,6 +872,8 @@ export class BillingService {
           paymentId: payment.id,
           planId: 'enterprise',
           enterpriseOfferId: offer.id,
+          taxablePaise: String(gst.taxablePaise),
+          gstPaise: String(gst.gstPaise),
         },
       });
       await this.prisma.employerPayment.update({
@@ -564,15 +883,27 @@ export class BillingService {
       return {
         paymentId: payment.id,
         orderId: order.id,
-        amountPaise: offer.amountPaise,
+        amountPaise,
+        taxablePaise: gst.taxablePaise,
+        gstPaise: gst.gstPaise,
         currency: offer.currency || 'INR',
         keyId: razorpayMode() === 'mock' ? 'rzp_test_mock' : razorpayKeyId(),
         mode: razorpayMode(),
         offerId: offer.id,
+        gst: {
+          taxablePaise: gst.taxablePaise,
+          gstPaise: gst.gstPaise,
+          totalPaise: gst.totalPaise,
+          gstRatePercent: gst.gstRatePercent,
+          taxMode: gst.taxMode,
+          cgstPaise: gst.cgstPaise,
+          sgstPaise: gst.sgstPaise,
+          igstPaise: gst.igstPaise,
+        },
         plan: {
           id: 'enterprise' as const,
           name: 'Enterprise',
-          priceLabel: `₹${Math.round(offer.amountPaise / 100).toLocaleString('en-IN')}`,
+          priceLabel: formatInrFromPaise(gst.taxablePaise),
           periodLabel: ` / ${offer.durationDays} days`,
           durationDays: offer.durationDays,
         },

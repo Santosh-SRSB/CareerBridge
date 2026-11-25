@@ -285,7 +285,7 @@ function EmployerApplicationsBody() {
               title="No applications yet"
               body="Publish a job to start receiving candidates."
               action={
-                <Link href="/employer/payments/buy?intent=post-job" className="ev-btn ev-btn--accent">
+                <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
                   + Post a job
                 </Link>
               }

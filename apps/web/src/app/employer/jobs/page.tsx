@@ -105,7 +105,7 @@ export default function EmployerJobsPage() {
         title="My jobs"
         subtitle="Create, publish, pause and close openings from one board."
         actions={
-          <Link href="/employer/payments/buy?intent=post-job" className="ev-btn ev-btn--accent">
+          <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
             + Post new job
           </Link>
         }
@@ -130,7 +130,7 @@ export default function EmployerJobsPage() {
                 : 'Create your first job posting to start hiring.'
             }
             action={
-              <Link href="/employer/payments/buy?intent=post-job" className="ev-btn ev-btn--accent">
+              <Link href="/employer/jobs/new" className="ev-btn ev-btn--accent">
                 + Create Job
               </Link>
             }

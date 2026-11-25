@@ -39,5 +39,19 @@ export function razorpayPublicStatus() {
     keysPresent: configuredEnv,
     webhookSecretPresent: Boolean(razorpayWebhookSecret()),
     checkoutReady: razorpayConfigured(),
+    /** When set, paid catalogue plans charge this paise amount (e.g. 100 = ₹1 test). */
+    testAmountPaise: subscriptionTestAmountPaise(),
   };
+}
+
+/**
+ * Temporary checkout override for smoke tests. Set EMPLOYER_SUBSCRIPTION_TEST_AMOUNT_PAISE=100
+ * for ₹1 on Starter/Growth/Business; leave unset for real catalogue prices. Min 100 paise.
+ */
+export function subscriptionTestAmountPaise(): number | null {
+  const raw = (process.env.EMPLOYER_SUBSCRIPTION_TEST_AMOUNT_PAISE || '').trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 100) return null;
+  return Math.round(n);
 }

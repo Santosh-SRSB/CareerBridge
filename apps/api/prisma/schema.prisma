@@ -385,6 +385,7 @@ model Employer {
   jobs           Job[]
   payments         EmployerPayment[]
   subscriptions    EmployerSubscription[]
+  invoices         EmployerInvoice[]
   enterpriseOffers EmployerEnterpriseOffer[]
   hiringOutcomes   HiringOutcome[]
   interviews       EmployerInterview[]
@@ -747,7 +748,12 @@ model EmployerPayment {
   planId            String?       @map("plan_id")
   /// Guide §12 — when set, checkout used an admin-approved Enterprise offer.
   enterpriseOfferId String?       @map("enterprise_offer_id")
+  /// Total charged (taxable + GST) for subscription checkouts; legacy rows may be pre-GST totals.
   amountPaise       Int           @map("amount_paise")
+  /// Taxable value before GST (subscription); null on legacy / non-subscription payments.
+  taxablePaise      Int?          @map("taxable_paise")
+  /// Total GST paise (CGST+SGST or IGST).
+  gstPaise          Int?          @map("gst_paise")
   currency          String        @default("INR")
   status            PaymentStatus @default(PENDING)
   provider          String?
@@ -763,11 +769,53 @@ model EmployerPayment {
   job           Job?                  @relation(fields: [jobId], references: [id], onDelete: SetNull)
   hiringOutcome HiringOutcome?        @relation(fields: [hiringOutcomeId], references: [id], onDelete: SetNull)
   subscription  EmployerSubscription?
+  invoice       EmployerInvoice?
 
   @@index([employerId, status])
   @@index([razorpayOrderId])
   @@index([enterpriseOfferId])
   @@map("employer_payments")
+}
+
+/// Tax invoice for paid employer subscription (SRSB004-style fields).
+model EmployerInvoice {
+  id              String   @id @default(uuid())
+  invoiceNumber   String   @unique @map("invoice_number")
+  paymentId       String   @unique @map("payment_id")
+  employerId      String   @map("employer_id")
+  planId          String?  @map("plan_id")
+  sacCode         String   @default("998591") @map("sac_code")
+  sellerName      String   @map("seller_name")
+  sellerGstin     String   @map("seller_gstin")
+  sellerAddress   String   @map("seller_address") @db.Text
+  sellerEmail     String?  @map("seller_email")
+  sellerPhone     String?  @map("seller_phone")
+  buyerName       String   @map("buyer_name")
+  buyerGstin      String?  @map("buyer_gstin")
+  buyerStateCode  String?  @map("buyer_state_code")
+  buyerAddress    String?  @map("buyer_address") @db.Text
+  placeOfSupply   String   @map("place_of_supply")
+  taxMode         String   @map("tax_mode")
+  lineDescription String   @map("line_description") @db.Text
+  taxablePaise    Int      @map("taxable_paise")
+  cgstPaise       Int      @default(0) @map("cgst_paise")
+  sgstPaise       Int      @default(0) @map("sgst_paise")
+  igstPaise       Int      @default(0) @map("igst_paise")
+  gstRatePercent  Int      @default(18) @map("gst_rate_percent")
+  totalPaise      Int      @map("total_paise")
+  amountInWords   String   @map("amount_in_words") @db.Text
+  currency        String   @default("INR")
+  status          String   @default("ISSUED")
+  issuedAt        DateTime @map("issued_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  payment  EmployerPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  employer Employer       @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@index([employerId, issuedAt])
+  @@index([status])
+  @@map("employer_invoices")
 }
 
 /// Active employer subscription unlocked only after verified Razorpay payment (or mock in local).

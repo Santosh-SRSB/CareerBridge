@@ -1113,6 +1113,110 @@ export class AdminService {
     return { ok: true as const, suspended: result.count };
   }
 
+  /** Super Admin — all employer subscriptions with payment / invoice / seat snapshot. */
+  async listEmployerSubscriptions(query?: string, status?: string) {
+    const q = String(query || '').trim();
+    const statusFilter = String(status || '').trim().toUpperCase();
+    const rows = await this.prisma.employerSubscription.findMany({
+      where: {
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(q
+          ? {
+              OR: [
+                { planId: { contains: q, mode: 'insensitive' } },
+                { employer: { companyName: { contains: q, mode: 'insensitive' } } },
+                { payment: { invoice: { invoiceNumber: { contains: q, mode: 'insensitive' } } } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 200,
+      include: {
+        employer: {
+          select: {
+            id: true,
+            companyName: true,
+            city: true,
+            state: true,
+            verificationStatus: true,
+            companyId: true,
+          },
+        },
+        payment: {
+          select: {
+            id: true,
+            amountPaise: true,
+            taxablePaise: true,
+            gstPaise: true,
+            status: true,
+            paidAt: true,
+            razorpayPaymentId: true,
+            invoice: {
+              select: {
+                id: true,
+                invoiceNumber: true,
+                status: true,
+                totalPaise: true,
+                taxablePaise: true,
+                cgstPaise: true,
+                sgstPaise: true,
+                igstPaise: true,
+                taxMode: true,
+                issuedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return rows.map((row) => {
+      let seats: number | null = null;
+      let jobs: number | null = null;
+      let views: number | null = null;
+      try {
+        const snap = row.entitlementsJson ? JSON.parse(row.entitlementsJson) : null;
+        if (snap && typeof snap === 'object') {
+          seats = typeof snap.loginSeats === 'number' ? snap.loginSeats : null;
+          jobs = typeof snap.activeJobLimit === 'number' ? snap.activeJobLimit : null;
+          views = typeof snap.candidateViewCredits === 'number' ? snap.candidateViewCredits : null;
+        }
+      } catch {
+        /* ignore bad snapshot */
+      }
+      const catalog = getEmployerSubscriptionPlan(row.planId);
+      const taxable = row.payment?.taxablePaise ?? row.payment?.invoice?.taxablePaise ?? null;
+      const gst = row.payment?.gstPaise ?? null;
+      const total = row.payment?.amountPaise ?? row.payment?.invoice?.totalPaise ?? null;
+      return {
+        id: row.id,
+        employerId: row.employerId,
+        companyName: row.employer.companyName,
+        city: row.employer.city,
+        state: row.employer.state,
+        verificationStatus: row.employer.verificationStatus,
+        planId: row.planId,
+        planName: catalog?.name || row.planId,
+        status: row.status,
+        startsAt: row.startsAt.toISOString(),
+        endsAt: row.endsAt.toISOString(),
+        loginSeats: seats ?? catalog?.loginSeats ?? null,
+        activeJobLimit: jobs ?? catalog?.activeJobLimit ?? null,
+        candidateViewCredits: views ?? catalog?.candidateViewCredits ?? null,
+        taxablePaise: taxable,
+        gstPaise: gst,
+        amountPaise: total,
+        invoiceNumber: row.payment?.invoice?.invoiceNumber ?? null,
+        invoiceId: row.payment?.invoice?.id ?? null,
+        taxMode: row.payment?.invoice?.taxMode ?? null,
+        paymentStatus: row.payment?.status ?? null,
+        paidAt: row.payment?.paidAt?.toISOString() ?? null,
+        razorpayPaymentId: row.payment?.razorpayPaymentId ?? null,
+      };
+    });
+  }
+
   /**
    * Super / platform admin opens the full employer workspace as that company
    * (post jobs, candidates, applications, interviews, profile, etc.).

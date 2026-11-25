@@ -20,6 +20,7 @@ export * from './registration-validation';
 export * from './business-identifiers';
 export * from './employer-plan';
 export * from './employer-subscription-plans';
+export * from './employer-subscription-gst';
 export * from './company-profile';
 export * from './resume-summary';
 export * from './job-roles';

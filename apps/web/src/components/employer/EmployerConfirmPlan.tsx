@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import Link from 'next/link';
 import {
-  EMPLOYER_SUBSCRIPTION_PLANS,
   EMPLOYER_SUPPORT_EMAIL,
+  computeSubscriptionGst,
+  formatInrFromPaise,
   getEmployerSubscriptionPlan,
   type EmployerSubscriptionPlan,
   type EmployerSubscriptionPlanId,
@@ -183,12 +184,18 @@ export function EmployerConfirmPlan({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync when URL plan changes
   }, [planId]);
 
+  const gstBreakdown = useMemo(
+    () => (plan && plan.amountPaise != null ? computeSubscriptionGst(plan.amountPaise) : null),
+    [plan],
+  );
+
   useEffect(() => {
     if (!plan || plan.amountPaise == null) {
       setDisplayTotal('Custom');
       return;
     }
-    const to = Math.round(plan.amountPaise / 100);
+    const totalPaise = computeSubscriptionGst(plan.amountPaise).totalPaise;
+    const to = Math.round(totalPaise / 100);
     const from = totalFrom.current;
     totalFrom.current = to;
     const t0 = performance.now();
@@ -378,8 +385,20 @@ export function EmployerConfirmPlan({
               <span>Unlocks</span>
               <b>Post a job</b>
             </div>
+            {gstBreakdown ? (
+              <>
+                <div className="cb-confirm__row">
+                  <span>Plan (excl. GST)</span>
+                  <b>{formatInrFromPaise(gstBreakdown.taxablePaise)}</b>
+                </div>
+                <div className="cb-confirm__row">
+                  <span>GST {gstBreakdown.gstRatePercent}%</span>
+                  <b>{formatInrFromPaise(gstBreakdown.gstPaise)}</b>
+                </div>
+              </>
+            ) : null}
             <div className="cb-confirm__total">
-              <span>Total</span>
+              <span>Total payable</span>
               <b>{displayTotal}</b>
             </div>
             <h3 className="cb-confirm__h3">WHAT HAPPENS NEXT</h3>

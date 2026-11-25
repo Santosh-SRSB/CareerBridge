@@ -91,7 +91,7 @@ export default function EmployerReportsPage() {
                 title="No hiring activity yet"
                 body="Post a job to start collecting applications — analytics will fill in as candidates apply."
                 action={
-                  <Link href="/employer/payments/buy?intent=post-job" className="ev-btn ev-mt-sm">
+                  <Link href="/employer/jobs/new" className="ev-btn ev-mt-sm">
                     + Post a job
                   </Link>
                 }
@@ -131,7 +131,7 @@ export default function EmployerReportsPage() {
                   title="No jobs yet"
                   body="Create your first opening to see role rankings here."
                   action={
-                    <Link href="/employer/payments/buy?intent=post-job" className="ev-lnk">
+                    <Link href="/employer/jobs/new" className="ev-lnk">
                       Create a job →
                     </Link>
                   }

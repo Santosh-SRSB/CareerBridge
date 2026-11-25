@@ -22,6 +22,12 @@ const PATHS: Record<SuperAdminNavId, React.ReactNode> = {
       <path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" />
     </>
   ),
+  subscriptions: (
+    <>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20M6 15h4" />
+    </>
+  ),
   jobs: (
     <>
       <rect x="2" y="7" width="20" height="14" rx="2" />

@@ -8,7 +8,7 @@ import { EmployerConfirmPlan } from '@/components/employer/EmployerConfirmPlan';
 import { EmployerPricingPlans } from '@/components/employer/EmployerPricingPlans';
 import { toast } from '@/components/ui/Toast';
 import { userFacingError } from '@/lib/client-errors';
-import { getEmployerMe } from '@/lib/api';
+import { getEmployerMe, getEmployerSubscription } from '@/lib/api';
 import { checkoutEmployerPlan } from '@/lib/employer-plan-checkout';
 import { EMPLOYER_POST_JOB_HREF } from '@/lib/employer-plan-gate';
 import './buy-fullpage.css';
@@ -43,15 +43,12 @@ function PaymentSuccessScreen({
           <span className="is-now">4 Post a job</span>
         </nav>
         <div className="cb-buy-full__actions">
-          {intentPostJob ? (
-            <Link href={EMPLOYER_POST_JOB_HREF} className="cb-buy-full__cta">
-              Continue to post a job
-            </Link>
-          ) : (
-            <Link href="/employer/payments" className="cb-buy-full__cta">
-              Go to Billing
-            </Link>
-          )}
+          <Link href={EMPLOYER_POST_JOB_HREF} className="cb-buy-full__cta">
+            Continue to post a job
+          </Link>
+          <Link href="/employer/payments" className="cb-buy-full__ghost">
+            Go to Billing
+          </Link>
           <Link href="/employer" className="cb-buy-full__ghost">
             Employer dashboard
           </Link>
@@ -80,6 +77,20 @@ function BuyCreditsInner() {
       })
       .catch(() => setNeedsVerification(false));
   }, []);
+
+  // Already subscribed + opened buy only to post a job → go straight to the form.
+  useEffect(() => {
+    if (!intentPostJob || paidPlan) return;
+    let cancelled = false;
+    void getEmployerSubscription()
+      .then((sub) => {
+        if (!cancelled && sub.active) router.replace(EMPLOYER_POST_JOB_HREF);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [intentPostJob, paidPlan, router]);
 
   async function continueAfterConfirm(plan: EmployerSubscriptionPlan) {
     if (plan.contactSales || paying) return;

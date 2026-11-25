@@ -41,6 +41,7 @@ export const TAB_THEME: Record<
   dashboard: { ...SA_TONE, title: 'Dashboard', blurb: 'Platform snapshot and quick jumps' },
   candidates: { ...SA_TONE, title: 'Candidates', blurb: 'People directory · profile cards' },
   employers: { ...SA_TONE, title: 'Employers', blurb: 'Company verification board' },
+  subscriptions: { ...SA_TONE, title: 'Subscriptions', blurb: 'Employer plans, seats, GST invoices' },
   jobs: { ...SA_TONE, title: 'Jobs', blurb: 'Moderation strip by status color' },
   applications: { ...SA_TONE, title: 'Applications', blurb: 'Pipeline tickets across employers' },
   interviews: { ...SA_TONE, title: 'Interviews', blurb: 'Schedule timeline cards' },

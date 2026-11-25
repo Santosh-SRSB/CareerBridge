@@ -14,6 +14,7 @@ type Tile = {
 const MODULE_TILES: Tile[] = [
   { id: 'candidates', label: 'Candidates', href: '/adminsrsb/dashboard?tab=candidates' },
   { id: 'employers', label: 'Employers', href: '/adminsrsb/dashboard?tab=employers' },
+  { id: 'subscriptions', label: 'Subscriptions', href: '/adminsrsb/dashboard?tab=subscriptions' },
   { id: 'jobs', label: 'Jobs', href: '/adminsrsb/dashboard?tab=jobs' },
   { id: 'applications', label: 'Applications', href: '/adminsrsb/dashboard?tab=applications' },
   { id: 'interviews', label: 'Interviews', href: '/adminsrsb/dashboard?tab=interviews' },

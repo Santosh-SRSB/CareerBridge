@@ -2,6 +2,7 @@ export type SuperAdminNavId =
   | 'dashboard'
   | 'candidates'
   | 'employers'
+  | 'subscriptions'
   | 'jobs'
   | 'applications'
   | 'interviews'
@@ -34,6 +35,7 @@ export const ADMIN_NAV_ROLES: Record<SuperAdminNavId, StaffRole[]> = {
   dashboard: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   candidates: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   employers: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
+  subscriptions: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   jobs: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   applications: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],
   interviews: ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'PLATFORM_OPERATOR'],

@@ -705,6 +705,7 @@ export class MatchingService {
     const rows = await this.prisma.employerPayment.findMany({
       where: { employerId: employer.id },
       orderBy: { createdAt: 'desc' },
+      include: { invoice: { select: { id: true, invoiceNumber: true, status: true } } },
     });
     return rows.map((row) => ({
       id: row.id,
@@ -712,12 +713,17 @@ export class MatchingService {
       hiringOutcomeId: row.hiringOutcomeId,
       planId: row.planId ?? null,
       amountPaise: row.amountPaise,
+      taxablePaise: row.taxablePaise ?? null,
+      gstPaise: row.gstPaise ?? null,
       currency: row.currency,
       status: row.status,
       provider: row.provider,
       description: row.description,
       paidAt: row.paidAt?.toISOString() || null,
       createdAt: row.createdAt.toISOString(),
+      invoiceId: row.invoice?.id ?? null,
+      invoiceNumber: row.invoice?.invoiceNumber ?? null,
+      invoiceStatus: row.invoice?.status ?? null,
     }));
   }
 

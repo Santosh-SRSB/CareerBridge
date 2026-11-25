@@ -34,6 +34,16 @@ export class BillingController {
     return this.billing.createPlanOrder(user.id, planId);
   }
 
+  @Get('employer/invoices')
+  listInvoices(@CurrentUser() user: { id: string }) {
+    return this.billing.listMyInvoices(user.id);
+  }
+
+  @Get('employer/invoices/:id')
+  getInvoice(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.billing.getMyInvoice(user.id, id);
+  }
+
   @Get('employer/enterprise-offers')
   listEnterpriseOffers(@CurrentUser() user: { id: string }) {
     return this.billing.listMyEnterpriseOffers(user.id);
