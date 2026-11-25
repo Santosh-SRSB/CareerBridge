@@ -35,11 +35,24 @@ function runPrisma(args) {
   });
 }
 
+/** Successfully applied only — rows with non-empty logs are failed attempts that block migrate deploy. */
 async function appliedNames(prisma) {
   const rows = await prisma.$queryRaw`
     SELECT migration_name
     FROM "_prisma_migrations"
     WHERE rolled_back_at IS NULL
+      AND (logs IS NULL OR btrim(logs) = '')
+  `;
+  return new Set(rows.map((r) => r.migration_name));
+}
+
+async function failedMigrationNames(prisma) {
+  const rows = await prisma.$queryRaw`
+    SELECT migration_name
+    FROM "_prisma_migrations"
+    WHERE rolled_back_at IS NULL
+      AND logs IS NOT NULL
+      AND btrim(logs) <> ''
   `;
   return new Set(rows.map((r) => r.migration_name));
 }
@@ -92,11 +105,25 @@ async function main() {
       console.log('repair: ensured experienced_points_per_batch column');
     }
 
+    const failed = await failedMigrationNames(prisma);
+    if (failed.size) {
+      console.log(`repair: failed=${[...failed].join(',')}`);
+    }
+
     const needResolve = [];
-    if (hasReferralTables && local.has(MAIN_REFERRAL) && !names.has(MAIN_REFERRAL)) {
+    // Missing from success history, or stuck as failed while referral tables already exist.
+    if (
+      hasReferralTables &&
+      local.has(MAIN_REFERRAL) &&
+      (!names.has(MAIN_REFERRAL) || failed.has(MAIN_REFERRAL))
+    ) {
       needResolve.push(MAIN_REFERRAL);
     }
-    if (hasReferralTables && local.has(EXPERIENCED_POINTS) && !names.has(EXPERIENCED_POINTS)) {
+    if (
+      hasReferralTables &&
+      local.has(EXPERIENCED_POINTS) &&
+      (!names.has(EXPERIENCED_POINTS) || failed.has(EXPERIENCED_POINTS))
+    ) {
       needResolve.push(EXPERIENCED_POINTS);
     }
 
