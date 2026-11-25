@@ -115,6 +115,27 @@ function Mascot({ id }: { id: EmployerSubscriptionPlanId }) {
       </svg>
     );
   }
+  if (id === 'staffing') {
+    return (
+      <svg className="cb-price__mascot" viewBox="0 0 100 100" aria-hidden>
+        <circle cx="50" cy="50" r="38" fill="#312E81" />
+        <circle cx="38" cy="42" r="12" fill="#A5B4FC" />
+        <circle cx="62" cy="42" r="12" fill="#C4B5FD" />
+        <path d="M22 72c4-14 14-20 28-20s24 6 28 20" fill="#6366F1" />
+        <g className="cb-price__eye">
+          <circle cx="35" cy="41" r="2.2" fill="#0C1245" />
+          <circle cx="41" cy="41" r="2.2" fill="#0C1245" />
+        </g>
+        <g className="cb-price__eye">
+          <circle cx="59" cy="41" r="2.2" fill="#0C1245" />
+          <circle cx="65" cy="41" r="2.2" fill="#0C1245" />
+        </g>
+        <path d="M34 48q4 4 8 0M58 48q4 4 8 0" fill="none" stroke="#0C1245" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="50" cy="78" r="6" fill="#34D399" />
+        <path d="M47 78l2 2 4-4" fill="none" stroke="#0C1245" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
   return (
     <svg className="cb-price__mascot" viewBox="0 0 100 100" aria-hidden>
       <path d="M30 24l6-14 14 9 14-9 6 14z" fill="#FBBF24" />
@@ -270,13 +291,13 @@ export function EmployerPricingPlans({
           <div className="cb-price__coin" aria-hidden>
             <div>₹</div>
           </div>
-          <span className="cb-price__free">★ EMPLOYER SUBSCRIPTION PLANS</span>
+          <span className="cb-price__free">★ 1 MONTH FREE TO START</span>
           <h1 className="cb-price__title">
             Clear plans. <em>No surprises.</em>
           </h1>
           <p className="cb-price__sub">
-            Choose Starter, Growth, Business or Enterprise. Job posts, login seats, database views and support scale
-            with each plan. Prices are exclusive of GST; checkout adds 18% GST.
+            Choose Starter, Growth, Business, Staffing &amp; On-Roll or Enterprise. Job posts, login seats, database
+            views and support scale with each plan. Self-serve prices are exclusive of GST; checkout adds 18% GST.
           </p>
         </header>
 
@@ -288,7 +309,7 @@ export function EmployerPricingPlans({
             return (
               <section
                 key={plan.id}
-                className={`cb-price__card${plan.recommended ? ' is-hot' : ''}`}
+                className={`cb-price__card${plan.recommended ? ' is-hot' : ''}${plan.id === 'staffing' ? ' is-staffing' : ''}`}
                 style={style}
                 onPointerMove={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
@@ -301,6 +322,7 @@ export function EmployerPricingPlans({
                 }}
               >
                 {plan.recommended ? <span className="cb-price__badge">RECOMMENDED</span> : null}
+                {plan.id === 'staffing' ? <span className="cb-price__badge cb-price__badge--new">NEW</span> : null}
                 <Mascot id={plan.id} />
                 <h3>{plan.name}</h3>
                 <p className="cb-price__tag">{plan.tagline}</p>

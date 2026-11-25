@@ -125,9 +125,17 @@
   border-radius: 12px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #3b45d8, var(--ind));
+  background: #fff;
   box-shadow: 0 8px 22px rgba(59, 69, 216, 0.55);
+  overflow: hidden;
   transition: transform 0.4s;
+}
+
+.cb-planx__mark-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
 }
 
 .cb-planx__logo:hover .cb-planx__mark {

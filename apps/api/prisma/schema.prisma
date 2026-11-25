@@ -744,7 +744,7 @@ model EmployerPayment {
   employerId        String        @map("employer_id")
   jobId             String?       @map("job_id")
   hiringOutcomeId   String?       @unique @map("hiring_outcome_id")
-  /// Subscription catalog id (starter|growth|business|enterprise); null for legacy job-post fees.
+  /// Subscription catalog id (starter|growth|business|staffing|enterprise); null for legacy job-post fees.
   planId            String?       @map("plan_id")
   /// Guide §12 — when set, checkout used an admin-approved Enterprise offer.
   enterpriseOfferId String?       @map("enterprise_offer_id")

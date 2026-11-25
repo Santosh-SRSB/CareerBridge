@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { EMPLOYER_SUPPORT_EMAIL } from '@careerbridge/shared';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { CookieSettingsLink } from '@/components/CookieConsentBanner';
 import { EmployerPricingPlans } from '@/components/employer/EmployerPricingPlans';
@@ -10,6 +11,33 @@ import { EmployerPricingPlans } from '@/components/employer/EmployerPricingPlans
 const REGISTER_HREF = '/employer/register';
 const LOGIN_HREF = '/login?role=employer';
 const PLANS_HREF = '/employer/payments/buy';
+const MANAGED_HIRE_MAIL = `mailto:${EMPLOYER_SUPPORT_EMAIL}?subject=${encodeURIComponent('Managed hiring / recruitment services')}`;
+
+const MANAGED_HIRE_FEATURES = [
+  'Share your job requirements',
+  'Get dedicated recruitment support',
+  'Receive screened and shortlisted candidates',
+  'Pay recruitment charges upon successful placement as agreed',
+] as const;
+
+const MANAGED_HIRE_STEPS = [
+  {
+    title: 'Share your requirements',
+    copy: 'Role, skills, salary range and location.',
+  },
+  {
+    title: 'Dedicated recruiter',
+    copy: 'A recruiter owns your hiring needs.',
+  },
+  {
+    title: 'Screened shortlist',
+    copy: 'Receive screened and shortlisted candidates.',
+  },
+  {
+    title: 'Pay on placement',
+    copy: 'Success fee of 5% – 8.33% of CTC.',
+  },
+] as const;
 
 const HIRE_STEPS = [
   {
@@ -147,7 +175,7 @@ const FAQ_SECONDARY = [
   },
   {
     q: 'How much does it cost to post a job?',
-    a: 'Employer plans start from Starter. Choose a plan that fits your hiring volume — prices are exclusive of GST, and checkout adds 18% GST.',
+    a: 'Employer plans start from Starter. Choose a plan that fits your hiring volume — prices are exclusive of GST, and checkout adds 18% GST. For managed hiring, recruitment charges apply only on successful placement (typically 5% – 8.33% of CTC).',
   },
   {
     q: 'Can I post without listing the salary?',
@@ -352,8 +380,8 @@ export function EmployerMarketingLanding() {
             <a href="#post">Post a job</a>
             <a href="#hire">Find talent</a>
             <a href="#features">Products</a>
-            <Link href="/pricing">Pricing</Link>
-            <a href="#resources">Resources</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#managed-hiring">Managed hiring</a>
           </nav>
 
           <div className="cb-emkt-nav__actions">
@@ -647,6 +675,71 @@ export function EmployerMarketingLanding() {
         </div>
       </Section>
 
+      <Section className="cb-emkt-managed" id="managed-hiring">
+        <div className="cb-emkt-wrap">
+          <div className="cb-emkt-managed__intro">
+            <p className="cb-emkt-managed__kicker">SRSB Workforce Solutions</p>
+            <h2>Prefer managed hiring?</h2>
+            <AccentRule />
+            <p className="cb-emkt-lead">
+              Let our recruitment team own sourcing, screening and shortlists — you only pay on successful placement.
+            </p>
+          </div>
+
+          <article className="cb-emkt-recruit">
+            <div className="cb-emkt-recruit__head">
+              <span className="cb-emkt-recruit__icon" aria-hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 20a6 6 0 0112 0M15 7a3.5 3.5 0 010 7M20 20a5 5 0 00-4-4.9"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <div className="cb-emkt-recruit__titles">
+                <h3>Option 2: Recruitment Services</h3>
+                <span className="cb-emkt-recruit__badge">Managed Hiring</span>
+              </div>
+            </div>
+            <p className="cb-emkt-recruit__sub">
+              Let SRSB Workforce Solutions manage your hiring requirements.
+            </p>
+            <ul className="cb-emkt-recruit__list">
+              {MANAGED_HIRE_FEATURES.map((item) => (
+                <li key={item}>
+                  <span className="cb-emkt-recruit__ck" aria-hidden>
+                    ✓
+                  </span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <a href={MANAGED_HIRE_MAIL} className="cb-emkt-recruit__cta">
+              Connect With Recruitment Team
+            </a>
+          </article>
+
+          <div className="cb-emkt-managed__how">
+            <h3>How managed hiring works</h3>
+            <p>Pay recruitment charges only on successful placement, as agreed.</p>
+            <div className="cb-emkt-managed__steps">
+              {MANAGED_HIRE_STEPS.map((step, index) => (
+                <article key={step.title} className="cb-emkt-managed__step">
+                  <span className="cb-emkt-managed__num" aria-hidden>
+                    {index + 1}
+                  </span>
+                  <h4>{step.title}</h4>
+                  <p>{step.copy}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Section>
+
       <Section className="cb-emkt-ready" id="pricing">
         <div className="cb-emkt-wrap" style={{ paddingTop: 24, paddingBottom: 8 }}>
           <EmployerPricingPlans
@@ -717,7 +810,8 @@ export function EmployerMarketingLanding() {
               <h3>Employers</h3>
               <Link href={REGISTER_HREF}>Post a job</Link>
               <a href="#features">Products</a>
-              <Link href={PLANS_HREF}>View plan</Link>
+              <a href="#pricing">View plans</a>
+              <a href="#managed-hiring">Managed hiring</a>
               <a href="#faq">FAQ</a>
             </div>
             <div>

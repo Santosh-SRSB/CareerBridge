@@ -88,9 +88,8 @@ function LockIcon() {
 
 function BrandMark() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M2 17h20M5 17c0-5 3-8 7-8s7 3 7 8M9 17v-5M15 17v-5" />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/srsb-logo.png" alt="" width={28} height={28} className="cb-planx__mark-img" />
   );
 }
 
