@@ -51,6 +51,8 @@ export async function openRazorpayCheckout(input: {
   description: string;
   prefillEmail?: string;
   prefillName?: string;
+  /** Prefill mobile so Checkout does not ask for phone again. */
+  prefillContact?: string;
   /** Called while Checkout is open (e.g. poll server for UPI QR capture). Return true to finish. */
   pollPaid?: () => Promise<boolean>;
 }): Promise<RazorpayCheckoutSuccess | { synced: true }> {
@@ -100,10 +102,11 @@ export async function openRazorpayCheckout(input: {
       name: input.name,
       description: input.description,
       order_id: input.orderId,
-      theme: { color: '#FBBF24' },
+      theme: { color: '#1A1FC4' },
       prefill: {
         email: input.prefillEmail || '',
         name: input.prefillName || '',
+        contact: input.prefillContact || '',
       },
       handler: (response: RazorpayCheckoutSuccess) => finish(response),
       modal: {

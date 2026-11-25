@@ -225,9 +225,8 @@ export function EmployerPricingPlans({
 
   function ctaHref(plan: EmployerSubscriptionPlan) {
     if (plan.contactSales) return `mailto:${EMPLOYER_SUPPORT_EMAIL}`;
-    if (signedIn) {
-      return continueHref?.(plan) ?? `/employer/payments/buy?plan=${plan.id}`;
-    }
+    if (continueHref) return continueHref(plan);
+    if (signedIn) return `/employer/payments/buy?plan=${plan.id}`;
     return `/login?role=employer&plan=${plan.id}`;
   }
 
@@ -271,13 +270,13 @@ export function EmployerPricingPlans({
           <div className="cb-price__coin" aria-hidden>
             <div>₹</div>
           </div>
-          <span className="cb-price__free">★ 1 MONTH FREE TO START</span>
+          <span className="cb-price__free">★ EMPLOYER SUBSCRIPTION PLANS</span>
           <h1 className="cb-price__title">
             Clear plans. <em>No surprises.</em>
           </h1>
           <p className="cb-price__sub">
             Choose Starter, Growth, Business or Enterprise. Job posts, login seats, database views and support scale
-            with each plan. Prices are fixed, and checkout happens after you sign in.
+            with each plan. Prices are exclusive of GST; checkout adds 18% GST.
           </p>
         </header>
 

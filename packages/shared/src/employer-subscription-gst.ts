@@ -50,16 +50,41 @@ export function gstinStateCode(gstin: string | null | undefined): string | null 
 }
 
 /**
+ * Map employer profile state/city text (or a numeric code) to GST state code.
+ * Used when buyer GSTIN is missing so Karnataka still gets CGST+SGST.
+ */
+export function indianStateToCode(stateOrCity: string | null | undefined): string | null {
+  const raw = String(stateOrCity || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  if (!raw) return null;
+  if (/^\d{2}$/.test(raw)) return raw;
+  if (
+    raw === 'ka' ||
+    raw === 'karnataka' ||
+    raw.includes('karnataka') ||
+    raw.includes('bengaluru') ||
+    raw.includes('bangalore')
+  ) {
+    return '29';
+  }
+  return null;
+}
+
+/**
  * Catalogue / offer amount is taxable value (exclusive of GST).
  * Same state as seller (29 Karnataka) → CGST 9% + SGST 9%; else IGST 18%.
+ * Prefer GSTIN state; if missing, use buyerStateHint (employer state/city).
  */
 export function computeSubscriptionGst(
   taxablePaise: number,
   buyerGstin?: string | null,
+  buyerStateHint?: string | null,
 ): SubscriptionGstBreakdown {
   const taxable = Math.max(0, Math.round(Number(taxablePaise) || 0));
   const gstPaise = Math.round((taxable * EMPLOYER_SUBSCRIPTION_GST_RATE_PERCENT) / 100);
-  const buyerState = gstinStateCode(buyerGstin);
+  const buyerState = gstinStateCode(buyerGstin) || indianStateToCode(buyerStateHint);
   const sellerState = SRSB_INVOICE_SELLER.stateCode;
   const intraState = Boolean(buyerState && buyerState === sellerState);
   let cgstPaise = 0;

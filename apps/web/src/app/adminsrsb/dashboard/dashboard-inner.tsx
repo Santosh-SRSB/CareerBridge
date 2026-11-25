@@ -1528,6 +1528,7 @@ export default function SuperAdminDashboardInner() {
                 {sortedRows.map((row) => {
                   const id = String(row.id ?? '');
                   const status = String(row.status ?? '');
+                  const payStatus = String(row.paymentStatus ?? '');
                   const bar =
                     status === 'ACTIVE' ? 'sa-strip--ok' : status === 'SUSPENDED' ? 'sa-strip--bad' : 'sa-strip--muted';
                   const taxable = Number(row.taxablePaise ?? 0);
@@ -1535,6 +1536,22 @@ export default function SuperAdminDashboardInner() {
                   const total = Number(row.amountPaise ?? 0);
                   const inr = (paise: number) =>
                     (paise / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
+                  const paidAt = row.paidAt
+                    ? new Date(String(row.paidAt)).toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : null;
+                  const endsAt = row.endsAt
+                    ? new Date(String(row.endsAt)).toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    : '—';
                   return (
                     <article key={id} className="sa-ccard flex items-stretch">
                       <div className={`w-1.5 shrink-0 ${bar}`} />
@@ -1551,16 +1568,30 @@ export default function SuperAdminDashboardInner() {
                           <p className="sa-muted text-xs">
                             {total > 0
                               ? `${inr(taxable)} + GST ${inr(gst)} = ${inr(total)}`
-                              : 'No payment linked'}
-                            {' · '}
-                            Ends{' '}
-                            {row.endsAt
-                              ? new Date(String(row.endsAt)).toLocaleDateString('en-IN')
-                              : '—'}
+                              : 'No payment linked (admin grant)'}
+                            {' · Ends '}
+                            {endsAt}
+                            {paidAt ? ` · Paid ${paidAt}` : ''}
+                          </p>
+                          <p className="sa-muted text-xs">
+                            Subscription {status}
+                            {payStatus ? ` · Payment ${payStatus}` : ''}
+                            {row.razorpayPaymentId ? ` · RZP ${cell(row.razorpayPaymentId)}` : ''}
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <StatusPill status={status} />
+                          {payStatus ? <StatusPill status={payStatus} /> : null}
+                          {row.invoiceId ? (
+                            <a
+                              className="sa-btn sa-btn--line min-h-9 px-3 text-xs inline-flex items-center"
+                              href={`/adminsrsb/invoices/${encodeURIComponent(String(row.invoiceId))}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Invoice
+                            </a>
+                          ) : null}
                           {row.employerId ? (
                             <ActionBtn onClick={() => void openDetail('employers', String(row.employerId))}>
                               Employer

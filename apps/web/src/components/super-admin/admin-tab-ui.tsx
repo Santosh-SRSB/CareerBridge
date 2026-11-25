@@ -41,7 +41,7 @@ export const TAB_THEME: Record<
   dashboard: { ...SA_TONE, title: 'Dashboard', blurb: 'Platform snapshot and quick jumps' },
   candidates: { ...SA_TONE, title: 'Candidates', blurb: 'People directory · profile cards' },
   employers: { ...SA_TONE, title: 'Employers', blurb: 'Company verification board' },
-  subscriptions: { ...SA_TONE, title: 'Subscriptions', blurb: 'Employer plans, seats, GST invoices' },
+  subscriptions: { ...SA_TONE, title: 'Billing', blurb: 'Employer plans, seats, payments & GST invoices' },
   jobs: { ...SA_TONE, title: 'Jobs', blurb: 'Moderation strip by status color' },
   applications: { ...SA_TONE, title: 'Applications', blurb: 'Pipeline tickets across employers' },
   interviews: { ...SA_TONE, title: 'Interviews', blurb: 'Schedule timeline cards' },
@@ -482,7 +482,32 @@ export function DetailPanel({
                     : null
                 }
               />
-              <Field label="Billing period" value={plan?.period} />
+              <Field
+                label="Billing period"
+                value={(() => {
+                  const raw = plan?.period;
+                  if (!raw) return null;
+                  if (String(raw).startsWith('sub:')) {
+                    const ends = (plan as { endsAt?: string | null } | undefined)?.endsAt;
+                    return ends
+                      ? `Current subscription · until ${new Date(String(ends)).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}`
+                      : 'Current subscription period';
+                  }
+                  const [year, month] = String(raw).split('-').map(Number);
+                  if (year && month) {
+                    return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('en-IN', {
+                      month: 'long',
+                      year: 'numeric',
+                      timeZone: 'UTC',
+                    });
+                  }
+                  return String(raw);
+                })()}
+              />
               <Field
                 label="Active jobs"
                 value={

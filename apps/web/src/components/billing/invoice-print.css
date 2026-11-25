@@ -1,0 +1,46 @@
+/* Print / Save-as-PDF: only the tax invoice card, no page chrome. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .inv-doc,
+  .inv-doc * {
+    visibility: visible !important;
+  }
+
+  .inv-doc {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    overflow: visible !important;
+  }
+
+  .no-print,
+  .inv-print-hide {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}

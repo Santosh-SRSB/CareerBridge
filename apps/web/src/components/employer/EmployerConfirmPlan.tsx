@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import Link from 'next/link';
 import {
   EMPLOYER_SUPPORT_EMAIL,
@@ -15,17 +15,18 @@ import './employer-confirm-plan.css';
 const CONFIRM_PLAN_IDS = ['starter', 'growth', 'business'] as const;
 type ConfirmPlanId = (typeof CONFIRM_PLAN_IDS)[number];
 
-const TRACK =
-  'HIRE SMARTER ✦ POST JOBS ✦ FIND TALENT ✦ SRSB CAREERBRIDGE ✦ '.repeat(6);
-
-const FLOAT_SHAPES = [
-  '<path d="M12 2l2.6 6.6L21 10l-5 4.5L17.5 22 12 18.5 6.5 22 8 14.5 3 10l6.4-1.4z" fill="#FBBF24"/>',
-  '<circle cx="12" cy="12" r="8" fill="none" stroke="#7C83FF" stroke-width="3"/>',
-  '<path d="M12 4v16M4 12h16" stroke="#34D399" stroke-width="3" stroke-linecap="round"/>',
-  '<rect x="5" y="5" width="14" height="14" rx="3" fill="#F472B6"/>',
-];
-
 const BIT_COLORS = ['#FBBF24', '#34D399', '#7C83FF', '#F472B6', '#fff'];
+
+const PILL_FEATURES: Record<ConfirmPlanId, string[]> = {
+  starter: ['Applicant management', 'Basic candidate filters', 'Email support'],
+  growth: ['Applicant management', 'Advanced candidate filters', 'Candidate shortlist', 'Priority email support'],
+  business: [
+    'Advanced candidate filters',
+    'Candidate shortlist and tracking',
+    'Priority support',
+    'Job performance reports',
+  ],
+};
 
 function isConfirmPlanId(id: string | null | undefined): id is ConfirmPlanId {
   return CONFIRM_PLAN_IDS.includes(id as ConfirmPlanId);
@@ -38,7 +39,12 @@ function validityLabel(plan: EmployerSubscriptionPlan) {
   return plan.periodLabel.replace(/^\//, '').trim() || 'Custom';
 }
 
-function formatInr(paise: number | null) {
+function shortTagline(plan: EmployerSubscriptionPlan) {
+  const parts = plan.tagline.split('·').map((s) => s.trim());
+  return parts.length > 1 ? parts.slice(1).join(' · ') : plan.tagline;
+}
+
+function formatInrWhole(paise: number | null) {
   if (paise == null) return 'Custom';
   return `₹${Math.round(paise / 100).toLocaleString('en-IN')}`;
 }
@@ -80,65 +86,84 @@ function LockIcon() {
   );
 }
 
+function BrandMark() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2 17h20M5 17c0-5 3-8 7-8s7 3 7 8M9 17v-5M15 17v-5" />
+    </svg>
+  );
+}
+
 function Mascot({ id }: { id: ConfirmPlanId }) {
   if (id === 'starter') {
     return (
-      <svg className="cb-confirm__mascot" viewBox="0 0 100 100" aria-hidden>
-        <path d="M38 38v-9a6 6 0 016-6h12a6 6 0 016 6v9" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
-        <rect x="16" y="36" width="68" height="50" rx="12" fill="#7C83FF" />
-        <rect x="16" y="60" width="68" height="7" fill="#5A61E0" />
-        <circle cx="50" cy="63" r="5" fill="#FBBF24" />
-        <g className="cb-confirm__eye">
-          <circle cx="37" cy="50" r="6" fill="#fff" />
-          <circle cx="63" cy="50" r="6" fill="#fff" />
-          <circle cx="38" cy="51" r="3" fill="#0C1245" />
-          <circle cx="64" cy="51" r="3" fill="#0C1245" />
+      <svg className="cb-planx__mascot" viewBox="0 0 120 120" aria-hidden>
+        <path className="cb-planx__tw" d="M104 20l2.4 5.6 5.6 2.4-5.6 2.4-2.4 5.6-2.4-5.6-5.6-2.4 5.6-2.4z" fill="#FDE68A" />
+        <path className="cb-planx__tw" style={{ animationDelay: '.9s' }} d="M14 30l1.8 4.2 4.2 1.8-4.2 1.8-1.8 4.2-1.8-4.2-4.2-1.8 4.2-1.8z" fill="#fff" />
+        <path d="M44 44v-9a7 7 0 017-7h18a7 7 0 017 7v9" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" />
+        <rect x="18" y="42" width="84" height="62" rx="16" fill="#7C83FF" />
+        <path d="M18 70h84v6H18z" fill="#5A61E0" />
+        <rect x="52" y="64" width="16" height="18" rx="4" fill="#FBBF24" />
+        <circle cx="60" cy="73" r="2.4" fill="#0C1245" />
+        <g className="cb-planx__eye">
+          <circle cx="52" cy="56" r="4.6" fill="#fff" />
+          <circle cx="68" cy="56" r="4.6" fill="#fff" />
+          <circle cx="53" cy="57" r="2.4" fill="#0C1245" />
+          <circle cx="69" cy="57" r="2.4" fill="#0C1245" />
         </g>
-        <path d="M42 74q8 8 16 0" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-        <circle cx="28" cy="62" r="4" fill="#F9A8D4" opacity=".7" />
-        <circle cx="72" cy="62" r="4" fill="#F9A8D4" opacity=".7" />
+        <path d="M55 65q5 6 10 0" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
+        <circle cx="45" cy="63" r="3.4" fill="#F9A8D4" opacity=".75" />
+        <circle cx="75" cy="63" r="3.4" fill="#F9A8D4" opacity=".75" />
+        <path d="M26 50q4-4 12-4" fill="none" stroke="#fff" strokeOpacity=".45" strokeWidth="3" strokeLinecap="round" />
       </svg>
     );
   }
   if (id === 'growth') {
     return (
-      <svg className="cb-confirm__mascot" viewBox="0 0 100 100" aria-hidden>
-        <path d="M42 76Q50 100 58 76Z" className="cb-confirm__flame" fill="#FB923C" />
-        <path d="M44 76Q50 90 56 76Z" className="cb-confirm__flame" fill="#FDE68A" />
-        <path d="M36 58L18 80L36 74Z" fill="#FBBF24" />
-        <path d="M64 58L82 80L64 74Z" fill="#FBBF24" />
-        <path d="M50 6C70 22 72 52 65 76H35C28 52 30 22 50 6Z" fill="#fff" />
-        <path d="M50 6C58 12 63 19 66 27H34C37 19 42 12 50 6Z" fill="#F87171" />
-        <circle cx="50" cy="44" r="13" fill="#1D2688" stroke="#FBBF24" strokeWidth="3" />
-        <g className="cb-confirm__eye">
-          <circle cx="45" cy="42" r="2.6" fill="#FDE68A" />
-          <circle cx="55" cy="42" r="2.6" fill="#FDE68A" />
+      <svg className="cb-planx__mascot" viewBox="0 0 120 120" aria-hidden>
+        <path className="cb-planx__tw" d="M104 20l2.4 5.6 5.6 2.4-5.6 2.4-2.4 5.6-2.4-5.6-5.6-2.4 5.6-2.4z" fill="#FDE68A" />
+        <path className="cb-planx__flame" d="M50 92Q60 118 70 92Z" fill="#FB923C" />
+        <path className="cb-planx__flame" d="M54 92Q60 106 66 92Z" fill="#FDE68A" />
+        <path d="M42 66L22 94L44 86Z" fill="#FBBF24" />
+        <path d="M78 66L98 94L76 86Z" fill="#FBBF24" />
+        <path d="M60 8C84 26 88 64 78 92H42C32 64 36 26 60 8Z" fill="#fff" />
+        <path d="M60 8C70 15 77 24 80 34H40C43 24 50 15 60 8Z" fill="#F87171" />
+        <circle cx="60" cy="56" r="17" fill="#1D2688" stroke="#FBBF24" strokeWidth="4" />
+        <g className="cb-planx__eye">
+          <circle cx="54" cy="54" r="4.6" fill="#FDE68A" />
+          <circle cx="66" cy="54" r="4.6" fill="#FDE68A" />
+          <circle cx="55" cy="55" r="2.4" fill="#0C1245" />
+          <circle cx="67" cy="55" r="2.4" fill="#0C1245" />
         </g>
-        <path d="M45 49q5 5 10 0" fill="none" stroke="#FDE68A" strokeWidth="2" strokeLinecap="round" />
+        <path d="M55 63q5 6 10 0" fill="none" stroke="#FDE68A" strokeWidth="2.6" strokeLinecap="round" />
+        <rect x="52" y="84" width="16" height="5" rx="2.5" fill="#E5E7EB" />
       </svg>
     );
   }
   return (
-    <svg className="cb-confirm__mascot" viewBox="0 0 100 100" aria-hidden>
-      <path d="M8 90q18-34 36 0z" fill="#FBBF24" />
-      <path d="M56 90q18-34 36 0z" fill="#F472B6" />
-      <path d="M32 90q18-38 36 0z" fill="#34D399" />
-      <circle cx="26" cy="58" r="12" fill="#FDE68A" />
-      <circle cx="74" cy="58" r="12" fill="#FBCFE8" />
-      <circle cx="50" cy="46" r="14" fill="#A7F3D0" />
-      <g className="cb-confirm__eye">
-        <circle cx="46" cy="44" r="2" fill="#0C1245" />
-        <circle cx="54" cy="44" r="2" fill="#0C1245" />
+    <svg className="cb-planx__mascot" viewBox="0 0 120 120" aria-hidden>
+      <path className="cb-planx__tw" d="M104 20l2.4 5.6 5.6 2.4-5.6 2.4-2.4 5.6-2.4-5.6-5.6-2.4 5.6-2.4z" fill="#FDE68A" />
+      <rect x="12" y="62" width="30" height="42" rx="6" fill="#7C83FF" />
+      <rect x="80" y="54" width="28" height="50" rx="6" fill="#5A61E0" />
+      <rect x="34" y="28" width="52" height="76" rx="10" fill="#A78BFA" />
+      <path d="M60 28V10" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+      <path className="cb-planx__flag" d="M60 10h20l-6 6 6 6H60z" fill="#FBBF24" />
+      <g fill="#FDE68A">
+        <rect className="cb-planx__tw" x="42" y="38" width="10" height="9" rx="2.5" />
+        <rect className="cb-planx__tw" style={{ animationDelay: '.7s' }} x="68" y="38" width="10" height="9" rx="2.5" />
+        <rect className="cb-planx__tw" style={{ animationDelay: '1.3s' }} x="42" y="52" width="10" height="9" rx="2.5" />
+        <rect className="cb-planx__tw" style={{ animationDelay: '.3s' }} x="68" y="52" width="10" height="9" rx="2.5" />
       </g>
-      <g className="cb-confirm__eye">
-        <circle cx="22" cy="56" r="1.7" fill="#0C1245" />
-        <circle cx="30" cy="56" r="1.7" fill="#0C1245" />
+      <g className="cb-planx__eye">
+        <circle cx="52" cy="76" r="4.6" fill="#fff" />
+        <circle cx="68" cy="76" r="4.6" fill="#fff" />
+        <circle cx="53" cy="77" r="2.4" fill="#0C1245" />
+        <circle cx="69" cy="77" r="2.4" fill="#0C1245" />
       </g>
-      <g className="cb-confirm__eye">
-        <circle cx="70" cy="56" r="1.7" fill="#0C1245" />
-        <circle cx="78" cy="56" r="1.7" fill="#0C1245" />
-      </g>
-      <path d="M45 51q5 5 10 0M22 62q4 4 8 0M70 62q4 4 8 0" fill="none" stroke="#0C1245" strokeWidth="2" strokeLinecap="round" />
+      <path d="M55 85q5 6 10 0" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
+      <circle cx="45" cy="83" r="3.4" fill="#F9A8D4" opacity=".75" />
+      <circle cx="75" cy="83" r="3.4" fill="#F9A8D4" opacity=".75" />
+      <rect x="8" y="102" width="104" height="6" rx="3" fill="#7C3AED" />
     </svg>
   );
 }
@@ -163,8 +188,9 @@ export function EmployerConfirmPlan({
   const [displayTotal, setDisplayTotal] = useState('₹0');
   const [confirmedFlash, setConfirmedFlash] = useState(false);
   const [swapKey, setSwapKey] = useState(0);
+  const [indStyle, setIndStyle] = useState<CSSProperties>({ width: 0, transform: 'translateX(0px)' });
   const totalFrom = useRef(0);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const segRef = useRef<HTMLDivElement>(null);
 
   const plans = useMemo(
     () =>
@@ -201,28 +227,32 @@ export function EmployerConfirmPlan({
     const t0 = performance.now();
     let raf = 0;
     const tick = (t: number) => {
-      const k = Math.min(1, (t - t0) / 600);
+      const k = Math.min(1, (t - t0) / 700);
       const e = 1 - Math.pow(1 - k, 3);
-      setDisplayTotal(formatInr(Math.round(from + (to - from) * e) * 100));
+      setDisplayTotal(formatInrWhole(Math.round(from + (to - from) * e) * 100));
       if (k < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [plan]);
 
-  const floaters = useMemo(
-    () =>
-      Array.from({ length: 14 }, (_, i) => ({
-        id: i,
-        left: `${Math.random() * 96}%`,
-        top: `${Math.random() * 95}%`,
-        width: `${16 + Math.random() * 20}px`,
-        d: `${6 + Math.random() * 7}s`,
-        delay: `-${Math.random() * 6}s`,
-        shape: FLOAT_SHAPES[i % 4],
-      })),
-    [],
-  );
+  function moveInd() {
+    const root = segRef.current;
+    if (!root) return;
+    const on = root.querySelector<HTMLButtonElement>('button.is-on');
+    if (!on) return;
+    setIndStyle({ width: on.offsetWidth, transform: `translateX(${on.offsetLeft}px)` });
+  }
+
+  useLayoutEffect(() => {
+    moveInd();
+  }, [activeId, plans.length]);
+
+  useEffect(() => {
+    const onResize = () => moveInd();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [activeId]);
 
   function selectPlan(id: ConfirmPlanId) {
     setActiveId(id);
@@ -235,15 +265,15 @@ export function EmployerConfirmPlan({
     setConfirmedFlash(true);
     window.setTimeout(() => setConfirmedFlash(false), 2600);
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      for (let i = 0; i < 30; i += 1) {
+      for (let i = 0; i < 32; i += 1) {
         const d = document.createElement('i');
-        d.className = 'cb-confirm__bit';
+        d.className = 'cb-planx__bit';
         d.style.background = BIT_COLORS[i % 5];
         d.style.left = `${e.clientX}px`;
         d.style.top = `${e.clientY}px`;
         document.body.appendChild(d);
         const a = Math.random() * 6.28;
-        const v = 60 + Math.random() * 130;
+        const v = 60 + Math.random() * 140;
         d.animate(
           [
             { transform: 'translate(0,0) rotate(0)', opacity: 1 },
@@ -261,79 +291,59 @@ export function EmployerConfirmPlan({
 
   if (!plan) return null;
 
-  return (
-    <div className="cb-confirm">
-      <div className="cb-confirm__rail cb-confirm__rail--l" aria-hidden>
-        <span className="cb-confirm__track">{TRACK}</span>
-      </div>
-      <div className="cb-confirm__rail cb-confirm__rail--r" aria-hidden>
-        <span className="cb-confirm__track">{TRACK}</span>
-      </div>
-      <div className="cb-confirm__glow cb-confirm__glow--1" aria-hidden />
-      <div className="cb-confirm__glow cb-confirm__glow--2" aria-hidden />
-      <div aria-hidden>
-        {floaters.map((f) => (
-          <div
-            key={f.id}
-            className="cb-confirm__fl"
-            style={
-              {
-                left: f.left,
-                top: f.top,
-                width: f.width,
-                '--d': f.d,
-                animationDelay: f.delay,
-              } as CSSProperties
-            }
-            dangerouslySetInnerHTML={{
-              __html: `<svg viewBox="0 0 24 24" width="100%" aria-hidden="true">${f.shape}</svg>`,
-            }}
-          />
-        ))}
-      </div>
+  const jobLabel =
+    plan.activeJobLimit == null
+      ? 'Job posts'
+      : plan.activeJobLimit === 1
+        ? 'Active job post'
+        : 'Job posts';
+  const seatLabel =
+    plan.loginSeats == null ? 'Login seats' : plan.loginSeats === 1 ? 'Employer login' : 'Login seats';
 
-      <main className="cb-confirm__main">
-        <div className="cb-confirm__top">
-          <div className="cb-confirm__logo">
-            <b>SRSB</b> CareerBridge
+  return (
+    <div className="cb-planx">
+      <div className="cb-planx__glow cb-planx__glow--1" aria-hidden />
+      <div className="cb-planx__glow cb-planx__glow--2" aria-hidden />
+      <div className="cb-planx__grid" aria-hidden />
+
+      <main className="cb-planx__main">
+        <div className="cb-planx__top cb-planx__in">
+          <div className="cb-planx__logo">
+            <span className="cb-planx__mark">
+              <BrandMark />
+            </span>
+            <span>
+              <b>SRSB</b> CareerBridge
+            </span>
           </div>
-          <span className="cb-confirm__sec">
+          <span className="cb-planx__sec">
             <LockIcon />
             Secure checkout
           </span>
         </div>
 
-        <nav className="cb-confirm__steps" aria-label="Progress">
-          <span className="cb-confirm__st is-done">
+        <nav className="cb-planx__steps cb-planx__in" style={{ '--d': '0.1s' } as CSSProperties} aria-label="Progress">
+          <span className="cb-planx__st is-done">
             <i>✓</i>Choose plan
           </span>
-          <span className="cb-confirm__bar is-on" />
-          <span className="cb-confirm__st is-now">
+          <span className="cb-planx__bar is-on" />
+          <span className="cb-planx__st is-now">
             <i>2</i>Confirm plan
           </span>
-          <span className="cb-confirm__bar" />
-          <span className="cb-confirm__st">
+          <span className="cb-planx__bar" />
+          <span className="cb-planx__st">
             <i>3</i>Payment
           </span>
-          <span className="cb-confirm__bar" />
-          <span className="cb-confirm__st">
+          <span className="cb-planx__bar" />
+          <span className="cb-planx__st">
             <i>4</i>Post a job
           </span>
         </nav>
 
-        <div
-          className="cb-confirm__panel"
-          id="panel"
-          ref={panelRef}
-          onPointerMove={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`);
-            e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`);
-          }}
-        >
-          <section className="cb-confirm__left">
-            <span className="cb-confirm__eyebrow">POST A JOB</span>
-            <div className="cb-confirm__seg" role="tablist" aria-label="Plans">
+        <div className="cb-planx__layout">
+          <section className="cb-planx__left cb-planx__in" style={{ '--d': '0.2s' } as CSSProperties}>
+            <div className="cb-planx__seg" ref={segRef} role="tablist" aria-label="Plans">
+              <span className="cb-planx__ind" style={indStyle} aria-hidden />
               {plans.map((p) => (
                 <button
                   key={p.id}
@@ -347,92 +357,124 @@ export function EmployerConfirmPlan({
                 </button>
               ))}
             </div>
-            <div className={`cb-confirm__head${swapKey ? ' is-swap' : ''}`} key={swapKey}>
-              <div className="cb-confirm__tile">
-                <Mascot id={activeId} />
+
+            <div key={swapKey} className={`cb-planx__swap${swapKey ? ' is-swap' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+              <div className="cb-planx__hero">
+                <div className="cb-planx__stage">
+                  <div className="cb-planx__orbit" aria-hidden>
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                  <div className="cb-planx__shadow" aria-hidden />
+                  <Mascot id={activeId} />
+                </div>
+                <div>
+                  <h1>{plan.name} plan</h1>
+                  {plan.recommended ? <div className="cb-planx__chip">Recommended</div> : null}
+                  <p className="cb-planx__tag">{shortTagline(plan)}</p>
+                </div>
               </div>
-              <div>
-                <h1>
-                  {plan.name} plan
-                  {plan.recommended ? <span className="cb-confirm__chip">RECOMMENDED</span> : null}
-                </h1>
-                <p className="cb-confirm__tag">{plan.tagline}</p>
+
+              <div className="cb-planx__stats" aria-label="Plan limits">
+                <div className="cb-planx__stat">
+                  <b>{plan.activeJobLimit == null ? '∞' : plan.activeJobLimit}</b>
+                  <span>{jobLabel}</span>
+                </div>
+                <div className="cb-planx__stat">
+                  <b>{plan.loginSeats == null ? '∞' : plan.loginSeats}</b>
+                  <span>{seatLabel}</span>
+                </div>
+                <div className="cb-planx__stat">
+                  <b>{plan.candidateViewCredits == null ? '∞' : plan.candidateViewCredits}</b>
+                  <span>Candidate views</span>
+                </div>
               </div>
+
+              <ul className="cb-planx__pills">
+                {PILL_FEATURES[activeId].map((feature, i) => (
+                  <li
+                    key={`${activeId}-${feature}`}
+                    className="cb-planx__pill"
+                    style={{ animationDelay: `${150 + i * 80}ms` }}
+                  >
+                    <span className="cb-planx__ck">
+                      <CheckIcon />
+                    </span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ul className="cb-confirm__features">
-              {plan.features.map((feature, i) => (
-                <li key={`${plan.id}-${feature}`} style={{ animationDelay: `${120 + i * 70}ms` }}>
-                  <span className="cb-confirm__ck">
-                    <CheckIcon />
-                  </span>
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
           </section>
 
-          <aside className="cb-confirm__right">
-            <h2>Order summary</h2>
-            <div className="cb-confirm__row">
-              <span>Plan</span>
-              <b>{plan.name}</b>
-            </div>
-            <div className="cb-confirm__row">
-              <span>Validity</span>
-              <b>{validityLabel(plan)}</b>
-            </div>
-            <div className="cb-confirm__row">
-              <span>Unlocks</span>
-              <b>Post a job</b>
-            </div>
-            {gstBreakdown ? (
-              <>
-                <div className="cb-confirm__row">
-                  <span>Plan (excl. GST)</span>
-                  <b>{formatInrFromPaise(gstBreakdown.taxablePaise)}</b>
-                </div>
-                <div className="cb-confirm__row">
-                  <span>GST {gstBreakdown.gstRatePercent}%</span>
-                  <b>{formatInrFromPaise(gstBreakdown.gstPaise)}</b>
-                </div>
-              </>
-            ) : null}
-            <div className="cb-confirm__total">
-              <span>Total payable</span>
-              <b>{displayTotal}</b>
-            </div>
-            <h3 className="cb-confirm__h3">WHAT HAPPENS NEXT</h3>
-            <div className="cb-confirm__next">
-              <div className="cb-confirm__nx is-a">
-                <i>1</i>
-                <div>
-                  <b>Confirm this plan</b>
-                  Unlocks Post a job
-                </div>
+          <aside className="cb-planx__ticket">
+            <div className="cb-planx__t1">
+              <h2>Order summary</h2>
+              <div className="cb-planx__row">
+                <span>Plan</span>
+                <b>{plan.name}</b>
               </div>
-              <div className="cb-confirm__nx">
-                <i>2</i>
-                <div>
-                  <b>Pay with Razorpay</b>
-                  Secure checkout · server-controlled amount
-                </div>
+              <div className="cb-planx__row">
+                <span>Validity</span>
+                <b>{validityLabel(plan)}</b>
               </div>
-              <div className="cb-confirm__nx">
-                <i>3</i>
-                <div>
-                  <b>Post your first job</b>
-                  Start receiving applicants
-                </div>
+              <div className="cb-planx__row">
+                <span>Unlocks</span>
+                <b>Post a job</b>
+              </div>
+              {gstBreakdown ? (
+                <>
+                  <div className="cb-planx__row">
+                    <span>Plan (excl. GST)</span>
+                    <b>{formatInrFromPaise(gstBreakdown.taxablePaise)}</b>
+                  </div>
+                  <div className="cb-planx__row">
+                    <span>GST {gstBreakdown.gstRatePercent}%</span>
+                    <b>{formatInrFromPaise(gstBreakdown.gstPaise)}</b>
+                  </div>
+                </>
+              ) : null}
+              <div className="cb-planx__total">
+                <span>Total</span>
+                <b>{displayTotal}</b>
               </div>
             </div>
-            <div className="cb-confirm__note">
-              <span>ℹ️</span>
-              <span>Secure Razorpay checkout. Amount is fixed by the server — never trust the browser alone.</span>
-            </div>
-            <div className="cb-confirm__acts">
+            <div className="cb-planx__t2">
+              <h3>What happens next</h3>
+              <div className="cb-planx__next">
+                <div className="cb-planx__nx is-a">
+                  <i>1</i>
+                  <div>
+                    <b>Confirm this plan</b>
+                    Unlocks Post a job
+                  </div>
+                </div>
+                <div className="cb-planx__nx">
+                  <i>2</i>
+                  <div>
+                    <b>Pay with Razorpay</b>
+                    Secure checkout · server-controlled amount
+                  </div>
+                </div>
+                <div className="cb-planx__nx">
+                  <i>3</i>
+                  <div>
+                    <b>Post your first job</b>
+                    Start receiving applicants
+                  </div>
+                </div>
+              </div>
+              <div className="cb-planx__note">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 11v5M12 8h.01" />
+                </svg>
+                Secure Razorpay checkout. Amount is fixed by the server.
+              </div>
               <button
                 type="button"
-                className={`cb-confirm__btn cb-confirm__btn--main${confirmedFlash ? ' is-ok' : ''}`}
+                className={`cb-planx__btn cb-planx__btn--main${confirmedFlash ? ' is-ok' : ''}`}
                 onClick={handleConfirm}
                 disabled={confirmBusy}
                 aria-busy={confirmBusy}
@@ -441,17 +483,17 @@ export function EmployerConfirmPlan({
                   ? 'Securing payment…'
                   : confirmedFlash
                     ? 'Plan confirmed ✓'
-                    : 'Pay securely & continue'}
+                    : 'Continue to post a job'}
                 {confirmBusy || confirmedFlash ? null : <ArrowIcon />}
               </button>
-              <Link href={changePlanHref} className="cb-confirm__btn cb-confirm__btn--ghost">
+              <Link href={changePlanHref} className="cb-planx__btn cb-planx__btn--ghost">
                 Change plan
               </Link>
             </div>
           </aside>
         </div>
 
-        <div className="cb-confirm__trust">
+        <div className="cb-planx__trust cb-planx__in" style={{ '--d': '0.4s' } as CSSProperties}>
           <span>
             <LockIcon />
             Secure Razorpay checkout
@@ -460,7 +502,7 @@ export function EmployerConfirmPlan({
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M5 12l4 4 10-10" />
             </svg>
-            Transparent pricing
+            Fixed prices, no surprises
           </span>
           <span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -470,9 +512,9 @@ export function EmployerConfirmPlan({
             Email support
           </span>
         </div>
-        <p className="cb-confirm__foot">
-          UPI QR pays this order only — plan unlocks for your logged-in employer account, not for whoever scans.
-          Need help? Write to <a href={`mailto:${EMPLOYER_SUPPORT_EMAIL}`}>{EMPLOYER_SUPPORT_EMAIL}</a>
+        <p className="cb-planx__foot cb-planx__in" style={{ '--d': '0.5s' } as CSSProperties}>
+          Need help choosing? Write to{' '}
+          <a href={`mailto:${EMPLOYER_SUPPORT_EMAIL}`}>{EMPLOYER_SUPPORT_EMAIL}</a>
         </p>
       </main>
     </div>

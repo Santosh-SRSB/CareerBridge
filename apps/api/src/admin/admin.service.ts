@@ -9,6 +9,7 @@ import {
   type AiBudgetStatus,
   EMPLOYER_PLAN_SETTING_DEFAULTS,
   ErrorCode,
+  SRSB_INVOICE_SELLER,
   aiBudgetStatus,
   aiUsageDayStart,
   getEmployerSubscriptionPlan,
@@ -1111,6 +1112,73 @@ export class AdminService {
       newValue: { status: 'SUSPENDED', count: result.count },
     });
     return { ok: true as const, suspended: result.count };
+  }
+
+  /** Super Admin — tax invoice by id or invoice number (SRSB0001…). */
+  async getEmployerInvoice(invoiceIdRaw: string) {
+    const id = String(invoiceIdRaw || '').trim();
+    const row = await this.prisma.employerInvoice.findFirst({
+      where: { OR: [{ id }, { invoiceNumber: id }] },
+      include: {
+        payment: {
+          select: {
+            status: true,
+            razorpayPaymentId: true,
+            paidAt: true,
+            planId: true,
+            amountPaise: true,
+          },
+        },
+        employer: { select: { id: true, companyName: true } },
+      },
+    });
+    if (!row) {
+      throw new NotFoundException({
+        code: ErrorCode.RESOURCE_NOT_FOUND,
+        message: 'Invoice was not found.',
+      });
+    }
+    return {
+      invoice: {
+        id: row.id,
+        invoiceNumber: row.invoiceNumber,
+        paymentId: row.paymentId,
+        employerId: row.employerId,
+        companyName: row.employer.companyName,
+        planId: row.planId,
+        sacCode: row.sacCode,
+        seller: {
+          name: row.sellerName,
+          gstin: row.sellerGstin,
+          address: row.sellerAddress,
+          email: row.sellerEmail,
+          phone: row.sellerPhone,
+        },
+        buyer: {
+          name: row.buyerName,
+          gstin: row.buyerGstin,
+          stateCode: row.buyerStateCode,
+          address: row.buyerAddress,
+        },
+        placeOfSupply: row.placeOfSupply,
+        taxMode: row.taxMode,
+        lineDescription: row.lineDescription,
+        taxablePaise: row.taxablePaise,
+        cgstPaise: row.cgstPaise,
+        sgstPaise: row.sgstPaise,
+        igstPaise: row.igstPaise,
+        gstRatePercent: row.gstRatePercent,
+        totalPaise: row.totalPaise,
+        amountInWords: row.amountInWords,
+        currency: row.currency,
+        status: row.status,
+        issuedAt: row.issuedAt.toISOString(),
+        paymentStatus: row.payment?.status ?? null,
+        razorpayPaymentId: row.payment?.razorpayPaymentId ?? null,
+        paidAt: row.payment?.paidAt?.toISOString() ?? null,
+      },
+      sellerBank: SRSB_INVOICE_SELLER.bank,
+    };
   }
 
   /** Super Admin — all employer subscriptions with payment / invoice / seat snapshot. */

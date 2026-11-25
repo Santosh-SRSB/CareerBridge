@@ -2,11 +2,24 @@ import type { EmployerSubscriptionPlan } from '@careerbridge/shared';
 import {
   createEmployerPlanOrder,
   createEnterpriseOfferOrder,
+  getEmployerMe,
   syncEmployerPlanPayment,
   verifyEmployerPlanPayment,
 } from '@/lib/api';
 import { markEmployerPlanForJobPost } from '@/lib/employer-plan-gate';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
+
+async function loadCheckoutPrefill() {
+  try {
+    const me = await getEmployerMe();
+    return {
+      prefillName: me.contactName || me.companyName || '',
+      prefillEmail: me.workEmail || '',
+    };
+  } catch {
+    return {};
+  }
+}
 
 async function finishRazorpayOrder(order: {
   paymentId: string;
@@ -33,6 +46,7 @@ async function finishRazorpayOrder(order: {
     return Boolean(status.active && !status.pending);
   };
 
+  const prefill = await loadCheckoutPrefill();
   const paid = await openRazorpayCheckout({
     keyId: order.keyId,
     orderId: order.orderId,
@@ -40,6 +54,7 @@ async function finishRazorpayOrder(order: {
     currency: order.currency,
     name: 'SRSB CareerBridge',
     description: `${order.plan.name} plan ${order.plan.priceLabel}`,
+    ...prefill,
     pollPaid,
   });
 

@@ -14,6 +14,7 @@ import {
   computeSubscriptionGst,
   formatInrFromPaise,
   getEmployerSubscriptionPlan,
+  indianStateToCode,
   listPublicEmployerSubscriptionPlans,
   type EmployerSubscriptionPlanId,
 } from '@careerbridge/shared';
@@ -184,7 +185,8 @@ export class BillingService {
       });
     }
     const buyerGstin = this.decryptEmployerGstin(employer.gstNumber);
-    const gst = computeSubscriptionGst(taxablePaise, buyerGstin);
+    const stateHint = [employer.state, employer.city].filter(Boolean).join(' ');
+    const gst = computeSubscriptionGst(taxablePaise, buyerGstin, stateHint);
     const amountPaise = gst.totalPaise;
     const priceLabel = formatInrFromPaise(taxablePaise);
     const receipt = `pl_${planId}_${Date.now().toString(36)}`.slice(0, 40);
@@ -630,11 +632,13 @@ export class BillingService {
     if (!employer) return null;
 
     const buyerGstin = this.decryptEmployerGstin(employer.gstNumber);
+    const stateHint = [employer.state, employer.city].filter(Boolean).join(' ');
     const taxable =
       payment.taxablePaise != null
         ? payment.taxablePaise
         : Math.round(payment.amountPaise / 1.18);
-    const gst = computeSubscriptionGst(taxable, buyerGstin);
+    // Prefer stored payment GST split; recompute mode from GSTIN/state so KA → CGST+SGST.
+    const gst = computeSubscriptionGst(taxable, buyerGstin, stateHint);
     const totalPaise = payment.amountPaise;
     const gstPaise = payment.gstPaise ?? gst.gstPaise;
     let cgstPaise = 0;
@@ -666,7 +670,7 @@ export class BillingService {
           sellerPhone: SRSB_INVOICE_SELLER.phone,
           buyerName: employer.companyName || employer.company?.name || 'Employer',
           buyerGstin,
-          buyerStateCode: gst.buyerStateCode,
+          buyerStateCode: gst.buyerStateCode || indianStateToCode(stateHint),
           buyerAddress: [employer.city, employer.state].filter(Boolean).join(', ') || null,
           placeOfSupply: gst.placeOfSupply,
           taxMode: gst.taxMode,
@@ -844,7 +848,8 @@ export class BillingService {
     }
 
     const buyerGstin = this.decryptEmployerGstin(employer.gstNumber);
-    const gst = computeSubscriptionGst(offer.amountPaise, buyerGstin);
+    const stateHint = [employer.state, employer.city].filter(Boolean).join(' ');
+    const gst = computeSubscriptionGst(offer.amountPaise, buyerGstin, stateHint);
     const amountPaise = gst.totalPaise;
     const receipt = `ent_${offer.id.slice(0, 8)}_${Date.now().toString(36)}`.slice(0, 40);
     const payment = await this.prisma.employerPayment.create({

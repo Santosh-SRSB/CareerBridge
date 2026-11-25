@@ -1463,7 +1463,7 @@ export async function listEmployerInvoices() {
 export async function getEmployerInvoice(id: string) {
   return request<{
     invoice: EmployerInvoiceRow;
-    sellerBank: {
+    sellerBank?: {
       accountName: string;
       accountNo: string;
       ifsc: string;
@@ -1471,6 +1471,19 @@ export async function getEmployerInvoice(id: string) {
       bankName: string;
     };
   }>(`/billing/employer/invoices/${encodeURIComponent(id)}`);
+}
+
+export async function getAdminInvoice(id: string) {
+  return request<{
+    invoice: EmployerInvoiceRow;
+    sellerBank?: {
+      accountName: string;
+      accountNo: string;
+      ifsc: string;
+      branch: string;
+      bankName: string;
+    };
+  }>(`/admin/invoices/${encodeURIComponent(id)}`);
 }
 
 export async function listEmployerPayments() {

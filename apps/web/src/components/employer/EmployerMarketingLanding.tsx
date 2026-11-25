@@ -5,9 +5,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { CookieSettingsLink } from '@/components/CookieConsentBanner';
+import { EmployerPricingPlans } from '@/components/employer/EmployerPricingPlans';
 
 const REGISTER_HREF = '/employer/register';
 const LOGIN_HREF = '/login?role=employer';
+const PLANS_HREF = '/employer/payments/buy';
 
 const HIRE_STEPS = [
   {
@@ -101,7 +103,7 @@ const CANDIDATES = [
 
 const FAQ_PRIMARY = [
   {
-    q: 'How do I create a CareerBridge for Employers account for free?',
+    q: 'How do I create a CareerBridge for Employers account?',
     a: 'Click Post a job or Create account, verify your email with OTP, set a password, then complete company KYC to start hiring.',
   },
   {
@@ -145,7 +147,7 @@ const FAQ_SECONDARY = [
   },
   {
     q: 'How much does it cost to post a job?',
-    a: 'Hiring on CareerBridge is free during early access. Post jobs and review matched candidates with no posting fee.',
+    a: 'Employer plans start from Starter. Choose a plan that fits your hiring volume — prices are exclusive of GST, and checkout adds 18% GST.',
   },
   {
     q: 'Can I post without listing the salary?',
@@ -530,9 +532,14 @@ export function EmployerMarketingLanding() {
               <li>Invite candidates who haven’t applied yet</li>
               <li>Message and shortlist without leaving CareerBridge</li>
             </ul>
-            <Link href={REGISTER_HREF} className="cb-emkt-text-cta">
-              Explore Smart Matching →
-            </Link>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+              <Link href="/employer/payments/buy" className="cb-emkt-hero__cta cb-emkt-shimmer">
+                View plan
+              </Link>
+              <Link href={REGISTER_HREF} className="cb-emkt-text-cta">
+                Explore Smart Matching →
+              </Link>
+            </div>
           </div>
         </div>
       </Section>
@@ -641,7 +648,13 @@ export function EmployerMarketingLanding() {
       </Section>
 
       <Section className="cb-emkt-ready" id="pricing">
-        <div className="cb-emkt-ready__stage">
+        <div className="cb-emkt-wrap" style={{ paddingTop: 24, paddingBottom: 8 }}>
+          <EmployerPricingPlans
+            signedIn={false}
+            continueHref={(plan) => `${PLANS_HREF}?plan=${plan.id}`}
+          />
+        </div>
+        <div className="cb-emkt-ready__stage" style={{ marginTop: 8 }}>
           <div className="cb-emkt-ready__photo" aria-hidden>
             <Image src="/auth/employer.png" alt="" fill className="object-cover" unoptimized />
           </div>
@@ -651,10 +664,10 @@ export function EmployerMarketingLanding() {
           <div className="cb-emkt-ready__blob" aria-hidden />
           <div className="cb-emkt-ready__card">
             <h2>Ready to find your next hired candidate?</h2>
-            <p>Clear plans from ₹999 — pick Starter, Growth, Business or Enterprise, then sign in to checkout.</p>
+            <p>Pick a plan above, create your employer account, then complete checkout to post jobs.</p>
             <div className="cb-emkt-ready__actions">
-              <Link href="/pricing" className="cb-emkt-hero__cta cb-emkt-shimmer">
-                View pricing
+              <Link href={PLANS_HREF} className="cb-emkt-hero__cta cb-emkt-shimmer">
+                View plan
               </Link>
               <Link href={REGISTER_HREF} className="cb-emkt-ready__login">
                 Post a job
@@ -704,7 +717,7 @@ export function EmployerMarketingLanding() {
               <h3>Employers</h3>
               <Link href={REGISTER_HREF}>Post a job</Link>
               <a href="#features">Products</a>
-              <Link href="/pricing">Pricing</Link>
+              <Link href={PLANS_HREF}>View plan</Link>
               <a href="#faq">FAQ</a>
             </div>
             <div>

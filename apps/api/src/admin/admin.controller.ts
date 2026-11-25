@@ -368,6 +368,12 @@ export class AdminController {
     return this.admin.listEmployerSubscriptions(query, status);
   }
 
+  @Get('invoices/:id')
+  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN, UserType.PLATFORM_OPERATOR)
+  getInvoice(@Param('id') id: string) {
+    return this.admin.getEmployerInvoice(id);
+  }
+
   @Post('employers/:id/impersonate')
   @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
   impersonateEmployer(

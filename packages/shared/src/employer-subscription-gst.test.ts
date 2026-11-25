@@ -23,6 +23,19 @@ describe('subscription GST', () => {
     assert.equal(g.igstPaise, 0);
   });
 
+  it('uses Karnataka state hint when GSTIN is missing', () => {
+    const g = computeSubscriptionGst(100, null, 'Karnataka');
+    assert.equal(g.taxMode, 'CGST_SGST');
+    assert.equal(g.buyerStateCode, '29');
+    assert.equal(g.cgstPaise + g.sgstPaise, g.gstPaise);
+  });
+
+  it('treats Bengaluru city hint as Karnataka (CGST+SGST)', () => {
+    const g = computeSubscriptionGst(100, null, 'Bengaluru');
+    assert.equal(g.taxMode, 'CGST_SGST');
+    assert.equal(g.buyerStateCode, '29');
+  });
+
   it('reads state from GSTIN', () => {
     assert.equal(gstinStateCode('29ABQCS9374K1Z6'), '29');
     assert.equal(gstinStateCode(null), null);
