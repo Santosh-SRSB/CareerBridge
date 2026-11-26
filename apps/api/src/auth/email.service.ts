@@ -380,6 +380,65 @@ export class EmailService {
     }
   }
 
+  /** Pricing “Talk with us” — Staffing / Enterprise enquiry to support inbox. */
+  async sendPlanEnquiry(input: {
+    name: string;
+    companyName: string;
+    query: string;
+    planName?: string;
+  }) {
+    if (!this.isConfigured()) {
+      this.logger.error('Plan enquiry email skipped: SMTP is not configured.');
+      throw new HttpException(
+        {
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Could not send your enquiry right now. Please try again later or email support.',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    const to = this.supportInbox();
+    const plan = input.planName?.trim() || 'Subscription plan';
+    const text = [
+      'New plan enquiry (Talk with us)',
+      '',
+      `Plan: ${plan}`,
+      `Name: ${input.name}`,
+      `Company: ${input.companyName}`,
+      '',
+      'Query:',
+      input.query,
+    ].join('\n');
+    try {
+      const sent = await this.sendMail(
+        to,
+        `Plan enquiry — ${plan} — ${input.companyName}`,
+        text,
+        [
+          emailParagraph('A new <strong>Talk with us</strong> plan enquiry was submitted from CareerBridge pricing.'),
+          emailParagraph(`<strong>Plan:</strong> ${escapeHtml(plan)}`),
+          emailParagraph(`<strong>Name:</strong> ${escapeHtml(input.name)}`),
+          emailParagraph(`<strong>Company:</strong> ${escapeHtml(input.companyName)}`),
+          emailParagraph(`<strong>Query:</strong><br/>${escapeHtml(input.query).replace(/\n/g, '<br/>')}`),
+        ].join(''),
+      );
+      if (!sent) {
+        throw new Error('sendMail returned false');
+      }
+      return true;
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      this.logger.error('Failed to send plan enquiry email');
+      throw new HttpException(
+        {
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Could not send your enquiry right now. Please try again later or email support.',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+  }
+
   renderHtml(subject: string, bodyHtml: string) {
     return renderBrandedEmail({
       title: subject,

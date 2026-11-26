@@ -580,7 +580,9 @@ export function DetailPanel({
                         grantPlan,
                         Number.isFinite(days) && days > 0 ? days : undefined,
                       );
-                      setGrantMsg('Subscription granted.');
+                      setGrantMsg(
+                        `${grantPlan} granted without payment (${Number.isFinite(days) && days > 0 ? days : 30} days). Employer can use this plan immediately.`,
+                      );
                     } catch (err) {
                       setGrantMsg(userFacingError(err, 'grant subscription'));
                     } finally {
@@ -588,7 +590,7 @@ export function DetailPanel({
                     }
                   }}
                 >
-                  Grant
+                  Grant (no payment)
                 </button>
                 <button
                   type="button"

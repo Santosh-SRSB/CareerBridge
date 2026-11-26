@@ -325,9 +325,9 @@ export class AdminController {
     return this.admin.verifyEmployer(user.id, id);
   }
 
-  /** DEV / ops — grant or extend a catalogue plan without Razorpay (Enterprise + courtesy). */
+  /** Super Admin — grant any catalogue plan without Razorpay (courtesy / Enterprise). */
   @Post('employers/:id/subscription')
-  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  @Roles(UserType.SUPER_ADMIN)
   grantEmployerSubscription(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
@@ -337,7 +337,7 @@ export class AdminController {
   }
 
   @Post('employers/:id/enterprise-offers')
-  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  @Roles(UserType.SUPER_ADMIN)
   createEnterpriseOffer(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
@@ -347,7 +347,7 @@ export class AdminController {
   }
 
   @Post('employers/:id/subscription/extend')
-  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  @Roles(UserType.SUPER_ADMIN)
   extendSubscription(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
@@ -357,7 +357,7 @@ export class AdminController {
   }
 
   @Post('employers/:id/subscription/suspend')
-  @Roles(UserType.SUPER_ADMIN, UserType.PLATFORM_ADMIN)
+  @Roles(UserType.SUPER_ADMIN)
   suspendSubscription(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.admin.suspendEmployerSubscription(user.id, id);
   }

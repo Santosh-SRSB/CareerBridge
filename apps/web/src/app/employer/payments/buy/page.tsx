@@ -175,6 +175,22 @@ function BuyCreditsInner() {
 
   return (
     <main className="cb-buy-full cb-buy-full--plans">
+      <Link
+        href={intentPostJob ? '/employer' : '/employer/payments'}
+        className="cb-buy-full__back"
+        aria-label={intentPostJob ? 'Back to employer dashboard' : 'Back to billing'}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <path
+            d="M10 3L5 8l5 5"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        Back
+      </Link>
       <EmployerPricingPlans
         signedIn
         initialPlanId={planId}

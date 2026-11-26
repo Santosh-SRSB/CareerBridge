@@ -954,10 +954,11 @@ export class AdminService {
     }
     const startsAt = new Date();
     const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
+    // null catalogue limits (Enterprise) → 0 = unlimited for job/view helpers
     const entitlementsJson = JSON.stringify({
-      activeJobLimit: plan.activeJobLimit,
-      loginSeats: plan.loginSeats,
-      candidateViewCredits: plan.candidateViewCredits,
+      activeJobLimit: plan.activeJobLimit ?? 0,
+      loginSeats: plan.loginSeats ?? null,
+      candidateViewCredits: plan.candidateViewCredits ?? 0,
       ...plan.entitlements,
     });
     await this.prisma.employerSubscription.updateMany({
@@ -981,7 +982,12 @@ export class AdminService {
       action: 'GRANT_EMPLOYER_SUBSCRIPTION',
       resourceType: 'EMPLOYER',
       resourceId: employerId,
-      newValue: { planId: plan.id, endsAt: endsAt.toISOString(), subscriptionId: row.id },
+      newValue: {
+        planId: plan.id,
+        endsAt: endsAt.toISOString(),
+        subscriptionId: row.id,
+        withoutPayment: true,
+      },
     });
     return {
       ok: true as const,
@@ -990,6 +996,7 @@ export class AdminService {
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
       subscriptionId: row.id,
+      withoutPayment: true as const,
     };
   }
 

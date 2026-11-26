@@ -2395,6 +2395,19 @@ export async function requestDemo(payload: {
   });
 }
 
+export async function submitPlanEnquiry(payload: {
+  name: string;
+  companyName: string;
+  query: string;
+  planName?: string;
+}) {
+  return request<{ ok: boolean }>('/platform/plan-enquiry', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    auth: false,
+  });
+}
+
 export async function getTestimonialPrompt() {
   return request<{
     source: string;

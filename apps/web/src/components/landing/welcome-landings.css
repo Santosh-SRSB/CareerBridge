@@ -64,6 +64,14 @@
   margin-top: 32px;
 }
 
+.wl-hero__ctas--center {
+  justify-content: center;
+}
+
+.wl-hero__ctas--center .wl-explore {
+  margin-top: 0;
+}
+
 .wl-offer {
   display: inline-flex;
   align-items: center;
@@ -213,19 +221,24 @@
 /* Two ways to hire — employer welcome popup */
 .hl-launch-popup__card.cb-hireways__card {
   position: relative;
-  width: min(920px, calc(100vw - 28px));
-  max-height: min(92vh, 820px);
+  width: min(940px, calc(100vw - 28px));
+  max-height: min(92vh, 840px);
   overflow: auto;
-  padding: 28px 24px 24px;
-  border-radius: 22px;
+  padding: 32px 28px 28px;
+  border-radius: 24px;
   background:
-    radial-gradient(ellipse 70% 55% at 15% 0%, rgba(124, 131, 255, 0.35), transparent 55%),
-    radial-gradient(ellipse 60% 45% at 90% 100%, rgba(59, 69, 216, 0.45), transparent 50%),
-    linear-gradient(165deg, #0c1245 0%, #141b63 55%, #1d2688 100%);
+    radial-gradient(ellipse 65% 50% at 12% -10%, rgba(99, 102, 241, 0.42), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 95% 110%, rgba(251, 191, 36, 0.18), transparent 52%),
+    linear-gradient(168deg, #080d38 0%, #0f1760 48%, #1a2488 100%);
   color: #fff;
   box-shadow:
-    0 0 0 1px rgba(124, 131, 255, 0.35),
-    0 28px 64px rgba(8, 10, 30, 0.55);
+    0 0 0 1px rgba(165, 180, 252, 0.28),
+    0 32px 72px rgba(4, 6, 24, 0.62);
+  animation: cb-hireways-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes cb-hireways-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .cb-hireways__close {
   color: #fff !important;
@@ -244,11 +257,11 @@
   position: absolute;
   font-size: 18px;
   color: #fbbf24;
-  opacity: 0.7;
+  opacity: 0.65;
   animation: cb-hireways-bob 3.2s ease-in-out infinite;
 }
 .cb-hireways__bob--a { left: 8%; top: 14%; animation-delay: 0s; }
-.cb-hireways__bob--b { right: 10%; top: 18%; color: #7c83ff; animation-delay: -0.8s; }
+.cb-hireways__bob--b { right: 10%; top: 18%; color: #a5b4fc; animation-delay: -0.8s; }
 .cb-hireways__bob--c { left: 14%; bottom: 18%; color: #34d399; font-size: 12px; animation-delay: -1.4s; }
 .cb-hireways__bob--d { right: 12%; bottom: 22%; animation-delay: -2s; }
 @keyframes cb-hireways-bob {
@@ -260,54 +273,75 @@
   z-index: 1;
   text-align: center;
   width: 100%;
-  max-width: 520px;
-  margin: 4px auto 22px;
+  max-width: 540px;
+  margin: 4px auto 26px;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+.cb-hireways__head::before {
+  content: 'SRSB CareerBridge';
+  display: block;
+  margin-bottom: 10px;
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 .cb-hireways__head h2 {
   margin: 0;
   width: 100%;
   text-align: center;
   font-family: var(--font-baloo-2), var(--font-poppins), Georgia, serif;
-  font-size: clamp(26px, 4vw, 36px);
+  font-size: clamp(28px, 4.2vw, 38px);
   font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
 }
 .cb-hireways__head p {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   width: 100%;
   text-align: center;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(226, 232, 255, 0.82);
   font-size: 15px;
   font-weight: 600;
+  line-height: 1.5;
 }
 .cb-hireways__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 .cb-hireways__option {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 20px 18px 18px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(251, 191, 36, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  padding: 22px 20px 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 14px 28px rgba(4, 6, 24, 0.22);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.cb-hireways__option:hover {
+  transform: translateY(-3px);
+  border-color: rgba(251, 191, 36, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 18px 36px rgba(4, 6, 24, 0.32);
 }
 .cb-hireways__icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
-  background: rgba(12, 18, 69, 0.55);
+  background: linear-gradient(145deg, rgba(251, 191, 36, 0.22), rgba(12, 18, 69, 0.55));
   color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, 0.35);
+  border: 1px solid rgba(251, 191, 36, 0.4);
 }
 .cb-hireways__label {
   margin: 0;
@@ -319,44 +353,44 @@
 }
 .cb-hireways__option h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 .cb-hireways__copy {
   margin: 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(226, 232, 255, 0.74);
   font-size: 13.5px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .cb-hireways__option ul {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   padding: 0;
   display: grid;
-  gap: 10px;
+  gap: 11px;
   flex: 1;
 }
 .cb-hireways__option li {
   position: relative;
-  padding-left: 28px;
+  padding-left: 30px;
   font-size: 13.5px;
   font-weight: 650;
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.94);
 }
 .cb-hireways__option li::before {
   content: '✓';
   position: absolute;
   left: 0;
   top: 0;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: rgba(52, 211, 153, 0.2);
+  background: rgba(52, 211, 153, 0.22);
   color: #34d399;
   font-size: 11px;
   font-weight: 800;
@@ -365,13 +399,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 14px;
-  min-height: 46px;
+  margin-top: 16px;
+  min-height: 48px;
   border-radius: 12px;
   font-size: 14px;
   font-weight: 800;
   text-decoration: none;
-  transition: transform 0.2s ease, filter 0.2s ease;
+  transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
 }
 .cb-hireways__cta:hover {
   transform: translateY(-2px);
@@ -380,17 +414,24 @@
 .cb-hireways__cta--light {
   background: #fff;
   color: #0c1245;
+  box-shadow: 0 10px 22px rgba(255, 255, 255, 0.12);
 }
 .cb-hireways__cta--gold {
-  background: #fbbf24;
+  background: linear-gradient(180deg, #fcd34d, #f59e0b);
   color: #0c1245;
+  box-shadow: 0 10px 22px rgba(245, 158, 11, 0.28);
 }
 @media (max-width: 720px) {
   .cb-hireways__grid {
     grid-template-columns: 1fr;
   }
   .hl-launch-popup__card.cb-hireways__card {
-    padding: 22px 16px 16px;
+    padding: 24px 16px 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hl-launch-popup__card.cb-hireways__card {
+    animation: none;
   }
 }
 
@@ -405,28 +446,29 @@
 
 /* Hire options above pricing on employer welcome */
 .wl-hireopts {
-  padding: 72px 0 40px;
+  padding: 80px 0 48px;
   background:
-    radial-gradient(ellipse 60% 50% at 0% 0%, rgba(99, 102, 241, 0.08), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 100% 20%, rgba(52, 211, 153, 0.08), transparent 50%),
-    #f8fafc;
+    radial-gradient(ellipse 70% 55% at 8% 0%, rgba(99, 102, 241, 0.35), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 100% 30%, rgba(251, 191, 36, 0.12), transparent 50%),
+    linear-gradient(180deg, #0c1245 0%, #141b63 55%, #1a2280 100%);
+  color: #fff;
 }
 .wl-hireopts__intro {
   text-align: center;
   max-width: 640px;
-  margin: 0 auto 32px;
+  margin: 0 auto 36px;
 }
 .wl-hireopts__kicker {
   margin: 0 0 10px;
-  color: #4338ca;
+  color: #fbbf24;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 .wl-hireopts__intro h2 {
   margin: 0;
-  color: #0c1245;
+  color: #fff;
   font-size: clamp(26px, 3.6vw, 38px);
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -434,7 +476,7 @@
 }
 .wl-hireopts__intro p {
   margin: 12px 0 0;
-  color: #64748b;
+  color: rgba(226, 232, 255, 0.78);
   font-size: 15px;
   font-weight: 600;
   line-height: 1.55;
@@ -449,17 +491,22 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 24px 22px 20px;
-  border-radius: 18px;
-  background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.07);
+  padding: 26px 22px 20px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 40px rgba(4, 6, 24, 0.28);
   animation: wl-offer-pop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 .wl-hireopts__card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 22px 44px rgba(15, 23, 42, 0.1);
+  border-color: rgba(251, 191, 36, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 24px 48px rgba(4, 6, 24, 0.36);
 }
 .wl-hireopts__top {
   display: flex;
@@ -468,13 +515,14 @@
 }
 .wl-hireopts__icon {
   flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
-  background: #e0e7ff;
-  color: #1e3a8a;
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.35);
 }
 .wl-hireopts__titles {
   display: flex;
@@ -485,7 +533,7 @@
 }
 .wl-hireopts__titles h3 {
   margin: 0;
-  color: #0c1245;
+  color: #fff;
   font-size: clamp(16px, 2vw, 19px);
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -501,16 +549,16 @@
   letter-spacing: 0.02em;
 }
 .wl-hireopts__badge--green {
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(52, 211, 153, 0.2);
+  color: #6ee7b7;
 }
 .wl-hireopts__badge--blue {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: rgba(147, 197, 253, 0.2);
+  color: #93c5fd;
 }
 .wl-hireopts__copy {
   margin: 0;
-  color: #64748b;
+  color: rgba(226, 232, 255, 0.72);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
@@ -526,7 +574,7 @@
 .wl-hireopts__card li {
   position: relative;
   padding-left: 28px;
-  color: #0f172a;
+  color: rgba(255, 255, 255, 0.94);
   font-size: 14px;
   font-weight: 650;
   line-height: 1.4;
@@ -541,8 +589,8 @@
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: rgba(34, 197, 94, 0.14);
-  color: #15803d;
+  background: rgba(52, 211, 153, 0.22);
+  color: #34d399;
   font-size: 11px;
   font-weight: 800;
 }
@@ -553,17 +601,21 @@
   margin-top: 12px;
   min-height: 46px;
   border-radius: 12px;
-  background: #0c1245;
-  color: #fff;
+  background: #fff;
+  color: #0c1245;
   font-size: 14px;
   font-weight: 800;
   text-decoration: none;
-  box-shadow: 0 10px 22px rgba(12, 18, 69, 0.18);
-  transition: transform 0.2s ease, background 0.2s ease;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, filter 0.2s ease;
 }
 .wl-hireopts__cta:hover {
   transform: translateY(-2px);
-  background: #161d5c;
+  filter: brightness(1.04);
+}
+.wl-hireopts__card--managed .wl-hireopts__cta {
+  background: linear-gradient(180deg, #fcd34d, #f59e0b);
+  color: #0c1245;
 }
 @media (max-width: 800px) {
   .wl-hireopts__grid {

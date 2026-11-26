@@ -102,6 +102,30 @@ export class BillingService {
 
   async getActiveSubscription(userId: string) {
     const employer = await this.requireEmployer(userId);
+    await this.expireStale(employer.id);
+    const row = await this.prisma.employerSubscription.findFirst({
+      where: {
+        employerId: employer.id,
+        status: 'ACTIVE',
+        endsAt: { gt: new Date() },
+      },
+      orderBy: { endsAt: 'desc' },
+    });
+    const isAdminGrant = row != null && row.paymentId == null;
+    // LIVE off: only Super Admin grants override legacy free. Paid rows wait for LIVE=true.
+    if (row && (employerSubscriptionsLive() || isAdminGrant)) {
+      await this.maybeNotifySubscriptionLifecycle(employer.userId, employer.id);
+      return {
+        active: true as const,
+        mode: razorpayMode(),
+        planId: row.planId,
+        endsAt: row.endsAt.toISOString(),
+        paymentRequired: false,
+        startsAt: row.startsAt.toISOString(),
+        enforcement: 'subscription' as const,
+        grantedWithoutPayment: isAdminGrant,
+      };
+    }
     // Prod safety: until EMPLOYER_SUBSCRIPTIONS_LIVE=true, treat as entitled (legacy free Starter).
     // Prevents web job-post gate from forcing checkout and breaking live employers.
     if (!employerSubscriptionsLive()) {
@@ -114,33 +138,13 @@ export class BillingService {
         enforcement: 'legacy' as const,
       };
     }
-    await this.expireStale(employer.id);
     await this.maybeNotifySubscriptionLifecycle(employer.userId, employer.id);
-    const row = await this.prisma.employerSubscription.findFirst({
-      where: {
-        employerId: employer.id,
-        status: 'ACTIVE',
-        endsAt: { gt: new Date() },
-      },
-      orderBy: { endsAt: 'desc' },
-    });
-    if (!row) {
-      return {
-        active: false as const,
-        mode: razorpayMode(),
-        planId: null,
-        endsAt: null,
-        paymentRequired: true,
-        enforcement: 'subscription' as const,
-      };
-    }
     return {
-      active: true as const,
+      active: false as const,
       mode: razorpayMode(),
-      planId: row.planId,
-      endsAt: row.endsAt.toISOString(),
-      paymentRequired: false,
-      startsAt: row.startsAt.toISOString(),
+      planId: null,
+      endsAt: null,
+      paymentRequired: true,
       enforcement: 'subscription' as const,
     };
   }

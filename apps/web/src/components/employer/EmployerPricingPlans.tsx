@@ -9,6 +9,7 @@ import {
   type EmployerSubscriptionPlan,
   type EmployerSubscriptionPlanId,
 } from '@careerbridge/shared';
+import { EmployerPlanEnquiryForm } from '@/components/employer/EmployerPlanEnquiryForm';
 import { storeEmployerPlanId } from '@/lib/employer-plan-gate';
 import './employer-pricing.css';
 
@@ -200,6 +201,7 @@ export function EmployerPricingPlans({
   const [selectedId, setSelectedId] = useState<EmployerSubscriptionPlanId | null>(
     () => getEmployerSubscriptionPlan(initialPlanId)?.id ?? null,
   );
+  const [enquiryPlan, setEnquiryPlan] = useState<EmployerSubscriptionPlan | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const floaters = useMemo(
     () =>
@@ -238,14 +240,16 @@ export function EmployerPricingPlans({
 
   function handlePlanClick(plan: EmployerSubscriptionPlan, e: { clientX: number; clientY: number }) {
     burst(e);
-    if (plan.contactSales) return;
+    if (plan.contactSales) {
+      setEnquiryPlan(plan);
+      return;
+    }
     setSelectedId(plan.id);
     storeEmployerPlanId(plan.id);
     onSelectPlan?.(plan);
   }
 
   function ctaHref(plan: EmployerSubscriptionPlan) {
-    if (plan.contactSales) return `mailto:${EMPLOYER_SUPPORT_EMAIL}`;
     if (continueHref) return continueHref(plan);
     if (signedIn) return `/employer/payments/buy?plan=${plan.id}`;
     return `/login?role=employer&plan=${plan.id}`;
@@ -304,7 +308,7 @@ export function EmployerPricingPlans({
         <div className="cb-price__grid" id="grid" ref={gridRef}>
           {EMPLOYER_SUBSCRIPTION_PLANS.map((plan, i) => {
             const href = ctaHref(plan);
-            const isLink = plan.contactSales || !signedIn || !onSelectPlan;
+            const isLink = !plan.contactSales && (!signedIn || !onSelectPlan);
             const style = { transitionDelay: `${i * 110}ms` } as CSSProperties;
             return (
               <section
@@ -352,7 +356,16 @@ export function EmployerPricingPlans({
                     </a>
                   </div>
                 ) : null}
-                {isLink ? (
+                {plan.contactSales ? (
+                  <button
+                    type="button"
+                    className="cb-price__btn"
+                    onClick={(e: { clientX: number; clientY: number }) => handlePlanClick(plan, e)}
+                  >
+                    {plan.cta}
+                    <ArrowIcon />
+                  </button>
+                ) : isLink ? (
                   <Link
                     className="cb-price__btn"
                     href={href}
@@ -402,6 +415,12 @@ export function EmployerPricingPlans({
           <a href={`mailto:${EMPLOYER_SUPPORT_EMAIL}`}>{EMPLOYER_SUPPORT_EMAIL}</a>
         </p>
       </div>
+
+      <EmployerPlanEnquiryForm
+        open={Boolean(enquiryPlan)}
+        planName={enquiryPlan?.name}
+        onClose={() => setEnquiryPlan(null)}
+      />
     </div>
   );
 }

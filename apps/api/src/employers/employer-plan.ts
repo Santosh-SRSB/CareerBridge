@@ -95,28 +95,6 @@ export async function employerPlanUsage(
     where: { employerId, status: { in: [...ACTIVE_JOB_STATUSES] } },
   });
 
-  // --- Live-safe default: do not change prod employer behaviour until flag is ON ---
-  if (!employerSubscriptionsLive()) {
-    const period = usagePeriod(now);
-    const [settings, candidateViews] = await Promise.all([
-      loadEmployerPlanSettings(prisma),
-      prisma.employerCandidateView.count({ where: { employerId, period } }),
-    ]);
-    return {
-      plan: 'STARTER',
-      planId: null,
-      subscriptionActive: true,
-      endsAt: null,
-      period,
-      activeJobs,
-      activeJobLimit: settings.starterActiveJobLimit,
-      candidateViews,
-      candidateViewCredits: settings.starterCandidateViewCredits,
-      loginSeats: null,
-      loginSeatsUsed: null,
-    };
-  }
-
   const [subscription, employer] = await Promise.all([
     prisma.employerSubscription.findFirst({
       where: {
@@ -139,7 +117,14 @@ export async function employerPlanUsage(
       ? 1
       : null;
 
-  if (subscription) {
+  // While LIVE is off: only Super Admin grants (paymentId null) override legacy free.
+  // Paid rows stay ignored until EMPLOYER_SUBSCRIPTIONS_LIVE=true (no prod surprise limits).
+  const honorSubscription =
+    Boolean(subscription) &&
+    (employerSubscriptionsLive() ||
+      (subscription as { paymentId?: string | null } | null)?.paymentId == null);
+
+  if (subscription && honorSubscription) {
     const catalog = getEmployerSubscriptionPlan(subscription.planId);
     const snap = parseSubscriptionEntitlementSnapshot(
       (subscription as { entitlementsJson?: string | null }).entitlementsJson,
@@ -155,11 +140,34 @@ export async function employerPlanUsage(
       endsAt: subscription.endsAt.toISOString(),
       period,
       activeJobs,
+      // null catalogue limits (Enterprise) → 0 = unlimited in shared helpers
       activeJobLimit: snap?.activeJobLimit ?? catalog?.activeJobLimit ?? 0,
       candidateViews,
       candidateViewCredits: snap?.candidateViewCredits ?? catalog?.candidateViewCredits ?? 0,
       loginSeats: snap?.loginSeats ?? catalog?.loginSeats ?? null,
       loginSeatsUsed,
+    };
+  }
+
+  // --- Live-safe default: do not change prod employer behaviour until flag is ON ---
+  if (!employerSubscriptionsLive()) {
+    const period = usagePeriod(now);
+    const [settings, candidateViews] = await Promise.all([
+      loadEmployerPlanSettings(prisma),
+      prisma.employerCandidateView.count({ where: { employerId, period } }),
+    ]);
+    return {
+      plan: 'STARTER',
+      planId: null,
+      subscriptionActive: true,
+      endsAt: null,
+      period,
+      activeJobs,
+      activeJobLimit: settings.starterActiveJobLimit,
+      candidateViews,
+      candidateViewCredits: settings.starterCandidateViewCredits,
+      loginSeats: null,
+      loginSeatsUsed: null,
     };
   }
 

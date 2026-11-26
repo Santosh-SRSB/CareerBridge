@@ -54,6 +54,28 @@ class DemoRequestDto {
   message?: string;
 }
 
+class PlanEnquiryDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  name!: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  companyName!: string;
+
+  @IsString()
+  @MinLength(5)
+  @MaxLength(2000)
+  query!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  planName?: string;
+}
+
 @SkipThrottle()
 @Controller('platform')
 export class PlatformController {
@@ -113,6 +135,22 @@ export class PlatformController {
       workEmail: body.workEmail.trim().toLowerCase(),
       phone: body.phone?.trim(),
       message: body.message?.trim(),
+    });
+    return { ok: true };
+  }
+
+  /** Pricing “Talk with us” — name, company, query → support inbox. */
+  @Public()
+  @SkipThrottle({ default: false })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('plan-enquiry')
+  @HttpCode(200)
+  async planEnquiry(@Body() body: PlanEnquiryDto) {
+    await this.email.sendPlanEnquiry({
+      name: body.name.trim().replace(/\s+/g, ' '),
+      companyName: body.companyName.trim().replace(/\s+/g, ' '),
+      query: body.query.trim(),
+      planName: body.planName?.trim(),
     });
     return { ok: true };
   }

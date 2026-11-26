@@ -156,10 +156,15 @@ export function EmployerWelcomeLanding() {
                 Meet people who already fit. Post jobs, shortlist talent, and spend your time on
                 interviews — not on inboxes.
               </p>
-              <a href="#features" className="hl-btn hl-btn--light hl-btn--lg wl-explore">
-                Explore
-                <ArrowRightIcon size={18} />
-              </a>
+              <div className="wl-hero__ctas wl-hero__ctas--center">
+                <a href="#plans" className="hl-btn hl-btn--lg wl-btn--outline-light">
+                  View Plan
+                </a>
+                <a href="#features" className="hl-btn hl-btn--light hl-btn--lg wl-explore">
+                  Explore
+                  <ArrowRightIcon size={18} />
+                </a>
+              </div>
             </div>
           </section>
 
