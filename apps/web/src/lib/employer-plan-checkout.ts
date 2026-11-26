@@ -8,16 +8,34 @@ import {
 } from '@/lib/api';
 import { markEmployerPlanForJobPost } from '@/lib/employer-plan-gate';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
+import { getStoredUser } from '@/lib/session';
+
+/** Razorpay contact field: digits only, prefer 91XXXXXXXXXX. */
+function toRazorpayContact(raw?: string | null): string {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10) return `91${digits}`;
+  if (digits.length >= 12 && digits.startsWith('91')) return digits.slice(0, 12);
+  if (digits.length > 12) return digits.slice(-12);
+  return digits;
+}
 
 async function loadCheckoutPrefill() {
+  const sessionPhone = toRazorpayContact(getStoredUser()?.phone);
   try {
     const me = await getEmployerMe();
     return {
       prefillName: me.contactName || me.companyName || '',
-      prefillEmail: me.workEmail || '',
+      prefillEmail: me.workEmail || getStoredUser()?.email || '',
+      // Prefer login phone so Razorpay does not show the Contact details mobile step.
+      prefillContact: sessionPhone,
     };
   } catch {
-    return {};
+    return {
+      prefillName: getStoredUser()?.firstName || '',
+      prefillEmail: getStoredUser()?.email || '',
+      prefillContact: sessionPhone,
+    };
   }
 }
 

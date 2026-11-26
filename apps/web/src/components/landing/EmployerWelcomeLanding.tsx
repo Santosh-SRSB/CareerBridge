@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EMPLOYER_SUBSCRIPTION_PLANS } from '@careerbridge/shared';
 import { WelcomeRoleNav } from '@/components/landing/WelcomeChrome';
-import { RoleOfferPopup } from '@/components/landing/RoleOfferPopup';
+import { EmployerHireWaysPopup } from '@/components/landing/EmployerHireWaysPopup';
 import { HomeFooter } from '@/components/landing/home/HomeFooter';
+import { EmployerPricingPlans } from '@/components/employer/EmployerPricingPlans';
 import { ArrowRightIcon, BriefcaseIcon, CloseIcon } from '@/components/landing/home/icons';
 import { useWelcomeReveal } from '@/components/landing/useWelcomeReveal';
 import '@/components/landing/home/home-landing.css';
@@ -52,7 +52,7 @@ const BANDS = [
 
 type Band = (typeof BANDS)[number];
 
-const HERO_LINE = '1 Month Free for Employers';
+const HERO_LINE = 'Hire your next great candidate';
 
 function Lightbox({ band, onClose }: { band: Band; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -145,7 +145,6 @@ export function EmployerWelcomeLanding() {
                 <BriefcaseIcon size={16} />
                 For employers
               </p>
-              <p className="wl-offer wl-offer--employer">1 month free</p>
               <h1 className="wl-type" aria-label={HERO_LINE}>
                 <span className="wl-type__ghost" aria-hidden="true">
                   {HERO_LINE}
@@ -153,8 +152,8 @@ export function EmployerWelcomeLanding() {
                 <span ref={lineRef} className="wl-type__text" aria-hidden="true" />
               </h1>
               <p className="wl-hero__lede wl-hero__lede--dark">
-                Post jobs free for one month. Meet people who already fit. Spend your time on
-                interviews, not on inboxes.
+                Meet people who already fit. Post jobs, shortlist talent, and spend your time on
+                interviews — not on inboxes.
               </p>
               <a href="#features" className="hl-btn hl-btn--light hl-btn--lg wl-explore">
                 Explore
@@ -213,53 +212,15 @@ export function EmployerWelcomeLanding() {
             ))}
           </section>
 
-          {/* Additive plans strip — does not replace hero, features, or free-month CTA. */}
-          <section className="wl-plans" id="plans" aria-labelledby="wl-plans-title">
-            <div className="wl-wrap">
-              <div className="wl-head wl-observe">
-                <p className="hl-eyebrow hl-reveal">Plans</p>
-                <h2 className="wl-head__title hl-reveal" id="wl-plans-title">
-                  Clear pricing for every hiring stage
-                </h2>
-                <p className="wl-head__lede hl-reveal">
-                  Concurrent job posts, recruiter seats and candidate database views. Own-job applicants never use
-                  database views. Manual renewal.
-                </p>
-              </div>
-              <div className="wl-plans__grid wl-observe">
-                {EMPLOYER_SUBSCRIPTION_PLANS.map((plan) => (
-                  <article
-                    key={plan.id}
-                    className={`wl-plan-card hl-reveal${plan.recommended ? ' wl-plan-card--rec' : ''}`}
-                  >
-                    {plan.recommended ? <span className="wl-plan-card__badge">Recommended</span> : null}
-                    <h3 className="wl-plan-card__name">{plan.name}</h3>
-                    <p className="wl-plan-card__price">
-                      {plan.priceLabel}
-                      {plan.periodLabel ? <span>{plan.periodLabel}</span> : null}
-                    </p>
-                    <p className="wl-plan-card__tag">{plan.tagline}</p>
-                    <ul className="wl-plan-card__list">
-                      {plan.features.slice(0, 4).map((f) => (
-                        <li key={f}>{f}</li>
-                      ))}
-                    </ul>
-                    {plan.contactSales ? (
-                      <a className="hl-btn hl-btn--ghost" href={`mailto:support@srsbcareerbridge.com`}>
-                        {plan.cta}
-                      </a>
-                    ) : (
-                      <Link className="hl-btn hl-btn--primary" href={`/login?role=employer&plan=${plan.id}`}>
-                        {plan.cta}
-                      </Link>
-                    )}
-                  </article>
-                ))}
-              </div>
-              <p className="wl-plans__more hl-reveal">
-                <Link href="/pricing">Full plan comparison</Link>
-              </p>
-            </div>
+          <section className="wl-plans wl-plans--pricing" id="plans" aria-labelledby="wl-plans-title">
+            <h2 id="wl-plans-title" className="sr-only">
+              Employer subscription plans
+            </h2>
+            <EmployerPricingPlans
+              signedIn={false}
+              continueHref={(plan) => `/login?role=employer&plan=${plan.id}`}
+              compactRails
+            />
           </section>
 
           <section className="wl-cta" id="start">
@@ -271,7 +232,7 @@ export function EmployerWelcomeLanding() {
               </svg>
               <h2 className="wl-cta__title hl-reveal">Ready to build your team?</h2>
               <p className="wl-cta__text hl-reveal">
-                Create your employer account — post jobs free for 1 month.
+                Create your employer account, pick a plan, and start hiring with matched talent.
               </p>
               <div className="wl-cta__actions hl-reveal">
                 <Link className="hl-btn hl-btn--light hl-btn--lg" href="/employer/register">
@@ -293,7 +254,7 @@ export function EmployerWelcomeLanding() {
       </div>
 
       {preview ? <Lightbox band={preview} onClose={closePreview} /> : null}
-      <RoleOfferPopup role="employer" />
+      <EmployerHireWaysPopup />
     </div>
   );
 }

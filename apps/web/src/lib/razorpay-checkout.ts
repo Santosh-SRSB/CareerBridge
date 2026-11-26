@@ -95,6 +95,17 @@ export async function openRazorpayCheckout(input: {
       reject(err);
     };
 
+    const prefillEmail = (input.prefillEmail || '').trim();
+    const prefillContact = (input.prefillContact || '').trim();
+    const prefillName = (input.prefillName || '').trim();
+    // When email + mobile are already known, lock them so Checkout skips "Contact details".
+    const readonly =
+      prefillEmail && prefillContact
+        ? { email: true as const, contact: true as const }
+        : prefillEmail
+          ? { email: true as const }
+          : undefined;
+
     rzp = new window.Razorpay!({
       key: input.keyId,
       amount: input.amountPaise,
@@ -104,10 +115,11 @@ export async function openRazorpayCheckout(input: {
       order_id: input.orderId,
       theme: { color: '#1A1FC4' },
       prefill: {
-        email: input.prefillEmail || '',
-        name: input.prefillName || '',
-        contact: input.prefillContact || '',
+        email: prefillEmail,
+        name: prefillName,
+        contact: prefillContact,
       },
+      ...(readonly ? { readonly } : {}),
       handler: (response: RazorpayCheckoutSuccess) => finish(response),
       modal: {
         ondismiss: async () => {

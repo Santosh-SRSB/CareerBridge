@@ -305,6 +305,19 @@ export function EmployerConfirmPlan({
       <div className="cb-planx__glow cb-planx__glow--2" aria-hidden />
       <div className="cb-planx__grid" aria-hidden />
 
+      <Link href={changePlanHref} className="cb-planx__back" aria-label="Back to plans">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <path
+            d="M10 3L5 8l5 5"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        Back
+      </Link>
+
       <main className="cb-planx__main">
         <div className="cb-planx__top cb-planx__in">
           <div className="cb-planx__logo">
@@ -485,9 +498,6 @@ export function EmployerConfirmPlan({
                     : 'Continue to post a job'}
                 {confirmBusy || confirmedFlash ? null : <ArrowIcon />}
               </button>
-              <Link href={changePlanHref} className="cb-planx__btn cb-planx__btn--ghost">
-                Change plan
-              </Link>
             </div>
           </aside>
         </div>

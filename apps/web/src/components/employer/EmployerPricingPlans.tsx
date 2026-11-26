@@ -291,7 +291,7 @@ export function EmployerPricingPlans({
           <div className="cb-price__coin" aria-hidden>
             <div>₹</div>
           </div>
-          <span className="cb-price__free">★ 1 MONTH FREE TO START</span>
+          <span className="cb-price__free">★ EMPLOYER SUBSCRIPTION PLANS</span>
           <h1 className="cb-price__title">
             Clear plans. <em>No surprises.</em>
           </h1>
