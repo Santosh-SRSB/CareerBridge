@@ -343,8 +343,13 @@ export function EmployerPricingPlans({
                 </ul>
                 {plan.contactSales ? (
                   <div className="cb-price__mail">
-                    Talk with us for this plan
-                    <a href={`mailto:${EMPLOYER_SUPPORT_EMAIL}`}>{EMPLOYER_SUPPORT_EMAIL}</a>
+                    <span>Talk with us for this plan</span>
+                    <a
+                      className="cb-price__mail-btn"
+                      href={`mailto:${EMPLOYER_SUPPORT_EMAIL}?subject=${encodeURIComponent(`${plan.name} enquiry`)}`}
+                    >
+                      Email support
+                    </a>
                   </div>
                 ) : null}
                 {isLink ? (

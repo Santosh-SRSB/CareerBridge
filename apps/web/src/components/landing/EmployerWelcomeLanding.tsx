@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WelcomeRoleNav } from '@/components/landing/WelcomeChrome';
 import { EmployerHireWaysPopup } from '@/components/landing/EmployerHireWaysPopup';
+import { EmployerHireOptions } from '@/components/landing/EmployerHireOptions';
 import { HomeFooter } from '@/components/landing/home/HomeFooter';
 import { EmployerPricingPlans } from '@/components/employer/EmployerPricingPlans';
 import { ArrowRightIcon, BriefcaseIcon, CloseIcon } from '@/components/landing/home/icons';
@@ -211,6 +212,8 @@ export function EmployerWelcomeLanding() {
               </div>
             ))}
           </section>
+
+          <EmployerHireOptions />
 
           <section className="wl-plans wl-plans--pricing" id="plans" aria-labelledby="wl-plans-title">
             <h2 id="wl-plans-title" className="sr-only">

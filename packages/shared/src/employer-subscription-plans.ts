@@ -161,7 +161,7 @@ export const EMPLOYER_SUBSCRIPTION_PLANS: readonly EmployerSubscriptionPlan[] = 
     id: 'staffing',
     name: 'Staffing & On-Roll',
     tagline: 'Managed hiring · success fee on placement',
-    priceLabel: '5% – 8.33%',
+    priceLabel: '8.33%',
     periodLabel: '',
     priceHint: 'of CTC · success fee',
     features: [

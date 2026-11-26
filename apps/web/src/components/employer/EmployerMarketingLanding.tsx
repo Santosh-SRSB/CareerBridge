@@ -35,7 +35,7 @@ const MANAGED_HIRE_STEPS = [
   },
   {
     title: 'Pay on placement',
-    copy: 'Success fee of 5% – 8.33% of CTC.',
+    copy: 'Success fee of 8.33% of CTC.',
   },
 ] as const;
 
@@ -175,7 +175,7 @@ const FAQ_SECONDARY = [
   },
   {
     q: 'How much does it cost to post a job?',
-    a: 'Employer plans start from Starter. Choose a plan that fits your hiring volume — prices are exclusive of GST, and checkout adds 18% GST. For managed hiring, recruitment charges apply only on successful placement (typically 5% – 8.33% of CTC).',
+    a: 'Employer plans start from Starter. Choose a plan that fits your hiring volume — prices are exclusive of GST, and checkout adds 18% GST. For managed hiring, recruitment charges apply only on successful placement (typically 8.33% of CTC).',
   },
   {
     q: 'Can I post without listing the salary?',

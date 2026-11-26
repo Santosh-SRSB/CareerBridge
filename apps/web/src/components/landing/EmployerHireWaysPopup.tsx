@@ -97,6 +97,13 @@ export function EmployerHireWaysPopup() {
           <CloseIcon size={18} />
         </button>
 
+        <div className="cb-hireways__floaters" aria-hidden>
+          <span className="cb-hireways__bob cb-hireways__bob--a">★</span>
+          <span className="cb-hireways__bob cb-hireways__bob--b">✦</span>
+          <span className="cb-hireways__bob cb-hireways__bob--c">●</span>
+          <span className="cb-hireways__bob cb-hireways__bob--d">+</span>
+        </div>
+
         <header className="cb-hireways__head">
           <h2 id={titleId}>Two ways to hire with SRSB</h2>
           <p>Self-service or fully managed. You decide.</p>

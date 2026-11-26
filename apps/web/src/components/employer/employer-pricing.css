@@ -446,18 +446,47 @@
 .cb-price__mail {
   border: 1px dashed rgba(255, 255, 255, 0.3);
   border-radius: 14px;
-  padding: 14px;
-  font-size: 14px;
+  padding: 12px;
+  font-size: 13px;
   color: var(--cbp-mute);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.cb-price__mail a {
-  display: block;
-  margin-top: 4px;
+.cb-price__mail > span {
+  line-height: 1.35;
+}
+
+.cb-price__mail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.16);
+  border: 1px solid rgba(251, 191, 36, 0.55);
   color: var(--cbp-amber);
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 13px;
   text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.cb-price__mail-btn:hover {
+  background: rgba(251, 191, 36, 0.28);
+  transform: translateY(-1px);
 }
 
 .cb-price__btn {
