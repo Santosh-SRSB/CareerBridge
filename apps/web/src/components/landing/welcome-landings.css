@@ -285,44 +285,65 @@
   align-items: stretch;
 }
 .cb-hire-light__card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 22px 20px 18px;
-  border-radius: 20px;
+  padding: 20px 20px 18px;
+  border-radius: 22px;
   background: #fff;
   border: 1px solid rgba(15, 23, 42, 0.06);
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  overflow: hidden;
+  animation: cb-hire-card-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 .cb-hire-light__card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 22px 44px rgba(15, 23, 42, 0.12);
+  transform: translateY(-5px);
+  border-color: rgba(99, 102, 241, 0.22);
+  box-shadow: 0 26px 48px rgba(15, 23, 42, 0.14);
 }
-.cb-hire-light__top {
+.cb-hire-light__card:hover .cb-hire-light__mascot {
+  transform: translateY(-4px) scale(1.04);
+}
+.cb-hire-light__card:hover .cb-hire-light__cta svg {
+  transform: translateX(3px);
+}
+@keyframes cb-hire-card-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.cb-hire-light__art {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  justify-content: center;
+  margin: 0 0 2px;
 }
-.cb-hire-light__icon {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
+.cb-hire-light__mascot {
+  width: min(148px, 70%);
+  height: auto;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.cb-hire-light__icon--teal {
-  background: #ccfbf1;
-  color: #0f766e;
+.cb-hire-light__eye {
+  animation: cb-hire-blink 4.8s ease-in-out infinite;
+  transform-origin: center;
 }
-.cb-hire-light__icon--amber {
-  background: #ffedd5;
-  color: #c2410c;
+.cb-hire-light__spark {
+  animation: cb-hire-spark 2.4s ease-in-out infinite;
+}
+.cb-hire-light__spark--b {
+  animation-delay: -1.1s;
+}
+@keyframes cb-hire-blink {
+  0%, 42%, 48%, 100% { transform: scaleY(1); }
+  45% { transform: scaleY(0.12); }
+}
+@keyframes cb-hire-spark {
+  0%, 100% { opacity: 0.45; transform: translateY(0) scale(1); }
+  50% { opacity: 1; transform: translateY(-4px) scale(1.15); }
 }
 .cb-hire-light__meta {
   min-width: 0;
-  flex: 1;
+  text-align: center;
 }
 .cb-hire-light__option {
   margin: 0 0 4px;
@@ -336,6 +357,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 8px 10px;
 }
 .cb-hire-light__title-row h3 {
@@ -369,6 +391,7 @@
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
+  text-align: center;
 }
 .cb-hire-light__card ul {
   list-style: none;
@@ -385,6 +408,12 @@
   font-size: 14px;
   font-weight: 650;
   line-height: 1.4;
+  opacity: 0;
+  animation: cb-hire-li-in 0.45s ease both;
+}
+@keyframes cb-hire-li-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 .cb-hire-light__card li::before {
   content: '✓';
@@ -401,38 +430,21 @@
   font-size: 11px;
   font-weight: 800;
 }
-.cb-hire-light__price {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
-}
-.cb-hire-light__price b {
-  color: #0c1245;
-  font-size: clamp(22px, 2.4vw, 28px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-}
-.cb-hire-light__price span {
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 600;
-}
 .cb-hire-light__cta {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
   min-height: 48px;
   border-radius: 12px;
   font-size: 14px;
   font-weight: 800;
   text-decoration: none;
   transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
+}
+.cb-hire-light__cta svg {
+  transition: transform 0.2s ease;
 }
 .cb-hire-light__cta:hover {
   transform: translateY(-2px);
@@ -447,6 +459,19 @@
   background: linear-gradient(180deg, #fbbf24, #f59e0b);
   color: #0c1245;
   box-shadow: 0 10px 22px rgba(245, 158, 11, 0.28);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb-hire-light__card,
+  .cb-hire-light__card li,
+  .cb-hire-light__eye,
+  .cb-hire-light__spark {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+  .cb-hire-light__card:hover,
+  .cb-hire-light__card:hover .cb-hire-light__mascot {
+    transform: none;
+  }
 }
 
 .wl-plans--pricing {

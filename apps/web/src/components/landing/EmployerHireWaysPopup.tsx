@@ -6,7 +6,7 @@ import { CloseIcon } from '@/components/landing/home/icons';
 import { EmployerHireWaysCards } from '@/components/landing/EmployerHireWaysCards';
 import { getStoredUser } from '@/lib/session';
 
-const STORAGE_KEY = 'cb.employerHireWaysPopup.v2';
+const STORAGE_KEY = 'cb.employerHireWaysPopup.v3';
 
 let seenThisRuntime = false;
 
