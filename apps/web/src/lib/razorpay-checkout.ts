@@ -120,6 +120,12 @@ export async function openRazorpayCheckout(input: {
         contact: prefillContact,
       },
       ...(readonly ? { readonly } : {}),
+      // Employer subscriptions: UPI / cards / netbanking / wallet only — no EMI.
+      config: {
+        display: {
+          hide: [{ method: 'emi' }],
+        },
+      },
       handler: (response: RazorpayCheckoutSuccess) => finish(response),
       modal: {
         ondismiss: async () => {
